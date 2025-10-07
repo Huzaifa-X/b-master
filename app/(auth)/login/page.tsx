@@ -34,6 +34,8 @@ export default function LoginPage() {
                     className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
                     unoptimized
                 />
+                {/* Add dark overlay for better text contrast */}
+                <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/50 to-black/40" />
 
                 <div className="absolute inset-0 flex flex-col justify-center items-start p-12 lg:p-16">
                     <div className="max-w-lg space-y-8 animate-fade-in text-white">

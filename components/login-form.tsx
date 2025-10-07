@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { useState } from "react"
 import { Eye, EyeOff } from "lucide-react"
+import Link from "next/link"
 import Image from "next/image"
 
 export function LoginForm({
@@ -46,12 +47,12 @@ export function LoginForm({
         <Field>
           <div className="flex items-center">
             <FieldLabel htmlFor="password">Password</FieldLabel>
-            <a
-              href="#"
+            <Link
+              href="/forgot-password"
               className="ml-auto text-sm underline-offset-4 hover:underline"
             >
               Forgot your password?
-            </a>
+            </Link>
           </div>
           <div className="relative">
             <Input
