@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Link from 'next/link';
 import { SignupForm } from "@/components/signup-form"
 
 export default function SignupPage() {
@@ -6,7 +7,7 @@ export default function SignupPage() {
         <div className="grid min-h-svh lg:grid-cols-2">
             <div className="flex flex-col gap-4 p-6 md:p-10">
                 <div className="flex justify-center gap-2 md:justify-start">
-                    <a href="/" className="flex items-center gap-2">
+                    <Link href="/" className="flex items-center gap-2">
                         <Image
                             src="/bmaster-logo.svg"
                             alt="Bmaster Logo"
@@ -16,7 +17,7 @@ export default function SignupPage() {
                             unoptimized
                             priority
                         />
-                    </a>
+                    </Link>
                 </div>
             <div className="flex flex-1 items-center justify-center">
                 <div className="w-full max-w-xs animate-fade-in-up">
@@ -25,10 +26,13 @@ export default function SignupPage() {
                 </div>
             </div>
             <div className="bg-muted relative hidden lg:block">
-                <img
+                <Image
                     src="/login-repeating-icons.svg"
                     alt="Image"
+                    width={800}
+                    height={600}
                     className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
+                    unoptimized
                 />
                 {/* Add dark overlay for better text contrast */}
                 <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/50 to-black/40" />

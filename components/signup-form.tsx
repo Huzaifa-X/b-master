@@ -44,7 +44,7 @@ export function SignupForm({
             id="name"
             type="text"
             placeholder="Enter your full name"
-            className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-input"
             required
           />
         </Field>
@@ -54,13 +54,9 @@ export function SignupForm({
             id="email"
             type="email"
             placeholder="Enter your email address"
-            className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-input"
             required
           />
-          <FieldDescription>
-            We&apos;ll use this to contact you. We will not share your email
-            with anyone else.
-          </FieldDescription>
         </Field>
         <Field>
           <FieldLabel htmlFor="password">Password</FieldLabel>
@@ -69,7 +65,7 @@ export function SignupForm({
               id="password"
               type={showPassword ? "text" : "password"}
               placeholder="Create a strong password"
-              className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-12"
+              className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-12 shadow-input"
               required
             />
             <button
@@ -96,7 +92,7 @@ export function SignupForm({
               id="confirm-password"
               type={showConfirmPassword ? "text" : "password"}
               placeholder="Re-enter your password"
-              className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-12"
+              className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-12 shadow-input"
               required
             />
             <button

@@ -39,7 +39,7 @@ export function LoginForm({
             id="email"
             type="email"
             placeholder="Enter your email address"
-            className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-input"
             required
           />
         </Field>
@@ -58,7 +58,7 @@ export function LoginForm({
               id="password"
               placeholder="Enter your password"
               type={showPassword ? "text" : "password"}
-              className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-12"
+              className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-12 shadow-input"
               required
             />
             <button
@@ -97,7 +97,7 @@ export function LoginForm({
             </a>
           </FieldDescription>
         </Field>
-      </FieldGroup>
-    </form>
+        </FieldGroup>
+      </form>
   )
 }
