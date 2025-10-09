@@ -52,52 +52,52 @@
 :root {
   /* Border Radius */
   --radius: 0.625rem;
-  
+
   /* Main Background & Foreground */
   --background: oklch(0.98 0.002 286);           /* Off-white background (less eye strain) */
   --foreground: oklch(0.20 0.005 286);           /* Dark text for readability */
-  
+
   /* Card Surfaces */
   --card: oklch(1 0 0);                          /* Pure white cards for contrast */
   --card-foreground: oklch(0.20 0.005 286);      /* Dark text on cards */
-  
+
   /* Popovers & Dropdowns */
   --popover: oklch(1 0 0);                       /* White popovers */
   --popover-foreground: oklch(0.20 0.005 286);   /* Dark text */
-  
+
   /* Primary Brand Color - Vibrant Blue */
   --primary: oklch(0.55 0.18 264);               /* Modern blue (buttons, links, focus) */
   --primary-foreground: oklch(1 0 0);            /* White text on primary */
-  
+
   /* Secondary Brand Color - Purple Accent */
   --secondary: oklch(0.65 0.15 290);             /* Purple for highlights & badges */
   --secondary-foreground: oklch(1 0 0);          /* White text on secondary */
-  
+
   /* Muted/Neutral Colors */
   --muted: oklch(0.96 0.002 286);                /* Light gray backgrounds */
   --muted-foreground: oklch(0.52 0.016 286);     /* Gray text for less emphasis */
-  
+
   /* Accent (Same as Primary for consistency) */
   --accent: oklch(0.55 0.18 264);                /* Accent = Primary blue */
   --accent-foreground: oklch(1 0 0);             /* White text */
-  
+
   /* Status Colors */
   --destructive: oklch(0.58 0.24 27);            /* Red for errors & delete */
   --success: oklch(0.65 0.17 145);               /* Green for success & earnings */
   --warning: oklch(0.75 0.15 85);                /* Yellow for warnings */
-  
+
   /* Borders & Inputs */
   --border: oklch(0.90 0.004 286);               /* Subtle borders */
   --input: oklch(0.95 0.002 286);                /* Input field backgrounds */
   --ring: oklch(0.55 0.18 264);                  /* Focus ring (matches primary) */
-  
+
   /* Chart Colors (for analytics dashboards) */
   --chart-1: oklch(0.55 0.18 264);               /* Primary blue */
   --chart-2: oklch(0.65 0.15 290);               /* Purple */
   --chart-3: oklch(0.65 0.17 145);               /* Green */
   --chart-4: oklch(0.75 0.15 85);                /* Yellow */
   --chart-5: oklch(0.58 0.24 27);                /* Red */
-  
+
   /* Sidebar Colors */
   --sidebar: oklch(0.99 0 0);                    /* Almost white sidebar */
   --sidebar-foreground: oklch(0.20 0.005 286);   /* Dark text */
@@ -164,22 +164,22 @@
   .gradient-primary {
     background: linear-gradient(135deg, oklch(0.55 0.18 264) 0%, oklch(0.65 0.15 290) 100%);
   }
-  
+
   /* Glass morphism effect for cards */
   .glass-card {
     @apply bg-white/80 backdrop-blur-sm border border-border;
   }
-  
+
   /* Success state styling */
   .success-state {
     @apply bg-success/10 text-success border-success/20;
   }
-  
+
   /* Warning state styling */
   .warning-state {
     @apply bg-warning/10 text-warning border-warning/20;
   }
-  
+
   /* Error state styling */
   .error-state {
     @apply bg-destructive/10 text-destructive border-destructive/20;
@@ -239,5 +239,14 @@
       opacity: 1;
       transform: scale(1);
     }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
   }
 }

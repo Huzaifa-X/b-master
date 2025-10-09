@@ -1,3 +1,5 @@
+"use client"
+
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,11 +15,20 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp"
 import Link from "next/link"
+import { useRouter } from "next/navigation";
 
 export function OTPForm({ className, ...props }: React.ComponentProps<"div">) {
+  const router = useRouter();
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    console.log("Form submitted");
+    router.push("/reset-password");
+  }
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <form>
+      <form onSubmit={handleSubmit}>
         <FieldGroup>
           <div className="flex flex-col items-center gap-1 text-center">
             <h1 className="text-2xl font-bold">Enter verification code</h1>

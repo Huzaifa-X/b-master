@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { useState } from "react"
 import { Eye, EyeOff } from "lucide-react"
+import { useRouter } from "next/navigation";
 
 export function SignupForm({
   className,
@@ -20,7 +21,7 @@ export function SignupForm({
 }: React.ComponentProps<"form">) {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-
+  const router = useRouter();
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword)
   }
@@ -29,8 +30,14 @@ export function SignupForm({
     setShowConfirmPassword(!showConfirmPassword)
   }
 
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    console.log("Form submitted");
+    router.push("/login");
+  }
+
   return (
-    <form className={cn("flex flex-col gap-6", className)} {...props}>
+    <form className={cn("flex flex-col gap-6", className)} {...props} onSubmit={handleSubmit}>
       <FieldGroup>
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-2xl font-bold">Create your account</h1>
