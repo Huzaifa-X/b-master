@@ -13,14 +13,16 @@ export default function DashboardLayout({
 }) {
   return (
     <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <SiteHeader />
-        <main>
-          <section>{children}</section>
-        </main>
-        <Toaster />
-      </SidebarInset>
+      <div className="flex h-dvh w-full pr-0.5">
+        <AppSidebar />
+        <SidebarInset>
+          <SiteHeader />
+          <div className="flex-1 overflow-hidden">
+            {children}
+          </div>
+          <Toaster />
+        </SidebarInset>
+      </div>
     </SidebarProvider>
   )
 }
