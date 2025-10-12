@@ -74,25 +74,25 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted">
+            <DropdownMenuGroup >
+              <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer">
                 <User className="text-black focus:!text-black focus:!bg-muted"/>
                 My Profile
               </DropdownMenuItem>
-              <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted">
+              <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer">
                 <Sparkles className="text-black focus:!text-black focus:!bg-muted"/>
                 My Assistants
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted">
+            <DropdownMenuGroup >
+              <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer">
                 <DollarSign className="text-black focus:!text-black focus:!bg-muted"/>
                 Upgrade Plan
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted">
+            <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer">
               <LogOut className="text-black focus:!text-black focus:!bg-muted"/>
               Log out
             </DropdownMenuItem>
