@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { OTPForm } from "@/components/otp-form"
+import { OTPForm } from "@/components/auth/otp-form"
 
 export default function LoginPage() {
     return (
