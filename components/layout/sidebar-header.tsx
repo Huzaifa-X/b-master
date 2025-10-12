@@ -5,13 +5,11 @@ import Image from "next/image"
 import { ArrowLeftFromLine, ArrowRightFromLine, PanelLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/components/ui/sidebar"
-import { useIsMobile } from "@/hooks/use-mobile"
 
 export function Header() {
     const { state, toggleSidebar } = useSidebar()
     const [isHovered, setIsHovered] = useState(false)
     const isCollapsed = state === "collapsed"
-    const isMobile = useIsMobile()
 
     return (
         <div className="flex items-center justify-between gap-2 px-4 py-2 group-data-[collapsible=icon]:justify-center">
@@ -26,26 +24,24 @@ export function Header() {
                     priority
                 />
             </div>
-            {!isMobile && (
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:shrink-0 hover:bg-transparent hover:text-black"
-                    onMouseEnter={() => setIsHovered(true)}
-                    onMouseLeave={() => setIsHovered(false)}
-                    onClick={toggleSidebar}
-                >
-                    {isHovered ? (
-                        isCollapsed ? (
-                            <ArrowRightFromLine className="h-4 w-4" />
-                        ) : (
-                            <ArrowLeftFromLine className="h-4 w-4" />
-                        )
+            <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:shrink-0 hover:bg-transparent hover:text-black"
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+                onClick={toggleSidebar}
+            >
+                {isHovered ? (
+                    isCollapsed ? (
+                        <ArrowRightFromLine className="h-4 w-4" />
                     ) : (
-                        <PanelLeft className="h-4 w-4" />
-                    )}
-                </Button>
-            )}
+                        <ArrowLeftFromLine className="h-4 w-4" />
+                    )
+                ) : (
+                    <PanelLeft className="h-4 w-4" />
+                )}
+            </Button>
         </div>
     )
 }

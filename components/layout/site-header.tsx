@@ -1,7 +1,7 @@
 "use client"
 
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { NotificationsSheet } from "@/components/notifications-sheet"
+import { NotificationsDropdown } from "@/components/notifications-dropdown"
 
 export function SiteHeader() {
   return (
@@ -20,7 +20,7 @@ export function SiteHeader() {
 
         {/* Right side actions */}
         <div className="flex items-center gap-2">
-          <NotificationsSheet />
+          <NotificationsDropdown />
         </div>
       </div>
     </header>
