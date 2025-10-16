@@ -19,19 +19,6 @@ export const ComposerAction: FC = () => {
             <AttachmentDropdown />
 
             <div className="flex items-center gap-2">
-                <TooltipIconButton
-                    tooltip="Toggle artifact panel"
-                    side="bottom"
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-[34px] rounded-full p-1"
-                    aria-label="Toggle artifact panel"
-                    onClick={togglePanel}
-                >
-                    <PanelRightOpen className="size-5" />
-                </TooltipIconButton>
-
                 <DictateButton />
 
                 <ThreadPrimitive.If running={false}>

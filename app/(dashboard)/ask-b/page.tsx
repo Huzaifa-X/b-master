@@ -2,8 +2,6 @@
 
 import { Assistant } from "@/components/assistant-ui/assistant";
 import { ArtifactPanel } from "@/components/assistant-ui/artifact-panel";
-import { useAssistantRuntime } from "@assistant-ui/react";
-import { useEffect } from "react";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -11,18 +9,12 @@ import {
 } from "@/components/ui/resizable";
 import { useArtifactStore } from "@/lib/stores/artifact-store";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
 export default function AskBPage() {
-  const runtime = useAssistantRuntime();
   const isPanelOpen = useArtifactStore((state) => state.isPanelOpen);
   const closePanel = useArtifactStore((state) => state.closePanel);
   const isMobile = useIsMobile();
-
-  useEffect(() => {
-    // Always switch to a new thread when this page loads
-    runtime.switchToNewThread();
-  }, [runtime]);
 
   const handleClosePanel = () => {
     closePanel();
@@ -58,6 +50,7 @@ export default function AskBPage() {
                 side="bottom" 
                 className="h-[90vh] p-0 [&>button]:hidden"
               >
+                <SheetTitle className="sr-only">Canvas</SheetTitle>
                 <ArtifactPanel onClose={handleClosePanel} />
               </SheetContent>
             </Sheet>

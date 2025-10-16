@@ -1,11 +1,11 @@
 "use client";
 
 import { FC } from "react";
-import { X, Copy, Maximize2, Code2, FileCode } from "lucide-react";
+import { X, Copy, Code2, FileCode, Eye, Code } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useArtifactStore } from "@/lib/stores/artifact-store";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
 
 interface ArtifactPanelProps {
@@ -13,7 +13,7 @@ interface ArtifactPanelProps {
 }
 
 export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose }) => {
-  const { artifactContent } = useArtifactStore();
+  const { artifactContent, isPreviewMode, togglePreview } = useArtifactStore();
 
   const handleCopy = () => {
     if (artifactContent?.content) {
@@ -24,6 +24,11 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose }) => {
   const handleClose = () => {
     onClose();
   };
+
+  // Check if the code is HTML
+  const isHtmlCode = artifactContent?.language?.toLowerCase() === 'html' || 
+                     artifactContent?.content?.trim().startsWith('<!DOCTYPE') ||
+                     artifactContent?.content?.trim().startsWith('<html');
 
   return (
     <div className="h-full flex flex-col bg-background border-l">
@@ -47,6 +52,17 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose }) => {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          {isHtmlCode && (
+            <Button
+              variant={isPreviewMode ? "default" : "ghost"}
+              size="icon"
+              className="h-8 w-8"
+              title={isPreviewMode ? "Show code" : "Preview"}
+              onClick={togglePreview}
+            >
+              {isPreviewMode ? <Code className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -71,23 +87,38 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose }) => {
       {/* Content Area */}
       <div className="flex-1 overflow-auto">
         {artifactContent ? (
-          <div className="p-6">
-            {artifactContent.type === "code" ? (
-              <SyntaxHighlighter
-                language={artifactContent.language || "javascript"}
-                style={vscDarkPlus}
-                showLineNumbers
-                customStyle={{
-                  margin: 0,
-                  borderRadius: "0.5rem",
-                  fontSize: "0.875rem",
-                }}
-              >
-                {artifactContent.content}
-              </SyntaxHighlighter>
+          <div className="h-full">
+            {/* HTML Preview Mode */}
+            {isPreviewMode && isHtmlCode ? (
+              <iframe
+                srcDoc={artifactContent.content}
+                className="w-full h-full border-0"
+                sandbox="allow-scripts allow-same-origin allow-forms"
+                title="HTML Preview"
+              />
             ) : (
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown>{artifactContent.content}</ReactMarkdown>
+              /* Code Display Mode */
+              <div className="p-6">
+                {artifactContent.type === "code" ? (
+                  <SyntaxHighlighter
+                    language={artifactContent.language || "javascript"}
+                    style={oneLight}
+                    showLineNumbers
+                    customStyle={{
+                      margin: 0,
+                      borderRadius: "0.5rem",
+                      fontSize: "0.875rem",
+                      background: "hsl(var(--muted))",
+                      padding: "1.5rem",
+                    }}
+                  >
+                    {artifactContent.content}
+                  </SyntaxHighlighter>
+                ) : (
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown>{artifactContent.content}</ReactMarkdown>
+                  </div>
+                )}
               </div>
             )}
           </div>
