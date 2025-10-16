@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import { NavMainDefault } from "./nav-main-default"
+import { NavMainAskB } from "./nav-main-askb"
 
 export function NavMain() {
   const pathname = usePathname()
@@ -9,6 +10,10 @@ export function NavMain() {
   // Route-based rendering logic
   if (pathname.startsWith("/home")) {
     return <NavMainDefault currentPath={pathname} />
+  }
+
+  if (pathname.startsWith("/ask-b")) {
+    return <NavMainAskB currentPath={pathname} />
   }
 
   // Add more route conditions here as needed

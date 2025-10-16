@@ -4,31 +4,36 @@ import {
   ThreadListPrimitive,
   useAssistantState,
 } from "@assistant-ui/react";
-import { ArchiveIcon, PlusIcon } from "lucide-react";
+import { ArchiveIcon, MoreHorizontal, PlusIcon, Share, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export const ThreadList: FC = () => {
   return (
-    <ThreadListPrimitive.Root className="aui-root aui-thread-list-root flex flex-col items-stretch gap-1.5">
-      <ThreadListNew />
-      <ThreadListItems />
+    <ThreadListPrimitive.Root className="aui-root aui-thread-list-root">
+      <SidebarMenu>
+        <ThreadListItems />
+      </SidebarMenu>
     </ThreadListPrimitive.Root>
   );
 };
 
-const ThreadListNew: FC = () => {
+export const ThreadListNew: FC = () => {
   return (
     <ThreadListPrimitive.New asChild>
-      <Button
-        className="aui-thread-list-new flex items-center justify-start gap-1 rounded-lg px-2.5 py-2 text-start hover:bg-muted data-active:bg-muted"
-        variant="ghost"
-      >
-        <PlusIcon />
-        New Thread
-      </Button>
+      <SidebarMenuItem key={"New Chat"}>
+        <SidebarMenuButton asChild tooltip={"New Chat"}>
+          <div className="aui-thread-list-new group/nav-item cursor-pointer">
+            <PlusIcon className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
+            <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">New Chat</span>
+          </div>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
     </ThreadListPrimitive.New>
   );
 };
@@ -62,12 +67,38 @@ const ThreadListSkeleton: FC = () => {
 };
 
 const ThreadListItem: FC = () => {
+  const isMobile = useIsMobile();
   return (
-    <ThreadListItemPrimitive.Root className="aui-thread-list-item flex items-center gap-2 rounded-lg transition-all hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none data-active:bg-muted">
-      <ThreadListItemPrimitive.Trigger className="aui-thread-list-item-trigger flex-grow px-3 py-2 text-start">
-        <ThreadListItemTitle />
-      </ThreadListItemPrimitive.Trigger>
-      <ThreadListItemArchive />
+    <ThreadListItemPrimitive.Root asChild>
+      <SidebarMenuItem className="aui-thread-list-item">
+        <ThreadListItemPrimitive.Trigger asChild>
+          <SidebarMenuButton className="aui-thread-list-item-trigger">
+            <ThreadListItemTitle />
+          </SidebarMenuButton>
+        </ThreadListItemPrimitive.Trigger>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuAction showOnHover>
+              <MoreHorizontal />
+            </SidebarMenuAction>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            className="w-48 rounded-lg"
+            side={isMobile ? "bottom" : "right"}
+            align={isMobile ? "end" : "start"}
+          >
+            <DropdownMenuItem className="text-muted-foreground focus:!text-muted-foreground focus:!bg-muted">
+              <Share className="text-muted-foreground focus:!text-muted-foreground focus:!bg-muted" />
+              <span>Share</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-destructive focus:!text-destructive focus:!bg-destructive/10">
+              <Trash2 className="text-destructive focus:!text-destructive focus:!bg-destructive/10" />
+              <span>Delete</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
     </ThreadListItemPrimitive.Root>
   );
 };

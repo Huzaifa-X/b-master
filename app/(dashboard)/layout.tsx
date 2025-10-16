@@ -1,28 +1,40 @@
+"use client"
+
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/layout/app-sidebar"
+import { AppSidebar } from "@/components/layout/sidebar/app-sidebar"
 import { SiteHeader } from "@/components/layout/site-header"
 import { Toaster } from "sonner"
+import { AssistantRuntimeProvider } from "@assistant-ui/react"
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk"
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const runtime = useChatRuntime({
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
+  })
+
   return (
-    <SidebarProvider>
-      <div className="flex h-dvh w-full pr-0.5">
-        <AppSidebar />
-        <SidebarInset>
-          <SiteHeader />
-          <div className="flex-1 overflow-hidden">
-            {children}
-          </div>
-          <Toaster />
-        </SidebarInset>
-      </div>
-    </SidebarProvider>
+    <AssistantRuntimeProvider runtime={runtime}>
+      <SidebarProvider>
+        <div className="flex h-dvh w-full pr-0.5">
+          <AppSidebar />
+          <SidebarInset>
+            <SiteHeader />
+            <div className="flex-1 overflow-hidden">
+              {children}
+            </div>
+            <Toaster />
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
+    </AssistantRuntimeProvider>
   )
 }

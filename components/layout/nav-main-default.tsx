@@ -24,7 +24,7 @@ function AskBIcon({ className }: { className?: string }) {
 const navItems = [
   {
     title: "Ask B",
-    url: "/home",
+    url: "/ask-b",
     icon: AskBIcon,
   },
   {

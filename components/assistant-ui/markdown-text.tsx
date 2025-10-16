@@ -10,17 +10,21 @@ import {
 } from "@assistant-ui/react-markdown";
 import remarkGfm from "remark-gfm";
 import { type FC, memo, useState } from "react";
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, Maximize2 } from "lucide-react";
 
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { cn } from "@/lib/utils";
+import { useArtifactStore } from "@/lib/stores/artifact-store";
 
 const MarkdownTextImpl = () => {
   return (
     <MarkdownTextPrimitive
       remarkPlugins={[remarkGfm]}
       className="aui-md"
-      components={defaultComponents}
+      components={{
+        ...defaultComponents,
+        CodeHeader: CodeHeaderWrapper,
+      }}
     />
   );
 };
@@ -29,9 +33,21 @@ export const MarkdownText = memo(MarkdownTextImpl);
 
 const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   const { isCopied, copyToClipboard } = useCopyToClipboard();
+  const { setArtifact } = useArtifactStore();
+  
   const onCopy = () => {
     if (!code || isCopied) return;
     copyToClipboard(code);
+  };
+
+  const onOpenInPanel = () => {
+    if (!code) return;
+    setArtifact({
+      type: "code",
+      language: language || "text",
+      content: code,
+      title: `${language ? language.charAt(0).toUpperCase() + language.slice(1) : "Code"}`,
+    });
   };
 
   return (
@@ -39,10 +55,15 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
       <span className="aui-code-header-language lowercase [&>span]:text-xs">
         {language}
       </span>
-      <TooltipIconButton tooltip="Copy" onClick={onCopy}>
-        {!isCopied && <CopyIcon />}
-        {isCopied && <CheckIcon />}
-      </TooltipIconButton>
+      <div className="flex items-center gap-1">
+        <TooltipIconButton tooltip="Open in panel" onClick={onOpenInPanel}>
+          <Maximize2 className="h-4 w-4" />
+        </TooltipIconButton>
+        <TooltipIconButton tooltip="Copy" onClick={onCopy}>
+          {!isCopied && <CopyIcon />}
+          {isCopied && <CheckIcon />}
+        </TooltipIconButton>
+      </div>
     </div>
   );
 };
@@ -66,7 +87,13 @@ const useCopyToClipboard = ({
   return { isCopied, copyToClipboard };
 };
 
+// Create a wrapper for CodeHeader that can use hooks
+const CodeHeaderWrapper: FC<CodeHeaderProps> = (props) => {
+  return <CodeHeader {...props} />;
+};
+
 const defaultComponents = memoizeMarkdownComponents({
+  CodeHeader: CodeHeaderWrapper,
   h1: ({ className, ...props }) => (
     <h1
       className={cn(
@@ -224,5 +251,4 @@ const defaultComponents = memoizeMarkdownComponents({
       />
     );
   },
-  CodeHeader,
 });
