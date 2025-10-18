@@ -1,6 +1,6 @@
 "use client"
 
-import { MessageCircle, ChevronLeft } from "lucide-react"
+import { MessageCircle, ChevronLeft, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { ThreadListNew } from "@/components/assistant-ui/thread-list"
 import {
@@ -9,18 +9,30 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { useAssistantRuntime } from "@assistant-ui/react"
+import { Button } from "@/components/ui/button"
+import { useRouter } from "next/navigation"
 
 export function NavMainAskB({ currentPath }: { currentPath: string }) {
+    const runtime = useAssistantRuntime();
+    const router = useRouter();
+    
+    const handleBack = (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        runtime.switchToNewThread();
+        router.push("/home");
+    };
+
     return (
         <SidebarGroup>
             <SidebarMenu>
                 {/* Back Button */}
                 <SidebarMenuItem>
-                    <SidebarMenuButton asChild tooltip="Back">
-                        <Link href="/home" className="group/nav-item">
-                            <ChevronLeft className="text-muted-foreground transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:-translate-x-1" />
-                            <span className="text-muted-foreground transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-0.5">Back</span>
-                        </Link>
+                    <SidebarMenuButton asChild tooltip="Back" onClick={(e) => handleBack(e)}>
+                        <div className="group/nav-item cursor-pointer">
+                            <ArrowLeft className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
+                            <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">Back</span>
+                        </div>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
 
