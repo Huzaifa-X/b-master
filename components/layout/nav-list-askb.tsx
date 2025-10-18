@@ -1,26 +1,49 @@
-"use client"
+"use client";
 
-import { ThreadList } from "@/components/assistant-ui/thread-list"
+import { useAssistantState } from "@assistant-ui/react";
 import {
     SidebarGroup,
     SidebarGroupLabel,
     SidebarMenuButton,
     SidebarMenuItem,
-} from "@/components/ui/sidebar"
-import { MoreHorizontal } from "lucide-react"
+} from "@/components/ui/sidebar";
+import { MoreHorizontal } from "lucide-react";
+import Link from "next/link";
+import { ThreadListSkeleton, ThreadList } from "@/components/assistant-ui/thread-list";
 
 export function NavListAskB() {
+    // Get thread count directly from the runtime state
+    const threadCount = useAssistantState(
+        ({ threads }) => threads.threadItems.length
+    );
+    const isLoading = useAssistantState(
+        ({ threads }) => threads.isLoading
+    );
+
+    console.log("Current thread count:", threadCount);
+
     return (
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-            <SidebarGroupLabel>Chats</SidebarGroupLabel>
-            <ThreadList />
-            <SidebarMenuItem>
-                <SidebarMenuButton className="text-sidebar-foreground/70">
-                    <MoreHorizontal className="text-sidebar-foreground/70" />
-                    <span>All Chats</span>
-                </SidebarMenuButton>
-            </SidebarMenuItem>
-        </SidebarGroup>
-    )
-}
+            {threadCount > 1 && (
+                <>
+                    <SidebarGroupLabel>Chats</SidebarGroupLabel>
 
+                    {isLoading ? (
+                        <ThreadListSkeleton />
+                    ) : (
+                        <ThreadList />
+                    )}
+
+                    <SidebarMenuItem>
+                        <SidebarMenuButton className="text-sidebar-foreground/70" asChild>
+                            <Link href="/ask-b/chats">
+                                <MoreHorizontal className="text-sidebar-foreground/70" />
+                                <span>All Chats</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </>
+            )}
+        </SidebarGroup>
+    );
+}

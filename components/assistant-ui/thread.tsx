@@ -11,6 +11,7 @@ import { AssistantMessage } from "./thread-components/assistant-message";
 import { EditComposer } from "./thread-components/edit-composer";
 import { Button } from "@/components/ui/button";
 import { TooltipIconButton } from "./tooltip-icon-button";
+import { ThreadHeaderUpdater } from "./thread-header-updater";
 
 const ThreadBackButton: FC = () => {
     const runtime = useAssistantRuntime();
@@ -46,6 +47,7 @@ export const Thread: FC = () => {
                         ["--thread-max-width" as string]: "44rem",
                     }}
                 >
+                    <ThreadHeaderUpdater />
                     <ThreadPrimitive.Viewport className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll px-4">
                         {/* Empty state - centered welcome and composer */}
                         <ThreadPrimitive.If empty>

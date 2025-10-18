@@ -1,10 +1,12 @@
 import type { FC } from "react";
+import { useEffect } from "react";
 import {
   ThreadListItemPrimitive,
   ThreadListPrimitive,
+  useAssistantRuntime,
   useAssistantState,
 } from "@assistant-ui/react";
-import { ArchiveIcon, MoreHorizontal, PlusIcon, Share, Trash2 } from "lucide-react";
+import { ArchiveIcon, MoreHorizontal, Pencil, PlusIcon, Share, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
@@ -24,17 +26,26 @@ export const ThreadList: FC = () => {
 };
 
 export const ThreadListNew: FC = () => {
+  const router = useRouter();
+  const runtime = useAssistantRuntime();
+  
+  const handleNewChat = async () => {
+    // Use the runtime's method to create a new thread
+    runtime.switchToNewThread();
+    
+    // Then navigate if needed
+    router.push("/ask-b");
+  };
+
   return (
-    <ThreadListPrimitive.New asChild>
-      <SidebarMenuItem key={"New Chat"}>
-        <SidebarMenuButton asChild tooltip={"New Chat"}>
-          <div className="aui-thread-list-new group/nav-item cursor-pointer">
-            <PlusIcon className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
-            <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">New Chat</span>
-          </div>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    </ThreadListPrimitive.New>
+    <SidebarMenuItem key={"New Chat"}>
+      <SidebarMenuButton tooltip={"New Chat"} onClick={handleNewChat}>
+        <PlusIcon className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
+        <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">
+          New Chat
+        </span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 };
 
@@ -48,7 +59,7 @@ const ThreadListItems: FC = () => {
   return <ThreadListPrimitive.Items components={{ ThreadListItem }} />;
 };
 
-const ThreadListSkeleton: FC = () => {
+export const ThreadListSkeleton: FC = () => {
   return (
     <>
       {Array.from({ length: 5 }, (_, i) => (
@@ -88,10 +99,14 @@ const ThreadListItem: FC = () => {
             align={isMobile ? "end" : "start"}
           >
             <DropdownMenuItem className="text-muted-foreground focus:!text-muted-foreground focus:!bg-muted">
-              <Share className="text-muted-foreground focus:!text-muted-foreground focus:!bg-muted" />
-              <span>Share</span>
+              <Pencil className="text-muted-foreground focus:!text-muted-foreground focus:!bg-muted" />
+              <span>Rename</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-muted-foreground focus:!text-muted-foreground focus:!bg-muted">
+              <ArchiveIcon className="text-muted-foreground focus:!text-muted-foreground focus:!bg-muted" />
+              <span>Archive</span>
+            </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive focus:!text-destructive focus:!bg-destructive/10">
               <Trash2 className="text-destructive focus:!text-destructive focus:!bg-destructive/10" />
               <span>Delete</span>
