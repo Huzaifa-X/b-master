@@ -63,10 +63,10 @@ const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
     return (
       <div 
         ref={ref} 
-        className={cn("relative", className)} 
+        className={cn("relative w-full", className)} 
         {...props}
       >
-        <div className="relative">
+        <div className="relative overflow-x-auto scrollbar-hide pb-2">
           {/* Hover Highlight */}
           <div
             className="absolute h-[30px] transition-all duration-300 ease-out bg-[#0e0f1114] dark:bg-[#ffffff1a] rounded-[6px] flex items-center"
@@ -78,12 +78,12 @@ const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
 
           {/* Active Indicator */}
           <div
-            className="absolute bottom-[-6px] h-[2px] bg-primary dark:bg-white transition-all duration-300 ease-out"
+            className="absolute bottom-[2px] h-[2px] bg-primary dark:bg-white transition-all duration-300 ease-out"
             style={activeStyle}
           />
 
           {/* Tabs */}
-          <div className="relative flex space-x-[6px] items-center">
+          <div className="relative flex space-x-[6px] items-center min-w-max">
             {tabs.map((tab, index) => (
               <div
                 key={tab.id}

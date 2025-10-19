@@ -2,7 +2,6 @@
 
 import { Grid } from "@/components/blocks/feature-section-with-card-gradient"
 import { useRouter } from "next/navigation"
-import { toast } from "sonner"
 
 interface Assistant {
   id: string
@@ -22,8 +21,12 @@ interface AssistantCardProps {
 export function AssistantCard({ assistant, tabType }: AssistantCardProps) {
   const router = useRouter()
   
+  const handleClick = () => {
+    router.push(`/assistants/${assistant.id}`)
+  }
+  
   return (
-    <div className="relative bg-gradient-to-b dark:from-neutral-900 from-neutral-100 dark:to-neutral-950 to-white rounded-3xl overflow-hidden group hover:scale-102 transition-all duration-300 cursor-pointer">
+    <div className="relative bg-gradient-to-b dark:from-neutral-900 from-neutral-100 dark:to-neutral-950 to-white rounded-3xl overflow-hidden group hover:scale-102 transition-all duration-300 cursor-pointer" onClick={handleClick}>
       <Grid size={20} />
       <div className="relative z-20 p-6 flex flex-col h-full min-h-[200px]">
         <div className="flex-1 mb-4">

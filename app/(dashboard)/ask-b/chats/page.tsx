@@ -89,7 +89,7 @@ export default function ChatsPage() {
       <div className="container mx-auto py-4 px-4 max-w-4xl pb-16">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-3xl font-medium mb-2">Your Chat History</h1>
+            <h1 className="text-2xl font-medium mb-2">Your Chat History</h1>
             <Button
               onClick={handleNewChat}
               className="flex items-center gap-2 whitespace-nowrap"
