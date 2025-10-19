@@ -24,19 +24,22 @@ export default function ContactsPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="container mx-auto py-4 px-4 max-w-4xl pb-16">
+      <div className="container mx-auto py-4 px-3 sm:px-4 max-w-4xl pb-16">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
+        <div className="mb-6 md:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 md:mb-6">
             <div>
-              <h1 className="text-2xl font-medium mb-2">All Contacts</h1>
-              <p className="text-muted-foreground">
+              <h1 className="text-xl sm:text-2xl font-medium mb-1 sm:mb-2">All Contacts</h1>
+              <p className="text-sm text-muted-foreground">
                 Manage your contacts for your assistant
               </p>
             </div>
-            <Button onClick={handleAddContact} className="flex items-center gap-2">
+            <Button 
+              onClick={handleAddContact} 
+              className="flex items-center justify-center gap-2 w-full sm:w-auto"
+            >
               <Plus className="h-4 w-4" />
-              Add Contact
+              <span>Add Contact</span>
             </Button>
           </div>
         </div>

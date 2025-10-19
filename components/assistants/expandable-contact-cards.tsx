@@ -166,10 +166,10 @@ export function ExpandableContactCards({ searchQuery }: { searchQuery: string })
                         <motion.div
                             layoutId={`card-${active.id}-${id}`}
                             ref={ref}
-                            className="w-full max-w-[500px] h-full md:h-fit md:max-h-[90%] flex flex-col bg-white dark:bg-neutral-900 sm:rounded-3xl overflow-hidden shadow-2xl"
+                            className="w-full max-w-[500px] h-full md:h-fit md:max-h-[90%] flex flex-col bg-white dark:bg-neutral-900 sm:rounded-3xl overflow-y-auto shadow-2xl"
                         >
                             {/* Expanded Card Content */}
-                            <div className="p-6">
+                            <div className="p-4 sm:p-6">
                                 <div className="flex flex-col items-center text-center mb-6">
                                     <motion.div layoutId={`avatar-${active.id}-${id}`} className="mb-4">
                                         <Avatar className="h-24 w-24">
@@ -243,34 +243,36 @@ export function ExpandableContactCards({ searchQuery }: { searchQuery: string })
                                     </div>
                                 </div>
 
-                                {/* Action Buttons */}
-                                <div className="flex justify-end gap-2 mt-6">
-                                    <Button
-                                        variant="outline"
-                                        onClick={handleEdit}
-                                        size="sm"
-                                    >
-                                        <Edit className="h-4 w-4" />
-                                        Edit
-                                    </Button>
-                                    <Button
-                                        variant="destructive"
-                                        onClick={handleDelete}
-                                        size="sm"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                        Delete
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => setActive(null)}
-                                        size="sm"
-                                        className="bg-transparent hover:bg-transparent hover:text-primary"
-                                    >
-                                        <X className="h-4 w-4" />
-                                        Close
-                                    </Button>
-                                </div>
+                                 {/* Action Buttons */}
+                                 <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4 sm:mt-6">
+                                     <Button
+                                         variant="outline"
+                                         onClick={handleEdit}
+                                         size="sm"
+                                         className="w-full sm:w-auto"
+                                     >
+                                         <Edit className="h-4 w-4 mr-2" />
+                                         Edit
+                                     </Button>
+                                     <Button
+                                         variant="destructive"
+                                         onClick={handleDelete}
+                                         size="sm"
+                                         className="w-full sm:w-auto"
+                                     >
+                                         <Trash2 className="h-4 w-4 mr-2" />
+                                         Delete
+                                     </Button>
+                                     <Button
+                                         variant="outline"
+                                         onClick={() => setActive(null)}
+                                         size="sm"
+                                         className="w-full sm:w-auto bg-transparent hover:bg-transparent hover:text-primary"
+                                     >
+                                         <X className="h-4 w-4 mr-2" />
+                                         Close
+                                     </Button>
+                                 </div>
                             </div>
                         </motion.div>
                     </div>

@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button"
 import { Share2 } from "lucide-react"
 import { toast } from "sonner"
 import { useAssistantStore } from "@/lib/stores/assistant-store"
+import { usePathname } from "next/navigation"
 
 export function SiteHeader() {
   const { title, subtitle, isThreadActive, onShare } = useHeaderStore()
   const assistantStore = useAssistantStore()
+  const isMessagesPage = usePathname().includes("/messages")
 
   const handleShare = () => {
     if (onShare) {
@@ -22,7 +24,7 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="bg-background sticky top-0 z-50 flex w-full items-center">
+    <header className={`bg-background sticky top-0 z-50 flex w-full items-center ${isMessagesPage ? "border-b" : ""}`}>
       <div className="flex h-16 w-full items-center gap-2 px-4">
         {/* Mobile sidebar trigger - only visible on mobile */}
         <div className="flex md:hidden">
