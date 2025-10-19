@@ -78,7 +78,7 @@ const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
 
           {/* Active Indicator */}
           <div
-            className="absolute bottom-[-6px] h-[2px] bg-[#0e0f11] dark:bg-white transition-all duration-300 ease-out"
+            className="absolute bottom-[-6px] h-[2px] bg-primary dark:bg-white transition-all duration-300 ease-out"
             style={activeStyle}
           />
 
@@ -87,11 +87,15 @@ const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
             {tabs.map((tab, index) => (
               <div
                 key={tab.id}
-                ref={(el) => (tabRefs.current[index] = el)}
+                ref={(el: HTMLDivElement | null) => {
+                  if (el) {
+                    tabRefs.current[index] = el
+                  }
+                }}
                 className={cn(
                   "px-3 py-2 cursor-pointer transition-colors duration-300 h-[30px]",
                   index === activeIndex 
-                    ? "text-[#0e0e10] dark:text-white" 
+                    ? "text-primary dark:text-white" 
                     : "text-[#0e0f1199] dark:text-[#ffffff99]"
                 )}
                 onMouseEnter={() => setHoveredIndex(index)}

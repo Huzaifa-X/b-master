@@ -75,12 +75,13 @@ export const Grid = ({
   size?: number;
 }) => {
   const patternId = useId();
+  // Use static pattern to avoid hydration mismatch
   const p = pattern ?? [
-    [Math.floor(Math.random() * 4) + 7, Math.floor(Math.random() * 6) + 1],
-    [Math.floor(Math.random() * 4) + 7, Math.floor(Math.random() * 6) + 1],
-    [Math.floor(Math.random() * 4) + 7, Math.floor(Math.random() * 6) + 1],
-    [Math.floor(Math.random() * 4) + 7, Math.floor(Math.random() * 6) + 1],
-    [Math.floor(Math.random() * 4) + 7, Math.floor(Math.random() * 6) + 1],
+    [7, 2],
+    [9, 3],
+    [8, 5],
+    [10, 1],
+    [7, 4],
   ];
   return (
     <div className="pointer-events-none absolute left-1/2 top-0  -ml-20 -mt-2 h-full w-full [mask-image:linear-gradient(white,transparent)]">
@@ -92,7 +93,11 @@ export const Grid = ({
           y="4"
           squares={p}
           patternId={patternId}
-          className="absolute inset-0 h-full w-full  mix-blend-overlay dark:fill-white/10 dark:stroke-white/10 stroke-black/10 fill-black/10"
+          className="absolute inset-0 h-full w-full mix-blend-overlay"
+          style={{
+            fill: '#BDA76D50',
+            stroke: '#BDA76D50',
+          }}
         />
       </div>
     </div>
