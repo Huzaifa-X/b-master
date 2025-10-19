@@ -15,13 +15,17 @@ interface Assistant {
 
 interface AssistantCardProps {
   assistant: Assistant
-  tabType: "my" | "purchased" | "shared"
+  tabType: "my" | "purchased" | "shared" | "marketplace"
 }
 
 export function AssistantCard({ assistant, tabType }: AssistantCardProps) {
   const router = useRouter()
   
   const handleClick = () => {
+    // Don't route for marketplace assistants
+    if (tabType === "marketplace") {
+      return
+    }
     router.push(`/assistants/${assistant.id}`)
   }
   
@@ -30,9 +34,16 @@ export function AssistantCard({ assistant, tabType }: AssistantCardProps) {
       <Grid size={20} />
       <div className="relative z-20 p-6 flex flex-col h-full min-h-[200px]">
         <div className="flex-1 mb-4">
-          <h3 className="text-lg font-bold text-neutral-800 dark:text-white mb-2 line-clamp-1">
-            {assistant.name}
-          </h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-lg font-bold text-neutral-800 dark:text-white line-clamp-1">
+              {assistant.name}
+            </h3>
+            {tabType === "marketplace" && (
+              <div className="bg-primary/10 text-primary px-2 py-1 rounded-md text-sm font-semibold">
+                ${assistant.price}
+              </div>
+            )}
+          </div>
           
           <p className="text-neutral-600 dark:text-neutral-400 text-sm line-clamp-3">
             {assistant.description}
