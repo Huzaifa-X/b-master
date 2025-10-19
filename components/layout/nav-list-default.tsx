@@ -78,9 +78,11 @@ export function NavListDefault() {
           </SidebarMenuItem>
         ))}
         <SidebarMenuItem>
-          <SidebarMenuButton className="text-sidebar-foreground/70">
+          <SidebarMenuButton className="text-sidebar-foreground/70" asChild>
+            <Link href="/assistants">
             <MoreHorizontal className="text-sidebar-foreground/70" />
-            <span>All Assistants</span>
+              <span>All Assistants</span>
+            </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
