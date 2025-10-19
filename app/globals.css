@@ -47,6 +47,26 @@
     0px 2px 3px -1px rgba(0, 0, 0, 0.1),
     0px 1px 0px 0px rgba(25, 28, 33, 0.02),
     0px 0px 0px 1px rgba(25, 28, 33, 0.08);
+  --animate-skeleton-loading: skeletonLoading 8s infinite ease-in-out;
+  --color-accents-2: var(----accents-2);
+  --color-accents-1: var(----accents-1);
+
+  @keyframes skeletonLoading {
+    0% {
+      backgroundPosition: 200% 0;
+    }
+    100% {
+      backgroundPosition: -200% 0;
+    }
+  }
+  @keyframes skeletonLoading {
+  0% {
+    backgroundPosition: 200% 0;
+    }
+  100% {
+    backgroundPosition: -200% 0;
+    }
+  }
 }
 
 :root {
@@ -106,7 +126,7 @@
   --sidebar-accent: oklch(0.96 0.002 286);       /* Hover background */
   --sidebar-accent-foreground: oklch(0.20 0.005 286); /* Text on hover */
   --sidebar-border: oklch(0.93 0.003 286);       /* Sidebar border */
-  --sidebar-ring: oklch(0.55 0.18 264);          /* Focus ring */
+  --sidebar-ring: oklch(0.55 0.18 264);          /* Focus ring */          --accents-1: #fafafa;          --accents-2: #eaeaea;
 }
 
 /* Dark Mode (keeping for future flexibility, though client wants light only) */
@@ -144,6 +164,8 @@
   --sidebar-accent-foreground: oklch(0.98 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.55 0.18 264);
+  --accents-2: #333333;
+  --accents-1: #111111;
 }
 
 @layer base {

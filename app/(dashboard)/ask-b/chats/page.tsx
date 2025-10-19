@@ -85,47 +85,49 @@ export default function ChatsPage() {
   )
 
   return (
-    <div className="container mx-auto py-4 px-4 max-w-4xl">
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-3xl font-medium mb-2">Your Chat History</h1>
-          <Button
-            onClick={handleNewChat}
-            className="flex items-center gap-2 whitespace-nowrap"
-            size="default"
-          >
-            <Plus className="h-4 w-4" />
-            New Chat
-          </Button>
-        </div>
+    <div className="h-full overflow-y-auto">
+      <div className="container mx-auto py-4 px-4 max-w-4xl pb-16">
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-3xl font-medium mb-2">Your Chat History</h1>
+            <Button
+              onClick={handleNewChat}
+              className="flex items-center gap-2 whitespace-nowrap"
+              size="default"
+            >
+              <Plus className="h-4 w-4" />
+              New Chat
+            </Button>
+          </div>
 
-        {/* Search and New Chat Button */}
-        <div className="flex items-center gap-4 mt-6">
-          <InputGroup className="flex-1">
-            <InputGroupAddon>
-              <Search className="h-4 w-4" />
-            </InputGroupAddon>
-            <InputGroupInput
-              placeholder="Search chats..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <InputGroupAddon align="inline-end">
-                {filteredChats.length} {filteredChats.length === 1 ? 'result' : 'results'}
+          {/* Search and New Chat Button */}
+          <div className="flex items-center gap-4 mt-6">
+            <InputGroup className="flex-1">
+              <InputGroupAddon>
+                <Search className="h-4 w-4" />
               </InputGroupAddon>
-            )}
-          </InputGroup>
+              <InputGroupInput
+                placeholder="Search chats..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <InputGroupAddon align="inline-end">
+                  {filteredChats.length} {filteredChats.length === 1 ? 'result' : 'results'}
+                </InputGroupAddon>
+              )}
+            </InputGroup>
+          </div>
         </div>
-      </div>
 
-      <ChatHistoryList
-        chats={filteredChats}
-        onSelectChat={handleSelectChat}
-        onRenameChat={handleRenameChat}
-        onArchiveChat={handleArchiveChat}
-        onDeleteChat={handleDeleteChat}
-      />
+        <ChatHistoryList
+          chats={filteredChats}
+          onSelectChat={handleSelectChat}
+          onRenameChat={handleRenameChat}
+          onArchiveChat={handleArchiveChat}
+          onDeleteChat={handleDeleteChat}
+        />
+      </div>
     </div>
   )
 }

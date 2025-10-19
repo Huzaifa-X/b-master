@@ -7,6 +7,10 @@ import { NavListAskB } from "./nav-list-askb"
 export function NavList() {
   const pathname = usePathname()
 
+  if (pathname.startsWith("/assistants/add") || pathname.startsWith("/assistants/new")) {
+    return null
+  }
+
   // Route-based rendering logic
   if (pathname.startsWith("/home")) {
     return <NavListDefault />
