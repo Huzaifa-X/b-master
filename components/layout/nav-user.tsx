@@ -26,6 +26,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { useRouter } from "next/navigation"
 
 export function NavUser({
   user,
@@ -35,6 +36,8 @@ export function NavUser({
     email: string
   }
 }) {
+
+  const router = useRouter()
 
   return (
     <SidebarMenu>
@@ -75,24 +78,32 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup >
-              <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer">
+              <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer" onClick={() => {
+                router.push("/profile")
+              }}>
                 <User className="text-black focus:!text-black focus:!bg-muted"/>
                 My Profile
               </DropdownMenuItem>
-              <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer">
+              <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer" onClick={() => {
+                router.push("/assistants")
+              }}>
                 <Sparkles className="text-black focus:!text-black focus:!bg-muted"/>
                 My Assistants
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup >
-              <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer">
+              <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer" onClick={() => {
+                router.push("/pricing")
+              }}>
                 <DollarSign className="text-black focus:!text-black focus:!bg-muted"/>
                 Upgrade Plan
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer">
+            <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer" onClick={() => {
+              router.push("/login")
+            }}>
               <LogOut className="text-black focus:!text-black focus:!bg-muted"/>
               Log out
             </DropdownMenuItem>
