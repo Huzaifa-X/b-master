@@ -6,9 +6,11 @@ import { useHeaderStore } from "@/lib/stores/header-store"
 import { Button } from "@/components/ui/button"
 import { Share2 } from "lucide-react"
 import { toast } from "sonner"
+import { useAssistantStore } from "@/lib/stores/assistant-store"
 
 export function SiteHeader() {
   const { title, subtitle, isThreadActive, onShare } = useHeaderStore()
+  const assistantStore = useAssistantStore()
 
   const handleShare = () => {
     if (onShare) {
@@ -27,10 +29,16 @@ export function SiteHeader() {
           <SidebarTrigger className="-ml-1" />
         </div>
 
-        {/* Thread name on the left (ONLY when thread is active) */}
-        {isThreadActive && title && (
+        {assistantStore.isAssistantMode && (
           <div className="flex-1 flex flex-col justify-center min-w-0 px-4">
-            <h1 className="text-lg font-semibold truncate">Title</h1>
+            <h1 className="text-base font-medium truncate">{isThreadActive && title ? `${assistantStore.assistantName} / Title` : assistantStore.assistantName}</h1>
+          </div>
+        )}
+
+        {/* Thread name on the left (ONLY when thread is active) */}
+        {!assistantStore.isAssistantMode && isThreadActive && title && (
+          <div className="flex-1 flex flex-col justify-center min-w-0 px-4">
+            <h1 className="text-lg font-medium truncate">Title</h1>
           </div>
         )}
 

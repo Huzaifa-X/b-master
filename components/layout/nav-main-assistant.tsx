@@ -1,6 +1,6 @@
 "use client"
 
-import { MessageCircle, ChevronLeft, ArrowLeft } from "lucide-react"
+import { MessageCircle, ChevronLeft, ArrowLeft, Users, Megaphone, Layers } from "lucide-react"
 import Link from "next/link"
 import { ThreadListNew } from "@/components/assistant-ui/thread-list"
 import {
@@ -10,16 +10,17 @@ import {
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { useAssistantRuntime } from "@assistant-ui/react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 
 export function NavMainAssistant({ currentPath }: { currentPath: string }) {
     const runtime = useAssistantRuntime();
     const router = useRouter();
+    const params = useParams();
+    const assistantId = params?.id as string || "";
     
-    const handleBack = (e: React.MouseEvent<HTMLButtonElement>) => {
-        e.preventDefault();
+    const handleBack = () => {
         runtime.switchToNewThread();
-        router.push("/home");
+        router.push("/assistants");
     };
 
     return (
@@ -27,8 +28,8 @@ export function NavMainAssistant({ currentPath }: { currentPath: string }) {
             <SidebarMenu>
                 {/* Back Button */}
                 <SidebarMenuItem>
-                    <SidebarMenuButton asChild tooltip="Back" onClick={(e) => handleBack(e)}>
-                        <div className="group/nav-item cursor-pointer">
+                    <SidebarMenuButton asChild tooltip="Back">
+                        <div className="group/nav-item cursor-pointer" onClick={handleBack}>
                             <ArrowLeft className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
                             <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">Back</span>
                         </div>
@@ -39,17 +40,17 @@ export function NavMainAssistant({ currentPath }: { currentPath: string }) {
                 <ThreadListNew />
 
                 <SidebarMenuItem key={"Contacts"}>
-                    <SidebarMenuButton asChild tooltip={"Contact"} isActive={currentPath === "/assistants/[id]/contact"}>
-                        <Link href={"/assistants/[id]/contact"} className="group/nav-item">
-                            <MessageCircle className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
-                            <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">Contact</span>
+                    <SidebarMenuButton asChild tooltip={"Contact"} isActive={currentPath.includes("/contacts")}>
+                        <Link href={`/assistants/${assistantId}/contacts`} className="group/nav-item">
+                            <Users className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
+                            <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">Contacts</span>
                         </Link>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
 
                 <SidebarMenuItem key={"Messages"}>
-                    <SidebarMenuButton asChild tooltip={"Messages"} isActive={currentPath === "/assistants/[id]/messages"}>
-                        <Link href={"/assistants/[id]/messages"} className="group/nav-item">
+                    <SidebarMenuButton asChild tooltip={"Messages"} isActive={currentPath.includes("/messages")}>
+                        <Link href={`/assistants/${assistantId}/messages`} className="group/nav-item">
                             <MessageCircle className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
                             <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">Messages</span>
                         </Link>
@@ -57,18 +58,18 @@ export function NavMainAssistant({ currentPath }: { currentPath: string }) {
                 </SidebarMenuItem>
 
                 <SidebarMenuItem key={"News Feed"}>
-                    <SidebarMenuButton asChild tooltip={"News Feed"} isActive={currentPath === "/assistants/[id]/news"}>
-                        <Link href={"/assistants/[id]/news"} className="group/nav-item">
-                            <MessageCircle className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
+                    <SidebarMenuButton asChild tooltip={"News Feed"} isActive={currentPath.includes("/news")}>
+                        <Link href={`/assistants/${assistantId}/news`} className="group/nav-item">
+                            <Megaphone className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
                             <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">News Feed</span>
                         </Link>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
 
                 <SidebarMenuItem key={"Artifacts"}>
-                    <SidebarMenuButton asChild tooltip={"Artifacts"} isActive={currentPath === "/assistants/[id]/artifacts"}>
-                        <Link href={"/assistants/[id]/artifacts"} className="group/nav-item">
-                            <MessageCircle className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
+                    <SidebarMenuButton asChild tooltip={"Artifacts"} isActive={currentPath.includes("/artifacts")}>
+                        <Link href={`/assistants/${assistantId}/artifacts`} className="group/nav-item">
+                            <Layers className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
                             <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">Artifacts</span>
                         </Link>
                     </SidebarMenuButton>

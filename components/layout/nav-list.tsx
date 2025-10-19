@@ -3,9 +3,14 @@
 import { usePathname } from "next/navigation"
 import { NavListDefault } from "./nav-list-default"
 import { NavListAskB } from "./nav-list-askb"
+import { NavListAssistant } from "./nav-list-assistant"
 
 export function NavList() {
   const pathname = usePathname()
+
+  if (pathname.startsWith("/assistants/") && !pathname.startsWith("/assistants/add")) {
+    return <NavListAssistant />
+  }
 
   if (pathname.startsWith("/assistants/add") || pathname.startsWith("/assistants/new")) {
     return null

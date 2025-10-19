@@ -10,12 +10,14 @@ import { ComposerAttachments } from "@/components/assistant-ui/attachment";
 import { ThreadScrollToBottom } from "./thread-scroll-to-bottom";
 import { ComposerAction } from "./composer-action";
 import { useRouter } from "next/navigation";
+import { useAssistantStore } from "@/lib/stores/assistant-store"
 
 // Create an inner component that can use useComposerRuntime
 const ComposerContent: FC = () => {
     const [showPreview, setShowPreview] = useState(false);
     const composerRuntime = useComposerRuntime();
     const router = useRouter();
+    const assistantStore = useAssistantStore()
     // Subscribe to composer runtime state changes
     const [inputValue, setInputValue] = useState('');
     
@@ -77,7 +79,11 @@ const ComposerContent: FC = () => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             composerRuntime.send();
-            router.push("/ask-b");
+            if (assistantStore.isAssistantMode) {
+                router.push(`/assistants/${assistantStore.currentAssistantId}`);
+            } else {
+                router.push("/ask-b");
+            }
         }
         // Shift+Enter = New line (default behavior, no need to handle)
     };

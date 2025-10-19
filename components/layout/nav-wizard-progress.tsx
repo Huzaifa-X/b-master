@@ -34,8 +34,8 @@ export function NavWizardProgress() {
   return (
     <SidebarGroup>
       {/* Back Button */}
-      <SidebarMenuButton asChild tooltip="Back" onClick={() => handleBack()}>
-        <div className="group/nav-item cursor-pointer">
+      <SidebarMenuButton asChild tooltip="Back">
+        <div className="group/nav-item cursor-pointer" onClick={handleBack}>
           <ArrowLeft className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
           <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">Back</span>
         </div>

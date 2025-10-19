@@ -17,8 +17,7 @@ export function NavMainAskB({ currentPath }: { currentPath: string }) {
     const runtime = useAssistantRuntime();
     const router = useRouter();
     
-    const handleBack = (e: React.MouseEvent<HTMLButtonElement>) => {
-        e.preventDefault();
+    const handleBack = () => {
         runtime.switchToNewThread();
         router.push("/home");
     };
@@ -28,8 +27,8 @@ export function NavMainAskB({ currentPath }: { currentPath: string }) {
             <SidebarMenu>
                 {/* Back Button */}
                 <SidebarMenuItem>
-                    <SidebarMenuButton asChild tooltip="Back" onClick={(e) => handleBack(e)}>
-                        <div className="group/nav-item cursor-pointer">
+                    <SidebarMenuButton asChild tooltip="Back">
+                        <div className="group/nav-item cursor-pointer" onClick={handleBack}>
                             <ArrowLeft className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
                             <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">Back</span>
                         </div>

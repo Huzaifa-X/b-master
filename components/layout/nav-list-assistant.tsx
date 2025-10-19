@@ -30,15 +30,7 @@ export function NavListAssistant() {
                     ) : (
                         <ThreadList />
                     )}
-
-                    <SidebarMenuItem>
-                        <SidebarMenuButton className="text-sidebar-foreground/70" asChild>
-                            <Link href="/ask-b/chats">
-                                <MoreHorizontal className="text-sidebar-foreground/70" />
-                                <span>All Chats</span>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
+                    
                 </>
             )}
         </SidebarGroup>

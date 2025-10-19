@@ -7,7 +7,8 @@ import {
   useAssistantState,
 } from "@assistant-ui/react";
 import { ArchiveIcon, MoreHorizontal, Pencil, PlusIcon, Share, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useAssistantStore } from "@/lib/stores/assistant-store";
 
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,13 +29,13 @@ export const ThreadList: FC = () => {
 export const ThreadListNew: FC = () => {
   const router = useRouter();
   const runtime = useAssistantRuntime();
-  
+  const assistantStore = useAssistantStore()
+
   const handleNewChat = async () => {
     // Use the runtime's method to create a new thread
     runtime.switchToNewThread();
-    
-    // Then navigate if needed
-    router.push("/ask-b");
+
+    assistantStore.isAssistantMode ? router.push(`/assistants/${assistantStore.currentAssistantId}`) : router.push("/ask-b");
   };
 
   return (
