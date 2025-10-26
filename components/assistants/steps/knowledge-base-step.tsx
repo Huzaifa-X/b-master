@@ -5,15 +5,10 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { AssistantFormData } from "../assistant-wizard"
+import { KnowledgeBaseStepProps } from "@/types/assistant"
 import { Plus, X, Upload, File } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-
-interface KnowledgeBaseStepProps {
-  formData: AssistantFormData
-  updateFormData: (data: Partial<AssistantFormData>) => void
-}
 
 export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseStepProps) {
   const [newUrl, setNewUrl] = useState("")

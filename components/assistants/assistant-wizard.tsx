@@ -11,42 +11,7 @@ import { AdvancedConfigStep } from "@/components/assistants/steps/advanced-confi
 import { SharingPermissionsStep } from "@/components/assistants/steps/sharing-permissions-step"
 import { toast } from "sonner"
 import { useWizardStore } from "@/lib/stores/wizard-store"
-
-export interface AssistantFormData {
-  // Step 1: Basic Information
-  name: string
-  price: string
-  description: string
-
-  // Step 2: Visual Identity
-  image: File | null
-  imagePreview: string | null
-
-  // Step 3: Knowledge Base
-  notes: string
-  urls: string[]
-  files: File[]
-
-  // Step 4: Advanced Configuration
-  apiEndpoint: string
-  apiKey: string
-  modelName: string
-  temperature: number
-
-  // Step 5: Sharing & Permissions
-  permissionLevel: "private" | "public"
-  sharedUsers: {
-    id: string
-    name: string
-    email: string
-    permissions: {
-      chat: boolean
-      contact: boolean
-      messenger: boolean
-      artifact: boolean
-    }
-  }[]
-}
+import { AssistantFormData } from "@/types/assistant"
 
 export function AssistantWizard() {
   const currentStep = useWizardStore((state) => state.currentStep)
@@ -58,6 +23,7 @@ export function AssistantWizard() {
   const [formData, setFormData] = useState<AssistantFormData>({
     name: "",
     price: "",
+    category: "Other",
     description: "",
     image: null,
     imagePreview: null,
@@ -172,7 +138,7 @@ export function AssistantWizard() {
           variant="outline"
           onClick={handleBack}
           disabled={currentStep === 1}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 bg-background hover:bg-muted hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" />
           Back

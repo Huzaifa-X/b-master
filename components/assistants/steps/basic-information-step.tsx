@@ -3,12 +3,8 @@
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { AssistantFormData } from "../assistant-wizard"
-
-interface BasicInformationStepProps {
-  formData: AssistantFormData
-  updateFormData: (data: Partial<AssistantFormData>) => void
-}
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { AssistantCategory, BasicInformationStepProps } from "@/types/assistant"
 
 export function BasicInformationStep({ formData, updateFormData }: BasicInformationStepProps) {
   return (
@@ -34,6 +30,32 @@ export function BasicInformationStep({ formData, updateFormData }: BasicInformat
           />
           <p className="text-sm text-muted-foreground">
             Give your assistant a memorable name
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="category">
+            Category <span className="text-destructive">*</span>
+          </Label>
+          <Select
+            value={formData.category}
+            onValueChange={(value) => updateFormData({ category: value as AssistantCategory })}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Education" className="focus:bg-muted focus:text-foreground">Education</SelectItem>
+              <SelectItem value="Travelling" className="focus:bg-muted focus:text-foreground capitalize">Travelling</SelectItem>
+              <SelectItem value="Programming" className="focus:bg-muted focus:text-foreground capitalize">Programming</SelectItem>
+              <SelectItem value="Markteting" className="focus:bg-muted focus:text-foreground capitalize">Markteting</SelectItem>
+              <SelectItem value="Analysis" className="focus:bg-muted focus:text-foreground capitalize">Analysis</SelectItem>
+              <SelectItem value="Booking" className="focus:bg-muted focus:text-foreground capitalize">Booking</SelectItem>
+              <SelectItem value="Other" className="focus:bg-muted focus:text-foreground capitalize">Other</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-muted-foreground">
+            Select the category that best describes your assistant
           </p>
         </div>
 
