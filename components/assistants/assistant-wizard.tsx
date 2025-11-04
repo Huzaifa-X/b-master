@@ -27,7 +27,7 @@ export function AssistantWizard() {
     description: "",
     image: null,
     imagePreview: null,
-    notes: "",
+    notes: [],
     urls: [],
     files: [],
     apiEndpoint: "",

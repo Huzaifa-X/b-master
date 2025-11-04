@@ -11,8 +11,22 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
 export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseStepProps) {
+  const [newNote, setNewNote] = useState("")
   const [newUrl, setNewUrl] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const addNote = () => {
+    if (newNote.trim()) {
+      updateFormData({ notes: [...formData.notes, newNote.trim()] })
+      setNewNote("")
+    }
+  }
+
+  const removeNote = (index: number) => {
+    updateFormData({
+      notes: formData.notes.filter((_, i) => i !== index),
+    })
+  }
 
   const addUrl = () => {
     if (newUrl.trim()) {
@@ -65,17 +79,42 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
       <div className="space-y-6">
         {/* Notes Section */}
         <div className="space-y-2">
-          <Label htmlFor="notes">Notes & Instructions</Label>
-          <Textarea
-            id="notes"
-            placeholder="Add custom instructions, guidelines, or knowledge for your assistant..."
-            value={formData.notes}
-            onChange={(e) => updateFormData({ notes: e.target.value })}
-            rows={6}
-            className="resize-none"
-          />
+          <Label>Notes</Label>
+          <div className="flex gap-2">
+            <Textarea
+              placeholder="Add notes, guidelines, or knowledge for your assistant..."
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+              onKeyPress={(e) => e.key === "Enter" && e.ctrlKey && addNote()}
+              rows={3}
+              className="resize-none"
+            />
+            <Button onClick={addNote} size="icon" className="self-start">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+          {formData.notes.length > 0 && (
+            <div className="space-y-2 mt-3">
+              {formData.notes.map((note, index) => (
+                <div
+                  key={index}
+                  className="flex items-start justify-between bg-muted p-3 rounded-md"
+                >
+                  <p className="text-sm flex-1 whitespace-pre-wrap">{note}</p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeNote(index)}
+                    className="ml-2 bg-transparent hover:bg-transparent text-muted-foreground hover:text-black"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
           <p className="text-sm text-muted-foreground">
-            Provide context and instructions for your assistant
+            Add notes and context for your assistant (Press Ctrl+Enter to add)
           </p>
         </div>
 

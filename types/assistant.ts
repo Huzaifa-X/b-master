@@ -12,7 +12,7 @@ export interface AssistantFormData {
     imagePreview: string | null
 
     // Step 3: Knowledge Base
-    notes: string
+    notes: string[]
     urls: string[]
     files: File[]
 
