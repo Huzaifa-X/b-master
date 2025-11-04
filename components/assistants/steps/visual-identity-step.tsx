@@ -2,12 +2,7 @@
 
 import { Label } from "@/components/ui/label"
 import { ImageUploadField } from "@/components/ui/image-uploader"
-import { AssistantFormData } from "../assistant-wizard"
-
-interface VisualIdentityStepProps {
-  formData: AssistantFormData
-  updateFormData: (data: Partial<AssistantFormData>) => void
-}
+import { VisualIdentityStepProps } from "@/types/assistant"
 
 export function VisualIdentityStep({ formData, updateFormData }: VisualIdentityStepProps) {
   const handleImageChange = (value: File | string | null) => {

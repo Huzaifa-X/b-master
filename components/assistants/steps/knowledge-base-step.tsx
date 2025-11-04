@@ -79,7 +79,12 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
       <div className="space-y-6">
         {/* Notes Section */}
         <div className="space-y-2">
-          <Label>Notes</Label>
+          <div className="flex items-center justify-between">
+            <Label>Notes</Label>
+            <Button onClick={addNote} size="icon" className="self-start">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
           <div className="flex gap-2">
             <Textarea
               placeholder="Add notes, guidelines, or knowledge for your assistant..."
@@ -89,23 +94,22 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
               rows={3}
               className="resize-none"
             />
-            <Button onClick={addNote} size="icon" className="self-start">
-              <Plus className="h-4 w-4" />
-            </Button>
           </div>
           {formData.notes.length > 0 && (
-            <div className="space-y-2 mt-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
               {formData.notes.map((note, index) => (
                 <div
                   key={index}
-                  className="flex items-start justify-between bg-muted p-3 rounded-md"
+                  className="group relative bg-muted rounded-md p-4"
                 >
-                  <p className="text-sm flex-1 whitespace-pre-wrap">{note}</p>
+                  <p className="text-sm whitespace-pre-wrap text-foreground pr-8 break-words">
+                    {note}
+                  </p>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => removeNote(index)}
-                    className="ml-2 bg-transparent hover:bg-transparent text-muted-foreground hover:text-black"
+                    className="absolute top-2 right-2 h-6 w-6 hover:bg-destructive/10 hover:text-destructive"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -114,13 +118,18 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
             </div>
           )}
           <p className="text-sm text-muted-foreground">
-            Add notes and context for your assistant (Press Ctrl+Enter to add)
+            Add notes and context for your assistant
           </p>
         </div>
 
         {/* URLs Section */}
         <div className="space-y-2">
-          <Label>Reference URLs</Label>
+          <div className="flex items-center justify-between">
+            <Label>Reference URLs</Label>
+            <Button onClick={addUrl} size="icon" className="self-start">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
           <div className="flex gap-2">
             <Input
               placeholder="https://example.com/documentation"
@@ -128,9 +137,6 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
               onChange={(e) => setNewUrl(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && addUrl()}
             />
-            <Button onClick={addUrl} size="icon">
-              <Plus className="h-4 w-4" />
-            </Button>
           </div>
           {formData.urls.length > 0 && (
             <div className="space-y-2 mt-3">
@@ -167,7 +173,7 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
         {/* Files Section */}
         <div className="space-y-2">
           <Label>Upload Files</Label>
-          
+
           <input
             ref={fileInputRef}
             type="file"
@@ -176,7 +182,7 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
             className="hidden"
             id="files-upload"
           />
-          
+
           <div
             onClick={handleCardClick}
             className={cn(
@@ -205,10 +211,7 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
                 >
                   <div className="flex items-center gap-2 flex-1">
                     <File className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm truncate">{file.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      ({(file.size / 1024).toFixed(1)} KB)
-                    </span>
+                    <span className="text-sm truncate break-words">{file.name}</span>
                   </div>
                   <Button
                     variant="ghost"

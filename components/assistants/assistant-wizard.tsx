@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { BasicInformationStep } from "@/components/assistants/steps/basic-information-step"
 import { VisualIdentityStep } from "@/components/assistants/steps/visual-identity-step"
 import { KnowledgeBaseStep } from "@/components/assistants/steps/knowledge-base-step"
+import { InstructionsStep } from "@/components/assistants/steps/instructions-step"
 import { AdvancedConfigStep } from "@/components/assistants/steps/advanced-config-step"
 import { SharingPermissionsStep } from "@/components/assistants/steps/sharing-permissions-step"
 import { toast } from "sonner"
@@ -30,10 +31,17 @@ export function AssistantWizard() {
     notes: [],
     urls: [],
     files: [],
-    apiEndpoint: "",
+    instructions: "",
+    authenticationType: "none",
     apiKey: "",
-    modelName: "gpt-4",
-    temperature: 0.7,
+    authType: "basic",
+    clientId: "",
+    clientSecret: "",
+    authorizationUrl: "",
+    tokenUrl: "",
+    scope: "",
+    tokenExchangeMethod: "post",
+    schema: null,
     permissionLevel: "private",
     sharedUsers: [],
   })
@@ -76,10 +84,14 @@ export function AssistantWizard() {
         return true
 
       case 4:
-        // All fields are optional in advanced config
+        // Instructions are optional
         return true
 
       case 5:
+        // All fields are optional in advanced config
+        return true
+
+      case 6:
         // Permission level is already set with default
         return true
 
@@ -91,7 +103,7 @@ export function AssistantWizard() {
   const handleNext = () => {
     if (validateStep(currentStep)) {
       addCompletedStep(currentStep)
-      setCurrentStep(Math.min(currentStep + 1, 5))
+      setCurrentStep(Math.min(currentStep + 1, 6))
     }
   }
 
@@ -125,9 +137,12 @@ export function AssistantWizard() {
           <KnowledgeBaseStep formData={formData} updateFormData={updateFormData} />
         )}
         {currentStep === 4 && (
-          <AdvancedConfigStep formData={formData} updateFormData={updateFormData} />
+          <InstructionsStep formData={formData} updateFormData={updateFormData} />
         )}
         {currentStep === 5 && (
+          <AdvancedConfigStep formData={formData} updateFormData={updateFormData} />
+        )}
+        {currentStep === 6 && (
           <SharingPermissionsStep formData={formData} updateFormData={updateFormData} />
         )}
       </Card>
@@ -144,7 +159,7 @@ export function AssistantWizard() {
           Back
         </Button>
 
-        {currentStep === 5 ? (
+        {currentStep === 6 ? (
           <Button onClick={handleSubmit} className="flex items-center gap-2">
             Create Assistant
           </Button>

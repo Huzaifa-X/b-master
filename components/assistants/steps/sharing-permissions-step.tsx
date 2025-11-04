@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { AssistantFormData } from "../assistant-wizard"
+import { SharingPermissionsStepProps, SharedUser, PermissionType } from "@/types/assistant"
 import { cn } from "@/lib/utils"
 import { Lock, Globe, Check, Plus, X, User } from "lucide-react"
 import { toast } from "sonner"
@@ -24,10 +24,7 @@ import {
 } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
 
-interface SharingPermissionsStepProps {
-  formData: AssistantFormData
-  updateFormData: (data: Partial<AssistantFormData>) => void
-}
+
 
 const PERMISSION_OPTIONS = [
   {
@@ -64,7 +61,7 @@ export function SharingPermissionsStep({
     if (!contact) return
 
     // Check if user already added
-    if (formData.sharedUsers.some((u) => u.id === contact.id)) {
+    if (formData.sharedUsers.some((u: SharedUser) => u.id === contact.id)) {
       toast.error("This user is already added")
       return
     }
@@ -90,7 +87,7 @@ export function SharingPermissionsStep({
 
   const removeUser = (userId: string) => {
     updateFormData({
-      sharedUsers: formData.sharedUsers.filter((user) => user.id !== userId),
+      sharedUsers: formData.sharedUsers.filter((user: SharedUser) => user.id !== userId),
     })
     toast.success("User removed")
   }
@@ -101,7 +98,7 @@ export function SharingPermissionsStep({
     value: boolean
   ) => {
     updateFormData({
-      sharedUsers: formData.sharedUsers.map((user) =>
+      sharedUsers: formData.sharedUsers.map((user: SharedUser) =>
         user.id === userId
           ? {
               ...user,
@@ -114,7 +111,7 @@ export function SharingPermissionsStep({
 
   // Get available contacts (not already added)
   const availableContacts = AVAILABLE_CONTACTS.filter(
-    (contact) => !formData.sharedUsers.some((user) => user.id === contact.id)
+    (contact) => !formData.sharedUsers.some((user: SharedUser) => user.id === contact.id)
   )
 
   return (
@@ -222,7 +219,7 @@ export function SharingPermissionsStep({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {formData.sharedUsers.map((user) => (
+                    {formData.sharedUsers.map((user: SharedUser) => (
                       <TableRow key={user.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">

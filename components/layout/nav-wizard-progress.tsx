@@ -12,8 +12,9 @@ const STEPS = [
   { id: 1, title: "Basic Info", description: "Name and details" },
   { id: 2, title: "Visual Identity", description: "Add an image" },
   { id: 3, title: "Knowledge Base", description: "Add resources" },
-  { id: 4, title: "Advanced Config", description: "API settings" },
-  { id: 5, title: "Sharing", description: "Permissions" },
+  { id: 4, title: "Instructions", description: "Add instructions" },
+  { id: 5, title: "Advanced Config", description: "API settings" },
+  { id: 6, title: "Sharing", description: "Permissions" },
 ]
 
 export function NavWizardProgress() {
