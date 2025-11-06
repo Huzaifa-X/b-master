@@ -4,9 +4,9 @@ import { useState } from "react"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Bot } from "lucide-react"
+import { Cpu } from "lucide-react"
 import { InstructionsStepProps } from "@/types/assistant"
-import { AIInstructionDialog } from "@/app/(dashboard)/assistants/_components/ai-instruction-dialog"
+import { AIInstructionDialog } from "@/app/(dashboard)/assistants/add/_components/ai-instruction-dialog"
 
 export function InstructionsStep({ formData, updateFormData }: InstructionsStepProps) {
   const [showAIDialog, setShowAIDialog] = useState(false)
@@ -34,7 +34,7 @@ export function InstructionsStep({ formData, updateFormData }: InstructionsStepP
             onClick={() => setShowAIDialog(true)}
             className="gap-2"
           >
-            <Bot className="w-4 h-4" />
+            <Cpu className="w-4 h-4" />
           </Button>
         </div>
         <Textarea

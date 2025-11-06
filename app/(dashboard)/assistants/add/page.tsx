@@ -1,4 +1,4 @@
-import { AssistantWizard } from "@/components/assistants/assistant-wizard"
+import { AssistantWizard } from "@/app/(dashboard)/assistants/add/_components/assistant-wizard"
 
 export default function NewAssistantPage() {
   return (

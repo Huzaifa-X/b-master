@@ -92,7 +92,7 @@ const CodeHeaderWrapper: FC<CodeHeaderProps> = (props) => {
   return <CodeHeader {...props} />;
 };
 
-const defaultComponents = memoizeMarkdownComponents({
+export const defaultComponents = memoizeMarkdownComponents({
   CodeHeader: CodeHeaderWrapper,
   h1: ({ className, ...props }) => (
     <h1
