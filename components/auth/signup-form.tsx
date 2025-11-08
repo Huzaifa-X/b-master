@@ -1,5 +1,3 @@
-
-
 "use client"
 
 import { cn } from "@/lib/utils"
@@ -12,29 +10,97 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useState } from "react"
-import { Eye, EyeOff } from "lucide-react"
-import { useRouter } from "next/navigation";
+import { Eye, EyeOff, Loader2 } from "lucide-react"
+import { registerSchema, RegisterInput } from "@/lib/validations/auth"
+import { useRegisterMutation } from "@/hooks/useAuth"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 export function SignupForm({
   className,
   ...props
 }: React.ComponentProps<"form">) {
+  const router = useRouter()
+  const registerMutation = useRegisterMutation()
+  
+  const [formData, setFormData] = useState<RegisterInput>({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  })
+  
+  const [errors, setErrors] = useState<Partial<Record<keyof RegisterInput, string>>>({})
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const router = useRouter();
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword)
+
+  const togglePasswordVisibility = () => setShowPassword(!showPassword)
+  const toggleConfirmPasswordVisibility = () => setShowConfirmPassword(!showConfirmPassword)
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target
+    const fieldName = id === "confirm-password" ? "confirmPassword" : id as keyof RegisterInput
+    
+    setFormData((prev: RegisterInput) => ({
+      ...prev,
+      [fieldName]: value,
+    }))
+    
+    // Clear field error when user types
+    if (errors[fieldName]) {
+      setErrors((prev: Partial<Record<keyof RegisterInput, string>>) => ({
+        ...prev,
+        [fieldName]: undefined,
+      }))
+    }
   }
 
-  const toggleConfirmPasswordVisibility = () => {
-    setShowConfirmPassword(!showConfirmPassword)
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setErrors({})
+
+    try {
+      // Client-side validation
+      const validatedData = registerSchema.parse(formData)
+      
+      // Call mutation
+      const result = await registerMutation.mutateAsync(validatedData)
+      
+      // Handle field errors from server
+      if (!result.success && result.fieldErrors) {
+        setErrors(result.fieldErrors as Partial<Record<keyof RegisterInput, string>>)
+        return
+      }
+
+      // Success - redirect to verify email page with email in URL
+      if (result.success) {
+        // Store email in sessionStorage for verification page
+        sessionStorage.setItem('verification_email', formData.email)
+        router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`)
+      }
+    } catch (error: any) {
+      // Handle client-side Zod validation errors
+      if (error?.name === "ZodError") {
+        const flattened = error.flatten()
+        const fieldErrors: Partial<Record<keyof RegisterInput, string>> = {}
+
+        // Convert array of error messages to single string per field
+        Object.entries(flattened.fieldErrors).forEach(([field, messages]) => {
+          if (Array.isArray(messages) && messages.length > 0) {
+            fieldErrors[field as keyof RegisterInput] = messages[0]
+          }
+        })
+
+        setErrors(fieldErrors)
+      } else {
+        // Handle other errors
+        console.error("Registration error:", error)
+        setErrors({ email: "An unexpected error occurred. Please try again." })
+      }
+    }
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    console.log("Form submitted");
-    router.push("/login");
-  }
+  const isLoading = registerMutation.isPending
 
   return (
     <form className={cn("flex flex-col gap-6", className)} {...props} onSubmit={handleSubmit}>
@@ -45,26 +111,50 @@ export function SignupForm({
             Fill in the form below to create your account
           </p>
         </div>
+
+        {/* Full Name Field */}
         <Field>
           <FieldLabel htmlFor="name">Full Name</FieldLabel>
           <Input
             id="name"
             type="text"
             placeholder="Enter your full name"
-            className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-input"
+            value={formData.name}
+            onChange={handleChange}
+            className={cn(
+              "transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-input",
+              errors.name && "border-red-500 focus:ring-red-500 focus:border-red-500"
+            )}
+            disabled={isLoading}
             required
           />
+          {errors.name && (
+            <p className="text-sm text-red-600 mt-1 animate-fade-in">{errors.name}</p>
+          )}
         </Field>
+
+        {/* Email Field */}
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input
             id="email"
             type="email"
             placeholder="Enter your email address"
-            className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-input"
+            value={formData.email}
+            onChange={handleChange}
+            className={cn(
+              "transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-input",
+              errors.email && "border-red-500 focus:ring-red-500 focus:border-red-500"
+            )}
+            disabled={isLoading}
             required
           />
+          {errors.email && (
+            <p className="text-sm text-red-600 mt-1 animate-fade-in">{errors.email}</p>
+          )}
         </Field>
+
+        {/* Password Field */}
         <Field>
           <FieldLabel htmlFor="password">Password</FieldLabel>
           <div className="relative">
@@ -72,7 +162,13 @@ export function SignupForm({
               id="password"
               type={showPassword ? "text" : "password"}
               placeholder="Create a strong password"
-              className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-12 shadow-input"
+              value={formData.password}
+              onChange={handleChange}
+              className={cn(
+                "transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-12 shadow-input",
+                errors.password && "border-red-500 focus:ring-red-500 focus:border-red-500"
+              )}
+              disabled={isLoading}
               required
             />
             <button
@@ -80,18 +176,21 @@ export function SignupForm({
               onClick={togglePasswordVisibility}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors duration-200 p-1 rounded-md hover:bg-gray-50"
               aria-label={showPassword ? "Hide password" : "Show password"}
+              disabled={isLoading}
             >
-              {showPassword ? (
-                <EyeOff className="w-5 h-5" />
-              ) : (
-                <Eye className="w-5 h-5" />
-              )}
+              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
-          <FieldDescription>
-            Must be at least 8 characters long.
-          </FieldDescription>
+          {errors.password ? (
+            <p className="text-sm text-red-600 mt-1 animate-fade-in">{errors.password}</p>
+          ) : (
+            <FieldDescription>
+              Must be at least 8 characters with uppercase, lowercase, and number.
+            </FieldDescription>
+          )}
         </Field>
+
+        {/* Confirm Password Field */}
         <Field>
           <FieldLabel htmlFor="confirm-password">Confirm Password</FieldLabel>
           <div className="relative">
@@ -99,7 +198,13 @@ export function SignupForm({
               id="confirm-password"
               type={showConfirmPassword ? "text" : "password"}
               placeholder="Re-enter your password"
-              className="transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-12 shadow-input"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              className={cn(
+                "transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-12 shadow-input",
+                errors.confirmPassword && "border-red-500 focus:ring-red-500 focus:border-red-500"
+              )}
+              disabled={isLoading}
               required
             />
             <button
@@ -107,27 +212,46 @@ export function SignupForm({
               onClick={toggleConfirmPasswordVisibility}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors duration-200 p-1 rounded-md hover:bg-gray-50"
               aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+              disabled={isLoading}
             >
-              {showConfirmPassword ? (
-                <EyeOff className="w-5 h-5" />
-              ) : (
-                <Eye className="w-5 h-5" />
-              )}
+              {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
-          <FieldDescription>Please confirm your password.</FieldDescription>
+          {errors.confirmPassword ? (
+            <p className="text-sm text-red-600 mt-1 animate-fade-in">{errors.confirmPassword}</p>
+          ) : (
+            <FieldDescription>Please confirm your password.</FieldDescription>
+          )}
         </Field>
+
+        {/* Submit Button */}
         <Field>
-          <Button type="submit" className="w-full transition-all duration-200 hover:shadow-md">
-            Create Account
+          <Button 
+            type="submit" 
+            className="w-full transition-all duration-200 hover:shadow-md"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating Account...
+              </>
+            ) : (
+              "Create Account"
+            )}
           </Button>
         </Field>
+
+        {/* Sign In Link */}
         <Field>
           <FieldDescription className="px-6 text-center">
             Already have an account?{" "}
-            <a href="/login" className="underline underline-offset-4 hover:text-blue-600 transition-colors duration-200">
+            <Link
+              href="/login" 
+              className="underline underline-offset-4 hover:text-blue-600 transition-colors duration-200"
+            >
               Sign in
-            </a>
+            </Link>
           </FieldDescription>
         </Field>
       </FieldGroup>

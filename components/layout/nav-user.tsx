@@ -27,6 +27,8 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
+import { signOut } from "next-auth/react"
 
 export function NavUser({
   user,
@@ -81,13 +83,13 @@ export function NavUser({
               <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer" onClick={() => {
                 router.push("/profile")
               }}>
-                <User className="text-black focus:!text-black focus:!bg-muted"/>
+                <User className="text-black focus:!text-black focus:!bg-muted" />
                 My Profile
               </DropdownMenuItem>
               <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer" onClick={() => {
                 router.push("/assistants")
               }}>
-                <Sparkles className="text-black focus:!text-black focus:!bg-muted"/>
+                <Sparkles className="text-black focus:!text-black focus:!bg-muted" />
                 My Assistants
               </DropdownMenuItem>
             </DropdownMenuGroup>
@@ -96,15 +98,31 @@ export function NavUser({
               <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer" onClick={() => {
                 router.push("/pricing")
               }}>
-                <DollarSign className="text-black focus:!text-black focus:!bg-muted"/>
+                <DollarSign className="text-black focus:!text-black focus:!bg-muted" />
                 Upgrade Plan
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer" onClick={() => {
-              router.push("/login")
-            }}>
-              <LogOut className="text-black focus:!text-black focus:!bg-muted"/>
+            <DropdownMenuItem
+              className="text-black focus:!text-black focus:!bg-muted cursor-pointer"
+              onClick={async () => {
+                try {
+                  await signOut({
+                    redirect: false,
+                    callbackUrl: "/login"
+                  })
+
+                  sessionStorage.clear()
+
+                  // Redirect to login
+                  router.push("/login")
+                  router.refresh()
+                } catch (error) {
+                  toast.error("Failed to sign out", { id: "logout" })
+                }
+              }}
+            >
+              <LogOut className="text-black focus:!text-black focus:!bg-muted" />
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
