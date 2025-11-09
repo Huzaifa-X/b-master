@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { InputGroup, InputGroupAddon, InputGroupText, InputGroupInput } from "@/components/ui/input-group"
 import { AssistantCategory, BasicInformationStepProps } from "@/types/assistant"
 
 export function BasicInformationStep({ formData, updateFormData }: BasicInformationStepProps) {
@@ -63,25 +64,24 @@ export function BasicInformationStep({ formData, updateFormData }: BasicInformat
           <Label htmlFor="price">
             Price <span className="text-destructive">*</span>
           </Label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-              $
-            </span>
-            <Input
-              id="price"
-              type="number"
+          <InputGroup>
+            <InputGroupAddon>
+              <InputGroupText>CHF</InputGroupText>
+            </InputGroupAddon>
+            <InputGroupInput
               placeholder="0.00"
               value={formData.price}
               onChange={(e) => updateFormData({ price: e.target.value })}
-              className="pl-7"
+              type="number"
               min="0"
               step="0.01"
             />
-          </div>
+          </InputGroup>
           <p className="text-sm text-muted-foreground">
-            Set the pricing for your assistant (per usage or subscription)
+            Set the pricing for your assistant.
           </p>
         </div>
+
 
         <div className="space-y-2">
           <Label htmlFor="description">

@@ -15,7 +15,7 @@ export type AuthenticationType = "none" | "api_key" | "oauth"
 export type AuthType = "basic" | "bearer" | "custom"
 export type TokenExchangeMethod = "post" | "basic_auth"
 export type PermissionLevel = "private" | "public"
-export type PermissionType = "chat" | "contact" | "messenger" | "artifact"
+export type PermissionType = "chat" | "contact" | "messenger" | "artifact" | "newsFeed"
 
 // ================================================================
 // ASSISTANT FORM DATA INTERFACE
@@ -29,8 +29,7 @@ export interface AssistantFormData {
   description: string
 
   // Step 2: Visual Identity
-  image: File | null
-  imagePreview: string | null
+  image: string | null // For preview (base64)
 
   // Step 3: Knowledge Base
   notes: string[]
@@ -46,6 +45,7 @@ export interface AssistantFormData {
   // API Key Authentication fields
   apiKey?: string
   authType?: AuthType
+  customHeaderName?: string
   
   // OAuth Authentication fields
   clientId?: string
@@ -57,6 +57,7 @@ export interface AssistantFormData {
   
   // OpenAPI Schema
   schema?: any // JSON object
+  schemaText?: string // Raw schema text for editing
 
   // Step 6: Sharing & Permissions
   permissionLevel: PermissionLevel
@@ -79,6 +80,7 @@ export interface UserPermissions {
   contact: boolean
   messenger: boolean
   artifact: boolean
+  newsFeed: boolean
 }
 
 // ================================================================

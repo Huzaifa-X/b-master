@@ -240,7 +240,7 @@ model Assistant {
   userId            BigInt
   name              String              @db.VarChar(255)
   price             Float               @default(0)
-  currency          String              @default("usd") @db.Text
+  currency          String              @default("chf") @db.Text
   priceType         String              @default("paid") @db.VarChar(255) // free or paid
   category          AssistantCategory   @default(OTHER) // New: Category field
   description       String?             @db.Text
@@ -309,6 +309,7 @@ model AssistantApiConfiguration {
   // ============================================
   apiKey              String?   @db.Text // Encrypted API key
   authType            String?   @db.VarChar(50) // Options: "basic", "bearer", "custom"
+  customHeaderName    String?   @db.VarChar(255) // Custom header name for API key auth
   
   // ============================================
   // OAUTH AUTHENTICATION (when type = "oauth")
@@ -322,9 +323,10 @@ model AssistantApiConfiguration {
   // Options: "post", "basic_auth"
   
   // ============================================
-  // OPENAPI SCHEMA
+  // OPENAPI SCHEMA STORAGE (2-part strategy)
   // ============================================
-  schema              Json?     // The OpenAPI/Swagger schema JSON
+  schemaText          String?   @db.Text    // Raw YAML/JSON (for editing)
+  schema              Json?                   // Parsed JSON (for validation)
   
   // ============================================
   // METADATA
@@ -361,7 +363,7 @@ model AssistantPin {
 
 model UsageMetric {
   id           BigInt   @id @default(autoincrement())
-  assistantId  BigInt
+  assistantId  BigInt?
   userId       BigInt
   inputToken   Int      @default(0)
   outputToken  Int      @default(0)
@@ -371,7 +373,7 @@ model UsageMetric {
   costType     String?  @db.VarChar(100) // Type of cost calculation
   createdAt    DateTime @default(now())
 
-  assistant Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  assistant Assistant? @relation(fields: [assistantId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([assistantId])

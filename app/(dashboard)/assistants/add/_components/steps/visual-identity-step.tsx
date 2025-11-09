@@ -1,25 +1,46 @@
 "use client"
 
+import { useState } from "react"
 import { Label } from "@/components/ui/label"
 import { ImageUploadField } from "@/components/ui/image-uploader"
 import { VisualIdentityStepProps } from "@/types/assistant"
+import { Button } from "@/components/ui/button"
+import { Trash2 } from "lucide-react"
 
-export function VisualIdentityStep({ formData, updateFormData }: VisualIdentityStepProps) {
-  const handleImageChange = (value: File | string | null) => {
+export function VisualIdentityStep({
+  formData,
+  updateFormData
+}: VisualIdentityStepProps) {
+  const [pendingImage, setPendingImage] = useState<string | null>(null)
+
+  const handleImageChange = async (value: File | string | null) => {
     if (value instanceof File) {
-      // Create preview when a file is selected
+      // Create preview and store file for later upload
       const reader = new FileReader()
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
+        const base64Data = reader.result as string
+        setPendingImage(base64Data)
+
+        // Store base64 for preview and file for later S3 upload
         updateFormData({
-          image: value,
-          imagePreview: reader.result as string,
+          image: base64Data, // For preview
         })
+        setPendingImage(null)
       }
       reader.readAsDataURL(value)
-    } else {
-      // Clear image if null
-      updateFormData({ image: null, imagePreview: null })
+    } else if (value === null) {
+      // User wants to remove image
+      updateFormData({
+        image: null, // Clear preview
+      })
+      setPendingImage(null)
     }
+  }
+
+  const handleRemoveImage = () => {
+    updateFormData({
+      image: null, // Clear preview
+    })
   }
 
   return (
@@ -34,7 +55,7 @@ export function VisualIdentityStep({ formData, updateFormData }: VisualIdentityS
       <div className="space-y-4">
         <div className="max-w-xs mx-auto">
           <ImageUploadField
-            value={formData.image}
+            value={formData.image || pendingImage}
             onChange={handleImageChange}
             aspectRatio={1}
             maxSize={5 * 1024 * 1024}
@@ -42,11 +63,7 @@ export function VisualIdentityStep({ formData, updateFormData }: VisualIdentityS
           />
         </div>
 
-        {formData.image && (
-          <p className="text-sm text-muted-foreground text-center">
-            {formData.image.name}
-          </p>
-        )}
+        
 
         <p className="text-sm text-muted-foreground text-center">
           This image will be used as the avatar for your assistant
@@ -55,4 +72,3 @@ export function VisualIdentityStep({ formData, updateFormData }: VisualIdentityS
     </div>
   )
 }
-

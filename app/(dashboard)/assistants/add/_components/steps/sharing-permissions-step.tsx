@@ -75,6 +75,7 @@ export function SharingPermissionsStep({
         contact: true,
         messenger: true,
         artifact: true,
+        newsFeed: true,
       },
     }
 
@@ -94,7 +95,7 @@ export function SharingPermissionsStep({
 
   const updateUserPermission = (
     userId: string,
-    permission: "chat" | "contact" | "messenger" | "artifact" | "newsFeed",
+    permission: PermissionType,
     value: boolean
   ) => {
     updateFormData({
@@ -257,7 +258,7 @@ export function SharingPermissionsStep({
                         <TableCell>
                           <div className="flex justify-center">
                             <Checkbox
-                              checked={user.permissions.chat}
+                              checked={user.permissions.newsFeed}
                               onCheckedChange={(checked) =>
                                 updateUserPermission(user.id, "newsFeed", checked as boolean)
                               }

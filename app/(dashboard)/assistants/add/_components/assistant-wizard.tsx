@@ -16,7 +16,6 @@ import { AssistantFormData } from "@/types/assistant"
 
 export function AssistantWizard() {
   const currentStep = useWizardStore((state) => state.currentStep)
-  const completedSteps = useWizardStore((state) => state.completedSteps)
   const setCurrentStep = useWizardStore((state) => state.setCurrentStep)
   const addCompletedStep = useWizardStore((state) => state.addCompletedStep)
   const resetWizard = useWizardStore((state) => state.reset)
@@ -26,8 +25,7 @@ export function AssistantWizard() {
     price: "",
     category: "Other",
     description: "",
-    image: null,
-    imagePreview: null,
+    image: null, // For preview (base64)
     notes: [],
     urls: [],
     files: [],
@@ -42,6 +40,7 @@ export function AssistantWizard() {
     scope: "",
     tokenExchangeMethod: "post",
     schema: null,
+    schemaText: "",
     permissionLevel: "private",
     sharedUsers: [],
   })
@@ -116,6 +115,7 @@ export function AssistantWizard() {
       console.log("Form submitted with data:", formData)
       toast.success("AI Assistant created successfully!")
       addCompletedStep(currentStep)
+      console.log("Form data:", formData)
       // Here you would typically send the data to your API
       // After successful submission, you might want to redirect
       // router.push('/assistants')

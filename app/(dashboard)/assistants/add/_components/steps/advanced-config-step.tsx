@@ -4,14 +4,7 @@ import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Select,
   SelectContent,
@@ -21,25 +14,27 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { AdvancedConfigStepProps } from "@/types/assistant"
-import { Settings } from "lucide-react"
+import { SchemaPreview } from "@/app/(dashboard)/assistants/add/_components/schema-preview"
+import { Shield, Key, Lock } from "lucide-react"
+import { parseSchemaText, parseOpenAPISchema } from "@/lib/openapi-parser"
 
 export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigStepProps) {
-  const [authDialogOpen, setAuthDialogOpen] = useState(false)
 
   const handleAuthTypeChange = (value: "none" | "api_key" | "oauth") => {
-    updateFormData({ 
+    updateFormData({
       authenticationType: value,
-      // Clear related fields when changing auth type
       apiKey: undefined,
       authType: undefined,
+      customHeaderName: undefined,
       clientId: undefined,
       clientSecret: undefined,
       authorizationUrl: undefined,
       tokenUrl: undefined,
       scope: undefined,
       tokenExchangeMethod: undefined,
+      schema: undefined,
+      schemaText: undefined,
     })
-    setAuthDialogOpen(false)
   }
 
   const getAuthTypeLabel = () => {
@@ -64,51 +59,63 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
 
       <div className="space-y-6">
         {/* Authentication Type Selection */}
-        <div className="space-y-2">
+        <div className="space-y-4">
           <Label>Authentication</Label>
-          <Dialog open={authDialogOpen} onOpenChange={setAuthDialogOpen}>
-            <DialogTrigger asChild>
-              <Button 
-                variant="outline" 
-                className="w-full justify-start"
-                type="button"
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                {getAuthTypeLabel()}
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Select Authentication Type</DialogTitle>
-                <DialogDescription>
-                  Choose how your assistant will authenticate with external APIs
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-2 py-4">
-                <Button
-                  variant={formData.authenticationType === "none" ? "default" : "outline"}
-                  className="w-full justify-start"
-                  onClick={() => handleAuthTypeChange("none")}
-                >
-                  None
-                </Button>
-                <Button
-                  variant={formData.authenticationType === "api_key" ? "default" : "outline"}
-                  className="w-full justify-start"
-                  onClick={() => handleAuthTypeChange("api_key")}
-                >
-                  API Key
-                </Button>
-                <Button
-                  variant={formData.authenticationType === "oauth" ? "default" : "outline"}
-                  className="w-full justify-start"
-                  onClick={() => handleAuthTypeChange("oauth")}
-                >
-                  OAuth
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card
+              className={`cursor-pointer transition-all hover:shadow-md ${formData.authenticationType === "none"
+                  ? "ring-2 ring-primary bg-primary/5"
+                  : "hover:bg-muted/50"
+                }`}
+              onClick={() => handleAuthTypeChange("none")}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="text-base">None</CardTitle>
+                </div>
+                <CardDescription className="text-sm">
+                  No authentication required
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            <Card
+              className={`cursor-pointer transition-all hover:shadow-md ${formData.authenticationType === "api_key"
+                  ? "ring-2 ring-primary bg-primary/5"
+                  : "hover:bg-muted/50"
+                }`}
+              onClick={() => handleAuthTypeChange("api_key")}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <Key className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="text-base">API Key</CardTitle>
+                </div>
+                <CardDescription className="text-sm">
+                  Use API keys for authentication
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            <Card
+              className={`cursor-pointer transition-all hover:shadow-md ${formData.authenticationType === "oauth"
+                  ? "ring-2 ring-primary bg-primary/5"
+                  : "hover:bg-muted/50"
+                }`}
+              onClick={() => handleAuthTypeChange("oauth")}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <Lock className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="text-base">OAuth</CardTitle>
+                </div>
+                <CardDescription className="text-sm">
+                  OAuth 2.0 authentication flow
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </div>
           <p className="text-sm text-muted-foreground">
             Configure how your assistant authenticates with external APIs
           </p>
@@ -135,7 +142,7 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
               <Label htmlFor="authType">Auth Type</Label>
               <Select
                 value={formData.authType || "bearer"}
-                onValueChange={(value: "basic" | "bearer" | "custom") => 
+                onValueChange={(value: "basic" | "bearer" | "custom") =>
                   updateFormData({ authType: value })
                 }
               >
@@ -158,6 +165,21 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
                 Select how the API key should be sent in requests
               </p>
             </div>
+
+            {formData.authType === "custom" && (
+              <div className="space-y-2">
+                <Label htmlFor="customHeaderName">Custom Header Name</Label>
+                <Input
+                  id="customHeaderName"
+                  placeholder="e.g., X-API-Key, Authorization"
+                  value={formData.customHeaderName || ""}
+                  onChange={(e) => updateFormData({ customHeaderName: e.target.value })}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Specify the custom header name to send the API key
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -227,7 +249,7 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
               <Label htmlFor="tokenExchangeMethod">Token Exchange Method</Label>
               <Select
                 value={formData.tokenExchangeMethod || "post"}
-                onValueChange={(value: "post" | "basic_auth") => 
+                onValueChange={(value: "post" | "basic_auth") =>
                   updateFormData({ tokenExchangeMethod: value })
                 }
               >
@@ -252,17 +274,71 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
 
         {/* OpenAPI Schema Field */}
         <div className="space-y-2 border-t pt-4">
-          <Label htmlFor="schema">OpenAPI Schema (JSON)</Label>
+          <Label htmlFor="schema">OpenAPI Schema (JSON or YAML)</Label>
           <Textarea
             id="schema"
-            placeholder='{"openapi": "3.0.0", ...}'
-            value={formData.schema ? JSON.stringify(formData.schema, null, 2) : ""}
+            placeholder='Paste your OpenAPI schema here (JSON or YAML format)...'
+            value={formData.schemaText || ""}
             onChange={(e) => {
+              const value = e.target.value
+              updateFormData({ schemaText: value })
+
+              if (!value.trim()) {
+                // Clear schema when empty
+                updateFormData({ schema: undefined })
+                return
+              }
+
               try {
-                const parsed = e.target.value ? JSON.parse(e.target.value) : undefined
-                updateFormData({ schema: parsed })
+                // Parse the schema text (supports both JSON and YAML)
+                const parsedSchema = parseSchemaText(value)
+
+                if (parsedSchema) {
+                  // Check for security requirements and auto-populate authentication
+                  const parsedOpenAPI = parseOpenAPISchema(parsedSchema)
+
+                  // Auto-populate authentication if security schemes are detected
+                  if (parsedOpenAPI.securitySchemes && parsedOpenAPI.security && parsedOpenAPI.security.length > 0) {
+                    // Get the first security requirement
+                    const firstSecurityReq = parsedOpenAPI.security[0]
+                    const securitySchemeName = Object.keys(firstSecurityReq)[0]
+
+                    if (securitySchemeName && parsedOpenAPI.securitySchemes[securitySchemeName]) {
+                      const scheme = parsedOpenAPI.securitySchemes[securitySchemeName]
+
+                      if (scheme.type === 'apiKey') {
+                        // Auto-populate API key authentication
+                        updateFormData({
+                          authenticationType: 'api_key',
+                          authType: scheme.in === 'header' ? 'bearer' : 'basic',
+                          customHeaderName: scheme.in === 'header' ? scheme.name : undefined,
+                          // Note: API key value still needs to be entered by user
+                        })
+                      } else if (scheme.type === 'http' && scheme.scheme === 'bearer') {
+                        // Auto-populate bearer token authentication
+                        updateFormData({
+                          authenticationType: 'api_key',
+                          authType: 'bearer',
+                        })
+                      } else if (scheme.type === 'oauth2') {
+                        // Auto-populate OAuth authentication
+                        updateFormData({
+                          authenticationType: 'oauth',
+                          authorizationUrl: scheme.flows?.authorizationCode?.authorizationUrl,
+                          tokenUrl: scheme.flows?.authorizationCode?.tokenUrl,
+                          scope: scheme.flows?.authorizationCode?.scopes ? Object.keys(scheme.flows.authorizationCode.scopes).join(' ') : undefined,
+                        })
+                      }
+                    }
+                  }
+
+                  updateFormData({ schema: parsedSchema })
+                } else {
+                  updateFormData({ schema: undefined })
+                }
               } catch {
-                // Invalid JSON, store as-is for now
+                // Invalid JSON - keep the schema as undefined until valid
+                updateFormData({ schema: undefined })
               }
             }}
             rows={20}
@@ -270,9 +346,30 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
             className="resize-none font-mono text-sm overflow-y-auto"
           />
           <p className="text-sm text-muted-foreground">
-            Optional: Paste your OpenAPI/Swagger schema JSON
+            Supports both JSON and YAML formats
           </p>
         </div>
+
+        {/* Schema Preview */}
+        {formData.schemaText && (
+          <div className="space-y-2">
+            <SchemaPreview
+              schemaText={formData.schemaText}
+              authConfig={{
+                authenticationType: formData.authenticationType,
+                apiKey: formData.apiKey,
+                authType: formData.authType,
+                customHeaderName: formData.customHeaderName,
+                clientId: formData.clientId,
+                clientSecret: formData.clientSecret,
+                authorizationUrl: formData.authorizationUrl,
+                tokenUrl: formData.tokenUrl,
+                scope: formData.scope,
+                tokenExchangeMethod: formData.tokenExchangeMethod,
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   )

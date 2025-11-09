@@ -19,7 +19,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     )
 
     return (
-        <NextAuthSessionProvider>
+        <NextAuthSessionProvider basePath="/api/auth">
             <QueryClientProvider client={queryClient}>
                 {children}
                 <ReactQueryDevtools initialIsOpen={false} />

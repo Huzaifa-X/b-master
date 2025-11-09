@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Cpu, AlertCircle } from "lucide-react"
 import { AIInstructionDialogProps } from "@/types/ai-instruction"
-import { generateInstructions } from "@/actions/generate-instructions"
+import { generateAssistantInstructions } from "@/app/actions/assistant.action"
 import { PromptInputSection } from "./prompt-input-section"
 import { GenerationResultSection } from "./generation-result-section"
 import { ActionButtons } from "./action-buttons"
@@ -28,7 +28,7 @@ export function AIInstructionDialog({ open, onOpenChange, onInsert }: AIInstruct
         setGeneratedInstructions("")
 
         try {
-            const result = await generateInstructions({
+            const result = await generateAssistantInstructions({
                 prompt
             })
 
