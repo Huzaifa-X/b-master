@@ -19,7 +19,7 @@ export function Header() {
                     alt="B-Master Logo"
                     width={128}
                     height={24}
-                    style={{ width: 'auto', height: '24px' }}
+                    style={{ width: 'auto', height: 'auto', maxHeight: '24px' }}
                     unoptimized
                     priority
                 />

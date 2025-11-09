@@ -30,6 +30,7 @@ export interface AssistantFormData {
 
   // Step 2: Visual Identity
   image: string | null // For preview (base64)
+  imageURL: string | null // For uploaded URL
 
   // Step 3: Knowledge Base
   notes: string[]

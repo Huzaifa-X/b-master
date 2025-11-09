@@ -18,6 +18,188 @@ import { SchemaPreview } from "@/app/(dashboard)/assistants/add/_components/sche
 import { Shield, Key, Lock } from "lucide-react"
 import { parseSchemaText, parseOpenAPISchema } from "@/lib/openapi-parser"
 
+// Example OpenAPI schemas
+const EXAMPLE_SCHEMAS = {
+  sharepoint: {
+    name: "Microsoft SharePoint API",
+    schema: `openapi: 3.0.1
+
+info:
+  title: Microsoft SharePoint API
+  version: 1.0.0
+  description: Access SharePoint site lists and files via Microsoft Graph
+
+servers:
+  - url: https://graph.microsoft.com/v1.0
+
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+          tokenUrl: https://login.microsoftonline.com/common/oauth2/v2.0/token
+          scopes:
+            Sites.Read.All: Read items in all site collections
+            Files.ReadWrite.All: Read and write user files
+
+security:
+  - oauth2: [Sites.Read.All]
+
+paths:
+  /sites/{siteId}/lists:
+    get:
+      summary: Get lists in a SharePoint site
+      operationId: getLists
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A list of SharePoint lists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        description:
+                          type: string
+
+  /sites/{siteId}/lists/{listId}/items:
+    get:
+      summary: Get list items from a SharePoint list
+      operationId: getListItems
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: listId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        fields:
+                          type: object`
+  },
+  weather: {
+    name: "Weather API",
+    schema: `openapi: 3.0.1
+
+info:
+  title: Weather API
+  version: 1.0.0
+  description: Get current weather data for a given city
+
+servers:
+  - url: https://api.openweathermap.org/data/2.5
+
+components:
+  securitySchemes:
+    api_key:
+      type: apiKey
+      in: query
+      name: appid
+
+security:
+  - api_key: []
+
+paths:
+  /weather:
+    get:
+      summary: Get current weather
+      operationId: getWeather
+      parameters:
+        - name: q
+          in: query
+          description: City name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  weather:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        main:
+                          type: string
+                        description:
+                          type: string`
+  },
+  advice: {
+    name: "Advice Slip API",
+    schema: `openapi: 3.0.1
+
+info:
+  title: Advice Slip API
+  version: 1.0.0
+  description: Get random advice quotes
+
+servers:
+  - url: https://api.adviceslip.com
+
+paths:
+  /advice:
+    get:
+      summary: Get random advice
+      operationId: getAdvice
+      responses:
+        "200":
+          description: Random advice response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slip:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      advice:
+                        type: string`
+  }
+}
+
 export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigStepProps) {
 
   const handleAuthTypeChange = (value: "none" | "api_key" | "oauth") => {
@@ -274,7 +456,77 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
 
         {/* OpenAPI Schema Field */}
         <div className="space-y-2 border-t pt-4">
-          <Label htmlFor="schema">OpenAPI Schema (JSON or YAML)</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="schema">OpenAPI Schema (JSON or YAML)</Label>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="examples" className="text-sm text-muted-foreground">Examples:</Label>
+              <Select
+                value=""
+                onValueChange={(value: keyof typeof EXAMPLE_SCHEMAS) => {
+                  if (value && EXAMPLE_SCHEMAS[value]) {
+                    const selectedSchema = EXAMPLE_SCHEMAS[value].schema
+                    updateFormData({ schemaText: selectedSchema })
+
+                    // Trigger the same parsing logic as manual input
+                    try {
+                      const parsedSchema = parseSchemaText(selectedSchema)
+                      if (parsedSchema) {
+                        const parsedOpenAPI = parseOpenAPISchema(parsedSchema)
+
+                        // Auto-populate authentication if security schemes are detected
+                        if (parsedOpenAPI.securitySchemes && parsedOpenAPI.security && parsedOpenAPI.security.length > 0) {
+                          const firstSecurityReq = parsedOpenAPI.security[0]
+                          const securitySchemeName = Object.keys(firstSecurityReq)[0]
+
+                          if (securitySchemeName && parsedOpenAPI.securitySchemes[securitySchemeName]) {
+                            const scheme = parsedOpenAPI.securitySchemes[securitySchemeName]
+
+                            if (scheme.type === 'apiKey') {
+                              updateFormData({
+                                authenticationType: 'api_key',
+                                authType: scheme.in === 'header' ? 'bearer' : 'basic',
+                                customHeaderName: scheme.in === 'header' ? scheme.name : undefined,
+                              })
+                            } else if (scheme.type === 'http' && scheme.scheme === 'bearer') {
+                              updateFormData({
+                                authenticationType: 'api_key',
+                                authType: 'bearer',
+                              })
+                            } else if (scheme.type === 'oauth2') {
+                              updateFormData({
+                                authenticationType: 'oauth',
+                              })
+                            }
+                          }
+                        }
+
+                        updateFormData({ schema: parsedSchema })
+                      } else {
+                        updateFormData({ schema: undefined })
+                      }
+                    } catch {
+                      updateFormData({ schema: undefined })
+                    }
+                  }
+                }}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Choose example..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sharepoint" className="focus:bg-muted focus:text-foreground">
+                    Microsoft SharePoint API
+                  </SelectItem>
+                  <SelectItem value="weather" className="focus:bg-muted focus:text-foreground">
+                    Weather API
+                  </SelectItem>
+                  <SelectItem value="advice" className="focus:bg-muted focus:text-foreground">
+                    Advice Slip API
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <Textarea
             id="schema"
             placeholder='Paste your OpenAPI schema here (JSON or YAML format)...'

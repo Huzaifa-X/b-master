@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { SharingPermissionsStepProps, SharedUser, PermissionType } from "@/types/assistant"
@@ -23,6 +23,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
+import { getAvailableContacts } from "@/app/actions/user.action"
+import { UserContact } from "@/types/user"
 
 
 
@@ -54,10 +56,20 @@ export function SharingPermissionsStep({
   formData,
   updateFormData,
 }: SharingPermissionsStepProps) {
+  const [availableContacts, setAvailableContacts] = useState<UserContact[]>([])
+
+  useEffect(() => {
+    getAvailableContacts().then(setAvailableContacts)
+  }, [])
+
+  const availableContactsNotAdded = availableContacts.filter(
+    (contact) => !formData.sharedUsers.some((user: SharedUser) => user.id === contact.id)
+  )
+
   const handleSelectContact = (contactId: string) => {
     if (!contactId || contactId === "none") return
 
-    const contact = AVAILABLE_CONTACTS.find((c) => c.id === contactId)
+    const contact = availableContacts.find((c) => c.id === contactId)
     if (!contact) return
 
     // Check if user already added
@@ -68,7 +80,7 @@ export function SharingPermissionsStep({
 
     const newUser = {
       id: contact.id,
-      name: contact.name,
+      name: contact.name || "",
       email: contact.email,
       permissions: {
         chat: true,
@@ -80,7 +92,7 @@ export function SharingPermissionsStep({
     }
 
     updateFormData({
-      sharedUsers: [...formData.sharedUsers, newUser],
+      sharedUsers: [...formData.sharedUsers, newUser as SharedUser],
     })
 
     toast.success("User added successfully")
@@ -111,10 +123,6 @@ export function SharingPermissionsStep({
   }
 
   // Get available contacts (not already added)
-  const availableContacts = AVAILABLE_CONTACTS.filter(
-    (contact) => !formData.sharedUsers.some((user: SharedUser) => user.id === contact.id)
-  )
-
   return (
     <div className="space-y-6">
       <div>
@@ -180,8 +188,8 @@ export function SharingPermissionsStep({
                 <SelectValue placeholder="Select a contact to add..." />
               </SelectTrigger>
               <SelectContent>
-                {availableContacts.length > 0 ? (
-                  availableContacts.map((contact) => (
+                {availableContactsNotAdded.length > 0 ? (
+                  availableContactsNotAdded.map((contact) => (
                     <SelectItem 
                       key={contact.id} 
                       value={contact.id}
