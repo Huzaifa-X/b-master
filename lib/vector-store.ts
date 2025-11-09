@@ -192,9 +192,8 @@ export async function deleteFileFromVectorStore(
   fileId: string
 ): Promise<void> {
   try {
-    await openai.vectorStores.files.delete({
-        vector_store_id: vectorStoreId,
-        file_id: fileId
+    await openai.vectorStores.files.delete(fileId, {
+      vector_store_id: vectorStoreId
     })
     console.log(`✅ File deleted from vector store: ${fileId}`)
   } catch (error) {

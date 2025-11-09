@@ -12,7 +12,7 @@ import {
   // ============================================
   
   const s3Client = new S3Client({
-    region: process.env.AWS_REGION!,
+    region: process.env.AWS_S3_REGION_NAME!,
     credentials: {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
@@ -24,7 +24,7 @@ import {
     }),
   })
   
-  const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME!
+  const BUCKET_NAME = process.env.AWS_STORAGE_BUCKET_NAME!
   
   // ============================================
   // UPLOAD FILE TO S3
