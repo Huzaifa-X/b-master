@@ -11,6 +11,7 @@ import {
 import {
   Avatar,
   AvatarFallback,
+  AvatarImage,
 } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -29,15 +30,17 @@ import {
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { signOut } from "next-auth/react"
+import { NavUserType } from "@/types/user"
 
 export function NavUser({
   user,
 }: {
-  user: {
-    name: string
-    email: string
-  }
+  user: NavUserType
 }) {
+
+  if (!user) {
+    return null
+  }
 
   const router = useRouter()
 
@@ -51,11 +54,12 @@ export function NavUser({
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarFallback className="rounded-lg">HT</AvatarFallback>
+                <AvatarImage src={user.image} />
+                <AvatarFallback className="rounded-lg">{user.name.charAt(0)}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
-                <span className="truncate text-xs">Professional</span>
+                <span className="truncate text-xs">Free</span>
               </div>
               <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -70,11 +74,12 @@ export function NavUser({
               <span className="text-xs text-muted-foreground px-2">{user.email}</span>
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarFallback className="rounded-lg">HT</AvatarFallback>
+                  <AvatarImage src={user.image} />
+                  <AvatarFallback className="rounded-lg">{user.name.charAt(0)}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
-                  <span className="truncate text-xs">Professional</span>
+                  <span className="truncate text-xs">Free</span>
                 </div>
               </div>
             </DropdownMenuLabel>

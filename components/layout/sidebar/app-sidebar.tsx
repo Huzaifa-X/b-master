@@ -13,16 +13,17 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-
-// This is sample data.
-const data = {
-  user: {
-    name: "Huzaifa Tahir",
-    email: "huzaifatahir7524@gmail.com",
-  },
-}
+import { useSession } from "next-auth/react"
+import { redirect } from "next/navigation"
+import { NavUserType } from "@/types/user"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { data: session } = useSession()
+
+  if (!session?.user) {
+    redirect("/login")
+  }
+  
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -33,7 +34,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavList />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={session?.user as NavUserType} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

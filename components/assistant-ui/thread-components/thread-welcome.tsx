@@ -6,20 +6,23 @@ import { useState, useEffect } from "react";
 import * as m from "motion/react-m";
 import { TypewriterEffect } from "@/components/ui/typewriter-effect";
 import { Composer } from "@/components/assistant-ui/thread-components/composer";
-
-// Array of welcome messages (outside component to avoid re-creation)
-const WELCOME_MESSAGES = [
-    "How is it going, Huzaifa Tahir?",
-    "Time to increase your knowledge, Huzaifa Tahir",
-    "Ready to explore something new, Huzaifa Tahir?",
-    "What brings you here today, Huzaifa Tahir?",
-    "Let's make today productive, Huzaifa Tahir!",
-    "Great to see you back, Huzaifa Tahir!",
-    "What can I help you with, Huzaifa Tahir?",
-    "Let's dive into something interesting, Huzaifa Tahir!",
-];
+import { useSession } from "next-auth/react";
 
 export const ThreadWelcome: FC = () => {
+    const { data: session } = useSession();
+
+    // Array of welcome messages (outside component to avoid re-creation)
+    const WELCOME_MESSAGES = [
+        `How is it going, ${session?.user?.name || "User"}?`,
+        `Time to increase your knowledge, ${session?.user?.name || "User"}`,
+        `Ready to explore something new, ${session?.user?.name || "User"}?`,
+        `What brings you here today, ${session?.user?.name || "User"}?`,
+        `Let's make today productive, ${session?.user?.name || "User"}!`,
+        `Great to see you back, ${session?.user?.name || "User"}!`,
+        `What can I help you with, ${session?.user?.name || "User"}?`,
+        `Let's dive into something interesting, ${session?.user?.name || "User"}!`,
+    ];
+
     // Use state to pick a random message on client side only
     const [randomMessage, setRandomMessage] = useState(WELCOME_MESSAGES[0]);
 

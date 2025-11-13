@@ -3,3 +3,10 @@ export interface UserContact {
     name: string | null
     email: string
 }
+
+export interface NavUserType {
+    id: string
+    name: string
+    email: string
+    image: string
+}

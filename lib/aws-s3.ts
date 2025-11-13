@@ -56,7 +56,7 @@ import {
         Key: key,
         Body: file,
         ContentType: contentType,
-        ACL: "public-read", // Make file publicly accessible
+        // ACL: "public-read", // Make file publicly accessible
         // Optional: Add metadata
         Metadata: {
           uploadedAt: new Date().toISOString(),

@@ -1,14 +1,16 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 // import GoogleProvider from "next-auth/providers/google"; // COMMENTED OUT - Google provider disabled
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { compare } from "bcryptjs";
 import prisma from "@/lib/prisma";
+import { randomBytes } from "crypto";
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  // Note: PrismaAdapter is NOT compatible with CredentialsProvider
+  // We'll manage sessions manually for credentials-based auth
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   pages: {
     signIn: "/login",
@@ -67,33 +69,38 @@ export const authOptions: NextAuthOptions = {
     // }), // COMMENTED OUT - Google provider disabled
   ],
   callbacks: {
-    async jwt({ token, user, trigger, session, account }) {
+    async jwt({ token, user, trigger }) {
+      // On sign in, add user info to token and create DB session
       if (user) {
         token.id = user.id;
         token.email = user.email;
         token.name = user.name;
         token.picture = user.image;
-      }
 
-      // For Google sign-in, mark email as verified
-      // COMMENTED OUT - Google provider disabled
-      // if (account?.provider === "google") {
-      //   await prisma.user.update({
-      //     where: { email: token.email as string },
-      //     data: {
-      //       isEmailVerified: true
-      //     },
-      //   });
-      // }
+        // Create a session record in database for tracking
+        try {
+          const sessionToken = randomBytes(32).toString("hex");
+          const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-      if (trigger === "update" && session) {
-        token.name = session.name;
-        token.picture = session.image;
+          await prisma.session.create({
+            data: {
+              sessionToken,
+              userId: BigInt(user.id),
+              expires,
+            },
+          });
+
+          // Store session token in JWT for later reference
+          token.sessionToken = sessionToken;
+        } catch (error) {
+          console.error("Failed to create session record:", error);
+        }
       }
 
       return token;
     },
     async session({ session, token }) {
+      // Add user info from token to session
       if (session.user) {
         session.user.id = token.id as string;
         session.user.email = token.email as string;
@@ -101,6 +108,22 @@ export const authOptions: NextAuthOptions = {
         session.user.image = token.picture as string;
       }
       return session;
+    },
+  },
+  events: {
+    async signOut({ token }) {
+      // Clean up database session on sign out
+      if (token && token.sessionToken) {
+        try {
+          await prisma.session.delete({
+            where: { sessionToken: token.sessionToken as string },
+          }).catch(() => {
+            // Session might already be deleted, ignore error
+          });
+        } catch (error) {
+          console.error("Failed to delete session record:", error);
+        }
+      }
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
