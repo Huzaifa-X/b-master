@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "public"."AssistantCategory" AS ENUM ('EDUCATION', 'TRAVELLING', 'PROGRAMMING', 'MARKETING', 'ANALYSIS', 'BOOKING', 'OTHER');
+CREATE TYPE "public"."AssistantCategory" AS ENUM ('EDUCATION', 'TRAVEL', 'PROGRAMMING', 'MARKETING', 'ANALYSIS', 'BOOKING', 'OTHER');
 
 -- CreateTable
 CREATE TABLE "public"."users" (
@@ -8,23 +8,16 @@ CREATE TABLE "public"."users" (
     "email" VARCHAR(255) NOT NULL,
     "password" VARCHAR(255),
     "image" VARCHAR(255),
-    "otp" VARCHAR(255),
-    "otpExpiresAt" TIMESTAMP(3),
     "isEmailVerified" BOOLEAN NOT NULL DEFAULT false,
-    "dateOfBirth" DATE,
     "organization" VARCHAR(255),
     "stripeAccountId" VARCHAR(255),
     "feePeriodEnd" DATE,
-    "totalBalance" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "role" VARCHAR(255) NOT NULL DEFAULT 'user',
-    "gender" VARCHAR(255),
+    "totalBalance" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "gender" VARCHAR(50),
     "googleId" VARCHAR(255),
     "loginType" VARCHAR(20) NOT NULL DEFAULT 'email',
     "status" VARCHAR(255) NOT NULL DEFAULT 'active',
-    "contactRole" VARCHAR(255),
     "address" TEXT,
-    "passwordResetToken" VARCHAR(255),
-    "passwordResetExpiresAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
@@ -33,14 +26,38 @@ CREATE TABLE "public"."users" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."auth_tokens" (
-    "id" SERIAL NOT NULL,
+CREATE TABLE "public"."accounts" (
+    "id" TEXT NOT NULL,
     "userId" BIGINT NOT NULL,
-    "token" VARCHAR(500) NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "type" TEXT NOT NULL,
+    "provider" TEXT NOT NULL,
+    "providerAccountId" TEXT NOT NULL,
+    "refresh_token" TEXT,
+    "access_token" TEXT,
+    "expires_at" INTEGER,
+    "token_type" TEXT,
+    "scope" TEXT,
+    "id_token" TEXT,
+    "session_state" TEXT,
 
-    CONSTRAINT "auth_tokens_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "accounts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."sessions" (
+    "id" TEXT NOT NULL,
+    "sessionToken" TEXT NOT NULL,
+    "userId" BIGINT NOT NULL,
+    "expires" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "sessions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."verification_tokens" (
+    "identifier" TEXT NOT NULL,
+    "token" TEXT NOT NULL,
+    "expires" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
@@ -55,7 +72,6 @@ CREATE TABLE "public"."plans" (
     "stripePriceId" VARCHAR(255),
     "assistantLimit" INTEGER NOT NULL DEFAULT 1,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "sortOrder" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
@@ -77,7 +93,7 @@ CREATE TABLE "public"."subscriptions" (
     "trialStart" TIMESTAMP(3),
     "trialEnd" TIMESTAMP(3),
     "amount" DECIMAL(10,2) NOT NULL,
-    "currency" VARCHAR(3) NOT NULL DEFAULT 'USD',
+    "currency" VARCHAR(3) NOT NULL DEFAULT 'CHF',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
@@ -95,7 +111,7 @@ CREATE TABLE "public"."invoices" (
     "invoiceNumber" VARCHAR(255) NOT NULL,
     "status" VARCHAR(50) NOT NULL DEFAULT 'draft',
     "amount" DECIMAL(10,2) NOT NULL,
-    "currency" VARCHAR(3) NOT NULL DEFAULT 'USD',
+    "currency" VARCHAR(3) NOT NULL DEFAULT 'CHF',
     "taxAmount" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     "discountAmount" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     "totalAmount" DECIMAL(10,2) NOT NULL,
@@ -119,7 +135,7 @@ CREATE TABLE "public"."user_wallets" (
     "availableAmount" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     "totalEarnings" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     "transferredAmount" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    "currency" VARCHAR(3) NOT NULL DEFAULT 'USD',
+    "currency" VARCHAR(3) NOT NULL DEFAULT 'CHF',
     "lastUpdated" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -133,8 +149,8 @@ CREATE TABLE "public"."assistants" (
     "id" BIGSERIAL NOT NULL,
     "userId" BIGINT NOT NULL,
     "name" VARCHAR(255) NOT NULL,
-    "price" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "currency" TEXT NOT NULL DEFAULT 'usd',
+    "price" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "currency" TEXT NOT NULL DEFAULT 'CHF',
     "priceType" VARCHAR(255) NOT NULL DEFAULT 'paid',
     "category" "public"."AssistantCategory" NOT NULL DEFAULT 'OTHER',
     "description" TEXT,
@@ -142,7 +158,6 @@ CREATE TABLE "public"."assistants" (
     "image" VARCHAR(255),
     "vectorStoreId" VARCHAR(255),
     "public" BOOLEAN NOT NULL DEFAULT true,
-    "specialAssistant" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
@@ -154,13 +169,11 @@ CREATE TABLE "public"."assistants" (
 CREATE TABLE "public"."assistant_knowledgebases" (
     "id" SERIAL NOT NULL,
     "assistantId" BIGINT NOT NULL,
-    "name" VARCHAR(255),
     "url" TEXT,
     "note" TEXT,
     "file" TEXT,
-    "fileId" TEXT,
+    "openAIFileId" TEXT,
     "type" VARCHAR(50) NOT NULL DEFAULT 'url',
-    "isCrawled" BOOLEAN,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -174,12 +187,14 @@ CREATE TABLE "public"."assistant_api_configurations" (
     "authenticationType" VARCHAR(50) NOT NULL DEFAULT 'none',
     "apiKey" TEXT,
     "authType" VARCHAR(50),
+    "customHeaderName" VARCHAR(255),
     "clientId" VARCHAR(255),
     "clientSecret" TEXT,
     "authorizationUrl" TEXT,
     "tokenUrl" TEXT,
     "scope" TEXT,
     "tokenExchangeMethod" VARCHAR(50),
+    "schemaText" TEXT,
     "schema" JSONB,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -189,20 +204,24 @@ CREATE TABLE "public"."assistant_api_configurations" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."assistant_pins" (
+CREATE TABLE "public"."assistant_contacts" (
     "id" SERIAL NOT NULL,
-    "userId" BIGINT NOT NULL,
     "assistantId" BIGINT NOT NULL,
+    "userId" BIGINT NOT NULL,
+    "description" TEXT,
+    "role" VARCHAR(255),
+    "access" VARCHAR(50) NOT NULL DEFAULT 'admin',
+    "permissions" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "assistant_pins_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "assistant_contacts_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "public"."usage_metrics" (
     "id" BIGSERIAL NOT NULL,
-    "assistantId" BIGINT NOT NULL,
+    "assistantId" BIGINT,
     "userId" BIGINT NOT NULL,
     "inputToken" INTEGER NOT NULL DEFAULT 0,
     "outputToken" INTEGER NOT NULL DEFAULT 0,
@@ -222,8 +241,6 @@ CREATE TABLE "public"."assistant_purchases" (
     "assistantId" BIGINT NOT NULL,
     "transactionId" INTEGER,
     "purchaseDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "amount" DECIMAL(10,2) NOT NULL,
-    "currency" VARCHAR(3) NOT NULL DEFAULT 'USD',
     "status" VARCHAR(50) NOT NULL DEFAULT 'pending',
     "stripePaymentIntentId" VARCHAR(255),
     "stripeCheckoutSessionId" VARCHAR(255),
@@ -239,7 +256,7 @@ CREATE TABLE "public"."assistant_transactions" (
     "id" SERIAL NOT NULL,
     "assistantOwnerId" BIGINT NOT NULL,
     "amount" DECIMAL(10,2) NOT NULL,
-    "currency" VARCHAR(3) NOT NULL DEFAULT 'USD',
+    "currency" VARCHAR(3) NOT NULL DEFAULT 'CHF',
     "type" VARCHAR(50) NOT NULL DEFAULT 'sale',
     "status" VARCHAR(50) NOT NULL DEFAULT 'pending',
     "stripeTransactionId" VARCHAR(255),
@@ -254,6 +271,7 @@ CREATE TABLE "public"."assistant_transactions" (
 CREATE TABLE "public"."assistant_user_chats" (
     "id" SERIAL NOT NULL,
     "userId" BIGINT NOT NULL,
+    "topic" TEXT NOT NULL,
     "assistantId" BIGINT NOT NULL,
     "shareableId" VARCHAR(255),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -270,12 +288,11 @@ CREATE TABLE "public"."assistant_user_chat_messages" (
     "message" TEXT,
     "image" VARCHAR(255),
     "documents" TEXT,
-    "audio" VARCHAR(255),
-    "assistantUserChatId" INTEGER NOT NULL,
-    "assistantId" BIGINT NOT NULL,
     "userId" BIGINT,
+    "assistantUserChatId" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "assistantId" BIGINT,
 
     CONSTRAINT "assistant_user_chat_messages_pkey" PRIMARY KEY ("id")
 );
@@ -365,9 +382,8 @@ CREATE TABLE "public"."assistant_artifacts" (
     "instructions" TEXT,
     "category" VARCHAR(255),
     "code" TEXT,
-    "files" TEXT,
-    "contacts" TEXT,
-    "apiKeys" TEXT,
+    "tools" JSON,
+    "apiKeys" JSON,
     "isPublic" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -389,27 +405,14 @@ CREATE TABLE "public"."artifact_permissions" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."assistant_user_permissions" (
+CREATE TABLE "public"."assistant_pins" (
     "id" SERIAL NOT NULL,
-    "assistantId" BIGINT NOT NULL,
     "userId" BIGINT NOT NULL,
-    "access" VARCHAR(50) NOT NULL DEFAULT 'admin',
-    "permissions" TEXT,
+    "assistantId" BIGINT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "assistant_user_permissions_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "public"."assistant_contacts" (
-    "id" BIGSERIAL NOT NULL,
-    "assistantId" BIGINT NOT NULL,
-    "userId" BIGINT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "assistant_contacts_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "assistant_pins_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -450,13 +453,22 @@ CREATE INDEX "users_status_idx" ON "public"."users"("status");
 CREATE INDEX "users_deletedAt_idx" ON "public"."users"("deletedAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "auth_tokens_token_key" ON "public"."auth_tokens"("token");
+CREATE INDEX "accounts_userId_idx" ON "public"."accounts"("userId");
 
 -- CreateIndex
-CREATE INDEX "auth_tokens_userId_idx" ON "public"."auth_tokens"("userId");
+CREATE UNIQUE INDEX "accounts_provider_providerAccountId_key" ON "public"."accounts"("provider", "providerAccountId");
 
 -- CreateIndex
-CREATE INDEX "auth_tokens_token_idx" ON "public"."auth_tokens"("token");
+CREATE UNIQUE INDEX "sessions_sessionToken_key" ON "public"."sessions"("sessionToken");
+
+-- CreateIndex
+CREATE INDEX "sessions_userId_idx" ON "public"."sessions"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "verification_tokens_token_key" ON "public"."verification_tokens"("token");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "verification_tokens_identifier_token_key" ON "public"."verification_tokens"("identifier", "token");
 
 -- CreateIndex
 CREATE INDEX "plans_period_idx" ON "public"."plans"("period");
@@ -519,9 +531,6 @@ CREATE INDEX "assistants_userId_idx" ON "public"."assistants"("userId");
 CREATE INDEX "assistants_public_idx" ON "public"."assistants"("public");
 
 -- CreateIndex
-CREATE INDEX "assistants_specialAssistant_idx" ON "public"."assistants"("specialAssistant");
-
--- CreateIndex
 CREATE INDEX "assistants_category_idx" ON "public"."assistants"("category");
 
 -- CreateIndex
@@ -534,16 +543,10 @@ CREATE INDEX "assistant_knowledgebases_assistantId_idx" ON "public"."assistant_k
 CREATE UNIQUE INDEX "assistant_api_configurations_assistantId_key" ON "public"."assistant_api_configurations"("assistantId");
 
 -- CreateIndex
-CREATE INDEX "assistant_api_configurations_assistantId_idx" ON "public"."assistant_api_configurations"("assistantId");
+CREATE INDEX "assistant_contacts_assistantId_idx" ON "public"."assistant_contacts"("assistantId");
 
 -- CreateIndex
-CREATE INDEX "assistant_pins_userId_idx" ON "public"."assistant_pins"("userId");
-
--- CreateIndex
-CREATE INDEX "assistant_pins_assistantId_idx" ON "public"."assistant_pins"("assistantId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "assistant_pins_userId_assistantId_key" ON "public"."assistant_pins"("userId", "assistantId");
+CREATE INDEX "assistant_contacts_userId_idx" ON "public"."assistant_contacts"("userId");
 
 -- CreateIndex
 CREATE INDEX "usage_metrics_assistantId_idx" ON "public"."usage_metrics"("assistantId");
@@ -600,16 +603,19 @@ CREATE INDEX "assistant_user_chats_shareableId_idx" ON "public"."assistant_user_
 CREATE INDEX "assistant_user_chat_messages_assistantUserChatId_idx" ON "public"."assistant_user_chat_messages"("assistantUserChatId");
 
 -- CreateIndex
-CREATE INDEX "assistant_user_chat_messages_assistantId_idx" ON "public"."assistant_user_chat_messages"("assistantId");
+CREATE INDEX "assistant_user_chat_messages_userId_idx" ON "public"."assistant_user_chat_messages"("userId");
 
 -- CreateIndex
-CREATE INDEX "assistant_user_chat_messages_userId_idx" ON "public"."assistant_user_chat_messages"("userId");
+CREATE INDEX "assistant_user_chat_messages_assistantId_idx" ON "public"."assistant_user_chat_messages"("assistantId");
 
 -- CreateIndex
 CREATE INDEX "assistant_chats_assistantId_initiatorId_idx" ON "public"."assistant_chats"("assistantId", "initiatorId");
 
 -- CreateIndex
 CREATE INDEX "assistant_chats_assistantId_participantId_idx" ON "public"."assistant_chats"("assistantId", "participantId");
+
+-- CreateIndex
+CREATE INDEX "assistant_chats_lastMessageId_idx" ON "public"."assistant_chats"("lastMessageId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "assistant_chats_assistantId_initiatorId_participantId_key" ON "public"."assistant_chats"("assistantId", "initiatorId", "participantId");
@@ -669,16 +675,13 @@ CREATE INDEX "artifact_permissions_artifactId_idx" ON "public"."artifact_permiss
 CREATE UNIQUE INDEX "artifact_permissions_userId_artifactId_key" ON "public"."artifact_permissions"("userId", "artifactId");
 
 -- CreateIndex
-CREATE INDEX "assistant_user_permissions_assistantId_idx" ON "public"."assistant_user_permissions"("assistantId");
+CREATE INDEX "assistant_pins_userId_idx" ON "public"."assistant_pins"("userId");
 
 -- CreateIndex
-CREATE INDEX "assistant_user_permissions_userId_idx" ON "public"."assistant_user_permissions"("userId");
+CREATE INDEX "assistant_pins_assistantId_idx" ON "public"."assistant_pins"("assistantId");
 
 -- CreateIndex
-CREATE INDEX "assistant_contacts_assistantId_idx" ON "public"."assistant_contacts"("assistantId");
-
--- CreateIndex
-CREATE INDEX "assistant_contacts_userId_idx" ON "public"."assistant_contacts"("userId");
+CREATE UNIQUE INDEX "assistant_pins_userId_assistantId_key" ON "public"."assistant_pins"("userId", "assistantId");
 
 -- CreateIndex
 CREATE INDEX "notifications_userId_idx" ON "public"."notifications"("userId");
@@ -696,7 +699,10 @@ CREATE INDEX "notifications_createdAt_idx" ON "public"."notifications"("createdA
 CREATE INDEX "notifications_relatedId_relatedType_idx" ON "public"."notifications"("relatedId", "relatedType");
 
 -- AddForeignKey
-ALTER TABLE "public"."auth_tokens" ADD CONSTRAINT "auth_tokens_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."accounts" ADD CONSTRAINT "accounts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."sessions" ADD CONSTRAINT "sessions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."subscriptions" ADD CONSTRAINT "subscriptions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -723,10 +729,10 @@ ALTER TABLE "public"."assistant_knowledgebases" ADD CONSTRAINT "assistant_knowle
 ALTER TABLE "public"."assistant_api_configurations" ADD CONSTRAINT "assistant_api_configurations_assistantId_fkey" FOREIGN KEY ("assistantId") REFERENCES "public"."assistants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."assistant_pins" ADD CONSTRAINT "assistant_pins_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."assistant_contacts" ADD CONSTRAINT "assistant_contacts_assistantId_fkey" FOREIGN KEY ("assistantId") REFERENCES "public"."assistants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."assistant_pins" ADD CONSTRAINT "assistant_pins_assistantId_fkey" FOREIGN KEY ("assistantId") REFERENCES "public"."assistants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."assistant_contacts" ADD CONSTRAINT "assistant_contacts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."usage_metrics" ADD CONSTRAINT "usage_metrics_assistantId_fkey" FOREIGN KEY ("assistantId") REFERENCES "public"."assistants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -756,10 +762,10 @@ ALTER TABLE "public"."assistant_user_chats" ADD CONSTRAINT "assistant_user_chats
 ALTER TABLE "public"."assistant_user_chat_messages" ADD CONSTRAINT "assistant_user_chat_messages_assistantUserChatId_fkey" FOREIGN KEY ("assistantUserChatId") REFERENCES "public"."assistant_user_chats"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."assistant_user_chat_messages" ADD CONSTRAINT "assistant_user_chat_messages_assistantId_fkey" FOREIGN KEY ("assistantId") REFERENCES "public"."assistants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."assistant_user_chat_messages" ADD CONSTRAINT "assistant_user_chat_messages_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."assistant_user_chat_messages" ADD CONSTRAINT "assistant_user_chat_messages_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "public"."assistant_user_chat_messages" ADD CONSTRAINT "assistant_user_chat_messages_assistantId_fkey" FOREIGN KEY ("assistantId") REFERENCES "public"."assistants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."assistant_chats" ADD CONSTRAINT "assistant_chats_assistantId_fkey" FOREIGN KEY ("assistantId") REFERENCES "public"."assistants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -816,16 +822,10 @@ ALTER TABLE "public"."artifact_permissions" ADD CONSTRAINT "artifact_permissions
 ALTER TABLE "public"."artifact_permissions" ADD CONSTRAINT "artifact_permissions_artifactId_fkey" FOREIGN KEY ("artifactId") REFERENCES "public"."assistant_artifacts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."assistant_user_permissions" ADD CONSTRAINT "assistant_user_permissions_assistantId_fkey" FOREIGN KEY ("assistantId") REFERENCES "public"."assistants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."assistant_pins" ADD CONSTRAINT "assistant_pins_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."assistant_user_permissions" ADD CONSTRAINT "assistant_user_permissions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."assistant_contacts" ADD CONSTRAINT "assistant_contacts_assistantId_fkey" FOREIGN KEY ("assistantId") REFERENCES "public"."assistants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."assistant_contacts" ADD CONSTRAINT "assistant_contacts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."assistant_pins" ADD CONSTRAINT "assistant_pins_assistantId_fkey" FOREIGN KEY ("assistantId") REFERENCES "public"."assistants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."notifications" ADD CONSTRAINT "notifications_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
