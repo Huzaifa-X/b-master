@@ -310,8 +310,7 @@ export async function createCompleteAssistant(
                                     assistantId: assistant.id,
                                     note: note.trim(),
                                     vectorFileId: vectorFileId,
-                                    isCrawled: false,
-                                    type: 'note',
+                                    type: 'text',
                                 }
                             })
 
@@ -358,18 +357,18 @@ export async function createCompleteAssistant(
                         const buffer = Buffer.from(await file.arrayBuffer())
 
                         // Upload to OpenAI vector store
-                        const openaiFileId = await uploadAndAddToVectorStore(
+                        const vectorFileId = await uploadAndAddToVectorStore(
                             vectorStoreId,
                             buffer,
-                            file.name.trim()
+                            file.name
                         )
 
                         // Save to database
                         await prisma.assistantKnowledgebase.create({
                             data: {
                                 assistantId: assistant.id,
-                                file: file.name.trim() || "",
-                                vectorFileId: openaiFileId,
+                                file: file.name,
+                                vectorFileId: vectorFileId,
                                 type: 'file',
                             }
                         })
