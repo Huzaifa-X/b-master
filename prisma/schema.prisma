@@ -271,14 +271,16 @@ model AssistantKnowledgebase {
   url          String?  @db.Text
   note         String?  @db.Text
   file         String?  @db.Text
-  openAIFileId String?  @db.Text // OpenAI file ID
+  vectorFileId String?  @db.Text // OpenAI file ID
   type         String   @default("url") @db.VarChar(50) // url, file, text
+  isCrawled    Boolean  @default(false) // Track if URL has been crawled
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   assistant Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
 
   @@index([assistantId])
+  @@index([isCrawled])
   @@map("assistant_knowledgebases")
 }
 

@@ -14,6 +14,7 @@ import {
     uploadAndAddToVectorStore,
 } from '@/lib/vector-store'
 import { triggerWebScraping } from '@/lib/web-scraper'
+import { randomUUID } from "crypto";
 
 const INSTRUCTION_GENERATION_PROMPT = `You are an expert AI assistant creator with extensive knowledge of prompt engineering and AI system design.
 
@@ -118,18 +119,18 @@ interface CreateCompleteAssistantParams {
     price: string
     category: AssistantCategory
     description: string
-    
+
     // Step 2: Image
     imageData?: string | null
-    
+
     // Step 3: Knowledge Base
     notes: string[]
     urls: string[]
     files: File[]
-    
+
     // Step 4: Instructions
     instructions: string
-    
+
     // Step 5: API Config
     authenticationType: string
     apiKey?: string
@@ -143,7 +144,7 @@ interface CreateCompleteAssistantParams {
     tokenExchangeMethod?: string
     schemaText?: string
     schema?: any
-    
+
     // Step 6: Sharing
     permissionLevel: string
     sharedUsers: Array<{
@@ -184,7 +185,7 @@ export async function createCompleteAssistant(
         // ============================================
         // STEP 1: CREATE ASSISTANT WITH BASIC INFO
         // ============================================
-        
+
         // Validate required fields
         if (!params.name?.trim() || !params.price?.trim() || !params.description?.trim()) {
             return {
@@ -205,7 +206,7 @@ export async function createCompleteAssistant(
         // Map category string to enum
         const categoryEnumMap: Record<AssistantCategory, any> = {
             "Education": "EDUCATION",
-            "Travelling": "TRAVELLING",
+            "Travelling": "TRAVEL",
             "Programming": "PROGRAMMING",
             "Markteting": "MARKETING",
             "Analysis": "ANALYSIS",
@@ -223,12 +224,11 @@ export async function createCompleteAssistant(
                 name: params.name.trim(),
                 price: parsedPrice,
                 currency: "chf",
-                priceType: parsedPrice === 0 ? "free" : "paid",
+                priceType: isPublic ? "paid" : "free",
                 category: mappedCategory,
                 description: params.description.trim(),
                 instructions: params.instructions?.trim() || null,
                 public: isPublic,
-                specialAssistant: false,
             }
         })
 
@@ -239,29 +239,29 @@ export async function createCompleteAssistant(
         // ============================================
         // STEP 2: UPLOAD IMAGE (IF PROVIDED)
         // ============================================
-        
+
         if (params.imageData && params.imageData.startsWith('data:image/')) {
             try {
                 // Extract base64 data
                 const base64Data = params.imageData.split(',')[1]
                 const imageBuffer = Buffer.from(base64Data, 'base64')
-                
+
                 // Determine file extension from data URL
                 const mimeMatch = params.imageData.match(/data:image\/(\w+);/)
                 const extension = mimeMatch ? mimeMatch[1] : 'png'
-                
+
                 const fileName = `assistant_${assistantId}_${Date.now()}.${extension}`
                 const mimeType = `image/${extension}`
-                
+
                 // Upload to S3
                 const imageUrl = await uploadToS3(imageBuffer, fileName, mimeType, 'assistants')
-                
+
                 // Update assistant with image URL
                 await prisma.assistant.update({
                     where: { id: assistant.id },
                     data: { image: imageUrl }
                 })
-                
+
                 console.log(`✅ Image uploaded: ${imageUrl}`)
             } catch (imageError) {
                 console.error('Error uploading image:', imageError)
@@ -272,62 +272,56 @@ export async function createCompleteAssistant(
         // ============================================
         // STEP 3: CREATE VECTOR STORE & KNOWLEDGE BASE
         // ============================================
-        
+
         let vectorStoreId: string | null = null
-        
+
         // Only create vector store if there's content to add
         if (params.notes.length > 0 || params.urls.length > 0 || params.files.length > 0) {
             try {
                 // Create OpenAI vector store
-                const vectorStoreName = `${params.name} Knowledge Base`
+                const vectorStoreName = `${params.name}_${randomUUID()}`
                 vectorStoreId = await createVectorStore(vectorStoreName)
-                
+
                 // Update assistant with vector store ID
                 await prisma.assistant.update({
                     where: { id: assistant.id },
                     data: { vectorStoreId }
                 })
-                
+
                 console.log(`✅ Vector store created: ${vectorStoreId}`)
-                
+
                 // Process notes
                 for (const note of params.notes) {
                     if (note.trim()) {
                         try {
                             const noteIndex = params.notes.indexOf(note)
                             const noteName = `note_${noteIndex + 1}_${Date.now()}`
-                            
+
                             // Add note to OpenAI vector store
-                            const openaiFileId = await addNoteToVectorStore(
+                            const vectorFileId = await addNoteToVectorStore(
                                 vectorStoreId,
                                 note.trim(),
                                 noteName
                             )
-                            
-                            // Save to S3 as backup
-                            const noteBuffer = Buffer.from(note.trim(), 'utf-8')
-                            const noteFileName = `${noteName}.txt`
-                            const noteUrl = await uploadToS3(noteBuffer, noteFileName, 'text/plain', 'knowledge-base')
-                            
+
                             // Save to database
                             await prisma.assistantKnowledgebase.create({
                                 data: {
                                     assistantId: assistant.id,
-                                    name: `Note ${noteIndex + 1}`,
                                     note: note.trim(),
-                                    file: noteUrl,
-                                    fileId: openaiFileId,
-                                    type: 'text',
+                                    vectorFileId: vectorFileId,
+                                    isCrawled: false,
+                                    type: 'note',
                                 }
                             })
-                            
+
                             console.log(`✅ Note ${noteIndex + 1} added`)
                         } catch (noteError) {
                             console.error(`Error processing note:`, noteError)
                         }
                     }
                 }
-                
+
                 // Process URLs
                 for (const url of params.urls) {
                     if (url.trim()) {
@@ -336,13 +330,12 @@ export async function createCompleteAssistant(
                             await prisma.assistantKnowledgebase.create({
                                 data: {
                                     assistantId: assistant.id,
-                                    name: `URL: ${url.trim()}`,
                                     url: url.trim(),
-                                    type: 'url',
                                     isCrawled: false,
+                                    type: 'url',
                                 }
                             })
-                            
+
                             // Trigger async web scraping
                             triggerWebScraping({
                                 url: url.trim(),
@@ -351,43 +344,36 @@ export async function createCompleteAssistant(
                             }).catch((err) => {
                                 console.error(`Error triggering scraping for ${url}:`, err)
                             })
-                            
+
                             console.log(`✅ URL queued: ${url}`)
                         } catch (urlError) {
                             console.error(`Error processing URL ${url}:`, urlError)
                         }
                     }
                 }
-                
+
                 // Process files
                 for (const file of params.files) {
                     try {
                         const buffer = Buffer.from(await file.arrayBuffer())
-                        const timestamp = Date.now()
-                        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
-                        const fileName = `file_${timestamp}_${sanitizedName}`
-                        
+
                         // Upload to OpenAI vector store
                         const openaiFileId = await uploadAndAddToVectorStore(
                             vectorStoreId,
                             buffer,
-                            file.name
+                            file.name.trim()
                         )
-                        
-                        // Upload to S3 as backup
-                        const fileUrl = await uploadToS3(buffer, fileName, file.type, 'knowledge-base')
-                        
+
                         // Save to database
                         await prisma.assistantKnowledgebase.create({
                             data: {
                                 assistantId: assistant.id,
-                                name: file.name,
-                                file: fileUrl,
-                                fileId: openaiFileId,
+                                file: file.name.trim() || "",
+                                vectorFileId: openaiFileId,
                                 type: 'file',
                             }
                         })
-                        
+
                         console.log(`✅ File added: ${file.name}`)
                     } catch (fileError) {
                         console.error(`Error processing file ${file.name}:`, fileError)
@@ -402,70 +388,68 @@ export async function createCompleteAssistant(
         // ============================================
         // STEP 5: CREATE API CONFIGURATION
         // ============================================
-        
-        if (params.authenticationType !== 'none') {
-            try {
-                const apiConfigData = {
-                    authenticationType: params.authenticationType,
-                    apiKey: params.authenticationType === 'api_key' ? params.apiKey : null,
-                    authType: params.authenticationType === 'api_key' ? params.authType : null,
-                    customHeaderName: params.authenticationType === 'api_key' ? params.customHeaderName : null,
-                    clientId: params.authenticationType === 'oauth' ? params.clientId : null,
-                    clientSecret: params.authenticationType === 'oauth' ? params.clientSecret : null,
-                    authorizationUrl: params.authenticationType === 'oauth' ? params.authorizationUrl : null,
-                    tokenUrl: params.authenticationType === 'oauth' ? params.tokenUrl : null,
-                    scope: params.authenticationType === 'oauth' ? params.scope : null,
-                    tokenExchangeMethod: params.authenticationType === 'oauth' ? params.tokenExchangeMethod : null,
-                    schemaText: params.schemaText,
-                    schema: params.schema,
-                }
-                
-                await prisma.assistantApiConfiguration.create({
-                    data: {
-                        assistantId: assistant.id,
-                        ...apiConfigData
-                    }
-                })
-                
-                console.log(`✅ API configuration created`)
-            } catch (apiConfigError) {
-                console.error('Error creating API configuration:', apiConfigError)
+
+        try {
+            const apiConfigData = {
+                authenticationType: params.authenticationType,
+                apiKey: params.authenticationType === 'api_key' ? params.apiKey : null,
+                authType: params.authenticationType === 'api_key' ? params.authType : null,
+                customHeaderName: params.authenticationType === 'api_key' ? params.customHeaderName : null,
+                clientId: params.authenticationType === 'oauth' ? params.clientId : null,
+                clientSecret: params.authenticationType === 'oauth' ? params.clientSecret : null,
+                authorizationUrl: params.authenticationType === 'oauth' ? params.authorizationUrl : null,
+                tokenUrl: params.authenticationType === 'oauth' ? params.tokenUrl : null,
+                scope: params.authenticationType === 'oauth' ? params.scope : null,
+                tokenExchangeMethod: params.authenticationType === 'oauth' ? params.tokenExchangeMethod : null,
+                schemaText: params.schemaText,
+                schema: params.schema,
             }
+
+            await prisma.assistantApiConfiguration.create({
+                data: {
+                    assistantId: assistant.id,
+                    ...apiConfigData
+                }
+            })
+
+            console.log(`✅ API configuration created`)
+        } catch (apiConfigError) {
+            console.error('Error creating API configuration:', apiConfigError)
         }
 
         // ============================================
         // STEP 6: SET UP PERMISSIONS & SHARING
         // ============================================
-        
+
         if (params.sharedUsers.length > 0) {
             try {
                 for (const sharedUser of params.sharedUsers) {
                     const sharedUserId = BigInt(sharedUser.id)
-                    
-                    // Create user permissions
-                    await prisma.assistantUserPermission.create({
-                        data: {
-                            assistantId: assistant.id,
-                            userId: sharedUserId,
-                            access: 'viewer',
-                            permissions: JSON.stringify(sharedUser.permissions)
-                        }
-                    })
-                    
-                    // Create contact record
+
+                    // Create contact record with permissions
                     await prisma.assistantContact.create({
                         data: {
                             assistantId: assistant.id,
                             userId: sharedUserId,
+                            access: 'editor',
+                            permissions: JSON.stringify(sharedUser.permissions),
                         }
                     })
                 }
-                
+
                 console.log(`✅ Permissions set for ${params.sharedUsers.length} users`)
             } catch (permissionsError) {
                 console.error('Error setting permissions:', permissionsError)
             }
         }
+
+        // Pin assistant to user's sidebar
+        await prisma.assistantPin.create({
+            data: {
+                assistantId: assistant.id,
+                userId: userId
+            }
+        })
 
         // Revalidate paths
         revalidatePath('/assistants')

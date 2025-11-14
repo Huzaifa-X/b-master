@@ -22,7 +22,7 @@ interface ScrapeJobParams {
  */
 export async function triggerWebScraping(
   params: ScrapeJobParams
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; vectorFileId: string }> {
   try {
     const response = await axios.post(WEB_CRAWLER_API, {
       url: params.url,
@@ -31,16 +31,12 @@ export async function triggerWebScraping(
     })
 
     console.log(`✅ Web scraping triggered for: ${params.url}`)
-    return { success: true }
+    return { success: true, vectorFileId: response.data.file_id }
   } catch (error) {
     console.error("❌ Error triggering web scraping:", error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    }
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error", vectorFileId: "" }
   }
 }
-
 /**
  * Process pending URL crawling jobs
  * This function should be called by a cron job
@@ -94,12 +90,13 @@ export async function processPendingUrlCrawls(): Promise<void> {
           maxPages: 20,
         })
 
-        if (result.success) {
+        if (result.success && result.vectorFileId) {
           // Mark as crawled
           await prisma.assistantKnowledgebase.update({
             where: { id: item.id },
             data: {
               isCrawled: true,
+              vectorFileId: result.vectorFileId,
               updatedAt: new Date(),
             },
           })
@@ -179,12 +176,13 @@ export async function retryFailedCrawls(maxRetries: number = 3): Promise<void> {
           maxPages: 20,
         })
 
-        if (result.success) {
+        if (result.success && result.vectorFileId) {
           // Mark as crawled
           await prisma.assistantKnowledgebase.update({
             where: { id: item.id },
             data: {
               isCrawled: true,
+              vectorFileId: result.vectorFileId || "",
               updatedAt: new Date(),
             },
           })
