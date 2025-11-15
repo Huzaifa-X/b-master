@@ -161,7 +161,7 @@ export function SchemaPreview({ schemaText, authConfig }: SchemaPreviewProps) {
             <div className="space-y-1">
               <p className="font-semibold">Authentication Required</p>
               <p className="text-sm">
-                This API requires authentication ({Object.keys(securitySchemes).join(', ')}). 
+                This API requires authentication ({Object.keys(securitySchemes).join(', ')}).
                 Please configure authentication above to test endpoints.
               </p>
             </div>
@@ -292,7 +292,7 @@ function ActionRow({ endpoint, baseUrl, authConfig, securitySchemes, globalSecur
       globalSecurity.forEach((securityReq: any) => {
         Object.keys(securityReq).forEach((schemeName) => {
           const scheme = securitySchemes[schemeName]
-          
+
           if (!scheme) return
 
           // Handle different authentication types
@@ -402,22 +402,34 @@ function ActionRow({ endpoint, baseUrl, authConfig, securitySchemes, globalSecur
 
       const { url, headers } = buildUrlAndHeaders()
 
-      console.log('Testing endpoint:', { url, headers: { ...headers, Authorization: headers.Authorization ? '***' : undefined } })
+      // Validate absolute URL
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        throw new Error(
+          "Invalid API URL. Your OpenAPI schema must include a 'servers' field with a valid base URL."
+        )
+      }
 
-      const response = await fetch(url, {
-        method: endpoint.method,
-        headers,
+      console.log('Testing endpoint:', {
+        method: endpoint.method, // ✅ This is already here
+        url,
+        headers: { ...headers, Authorization: headers.Authorization ? '***' : undefined }
       })
 
-      let data
-      const contentType = response.headers.get('content-type')
-      
-      if (contentType?.includes('application/json')) {
-        data = await response.json()
-      } else {
-        const text = await response.text()
-        data = { response: text }
-      }
+      // Call proxy with the correct method
+      const response = await fetch('/api/proxy-openapi', {
+        method: 'POST', // ← Proxy endpoint is always POST
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url,
+          method: endpoint.method, // ✅ Pass GET, POST, PUT, DELETE, etc.
+          headers,
+          // TODO: Add request body for POST/PUT methods (see below)
+        }),
+      })
+
+      const data = await response.json()
 
       if (!response.ok) {
         setTestError(`Error ${response.status}: ${JSON.stringify(data, null, 2)}`)
@@ -535,8 +547,8 @@ function ActionRow({ endpoint, baseUrl, authConfig, securitySchemes, globalSecur
                   <div key={key} className="flex gap-2">
                     <span className="text-muted-foreground">{key}:</span>
                     <span className="break-all">
-                      {key.toLowerCase().includes('auth') || key.toLowerCase().includes('key') 
-                        ? '***' + value.slice(-4) 
+                      {key.toLowerCase().includes('auth') || key.toLowerCase().includes('key')
+                        ? '***' + value.slice(-4)
                         : value}
                     </span>
                   </div>
@@ -584,9 +596,9 @@ function ActionRow({ endpoint, baseUrl, authConfig, securitySchemes, globalSecur
             )}
 
             {/* Test Button */}
-            <Button 
-              onClick={handleTest} 
-              disabled={isTesting || !canTest} 
+            <Button
+              onClick={handleTest}
+              disabled={isTesting || !canTest}
               className="w-full"
             >
               {isTesting ? (

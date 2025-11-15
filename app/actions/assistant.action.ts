@@ -356,6 +356,11 @@ export async function createCompleteAssistant(
                     try {
                         const buffer = Buffer.from(await file.arrayBuffer())
 
+                        // s
+                        const fileBuffer = Buffer.from(await file.arrayBuffer())
+                        const fileFileName = `${file.name}.${file.type}`
+                        const fileUrl = await uploadToS3(fileBuffer, fileFileName, file.type, 'knowledge-base')
+
                         // Upload to OpenAI vector store
                         const vectorFileId = await uploadAndAddToVectorStore(
                             vectorStoreId,
@@ -367,7 +372,7 @@ export async function createCompleteAssistant(
                         await prisma.assistantKnowledgebase.create({
                             data: {
                                 assistantId: assistant.id,
-                                file: file.name,
+                                file: fileUrl,
                                 vectorFileId: vectorFileId,
                                 type: 'file',
                             }
