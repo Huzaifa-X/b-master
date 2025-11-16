@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reservation System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 30px;
+        }
+        .search-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .search-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .search-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+            margin-top: 16px;
+        }
+        .search-button:hover {
+            transform: translateY(-1px);
+        }
+        .availability-calendar {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .calendar-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        .calendar-nav {
+            display: flex;
+            gap: 8px;
+        }
+        .nav-btn {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .nav-btn:hover {
+            border-color: #667eea;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+        }
+        .day-header {
+            text-align: center;
+            font-weight: 600;
+            color: #6c757d;
+            font-size: 12px;
+            padding: 8px;
+        }
+        .day-cell {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .day-cell:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+        .day-cell.available {
+            background: #d4edda;
+            color: #155724;
+        }
+        .day-cell.unavailable {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .day-cell.selected {
+            background: #667eea;
+            color: white;
+        }
+        .reservations-list {
+            margin-bottom: 30px;
+        }
+        .reservation-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            transition: all 0.2s;
+        }
+        .reservation-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+        }
+        .reservation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 12px;
+        }
+        .reservation-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        .reservation-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-confirmed {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .reservation-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .detail-label {
+            font-size: 12px;
+            color: #6c757d;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .detail-value {
+            font-size: 14px;
+            color: #333;
+            font-weight: 500;
+        }
+        .reservation-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .action-btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #5a67d8;
+        }
+        .btn-secondary {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #dee2e6;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 16px;
+            margin-top: 30px;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #6c757d;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍽️ Reservation System</h1>
+            <p>Manage bookings for restaurants, hotels, and services</p>
+        </div>
+
+        <div class="content">
+            <div class="search-section">
+                <div class="search-grid">
+                    <div class="form-group">
+                        <label>Check-in Date</label>
+                        <input type="date" value="2024-12-15">
+                    </div>
+                    <div class="form-group">
+                        <label>Check-out Date</label>
+                        <input type="date" value="2024-12-17">
+                    </div>
+                    <div class="form-group">
+                        <label>Guests</label>
+                        <select>
+                            <option>1 Guest</option>
+                            <option>2 Guests</option>
+                            <option>3 Guests</option>
+                            <option>4+ Guests</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Room Type</label>
+                        <select>
+                            <option>Standard Room</option>
+                            <option>Deluxe Room</option>
+                            <option>Suite</option>
+                            <option>VIP Suite</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="search-button">🔍 Check Availability</button>
+            </div>
+
+            <div class="availability-calendar">
+                <div class="calendar-header">
+                    <div class="calendar-title">December 2024</div>
+                    <div class="calendar-nav">
+                        <button class="nav-btn">‹</button>
+                        <button class="nav-btn">›</button>
+                    </div>
+                </div>
+                <div class="calendar-grid">
+                    <div class="day-header">Mon</div>
+                    <div class="day-header">Tue</div>
+                    <div class="day-header">Wed</div>
+                    <div class="day-header">Thu</div>
+                    <div class="day-header">Fri</div>
+                    <div class="day-header">Sat</div>
+                    <div class="day-header">Sun</div>
+
+                    <div class="day-cell">1</div>
+                    <div class="day-cell">2</div>
+                    <div class="day-cell">3</div>
+                    <div class="day-cell">4</div>
+                    <div class="day-cell">5</div>
+                    <div class="day-cell">6</div>
+                    <div class="day-cell">7</div>
+                    <div class="day-cell">8</div>
+                    <div class="day-cell">9</div>
+                    <div class="day-cell available">10</div>
+                    <div class="day-cell available">11</div>
+                    <div class="day-cell available">12</div>
+                    <div class="day-cell available">13</div>
+                    <div class="day-cell selected">14</div>
+                    <div class="day-cell selected">15</div>
+                    <div class="day-cell selected">16</div>
+                    <div class="day-cell unavailable">17</div>
+                    <div class="day-cell unavailable">18</div>
+                    <div class="day-cell available">19</div>
+                    <div class="day-cell available">20</div>
+                    <div class="day-cell">21</div>
+                    <div class="day-cell">22</div>
+                    <div class="day-cell">23</div>
+                    <div class="day-cell">24</div>
+                    <div class="day-cell">25</div>
+                    <div class="day-cell">26</div>
+                    <div class="day-cell">27</div>
+                    <div class="day-cell">28</div>
+                    <div class="day-cell">29</div>
+                    <div class="day-cell">30</div>
+                    <div class="day-cell">31</div>
+                </div>
+            </div>
+
+            <div class="reservations-list">
+                <h3 style="font-size: 20px; font-weight: 600; color: #333; margin-bottom: 20px;">Recent Reservations</h3>
+
+                <div class="reservation-card">
+                    <div class="reservation-header">
+                        <div class="reservation-title">Deluxe Suite - John Smith</div>
+                        <div class="reservation-status status-confirmed">Confirmed</div>
+                    </div>
+                    <div class="reservation-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Check-in</div>
+                            <div class="detail-value">Dec 14, 2024</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Check-out</div>
+                            <div class="detail-value">Dec 16, 2024</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Guests</div>
+                            <div class="detail-value">2 Adults</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Total</div>
+                            <div class="detail-value">$450.00</div>
+                        </div>
+                    </div>
+                    <div class="reservation-actions">
+                        <button class="action-btn btn-primary">View Details</button>
+                        <button class="action-btn btn-secondary">Modify</button>
+                        <button class="action-btn btn-danger">Cancel</button>
+                    </div>
+                </div>
+
+                <div class="reservation-card">
+                    <div class="reservation-header">
+                        <div class="reservation-title">Standard Room - Sarah Johnson</div>
+                        <div class="reservation-status status-pending">Pending</div>
+                    </div>
+                    <div class="reservation-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Check-in</div>
+                            <div class="detail-value">Dec 20, 2024</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Check-out</div>
+                            <div class="detail-value">Dec 22, 2024</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Guests</div>
+                            <div class="detail-value">1 Adult</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Total</div>
+                            <div class="detail-value">$180.00</div>
+                        </div>
+                    </div>
+                    <div class="reservation-actions">
+                        <button class="action-btn btn-primary">Confirm</button>
+                        <button class="action-btn btn-secondary">Modify</button>
+                        <button class="action-btn btn-danger">Reject</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">24</div>
+                    <div class="stat-label">Total Rooms</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">18</div>
+                    <div class="stat-label">Available</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">6</div>
+                    <div class="stat-label">Occupied</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">85%</div>
+                    <div class="stat-label">Occupancy</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

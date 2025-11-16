@@ -1,13 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { use, useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, Plus, FolderOpen } from "lucide-react"
+import { Search, Plus, FolderOpen, Loader2 } from "lucide-react"
 import { CreateArtifactDialog } from "@/components/artifacts/create-artifact-dialog"
 import { ViewArtifactDialog } from "@/components/artifacts/view-artifact-dialog"
 import { ArtifactCard, type Artifact } from "@/components/artifacts/artifact-card"
 import { toast } from "sonner"
+import { getArtifacts } from "@/app/actions/artifact.action"
 
 // Dummy HTML generator for different artifacts
 const getDummyHTML = (name: string, category: string) => {
@@ -118,15 +119,53 @@ const MOCK_ARTIFACTS: Artifact[] = [
   },
 ]
 
-export default function ArtifactsPage() {
+export default function ArtifactsPage({ params }: { params: Promise<{ id: string }> }) {
+    // Unwrap params promise for Next.js 15
+    const { id: assistantId } = use(params)
+    
     const [searchQuery, setSearchQuery] = useState("")
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
     const [viewDialogOpen, setViewDialogOpen] = useState(false)
     const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null)
-    const [artifacts] = useState<Artifact[]>(MOCK_ARTIFACTS)
+    const [artifacts, setArtifacts] = useState<Artifact[]>([])
+    const [loading, setLoading] = useState(true)
+
+    // Fetch artifacts on mount
+    useEffect(() => {
+        const fetchArtifacts = async () => {
+            setLoading(true)
+            try {
+                const result = await getArtifacts(assistantId)
+                if (result.success) {
+                    setArtifacts(result.artifacts as Artifact[])
+                } else {
+                    toast.error(result.error || 'Failed to load artifacts')
+                }
+            } catch (error) {
+                console.error('Error fetching artifacts:', error)
+                toast.error('Failed to load artifacts')
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        fetchArtifacts()
+    }, [assistantId])
 
     const handleCreateArtifact = () => {
         setCreateDialogOpen(true)
+    }
+
+    const handleArtifactCreated = async () => {
+        // Refresh artifacts list after creation
+        try {
+            const result = await getArtifacts(assistantId)
+            if (result.success) {
+                setArtifacts(result.artifacts as Artifact[])
+            }
+        } catch (error) {
+            console.error('Error refreshing artifacts:', error)
+        }
     }
 
     const handleCardClick = (id: string) => {
@@ -180,7 +219,12 @@ export default function ArtifactsPage() {
                 </div>
 
                 {/* Artifacts Grid or Empty State */}
-                {filteredArtifacts.length > 0 ? (
+                {loading ? (
+                    <div className="flex flex-col items-center justify-center py-16">
+                        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+                        <p className="text-sm text-muted-foreground">Loading artifacts...</p>
+                    </div>
+                ) : filteredArtifacts.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredArtifacts.map((artifact) => (
                             <ArtifactCard
@@ -212,7 +256,17 @@ export default function ArtifactsPage() {
             </div>
 
             {/* Create Artifact Dialog */}
-            <CreateArtifactDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+            <CreateArtifactDialog 
+                open={createDialogOpen} 
+                onOpenChange={(open) => {
+                    setCreateDialogOpen(open)
+                    if (!open) {
+                        // Refresh artifacts when dialog closes
+                        handleArtifactCreated()
+                    }
+                }}
+                assistantId={assistantId}
+            />
 
             {/* View Artifact Dialog */}
             <ViewArtifactDialog
