@@ -10,11 +10,36 @@ import {
 import { useArtifactStore } from "@/lib/stores/artifact-store"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
+import { useAssistantStore } from "@/lib/stores/assistant-store"
+import { useEffect } from "react"
+import { getAssistantById } from "@/app/actions/assistant.action"
 
-export function AssistantView() {
+interface AssistantViewProps {
+  assistantId: string
+}
+
+export function AssistantView({ assistantId }: AssistantViewProps) {
   const isPanelOpen = useArtifactStore((state) => state.isPanelOpen)
   const closePanel = useArtifactStore((state) => state.closePanel)
   const isMobile = useIsMobile()
+  const { setAssistantMode, clearAssistantMode } = useAssistantStore()
+
+  // Fetch and set assistant details
+  useEffect(() => {
+    const fetchAssistant = async () => {
+      const result = await getAssistantById(assistantId)
+      if (result.success && result.assistant) {
+        setAssistantMode(assistantId, result.assistant.name)
+      }
+    }
+
+    fetchAssistant()
+
+    // Cleanup: clear assistant mode when leaving
+    return () => {
+      clearAssistantMode()
+    }
+  }, [assistantId, setAssistantMode, clearAssistantMode])
 
   const handleClosePanel = () => {
     closePanel()

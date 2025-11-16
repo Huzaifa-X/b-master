@@ -218,7 +218,7 @@ export function parseOpenAPISchema(schema: any): ParsedSchema {
       for (const [name, scheme] of Object.entries(schema.components.securitySchemes)) {
         const securityScheme = scheme as any
         parsed.securitySchemes[name] = {
-          name,
+          name: securityScheme.name || name, // Use the actual parameter name from schema, fallback to scheme key
           type: securityScheme.type,
           in: securityScheme.in,
           scheme: securityScheme.scheme,

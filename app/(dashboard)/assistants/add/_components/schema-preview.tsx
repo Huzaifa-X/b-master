@@ -493,148 +493,152 @@ function ActionRow({ endpoint, baseUrl, authConfig, securitySchemes, globalSecur
 
       {/* Test Dialog */}
       <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Badge className={cn("text-white", getMethodColor(endpoint.method))}>
-                {endpoint.method}
-              </Badge>
-              <span className="font-mono">{endpoint.path}</span>
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[80vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b shrink-0">
+            <DialogTitle className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge className={cn("text-white", getMethodColor(endpoint.method))}>
+                  {endpoint.method}
+                </Badge>
+                <span className="font-mono text-sm sm:text-base break-all">{endpoint.path}</span>
+              </div>
               {requiresAuth && (
-                <Badge variant={isAuthConfigured ? "default" : "destructive"} className="ml-2">
+                <Badge variant={isAuthConfigured ? "default" : "destructive"} className="self-start sm:self-auto sm:ml-2">
                   <Lock className="h-3 w-3 mr-1" />
                   {isAuthConfigured ? "Auth Configured" : "Auth Required"}
                 </Badge>
               )}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-sm">
               {endpoint.summary || endpoint.description || "Test this endpoint"}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            {/* Authentication Info */}
-            {requiresAuth && (
-              <Alert className={isAuthConfigured ? "border-green-200 bg-green-50" : "border-yellow-200 bg-yellow-50"}>
-                <Key className="h-4 w-4" />
-                <AlertDescription>
-                  {isAuthConfigured ? (
-                    <span className="text-green-800">
-                      Authentication configured: {authConfig.authenticationType === 'api_key' ? 'API Key' : 'OAuth 2.0'}
-                    </span>
-                  ) : (
-                    <span className="text-yellow-800">
-                      This endpoint requires authentication. Please configure it in the form above.
-                    </span>
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* URL */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Request URL</Label>
-              <div className="p-2 bg-muted rounded font-mono text-sm break-all">
-                {buildUrlAndHeaders().url}
-              </div>
-            </div>
-
-            {/* Headers Preview */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Request Headers</Label>
-              <div className="p-2 bg-muted rounded font-mono text-xs space-y-1">
-                {Object.entries(buildUrlAndHeaders().headers).map(([key, value]) => (
-                  <div key={key} className="flex gap-2">
-                    <span className="text-muted-foreground">{key}:</span>
-                    <span className="break-all">
-                      {key.toLowerCase().includes('auth') || key.toLowerCase().includes('key')
-                        ? '***' + value.slice(-4)
-                        : value}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Parameters */}
-            {endpoint.parameters.length > 0 && (
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">Parameters</Label>
-                {endpoint.parameters.map((param) => (
-                  <div key={param.name} className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor={`test-${param.name}`} className="text-sm">
-                        {param.name}
-                        {param.required && (
-                          <span className="text-destructive ml-1">*</span>
-                        )}
-                      </Label>
-                      <Badge variant="outline" className="text-xs">
-                        {param.in}
-                      </Badge>
-                    </div>
-                    <Input
-                      id={`test-${param.name}`}
-                      value={paramValues[param.name] || ""}
-                      onChange={(e) =>
-                        setParamValues((prev) => ({
-                          ...prev,
-                          [param.name]: e.target.value,
-                        }))
-                      }
-                      placeholder={param.description || `Enter ${param.name}`}
-                      className="font-mono text-sm"
-                    />
-                    {param.description && (
-                      <p className="text-xs text-muted-foreground break-words">
-                        {param.description}
-                      </p>
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 min-h-0">
+            <div className="space-y-4">
+              {/* Authentication Info */}
+              {requiresAuth && (
+                <Alert className={isAuthConfigured ? "border-green-200 bg-green-50" : "border-yellow-200 bg-yellow-50"}>
+                  <Key className="h-4 w-4 shrink-0" />
+                  <AlertDescription className="text-sm">
+                    {isAuthConfigured ? (
+                      <span className="text-green-800">
+                        Authentication configured: {authConfig.authenticationType === 'api_key' ? 'API Key' : 'OAuth 2.0'}
+                      </span>
+                    ) : (
+                      <span className="text-yellow-800">
+                        This endpoint requires authentication. Please configure it in the form above.
+                      </span>
                     )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Test Button */}
-            <Button
-              onClick={handleTest}
-              disabled={isTesting || !canTest}
-              className="w-full"
-            >
-              {isTesting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Testing...
-                </>
-              ) : (
-                <>
-                  <Play className="mr-2 h-4 w-4" />
-                  Test Endpoint
-                </>
+                  </AlertDescription>
+                </Alert>
               )}
-            </Button>
 
-            {/* Error */}
-            {testError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="whitespace-pre-wrap break-words">
-                  {testError}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Success Result */}
-            {testResult && (
+              {/* URL */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-green-600">
-                  ✓ Response
-                </Label>
-                <pre className="bg-muted p-4 rounded-lg overflow-auto text-xs max-h-64 whitespace-pre-wrap break-words">
-                  {JSON.stringify(testResult, null, 2)}
-                </pre>
+                <Label className="text-sm font-medium">Request URL</Label>
+                <div className="p-2 sm:p-3 bg-muted rounded font-mono text-xs sm:text-sm break-all">
+                  {buildUrlAndHeaders().url}
+                </div>
               </div>
-            )}
+
+              {/* Headers Preview */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Request Headers</Label>
+                <div className="p-2 sm:p-3 bg-muted rounded font-mono text-xs space-y-1">
+                  {Object.entries(buildUrlAndHeaders().headers).map(([key, value]) => (
+                    <div key={key} className="flex flex-col sm:flex-row sm:gap-2">
+                      <span className="text-muted-foreground font-semibold sm:font-normal">{key}:</span>
+                      <span className="break-all pl-2 sm:pl-0">
+                        {key.toLowerCase().includes('auth') || key.toLowerCase().includes('key')
+                          ? '***' + value.slice(-4)
+                          : value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Parameters */}
+              {endpoint.parameters.length > 0 && (
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Parameters</Label>
+                  {endpoint.parameters.map((param) => (
+                    <div key={param.name} className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Label htmlFor={`test-${param.name}`} className="text-sm">
+                          {param.name}
+                          {param.required && (
+                            <span className="text-destructive ml-1">*</span>
+                          )}
+                        </Label>
+                        <Badge variant="outline" className="text-xs">
+                          {param.in}
+                        </Badge>
+                      </div>
+                      <Input
+                        id={`test-${param.name}`}
+                        value={paramValues[param.name] || ""}
+                        onChange={(e) =>
+                          setParamValues((prev) => ({
+                            ...prev,
+                            [param.name]: e.target.value,
+                          }))
+                        }
+                        placeholder={param.description || `Enter ${param.name}`}
+                        className="font-mono text-sm"
+                      />
+                      {param.description && (
+                        <p className="text-xs text-muted-foreground break-words">
+                          {param.description}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Test Button */}
+              <Button
+                onClick={handleTest}
+                disabled={isTesting || !canTest}
+                className="w-full"
+              >
+                {isTesting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Testing...
+                  </>
+                ) : (
+                  <>
+                    <Play className="mr-2 h-4 w-4" />
+                    Test Endpoint
+                  </>
+                )}
+              </Button>
+
+              {/* Error */}
+              {testError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <AlertDescription className="whitespace-pre-wrap break-words text-sm">
+                    {testError}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Success Result */}
+              {testResult && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-green-600">
+                    ✓ Response
+                  </Label>
+                  <pre className="bg-muted p-3 sm:p-4 rounded-lg overflow-auto text-xs max-h-48 sm:max-h-64 whitespace-pre-wrap break-words">
+                    {JSON.stringify(testResult, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>

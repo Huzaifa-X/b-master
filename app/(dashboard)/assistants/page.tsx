@@ -1,184 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Tabs } from "@/components/ui/vercel-tabs"
 import { AssistantCard } from "@/components/assistants/assistant-card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, Plus, Bot } from "lucide-react"
+import { Search, Plus, Bot, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
-
-interface Assistant {
-  id: string
-  name: string
-  price: number
-  description: string
-  image: string
-  category?: string
-  createdAt?: string
-}
-
-// Mock data for My Assistants
-const myAssistants: Assistant[] = [
-  {
-    id: "1",
-    name: "Marketing Assistant",
-    price: 29.99,
-    description: "Helps create marketing content, social media posts, and campaign strategies",
-    image: "/bmaster-icon.png",
-    category: "Marketing",
-    createdAt: "2024-01-15",
-  },
-  {
-    id: "2",
-    name: "Code Review Helper",
-    price: 49.99,
-    description: "Reviews code, suggests improvements, and helps with debugging complex issues",
-    image: "/bmaster-icon.png",
-    category: "Development",
-    createdAt: "2024-02-20",
-  },
-  {
-    id: "3",
-    name: "Content Writer",
-    price: 19.99,
-    description: "Creates blog posts, articles, and SEO-optimized content for your business",
-    image: "/bmaster-icon.png",
-    category: "Writing",
-    createdAt: "2024-03-10",
-  },
-  {
-    id: "4",
-    name: "Data Analyst",
-    price: 39.99,
-    description: "Analyzes data, creates reports, and provides insights for business decisions",
-    image: "/bmaster-icon.png",
-    category: "Analytics",
-    createdAt: "2024-03-25",
-  },
-  {
-    id: "5",
-    name: "Customer Support",
-    price: 24.99,
-    description: "Handles customer inquiries, provides support, and resolves issues efficiently",
-    image: "/bmaster-icon.png",
-    category: "Support",
-    createdAt: "2024-04-05",
-  },
-  {
-    id: "6",
-    name: "Sales Assistant",
-    price: 34.99,
-    description: "Helps with sales pitches, lead generation, and customer relationship management",
-    image: "/bmaster-icon.png",
-    category: "Sales",
-    createdAt: "2024-04-20",
-  },
-]
-
-// Mock data for Purchased Assistants
-const purchasedAssistants: Assistant[] = [
-  {
-    id: "p1",
-    name: "Email Marketing Pro",
-    price: 45.00,
-    description: "Advanced email campaign management with A/B testing and analytics",
-    image: "/bmaster-icon.png",
-    category: "Marketing",
-  },
-  {
-    id: "p2",
-    name: "SEO Optimizer",
-    price: 55.00,
-    description: "Optimize your content for search engines and improve rankings",
-    image: "/bmaster-icon.png",
-    category: "SEO",
-  },
-  {
-    id: "p3",
-    name: "Legal Document Assistant",
-    price: 89.99,
-    description: "Helps draft legal documents, contracts, and agreements",
-    image: "/bmaster-icon.png",
-    category: "Legal",
-  },
-  {
-    id: "p4",
-    name: "Financial Advisor",
-    price: 79.99,
-    description: "Provides financial advice, budgeting tips, and investment strategies",
-    image: "/bmaster-icon.png",
-    category: "Finance",
-  },
-  {
-    id: "p5",
-    name: "Fitness Coach",
-    price: 29.99,
-    description: "Creates workout plans, nutrition guides, and fitness tracking",
-    image: "/bmaster-icon.png",
-    category: "Health",
-  },
-  {
-    id: "p6",
-    name: "Language Tutor",
-    price: 39.99,
-    description: "Helps learn new languages with interactive lessons and practice",
-    image: "/bmaster-icon.png",
-    category: "Education",
-  },
-]
-
-// Mock data for Shared Assistants
-const sharedAssistants: Assistant[] = [
-  {
-    id: "s1",
-    name: "Team Productivity",
-    price: 0,
-    description: "Shared by team lead for project management and task tracking",
-    image: "/bmaster-icon.png",
-    category: "Productivity",
-  },
-  {
-    id: "s2",
-    name: "Design Review Assistant",
-    price: 0,
-    description: "Shared by design team for reviewing UI/UX and providing feedback",
-    image: "/bmaster-icon.png",
-    category: "Design",
-  },
-  {
-    id: "s3",
-    name: "HR Onboarding",
-    price: 0,
-    description: "Shared by HR for new employee onboarding and training",
-    image: "/bmaster-icon.png",
-    category: "HR",
-  },
-  {
-    id: "s4",
-    name: "Research Assistant",
-    price: 0,
-    description: "Shared by research team for academic research and literature review",
-    image: "/bmaster-icon.png",
-    category: "Research",
-  },
-  {
-    id: "s5",
-    name: "Meeting Notes",
-    price: 0,
-    description: "Shared by team for taking and organizing meeting notes",
-    image: "/bmaster-icon.png",
-    category: "Productivity",
-  },
-  {
-    id: "s6",
-    name: "Documentation Writer",
-    price: 0,
-    description: "Shared by tech team for creating technical documentation",
-    image: "/bmaster-icon.png",
-    category: "Documentation",
-  },
-]
+import { useAssistants } from "@/hooks/useAssistants"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useDebounce } from "@/hooks/useDebounce"
 
 const TABS = [
   { id: "my", label: "My Assistants" },
@@ -188,30 +19,35 @@ const TABS = [
 
 export default function AssistantsPage() {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState("my")
+  const [activeTab, setActiveTab] = useState<'my' | 'purchased' | 'shared'>("my")
   const [searchQuery, setSearchQuery] = useState("")
+  
+  // Debounce search to avoid too many requests
+  const debouncedSearch = useDebounce(searchQuery, 500)
 
-  const getCurrentAssistants = () => {
-    switch (activeTab) {
-      case "my":
-        return myAssistants
-      case "purchased":
-        return purchasedAssistants
-      case "shared":
-        return sharedAssistants
-      default:
-        return []
-    }
-  }
-
-  const filteredAssistants = getCurrentAssistants().filter((assistant) =>
-    assistant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    assistant.description.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const {
+    assistants,
+    pagination,
+    isLoading,
+    isError,
+    error,
+    hasMore,
+    loadMore,
+    isLoadingMore
+  } = useAssistants({
+    type: activeTab,
+    search: debouncedSearch,
+    limit: 12
+  })
 
   const handleCreateNew = () => {
     router.push("/assistants/add")
   }
+
+  // Reset search when tab changes
+  useEffect(() => {
+    setSearchQuery("")
+  }, [activeTab])
 
   return (
     <div className="h-full overflow-y-auto">
@@ -228,7 +64,7 @@ export default function AssistantsPage() {
           </div>
 
           {/* Tabs */}
-          <Tabs tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+          <Tabs tabs={TABS} activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as typeof activeTab)} />
         </div>
 
         {/* Search Bar */}
@@ -244,42 +80,111 @@ export default function AssistantsPage() {
           </div>
         </div>
 
-        {/* Assistants Grid */}
-        {filteredAssistants.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
-            {filteredAssistants.map((assistant) => (
-              <AssistantCard
-                key={assistant.id}
-                assistant={assistant}
-                tabType={activeTab as "my" | "purchased" | "shared"}
-              />
+        {/* Loading State */}
+        {isLoading && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="space-y-3">
+                <Skeleton className="h-48 w-full rounded-lg" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
             ))}
           </div>
-        ) : searchQuery ? (
+        )}
+
+        {/* Error State */}
+        {isError && (
           <div className="text-center py-16">
-            <Search className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2">No results found</h3>
-            <p className="text-sm text-muted-foreground">
-              Try searching with different keywords
-            </p>
-          </div>
-        ) : (
-          <div className="text-center py-16">
-            <Bot className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2">
-              {activeTab === "my" && "No assistants created yet"}
-              {activeTab === "purchased" && "No purchased assistants"}
-              {activeTab === "shared" && "No shared assistants"}
-            </h3>
+            <Bot className="h-16 w-16 mx-auto mb-4 text-destructive" />
+            <h3 className="text-lg font-semibold mb-2">Error loading assistants</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              {activeTab === "my" && "Create your first assistant to get started"}
-              {activeTab === "purchased" && "Browse the store to purchase assistants"}
-              {activeTab === "shared" && "Assistants shared with you will appear here"}
+              {error || "Something went wrong"}
             </p>
           </div>
+        )}
+
+        {/* Assistants Grid */}
+        {!isLoading && !isError && (
+          <>
+            {assistants.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {assistants.map((assistant) => (
+                    <AssistantCard
+                      key={assistant.id}
+                      assistant={{
+                        id: assistant.id,
+                        name: assistant.name,
+                        price: assistant.price,
+                        description: assistant.description || "",
+                        image: assistant.image || "/bmaster-icon.png",
+                        category: assistant.category,
+                        createdAt: assistant.createdAt.toString()
+                      }}
+                      tabType={activeTab}
+                    />
+                  ))}
+                </div>
+
+                {/* Load More Button */}
+                {hasMore && (
+                  <div className="flex justify-center mt-8">
+                    <Button
+                      onClick={() => loadMore()}
+                      disabled={isLoadingMore}
+                      variant="outline"
+                      size="lg"
+                    >
+                      {isLoadingMore ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        `Load More (${pagination.total - assistants.length} remaining)`
+                      )}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Pagination Info */}
+                <div className="text-center mt-4 text-sm text-muted-foreground">
+                  Showing {assistants.length} of {pagination.total} assistants
+                </div>
+              </>
+            ) : searchQuery ? (
+              <div className="text-center py-16">
+                <Search className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mb-2">No results found</h3>
+                <p className="text-sm text-muted-foreground">
+                  Try searching with different keywords
+                </p>
+              </div>
+            ) : (
+              <div className="text-center py-16">
+                <Bot className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mb-2">
+                  {activeTab === "my" && "No assistants created yet"}
+                  {activeTab === "purchased" && "No purchased assistants"}
+                  {activeTab === "shared" && "No shared assistants"}
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {activeTab === "my" && "Create your first assistant to get started"}
+                  {activeTab === "purchased" && "Browse the store to purchase assistants"}
+                  {activeTab === "shared" && "Assistants shared with you will appear here"}
+                </p>
+                {activeTab === "my" && (
+                  <Button onClick={handleCreateNew} className="mt-4">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Assistant
+                  </Button>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
   )
 }
-

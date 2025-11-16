@@ -471,3 +471,593 @@ export async function createCompleteAssistant(
         }
     }
 }
+
+// ================================================================
+// ASSISTANT PIN MANAGEMENT
+// ================================================================
+
+/**
+ * Get all pinned assistants for the current user
+ */
+export async function getPinnedAssistants() {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: 'Authentication required',
+                assistants: []
+            }
+        }
+
+        const userId = BigInt(session.user.id)
+
+        const pinnedAssistants = await prisma.assistantPin.findMany({
+            where: {
+                userId
+            },
+            include: {
+                assistant: {
+                    select: {
+                        id: true,
+                        name: true,
+                        description: true,
+                        image: true,
+                        category: true,
+                        public: true,
+                        userId: true,
+                    }
+                }
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        })
+
+        return {
+            success: true,
+            assistants: pinnedAssistants.map(pin => ({
+                ...pin.assistant,
+                id: pin.assistant.id.toString(),
+                userId: pin.assistant.userId.toString(),
+                pinnedAt: pin.createdAt
+            }))
+        }
+    } catch (error) {
+        console.error('Error fetching pinned assistants:', error)
+        return {
+            success: false,
+            error: 'Failed to fetch pinned assistants',
+            assistants: []
+        }
+    }
+}
+
+/**
+ * Pin an assistant to the sidebar
+ */
+export async function pinAssistant(assistantId: string) {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: 'Authentication required'
+            }
+        }
+
+        const userId = BigInt(session.user.id)
+        const assistantBigInt = BigInt(assistantId)
+
+        // Check if assistant exists
+        const assistant = await prisma.assistant.findUnique({
+            where: { id: assistantBigInt }
+        })
+
+        if (!assistant) {
+            return {
+                success: false,
+                error: 'Assistant not found'
+            }
+        }
+
+        // Check if already pinned
+        const existingPin = await prisma.assistantPin.findUnique({
+            where: {
+                userId_assistantId: {
+                    userId,
+                    assistantId: assistantBigInt
+                }
+            }
+        })
+
+        if (existingPin) {
+            return {
+                success: false,
+                error: 'Assistant already pinned'
+            }
+        }
+
+        // Create pin
+        await prisma.assistantPin.create({
+            data: {
+                userId,
+                assistantId: assistantBigInt
+            }
+        })
+
+        revalidatePath('/')
+        revalidatePath('/assistants')
+
+        return {
+            success: true,
+            message: 'Assistant pinned successfully'
+        }
+    } catch (error) {
+        console.error('Error pinning assistant:', error)
+        return {
+            success: false,
+            error: 'Failed to pin assistant'
+        }
+    }
+}
+
+/**
+ * Unpin an assistant from the sidebar
+ */
+export async function unpinAssistant(assistantId: string) {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: 'Authentication required'
+            }
+        }
+
+        const userId = BigInt(session.user.id)
+        const assistantBigInt = BigInt(assistantId)
+
+        // Delete pin
+        await prisma.assistantPin.delete({
+            where: {
+                userId_assistantId: {
+                    userId,
+                    assistantId: assistantBigInt
+                }
+            }
+        })
+
+        revalidatePath('/')
+        revalidatePath('/assistants')
+
+        return {
+            success: true,
+            message: 'Assistant unpinned successfully'
+        }
+    } catch (error) {
+        console.error('Error unpinning assistant:', error)
+        return {
+            success: false,
+            error: 'Failed to unpin assistant'
+        }
+    }
+}
+
+/**
+ * Toggle pin status for an assistant
+ */
+export async function togglePinAssistant(assistantId: string) {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: 'Authentication required'
+            }
+        }
+
+        const userId = BigInt(session.user.id)
+        const assistantBigInt = BigInt(assistantId)
+
+        // Check if already pinned
+        const existingPin = await prisma.assistantPin.findUnique({
+            where: {
+                userId_assistantId: {
+                    userId,
+                    assistantId: assistantBigInt
+                }
+            }
+        })
+
+        if (existingPin) {
+            // Unpin
+            await prisma.assistantPin.delete({
+                where: {
+                    userId_assistantId: {
+                        userId,
+                        assistantId: assistantBigInt
+                    }
+                }
+            })
+
+            revalidatePath('/')
+            revalidatePath('/assistants')
+
+            return {
+                success: true,
+                isPinned: false,
+                message: 'Assistant unpinned successfully'
+            }
+        } else {
+            // Pin
+            await prisma.assistantPin.create({
+                data: {
+                    userId,
+                    assistantId: assistantBigInt
+                }
+            })
+
+            revalidatePath('/')
+            revalidatePath('/assistants')
+
+            return {
+                success: true,
+                isPinned: true,
+                message: 'Assistant pinned successfully'
+            }
+        }
+    } catch (error) {
+        console.error('Error toggling pin:', error)
+        return {
+            success: false,
+            error: 'Failed to toggle pin'
+        }
+    }
+}
+
+// ================================================================
+// ASSISTANT DETAILS
+// ================================================================
+
+/**
+ * Get single assistant details by ID
+ */
+export async function getAssistantById(assistantId: string) {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: 'Authentication required',
+                assistant: null
+            }
+        }
+
+        const userId = BigInt(session.user.id)
+        const assistantBigInt = BigInt(assistantId)
+
+        const assistant = await prisma.assistant.findUnique({
+            where: {
+                id: assistantBigInt,
+                deletedAt: null
+            },
+            select: {
+                id: true,
+                name: true,
+                description: true,
+                image: true,
+                price: true,
+                currency: true,
+                priceType: true,
+                category: true,
+                public: true,
+                instructions: true,
+                vectorStoreId: true,
+                userId: true,
+                createdAt: true,
+                updatedAt: true,
+                pins: {
+                    where: { userId },
+                    select: { id: true }
+                }
+            }
+        })
+
+        if (!assistant) {
+            return {
+                success: false,
+                error: 'Assistant not found',
+                assistant: null
+            }
+        }
+
+        return {
+            success: true,
+            assistant: {
+                id: assistant.id.toString(),
+                name: assistant.name,
+                description: assistant.description,
+                image: assistant.image,
+                price: Number(assistant.price),
+                currency: assistant.currency,
+                priceType: assistant.priceType,
+                category: assistant.category,
+                public: assistant.public,
+                instructions: assistant.instructions,
+                vectorStoreId: assistant.vectorStoreId,
+                userId: assistant.userId.toString(),
+                createdAt: assistant.createdAt,
+                updatedAt: assistant.updatedAt,
+                isPinned: assistant.pins && assistant.pins.length > 0
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching assistant:', error)
+        return {
+            success: false,
+            error: 'Failed to fetch assistant',
+            assistant: null
+        }
+    }
+}
+
+// ================================================================
+// ASSISTANT FETCHING (MY, PURCHASED, SHARED)
+// ================================================================
+
+export interface AssistantListItem {
+    id: string
+    name: string
+    description: string | null
+    image: string | null
+    price: number
+    currency: string
+    priceType: string
+    category: string
+    public: boolean
+    createdAt: Date
+    isPinned?: boolean
+}
+
+interface GetAssistantsParams {
+    type: 'my' | 'purchased' | 'shared'
+    page?: number
+    limit?: number
+    search?: string
+}
+
+interface GetAssistantsResponse {
+    success: boolean
+    error?: string
+    assistants: AssistantListItem[]
+    pagination: {
+        page: number
+        limit: number
+        total: number
+        totalPages: number
+        hasMore: boolean
+    }
+}
+
+/**
+ * Get assistants based on type (my, purchased, shared) with pagination
+ */
+export async function getAssistants({
+    type,
+    page = 1,
+    limit = 12,
+    search = ''
+}: GetAssistantsParams): Promise<GetAssistantsResponse> {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: 'Authentication required',
+                assistants: [],
+                pagination: {
+                    page: 1,
+                    limit,
+                    total: 0,
+                    totalPages: 0,
+                    hasMore: false
+                }
+            }
+        }
+
+        const userId = BigInt(session.user.id)
+        const skip = (page - 1) * limit
+
+        // Build search filter
+        const searchFilter = search ? {
+            OR: [
+                { name: { contains: search, mode: 'insensitive' as const } },
+                { description: { contains: search, mode: 'insensitive' as const } }
+            ]
+        } : {}
+
+        let assistants: any[] = []
+        let total = 0
+
+        switch (type) {
+            case 'my':
+                // Get assistants created by the user
+                [assistants, total] = await Promise.all([
+                    prisma.assistant.findMany({
+                        where: {
+                            userId,
+                            deletedAt: null,
+                            ...searchFilter
+                        },
+                        select: {
+                            id: true,
+                            name: true,
+                            description: true,
+                            image: true,
+                            price: true,
+                            currency: true,
+                            priceType: true,
+                            category: true,
+                            public: true,
+                            createdAt: true,
+                            pins: {
+                                where: { userId },
+                                select: { id: true }
+                            }
+                        },
+                        orderBy: { createdAt: 'desc' },
+                        skip,
+                        take: limit
+                    }),
+                    prisma.assistant.count({
+                        where: {
+                            userId,
+                            deletedAt: null,
+                            ...searchFilter
+                        }
+                    })
+                ])
+                break
+
+            case 'purchased':
+                // Get assistants purchased by the user
+                [assistants, total] = await Promise.all([
+                    prisma.assistantPurchase.findMany({
+                        where: {
+                            buyerId: userId,
+                            status: 'completed',
+                            deletedAt: null,
+                            assistant: {
+                                deletedAt: null,
+                                ...searchFilter
+                            }
+                        },
+                        select: {
+                            assistant: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    description: true,
+                                    image: true,
+                                    price: true,
+                                    currency: true,
+                                    priceType: true,
+                                    category: true,
+                                    public: true,
+                                    createdAt: true,
+                                    pins: {
+                                        where: { userId },
+                                        select: { id: true }
+                                    }
+                                }
+                            }
+                        },
+                        orderBy: { purchaseDate: 'desc' },
+                        skip,
+                        take: limit
+                    }).then(purchases => purchases.map(p => p.assistant)),
+                    prisma.assistantPurchase.count({
+                        where: {
+                            buyerId: userId,
+                            status: 'completed',
+                            deletedAt: null,
+                            assistant: {
+                                deletedAt: null,
+                                ...searchFilter
+                            }
+                        }
+                    })
+                ])
+                break
+
+            case 'shared':
+                // Get assistants shared with the user
+                [assistants, total] = await Promise.all([
+                    prisma.assistantContact.findMany({
+                        where: {
+                            userId,
+                            assistant: {
+                                deletedAt: null,
+                                ...searchFilter
+                            }
+                        },
+                        select: {
+                            assistant: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    description: true,
+                                    image: true,
+                                    price: true,
+                                    currency: true,
+                                    priceType: true,
+                                    category: true,
+                                    public: true,
+                                    createdAt: true,
+                                    pins: {
+                                        where: { userId },
+                                        select: { id: true }
+                                    }
+                                }
+                            }
+                        },
+                        orderBy: { createdAt: 'desc' },
+                        skip,
+                        take: limit
+                    }).then(contacts => contacts.map(c => c.assistant)),
+                    prisma.assistantContact.count({
+                        where: {
+                            userId,
+                            assistant: {
+                                deletedAt: null,
+                                ...searchFilter
+                            }
+                        }
+                    })
+                ])
+                break
+        }
+
+        const totalPages = Math.ceil(total / limit)
+        const hasMore = page < totalPages
+
+        return {
+            success: true,
+            assistants: assistants.map(assistant => ({
+                id: assistant.id.toString(),
+                name: assistant.name,
+                description: assistant.description,
+                image: assistant.image,
+                price: Number(assistant.price),
+                currency: assistant.currency,
+                priceType: assistant.priceType,
+                category: assistant.category,
+                public: assistant.public,
+                createdAt: assistant.createdAt,
+                isPinned: assistant.pins && assistant.pins.length > 0
+            })),
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages,
+                hasMore
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching assistants:', error)
+        return {
+            success: false,
+            error: 'Failed to fetch assistants',
+            assistants: [],
+            pagination: {
+                page: 1,
+                limit,
+                total: 0,
+                totalPages: 0,
+                hasMore: false
+            }
+        }
+    }
+}
