@@ -56,7 +56,9 @@ export function ArtifactCard({ artifact, onClick }: ArtifactCardProps) {
               width: "calc(100% / 0.32)",
             }}
             title={artifact.name}
-            sandbox="allow-scripts"
+            sandbox="allow-same-origin"
+            referrerPolicy="no-referrer"
+            loading="lazy"
           />
         </div>
       </div>

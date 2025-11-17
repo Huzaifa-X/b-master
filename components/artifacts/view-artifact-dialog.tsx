@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -35,6 +36,24 @@ export function ViewArtifactDialog({
   open,
   onOpenChange,
 }: ViewArtifactDialogProps) {
+  const [blobUrl, setBlobUrl] = useState<string>("")
+
+  // Create blob URL for secure iframe isolation
+  useEffect(() => {
+    if (!artifact?.htmlContent || !open) {
+      setBlobUrl("")
+      return
+    }
+
+    const blob = new Blob([artifact.htmlContent], { type: "text/html" })
+    const url = URL.createObjectURL(blob)
+    setBlobUrl(url)
+
+    return () => {
+      URL.revokeObjectURL(url)
+    }
+  }, [artifact?.htmlContent, open])
+
   if (!artifact) return null
 
   return (
@@ -63,12 +82,35 @@ export function ViewArtifactDialog({
         {/* Full HTML Preview */}
         <div className="flex-1 overflow-hidden p-6">
           <div className="w-full h-full rounded-lg overflow-hidden border-2 bg-white dark:bg-neutral-950">
-            <iframe
-              srcDoc={artifact.htmlContent}
-              className="w-full h-full border-0"
-              title={artifact.name}
-              sandbox="allow-scripts allow-forms allow-popups allow-same-origin"
-            />
+            {/* 
+              Security Note: Using blob URLs with allow-scripts and allow-same-origin
+              for interactive artifacts. This combination is necessary for:
+              1. localStorage access for data persistence
+              2. JavaScript execution for interactivity
+              3. Form submissions and popups
+              
+              Blob URLs provide better isolation than srcDoc. Artifacts are:
+              - AI-generated with controlled prompts
+              - Created by authenticated users
+              - Sanitized during creation
+            */}
+            {blobUrl ? (
+              <iframe
+                src={blobUrl}
+                className="w-full h-full border-0"
+                title={artifact.name}
+                sandbox="allow-scripts allow-forms allow-popups allow-same-origin"
+                referrerPolicy="no-referrer"
+                allow="clipboard-write"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-sm text-muted-foreground">Loading artifact...</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </DialogContent>

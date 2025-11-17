@@ -1,5 +1,6 @@
 "use client"
 
+import { use } from "react"
 import { useState } from "react"
 import { Plus, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -14,6 +15,7 @@ import {
 import { FeedCard } from "@/components/feed/feed-card"
 import { AddFeedDialog } from "@/components/feed/add-feed-dialog"
 import { toast } from "sonner"
+import { useSetAssistantMode } from "@/hooks/useAssistant"
 
 // Mock current user
 const CURRENT_USER = {
@@ -243,12 +245,20 @@ const INITIAL_FEEDS: FeedPost[] = [
 
 type SortOption = "recent" | "most-liked" | "most-commented"
 
-export default function NewsFeedPage() {
+interface PageProps {
+  params: Promise<{ id: string }>
+}
+
+export default function NewsFeedPage({ params }: PageProps) {
+  const { id: assistantId } = use(params)
   const [feeds, setFeeds] = useState<FeedPost[]>(INITIAL_FEEDS)
   const [expandedFeedId, setExpandedFeedId] = useState<string | null>(null)
   const [addFeedOpen, setAddFeedOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState<SortOption>("recent")
+  
+  // Set assistant mode in header (automatically handles fetching and cleanup)
+  useSetAssistantMode(assistantId)
 
   const handleAddFeed = (newFeed: Omit<FeedPost, "id" | "author" | "timestamp" | "likes" | "comments">) => {
     const feed: FeedPost = {

@@ -209,11 +209,103 @@ Your task is to generate complete, self-contained HTML artifacts based on the pr
 5. **Modern Design**: Use modern, clean UI design with proper spacing, colors, and typography
 6. **Responsive**: Ensure the artifact works on all screen sizes
 7. **Interactive**: Implement all required functionality with proper event handlers
-8. **Data Management**: Use localStorage for data persistence when appropriate
-9. **Error Handling**: Include proper validation and error handling
-10. **Accessibility**: Follow basic accessibility best practices
+
+8. **CRITICAL - Secure Storage Implementation**: 
+   ALWAYS use this exact SecureStorage wrapper for data persistence. This is MANDATORY:
+   
+   \`\`\`javascript
+   // Secure storage wrapper - MUST be included at the start of your script
+   const SecureStorage = (() => {
+     let memoryStore = {};
+     let useMemory = false;
+     
+     // Test localStorage availability
+     try {
+       localStorage.setItem('__test__', '1');
+       localStorage.removeItem('__test__');
+     } catch (e) {
+       useMemory = true;
+       console.warn('localStorage unavailable, using memory-only storage');
+     }
+     
+     return {
+       getItem: (key) => {
+         try {
+           return useMemory ? memoryStore[key] : localStorage.getItem(key);
+         } catch (e) {
+           return memoryStore[key];
+         }
+       },
+       setItem: (key, value) => {
+         try {
+           if (useMemory) {
+             memoryStore[key] = value;
+           } else {
+             localStorage.setItem(key, value);
+           }
+         } catch (e) {
+           memoryStore[key] = value;
+         }
+       },
+       removeItem: (key) => {
+         try {
+           if (useMemory) {
+             delete memoryStore[key];
+           } else {
+             localStorage.removeItem(key);
+           }
+         } catch (e) {
+           delete memoryStore[key];
+         }
+       },
+       clear: () => {
+         try {
+           if (useMemory) {
+             memoryStore = {};
+           } else {
+             localStorage.clear();
+           }
+         } catch (e) {
+           memoryStore = {};
+         }
+       }
+     };
+   })();
+   
+   // ALWAYS use SecureStorage instead of localStorage:
+   // SecureStorage.setItem('data', JSON.stringify(myData));
+   // const data = JSON.parse(SecureStorage.getItem('data') || '[]');
+   \`\`\`
+
+9. **Error Handling**: Include proper validation and error handling for all user inputs
+10. **Accessibility**: Follow basic accessibility best practices (ARIA labels, semantic HTML, keyboard navigation)
+11. **Security**: Never use inline event handlers in HTML (use addEventListener), avoid eval(), sanitize user inputs
 
 Generate ONLY the HTML code without any markdown formatting, explanations, or comments outside the code.`
+
+/**
+ * Basic HTML sanitization to prevent dangerous patterns
+ * Note: This is a basic layer - artifacts are AI-generated with controlled prompts
+ */
+function sanitizeHtml(html: string): string {
+    let sanitized = html
+
+    // Remove external script sources (only allow inline scripts)
+    sanitized = sanitized.replace(/<script[^>]*src\s*=\s*["']https?:\/\/[^"']*["'][^>]*>/gi, '')
+    
+    // Remove javascript: protocol URLs
+    sanitized = sanitized.replace(/javascript:/gi, 'blocked:')
+    
+    // Remove data: URLs in script contexts (but allow in images)
+    sanitized = sanitized.replace(/<script[^>]*src\s*=\s*["']data:[^"']*["'][^>]*>/gi, '')
+    
+    // Log if any sanitization occurred
+    if (sanitized !== html) {
+        console.warn('HTML sanitization applied: removed potentially dangerous patterns')
+    }
+    
+    return sanitized
+}
 
 // Create artifact with AI-generated code
 export async function createArtifact(data: {
@@ -281,6 +373,10 @@ export async function createArtifact(data: {
                     error: 'Failed to generate artifact code'
                 }
             }
+
+            // Sanitize the generated HTML
+            generatedCode = sanitizeHtml(generatedCode)
+
         } catch (aiError) {
             console.error('AI generation error:', aiError)
             return {

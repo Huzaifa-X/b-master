@@ -1,5 +1,6 @@
 "use client"
 
+import { use } from "react"
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -7,8 +8,17 @@ import { Search, Plus } from "lucide-react"
 import { ExpandableContactCards } from "@/components/assistants/expandable-contact-cards"
 import { ContactDialog, type ContactFormData } from "@/components/assistants/contact-dialog"
 import { toast } from "sonner"
+import { useSetAssistantMode } from "@/hooks/useAssistant"
 
-export default function ContactsPage() {
+interface PageProps {
+  params: Promise<{ id: string }>
+}
+
+export default function ContactsPage({ params }: PageProps) {
+  const { id: assistantId } = use(params)
+  
+  // Set assistant mode in header (automatically handles fetching and cleanup)
+  useSetAssistantMode(assistantId)
   const [searchQuery, setSearchQuery] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
 

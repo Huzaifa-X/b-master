@@ -1,11 +1,22 @@
 "use client"
 
+import { use } from "react"
 import { useState } from "react"
 import { MessagesSidebar } from "@/components/assistants/messages-sidebar"
 import { ChatView } from "@/components/assistants/chat-view"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useSetAssistantMode } from "@/hooks/useAssistant"
 
-export default function MessagesLayout({ children }: { children: React.ReactNode }) {
+interface MessagesLayoutProps {
+  children: React.ReactNode
+  params: Promise<{ id: string }>
+}
+
+export default function MessagesLayout({ children, params }: MessagesLayoutProps) {
+  const { id: assistantId } = use(params)
+  
+  // Set assistant mode in header (automatically handles fetching and cleanup)
+  useSetAssistantMode(assistantId)
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null)
   const isMobile = useIsMobile()
 

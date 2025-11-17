@@ -1,14 +1,14 @@
 "use client"
 
-import { use, useState, useEffect } from "react"
+import { use, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Search, Plus, FolderOpen, Loader2 } from "lucide-react"
 import { CreateArtifactDialog } from "@/components/artifacts/create-artifact-dialog"
-import { ViewArtifactDialog } from "@/components/artifacts/view-artifact-dialog"
 import { ArtifactCard, type Artifact } from "@/components/artifacts/artifact-card"
-import { toast } from "sonner"
-import { getArtifacts } from "@/app/actions/artifact.action"
+import { useArtifacts, useInvalidateArtifacts } from "@/hooks/useArtifact"
+import { useSetAssistantMode } from "@/hooks/useAssistant"
 
 // Dummy HTML generator for different artifacts
 const getDummyHTML = (name: string, category: string) => {
@@ -122,58 +122,29 @@ const MOCK_ARTIFACTS: Artifact[] = [
 export default function ArtifactsPage({ params }: { params: Promise<{ id: string }> }) {
     // Unwrap params promise for Next.js 15
     const { id: assistantId } = use(params)
+    const router = useRouter()
+    
+    // Set assistant mode in header (automatically handles fetching and cleanup)
+    useSetAssistantMode(assistantId)
     
     const [searchQuery, setSearchQuery] = useState("")
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
-    const [viewDialogOpen, setViewDialogOpen] = useState(false)
-    const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null)
-    const [artifacts, setArtifacts] = useState<Artifact[]>([])
-    const [loading, setLoading] = useState(true)
-
-    // Fetch artifacts on mount
-    useEffect(() => {
-        const fetchArtifacts = async () => {
-            setLoading(true)
-            try {
-                const result = await getArtifacts(assistantId)
-                if (result.success) {
-                    setArtifacts(result.artifacts as Artifact[])
-                } else {
-                    toast.error(result.error || 'Failed to load artifacts')
-                }
-            } catch (error) {
-                console.error('Error fetching artifacts:', error)
-                toast.error('Failed to load artifacts')
-            } finally {
-                setLoading(false)
-            }
-        }
-
-        fetchArtifacts()
-    }, [assistantId])
+    
+    // Use React Query hook to fetch artifacts
+    const { artifacts, isLoading, isError } = useArtifacts(assistantId)
+    const { invalidateArtifacts } = useInvalidateArtifacts()
 
     const handleCreateArtifact = () => {
         setCreateDialogOpen(true)
     }
 
-    const handleArtifactCreated = async () => {
-        // Refresh artifacts list after creation
-        try {
-            const result = await getArtifacts(assistantId)
-            if (result.success) {
-                setArtifacts(result.artifacts as Artifact[])
-            }
-        } catch (error) {
-            console.error('Error refreshing artifacts:', error)
-        }
+    const handleArtifactCreated = () => {
+        // Invalidate and refetch artifacts after creation
+        invalidateArtifacts(assistantId)
     }
 
-    const handleCardClick = (id: string) => {
-        const artifact = artifacts.find((a) => a.id === id)
-        if (artifact) {
-            setSelectedArtifact(artifact)
-            setViewDialogOpen(true)
-        }
+    const handleCardClick = (artifactId: string) => {
+        router.push(`/assistants/${assistantId}/artifacts/${artifactId}`)
     }
 
     // Filter artifacts based on search
@@ -219,10 +190,18 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                 </div>
 
                 {/* Artifacts Grid or Empty State */}
-                {loading ? (
+                {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-16">
                         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
                         <p className="text-sm text-muted-foreground">Loading artifacts...</p>
+                    </div>
+                ) : isError ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                        <FolderOpen className="h-16 w-16 text-muted-foreground mb-4" />
+                        <h3 className="text-lg font-semibold mb-2">Failed to load artifacts</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                            There was an error loading your artifacts. Please try again.
+                        </p>
                     </div>
                 ) : filteredArtifacts.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -266,13 +245,6 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                     }
                 }}
                 assistantId={assistantId}
-            />
-
-            {/* View Artifact Dialog */}
-            <ViewArtifactDialog
-                artifact={selectedArtifact}
-                open={viewDialogOpen}
-                onOpenChange={setViewDialogOpen}
             />
         </div>
     )

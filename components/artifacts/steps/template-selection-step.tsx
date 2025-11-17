@@ -283,12 +283,14 @@ export function TemplateSelectionStep({
             </div>
             <div className="flex-1 border-2 rounded-lg overflow-hidden bg-white dark:bg-neutral-950 shadow-inner">
               {templateHtml ? (
-                <iframe
-                  srcDoc={templateHtml}
-                  className="w-full h-full border-0"
-                  title="Artifact Preview"
-                  sandbox="allow-scripts allow-forms allow-popups allow-same-origin"
-                />
+                      <iframe
+                        srcDoc={templateHtml}
+                        className="w-full h-full border-0 pointer-events-none"
+                        title="Artifact Preview"
+                        sandbox="allow-same-origin"
+                        referrerPolicy="no-referrer"
+                        loading="lazy"
+                      />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
                   <div className="text-center">
