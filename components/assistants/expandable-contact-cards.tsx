@@ -8,9 +8,11 @@ import { User, MapPin, Briefcase, Mail, Search, Edit, Trash2, X, FileText } from
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { toast } from "sonner"
 import { ContactDialog, type ContactFormData } from "./contact-dialog"
+import { deleteContact } from "@/app/actions/contact.action"
 
 interface Contact {
     id: string
+    contactId: string
     name: string
     email: string
     description: string
@@ -18,70 +20,9 @@ interface Contact {
     gender: string
     role: "user" | "client" | "investor"
     address: string
+    assistantName?: string
+    assistantId?: string
 }
-
-const CONTACTS: Contact[] = [
-    {
-        id: "1",
-        name: "John Doe",
-        email: "john@example.com",
-        description: "Senior marketing manager with 10+ years of experience in digital marketing and brand strategy.",
-        avatar: "/bmaster-icon.png",
-        gender: "Male",
-        role: "client",
-        address: "123 Main St, New York, NY 10001",
-    },
-    {
-        id: "2",
-        name: "Jane Smith",
-        email: "jane@example.com",
-        description: "Angel investor focusing on early-stage tech startups and SaaS companies.",
-        avatar: "/bmaster-icon.png",
-        gender: "Female",
-        role: "investor",
-        address: "456 Oak Ave, San Francisco, CA 94102",
-    },
-    {
-        id: "3",
-        name: "Mike Johnson",
-        email: "mike@example.com",
-        description: "Product designer passionate about creating intuitive user experiences.",
-        avatar: "/bmaster-icon.png",
-        gender: "Male",
-        role: "user",
-        address: "789 Pine Rd, Austin, TX 73301",
-    },
-    {
-        id: "4",
-        name: "Sarah Williams",
-        email: "sarah@example.com",
-        description: "E-commerce business owner looking to scale operations and improve customer experience.",
-        avatar: "/bmaster-icon.png",
-        gender: "Female",
-        role: "client",
-        address: "321 Elm St, Boston, MA 02101",
-    },
-    {
-        id: "5",
-        name: "David Brown",
-        email: "david@example.com",
-        description: "Venture capitalist with portfolio focused on AI and machine learning startups.",
-        avatar: "/bmaster-icon.png",
-        gender: "Male",
-        role: "investor",
-        address: "654 Maple Dr, Seattle, WA 98101",
-    },
-    {
-        id: "6",
-        name: "Emily Davis",
-        email: "emily@example.com",
-        description: "Freelance content writer specializing in technology and business topics.",
-        avatar: "/bmaster-icon.png",
-        gender: "Female",
-        role: "user",
-        address: "987 Cedar Ln, Miami, FL 33101",
-    },
-]
 
 const getRoleBadgeColor = (role: string) => {
     switch (role) {
@@ -96,14 +37,31 @@ const getRoleBadgeColor = (role: string) => {
     }
 }
 
-export function ExpandableContactCards({ searchQuery }: { searchQuery: string }) {
+interface ExpandableContactCardsProps {
+    searchQuery: string
+    assistantId?: string
+    contacts?: Contact[]
+    isLoading?: boolean
+    onContactDeleted?: () => void
+    viewOnly?: boolean // If true, hides edit/delete buttons and role/description fields
+}
+
+export function ExpandableContactCards({ 
+    searchQuery, 
+    assistantId, 
+    contacts = [],
+    isLoading = false,
+    onContactDeleted,
+    viewOnly = false
+}: ExpandableContactCardsProps) {
     const [active, setActive] = useState<Contact | null>(null)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [editingContact, setEditingContact] = useState<ContactFormData | null>(null)
+    const [isDeleting, setIsDeleting] = useState(false)
     const ref = useRef<HTMLDivElement>(null)
     const id = useId()
 
-    const filteredContacts = CONTACTS.filter(
+    const filteredContacts = contacts.filter(
         (contact) =>
             contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             contact.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -130,16 +88,54 @@ export function ExpandableContactCards({ searchQuery }: { searchQuery: string })
 
     const handleEdit = () => {
         if (active) {
-            setEditingContact(active as ContactFormData)
+            setEditingContact({
+                id: active.contactId,
+                name: active.name,
+                email: active.email,
+                description: active.description,
+                avatar: active.avatar,
+                gender: active.gender,
+                role: active.role,
+                address: active.address,
+            })
             setDialogOpen(true)
             setActive(null)
         }
     }
 
-    const handleDelete = () => {
+    const handleDelete = async () => {
+        if (!active?.contactId) {
+            toast.error("Contact ID is required")
+            return
+        }
+
+        // Confirm deletion
+        const confirmed = window.confirm(
+            `Are you sure you want to delete ${active.name} from your contacts? This action cannot be undone.`
+        )
+
+        if (!confirmed) {
+            return
+        }
+
+        setIsDeleting(true)
+        try {
+            const result = await deleteContact(active.contactId)
+
+            if (result.success) {
         toast.success("Contact deleted successfully")
-        console.log("Delete contact:", active?.id)
         setActive(null)
+                // Refresh contacts list
+                onContactDeleted?.()
+            } else {
+                toast.error(result.error || "Failed to delete contact")
+            }
+        } catch (error) {
+            console.error("Error deleting contact:", error)
+            toast.error("An unexpected error occurred")
+        } finally {
+            setIsDeleting(false)
+        }
     }
 
     const handleSaveContact = (contact: ContactFormData) => {
@@ -173,7 +169,7 @@ export function ExpandableContactCards({ searchQuery }: { searchQuery: string })
                                 <div className="flex flex-col items-center text-center mb-6">
                                     <motion.div layoutId={`avatar-${active.id}-${id}`} className="mb-4">
                                         <Avatar className="h-24 w-24">
-                                            {/* <AvatarImage src={active.avatar} alt={active.name} /> */}
+                                            <AvatarImage src={active.avatar || undefined} alt={active.name} />
                                             <AvatarFallback>{active.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                                         </Avatar>
                                     </motion.div>
@@ -192,13 +188,20 @@ export function ExpandableContactCards({ searchQuery }: { searchQuery: string })
                                         {active.email}
                                     </motion.p>
 
-                                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(active.role)}`}>
-                                        {active.role.charAt(0).toUpperCase() + active.role.slice(1)}
-                                    </span>
+                                    {!viewOnly && (
+                                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(active.role)}`}>
+                                            {active.role.charAt(0).toUpperCase() + active.role.slice(1)}
+                                        </span>
+                                    )}
+                                    {!viewOnly && active.assistantName && (
+                                        <p className="text-xs text-muted-foreground mt-2">
+                                            {viewOnly ? active.assistantName : `Assistant: ${active.assistantName}`}
+                                        </p>
+                                    )}
                                 </div>
 
                                 {/* Description */}
-                                {active.description && (
+                                {!viewOnly && active.description && active.description.trim() !== "" && (
                                     <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg mb-4">
                                         <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
                                         <div>
@@ -208,43 +211,51 @@ export function ExpandableContactCards({ searchQuery }: { searchQuery: string })
                                     </div>
                                 )}
 
-                                {/* Detailed Information */}
-                                <div className="space-y-4">
-                                    <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                                        <User className="h-5 w-5 text-muted-foreground mt-0.5" />
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Gender</p>
-                                            <p className="text-sm font-medium">{active.gender}</p>
+                                {/* Detailed Information - Only show in non-view-only mode */}
+                                {!viewOnly && (
+                                    <div className="space-y-4">
+                                        {active.gender && active.gender.trim() !== "" && (
+                                        <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                                            <User className="h-5 w-5 text-muted-foreground mt-0.5" />
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Gender</p>
+                                                <p className="text-sm font-medium">{active.gender}</p>
+                                            </div>
                                         </div>
-                                    </div>
+                                        )}
 
-                                    <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                                        <Briefcase className="h-5 w-5 text-muted-foreground mt-0.5" />
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Role</p>
-                                            <p className="text-sm font-medium capitalize">{active.role}</p>
+                                        <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                                            <Briefcase className="h-5 w-5 text-muted-foreground mt-0.5" />
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Role</p>
+                                                <p className="text-sm font-medium capitalize">{active.role}</p>
+                                            </div>
                                         </div>
-                                    </div>
 
-                                    <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                                        <Mail className="h-5 w-5 text-muted-foreground mt-0.5" />
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Email Address</p>
-                                            <p className="text-sm font-medium">{active.email}</p>
+                                        <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                                            <Mail className="h-5 w-5 text-muted-foreground mt-0.5" />
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Email Address</p>
+                                                <p className="text-sm font-medium">{active.email}</p>
+                                            </div>
                                         </div>
-                                    </div>
 
-                                    <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                                        <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Address</p>
-                                            <p className="text-sm font-medium">{active.address}</p>
+                                        {active.address && active.address.trim() !== "" && (
+                                        <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                                            <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Address</p>
+                                                <p className="text-sm font-medium">{active.address}</p>
+                                            </div>
                                         </div>
+                                        )}
                                     </div>
-                                </div>
+                                )}
 
                                  {/* Action Buttons */}
                                  <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4 sm:mt-6">
+                                     {!viewOnly && (
+                                         <>
                                      <Button
                                          variant="outline"
                                          onClick={handleEdit}
@@ -259,10 +270,13 @@ export function ExpandableContactCards({ searchQuery }: { searchQuery: string })
                                          onClick={handleDelete}
                                          size="sm"
                                          className="w-full sm:w-auto"
+                                                 disabled={isDeleting}
                                      >
                                          <Trash2 className="h-4 w-4 mr-2" />
-                                         Delete
+                                                 {isDeleting ? "Deleting..." : "Delete"}
                                      </Button>
+                                         </>
+                                     )}
                                      <Button
                                          variant="outline"
                                          onClick={() => setActive(null)}
@@ -279,6 +293,23 @@ export function ExpandableContactCards({ searchQuery }: { searchQuery: string })
                 ) : null}
             </AnimatePresence>
 
+            {/* Loading State */}
+            {isLoading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-2 gap-4">
+                    {[1, 2, 3, 4].map((i) => (
+                        <div key={i} className="p-4 border border-border rounded-xl animate-pulse">
+                            <div className="flex items-center gap-4">
+                                <div className="h-12 w-12 rounded-full bg-muted" />
+                                <div className="flex-1 space-y-2">
+                                    <div className="h-4 bg-muted rounded w-3/4" />
+                                    <div className="h-3 bg-muted rounded w-1/2" />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <>
             {/* Contact Cards Grid */}
             <ul className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-2 gap-4">
                 {filteredContacts.map((contact) => (
@@ -291,7 +322,7 @@ export function ExpandableContactCards({ searchQuery }: { searchQuery: string })
                         <div className="flex items-center gap-4 mb-3">
                             <motion.div layoutId={`avatar-${contact.id}-${id}`}>
                                 <Avatar className="h-12 w-12">
-                                    {/* <AvatarImage src={contact.avatar} alt={contact.name} /> */}
+                                    <AvatarImage src={contact.avatar || undefined} alt={contact.name} />
                                     <AvatarFallback>{contact.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                                 </Avatar>
                             </motion.div>
@@ -318,7 +349,7 @@ export function ExpandableContactCards({ searchQuery }: { searchQuery: string })
             </ul>
 
       {/* Empty State */}
-      {filteredContacts.length === 0 && (
+                    {filteredContacts.length === 0 && contacts.length === 0 && (
         <div className="text-center py-16">
           <Search className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
           <h3 className="text-lg font-semibold mb-2">No contacts found</h3>
@@ -328,6 +359,19 @@ export function ExpandableContactCards({ searchQuery }: { searchQuery: string })
               : "No contacts available"}
           </p>
         </div>
+                    )}
+
+                    {/* No Results State */}
+                    {contacts.length > 0 && filteredContacts.length === 0 && (
+                        <div className="text-center py-16">
+                            <Search className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                            <h3 className="text-lg font-semibold mb-2">No contacts found</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Try searching with different keywords
+                            </p>
+                        </div>
+                    )}
+                </>
       )}
 
       {/* Contact Dialog */}
@@ -338,6 +382,7 @@ export function ExpandableContactCards({ searchQuery }: { searchQuery: string })
           if (!open) setEditingContact(null)
         }}
         contact={editingContact}
+        assistantId={assistantId}
         onSave={handleSaveContact}
       />
     </>

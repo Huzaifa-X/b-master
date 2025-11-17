@@ -19,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ImageUploadField } from "@/components/ui/image-uploader"
 import { toast } from "sonner"
 
 export interface ContactFormData {
@@ -37,10 +36,11 @@ interface ContactDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   contact?: ContactFormData | null
-  onSave: (contact: ContactFormData) => void
+  assistantId?: string
+  onSave: (contact: ContactFormData) => void | Promise<void>
 }
 
-export function ContactDialog({ open, onOpenChange, contact, onSave }: ContactDialogProps) {
+export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave }: ContactDialogProps) {
   const [formData, setFormData] = useState<ContactFormData>({
     name: "",
     email: "",
@@ -50,6 +50,7 @@ export function ContactDialog({ open, onOpenChange, contact, onSave }: ContactDi
     role: "user",
     address: "",
   })
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Populate form when editing
   useEffect(() => {
@@ -69,36 +70,42 @@ export function ContactDialog({ open, onOpenChange, contact, onSave }: ContactDi
     }
   }, [contact, open])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validation
-    if (!formData.name.trim()) {
-      toast.error("Please enter a name")
-      return
-    }
+    // Validation for adding new contact
+    if (!contact) {
     if (!formData.email.trim()) {
       toast.error("Please enter an email")
       return
     }
-    if (!formData.gender) {
-      toast.error("Please select a gender")
+      if (!formData.role) {
+        toast.error("Please select a role")
       return
+      }
+      // Description is optional but we'll allow empty
     }
 
-    onSave(formData)
-    onOpenChange(false)
-    
+    // Validation for editing (role and description are editable)
     if (contact) {
-      toast.success("Contact updated successfully")
-    } else {
-      toast.success("Contact added successfully")
+      if (!formData.role) {
+        toast.error("Please select a role")
+        return
+      }
     }
+
+    setIsSubmitting(true)
+    try {
+      await onSave(formData)
+      // Don't close dialog or show success here - let the parent handle it
+      // The parent will handle success/error messages and closing
+    } catch (error) {
+      // Error handling is done in the parent component
+    } finally {
+      setIsSubmitting(false)
+  }
   }
 
-  const handleImageChange = (value: File | string | null) => {
-    setFormData({ ...formData, avatar: value })
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -109,41 +116,16 @@ export function ContactDialog({ open, onOpenChange, contact, onSave }: ContactDi
           </DialogTitle>
           <DialogDescription>
             {contact 
-              ? "Update the contact information below" 
-              : "Fill in the details to add a new contact"}
+              ? "You can only edit the role and description for this contact" 
+              : "Enter the email of a registered user to add them as a contact. Only email, role, and description are required."}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Image Upload */}
-          <div className="space-y-2">
-            <Label>Profile Image</Label>
-            <div className="max-w-[150px] mx-auto">
-              <ImageUploadField
-                value={formData.avatar}
-                onChange={handleImageChange}
-                aspectRatio={1}
-                maxSize={5 * 1024 * 1024}
-                className="w-full h-[150px]"
-              />
-            </div>
-          </div>
-
-          {/* Name and Email */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">
-                Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="name"
-                placeholder="John Doe"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
-              />
-            </div>
-
+          {/* When adding: Only show Email, Description, and Role */}
+          {!contact ? (
+            <>
+              {/* Email - Required */}
             <div className="space-y-2">
               <Label htmlFor="email">
                 Email <span className="text-destructive">*</span>
@@ -155,11 +137,14 @@ export function ContactDialog({ open, onOpenChange, contact, onSave }: ContactDi
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
+                  disabled={isSubmitting}
               />
-            </div>
+                <p className="text-xs text-muted-foreground">
+                  Enter the email of a registered user in b-master
+                </p>
           </div>
 
-          {/* Description */}
+              {/* Description - Optional */}
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
             <Textarea
@@ -169,37 +154,95 @@ export function ContactDialog({ open, onOpenChange, contact, onSave }: ContactDi
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
               className="resize-none"
+                  disabled={isSubmitting}
             />
           </div>
 
-          {/* Gender and Role */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Role - Required */}
             <div className="space-y-2">
-              <Label htmlFor="gender">
-                Gender <span className="text-destructive">*</span>
+                <Label htmlFor="role">
+                  Role <span className="text-destructive">*</span>
               </Label>
               <Select
-                value={formData.gender}
-                onValueChange={(value) => setFormData({ ...formData, gender: value })}
+                  value={formData.role}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, role: value as "user" | "client" | "investor" })
+                  }
+                  disabled={isSubmitting}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select gender" />
+                    <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Male" className="focus:bg-muted focus:text-foreground">Male</SelectItem>
-                  <SelectItem value="Female" className="focus:bg-muted focus:text-foreground">Female</SelectItem>
-                  <SelectItem value="Other" className="focus:bg-muted focus:text-foreground">Other</SelectItem>
+                    <SelectItem value="user" className="focus:bg-muted focus:text-foreground">User</SelectItem>
+                    <SelectItem value="client" className="focus:bg-muted focus:text-foreground">Client</SelectItem>
+                    <SelectItem value="investor" className="focus:bg-muted focus:text-foreground">Investor</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            </>
+          ) : (
+            <>
+              {/* When editing: Show all fields but only Role and Description are editable */}
+              {/* Name - Read-only */}
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
 
+              {/* Email - Read-only */}
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+
+              {/* Description - Editable */}
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Add a brief description about this contact..."
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows={3}
+                  className="resize-none"
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              {/* Gender - Read-only */}
+              <div className="space-y-2">
+                <Label htmlFor="gender">Gender</Label>
+                <Input
+                  id="gender"
+                  value={formData.gender}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+
+              {/* Role - Editable */}
             <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
+                <Label htmlFor="role">
+                  Role <span className="text-destructive">*</span>
+                </Label>
               <Select
                 value={formData.role}
                 onValueChange={(value) =>
                   setFormData({ ...formData, role: value as "user" | "client" | "investor" })
                 }
+                  disabled={isSubmitting}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select role" />
@@ -210,21 +253,21 @@ export function ContactDialog({ open, onOpenChange, contact, onSave }: ContactDi
                   <SelectItem value="investor" className="focus:bg-muted focus:text-foreground">Investor</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
           </div>
 
-          {/* Address */}
+              {/* Address - Read-only */}
           <div className="space-y-2">
             <Label htmlFor="address">Address</Label>
             <Textarea
               id="address"
-              placeholder="123 Main St, City, State, ZIP"
               value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  disabled
               rows={2}
-              className="resize-none"
+                  className="resize-none bg-muted"
             />
           </div>
+            </>
+          )}
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-4">
@@ -236,8 +279,12 @@ export function ContactDialog({ open, onOpenChange, contact, onSave }: ContactDi
             >
               Cancel
             </Button>
-            <Button type="submit">
-              {contact ? "Update Contact" : "Add Contact"}
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting
+                ? "Processing..."
+                : contact
+                ? "Update Contact"
+                : "Add Contact"}
             </Button>
           </div>
         </form>

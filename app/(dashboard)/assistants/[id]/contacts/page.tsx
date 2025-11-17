@@ -9,6 +9,8 @@ import { ExpandableContactCards } from "@/components/assistants/expandable-conta
 import { ContactDialog, type ContactFormData } from "@/components/assistants/contact-dialog"
 import { toast } from "sonner"
 import { useSetAssistantMode } from "@/hooks/useAssistant"
+import { addContact, updateContact } from "@/app/actions/contact.action"
+import { useAssistantContacts, useInvalidateContacts } from "@/hooks/useContacts"
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -19,6 +21,11 @@ export default function ContactsPage({ params }: PageProps) {
   
   // Set assistant mode in header (automatically handles fetching and cleanup)
   useSetAssistantMode(assistantId)
+  
+  // Fetch contacts for this assistant
+  const { contacts, isLoading: isLoadingContacts, refetch: refetchContacts } = useAssistantContacts(assistantId)
+  const { invalidateAssistantContacts } = useInvalidateContacts()
+  
   const [searchQuery, setSearchQuery] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -26,10 +33,53 @@ export default function ContactsPage({ params }: PageProps) {
     setDialogOpen(true)
   }
 
-  const handleSaveNewContact = (contact: ContactFormData) => {
-    console.log("New contact:", contact)
+  const handleSaveNewContact = async (contact: ContactFormData) => {
+    try {
+      if (contact.id) {
+        // Update existing contact
+        const result = await updateContact({
+          contactId: contact.id,
+          role: contact.role,
+          description: contact.description,
+        })
+
+        if (result.success) {
+          toast.success("Contact updated successfully!")
+          setDialogOpen(false)
+          // Refresh the contacts list
+          invalidateAssistantContacts(assistantId)
+          refetchContacts()
+        } else {
+          toast.error(result.error || "Failed to update contact")
+        }
+      } else {
+        // Add new contact
+        if (!assistantId) {
+          toast.error("Assistant ID is required")
+          return
+        }
+
+        const result = await addContact({
+          assistantId,
+          email: contact.email,
+          role: contact.role,
+          description: contact.description,
+        })
+
+        if (result.success) {
     toast.success("Contact added successfully!")
-    // In production, this would save to your backend
+          setDialogOpen(false)
+          // Refresh the contacts list
+          invalidateAssistantContacts(assistantId)
+          refetchContacts()
+        } else {
+          toast.error(result.error || "Failed to add contact")
+        }
+      }
+    } catch (error) {
+      console.error("Error saving contact:", error)
+      toast.error("An unexpected error occurred")
+    }
   }
 
   return (
@@ -68,13 +118,23 @@ export default function ContactsPage({ params }: PageProps) {
         </div>
 
         {/* Expandable Contact Cards */}
-        <ExpandableContactCards searchQuery={searchQuery} />
+        <ExpandableContactCards 
+          searchQuery={searchQuery} 
+          assistantId={assistantId}
+          contacts={contacts}
+          isLoading={isLoadingContacts}
+          onContactDeleted={() => {
+            invalidateAssistantContacts(assistantId)
+            refetchContacts()
+          }}
+        />
 
         {/* Add Contact Dialog */}
         <ContactDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           onSave={handleSaveNewContact}
+          assistantId={assistantId}
         />
       </div>
     </div>

@@ -7,19 +7,25 @@ import { Search, Plus } from "lucide-react"
 import { ExpandableContactCards } from "@/components/assistants/expandable-contact-cards"
 import { ContactDialog, type ContactFormData } from "@/components/assistants/contact-dialog"
 import { toast } from "sonner"
+import { useAllContacts, useInvalidateContacts } from "@/hooks/useContacts"
 
 export default function ContactsPage() {
+  // Fetch all contacts across all assistants
+  const { contacts, isLoading: isLoadingContacts, refetch: refetchContacts } = useAllContacts()
+  const { invalidateAllContacts } = useInvalidateContacts()
+  
   const [searchQuery, setSearchQuery] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const handleAddContact = () => {
-    setDialogOpen(true)
+    toast.info("Please add contacts from the specific assistant's contact page")
+    // Optionally, you could open a dialog to select an assistant first
   }
 
   const handleSaveNewContact = (contact: ContactFormData) => {
-    console.log("New contact:", contact)
-    toast.success("Contact added successfully!")
-    // In production, this would save to your backend
+    // This page is for viewing all contacts, not adding
+    // Adding should be done from assistant-specific pages
+    console.log("Contact view only - use assistant contact page to add")
   }
 
   return (
@@ -31,16 +37,9 @@ export default function ContactsPage() {
             <div>
               <h1 className="text-xl sm:text-2xl font-medium mb-1 sm:mb-2">All Contacts</h1>
               <p className="text-sm text-muted-foreground">
-                Manage your contacts for your assistant
+                View all contacts across all your assistants
               </p>
             </div>
-            <Button 
-              onClick={handleAddContact} 
-              className="flex items-center justify-center gap-2 w-full sm:w-auto"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add Contact</span>
-            </Button>
           </div>
         </div>
 
@@ -58,7 +57,16 @@ export default function ContactsPage() {
         </div>
 
         {/* Expandable Contact Cards */}
-        <ExpandableContactCards searchQuery={searchQuery} />
+        <ExpandableContactCards 
+          searchQuery={searchQuery}
+          contacts={contacts}
+          isLoading={isLoadingContacts}
+          viewOnly={true}
+          onContactDeleted={() => {
+            invalidateAllContacts()
+            refetchContacts()
+          }}
+        />
 
         {/* Add Contact Dialog */}
         <ContactDialog
