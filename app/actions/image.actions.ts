@@ -169,3 +169,51 @@ export async function updateAssistantImage(
     // since it automatically deletes the old image
     return uploadAssistantImage(assistantId, imageData)
 }
+
+/**
+ * Get presigned URL for viewing an S3 image
+ * @param imageUrl - Full S3 URL or S3 key
+ * @param expiresIn - URL expiration time in seconds (default: 1 hour)
+ * @returns Presigned URL or original URL if not an S3 URL
+ */
+export async function getPresignedImageUrl(
+    imageUrl: string | null | undefined,
+    expiresIn: number = 3600
+): Promise<{ success: true; url: string } | { success: false; error: string }> {
+    try {
+        if (!imageUrl || typeof imageUrl !== "string") {
+            return { success: false, error: "No image URL provided" }
+        }
+
+        // Validate URL format to prevent issues
+        if (imageUrl.trim() === "") {
+            return { success: false, error: "Empty image URL" }
+        }
+
+        // Import here to avoid circular dependencies
+        const { getSignedS3Url, extractKeyFromUrl } = await import("@/lib/aws-s3")
+        
+        // Extract S3 key from URL
+        const key = extractKeyFromUrl(imageUrl)
+        
+        if (!key) {
+            // If it's not an S3 URL, return the original URL
+            return { success: true, url: imageUrl }
+        }
+
+        // Generate presigned URL
+        const presignedUrl = await getSignedS3Url(key, expiresIn)
+        
+        // Validate the presigned URL
+        if (!presignedUrl || typeof presignedUrl !== "string") {
+            console.error("Invalid presigned URL generated")
+            return { success: true, url: imageUrl }
+        }
+        
+        return { success: true, url: presignedUrl }
+    } catch (error) {
+        console.error("Get presigned image URL error:", error)
+        // Fallback to original URL if presigned URL generation fails
+        return { success: true, url: imageUrl || "" }
+    }
+}

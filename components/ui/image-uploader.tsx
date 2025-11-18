@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
+import { usePresignedImage } from "@/hooks/usePresignedImage";
 
 import { Button } from "./button";
 import { Input } from "./input";
@@ -36,20 +37,31 @@ export function ImageUploadField({
   maxSize = 4 * 1024 * 1024,
 }: ImageUploadFieldProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
+
+  // Get presigned URL for string values (S3 URLs)
+  const stringValue = typeof value === "string" ? value : null;
+  const presignedUrl = usePresignedImage(stringValue, !!stringValue);
 
   // Handle preview URL generation and cleanup
   useEffect(() => {
     if (typeof value === "string") {
-      setPreviewUrl(value);
+      // For string URLs, use presigned URL (handled by usePresignedImage hook)
+      // Don't set localPreviewUrl here, it will be handled by presignedUrl
+      setLocalPreviewUrl(null);
     } else if (value instanceof File) {
       const url = URL.createObjectURL(value);
-      setPreviewUrl(url);
+      setLocalPreviewUrl(url);
       return () => URL.revokeObjectURL(url);
     } else {
-      setPreviewUrl(defaultImage || null);
+      setLocalPreviewUrl(defaultImage || null);
     }
   }, [value, defaultImage]);
+
+  // Determine the final preview URL to use
+  const previewUrl = typeof value === "string" 
+    ? presignedUrl 
+    : localPreviewUrl;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -113,6 +125,7 @@ export function ImageUploadField({
               alt="Preview"
               className="object-cover transition-opacity group-hover:opacity-50"
               sizes="(max-width: 768px) 100vw, 50vw"
+              unoptimized={typeof value === "string" && (value.includes("s3") || value.includes("amazonaws.com"))}
             />
 
             {!disabled && (

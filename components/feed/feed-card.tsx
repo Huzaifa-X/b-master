@@ -4,7 +4,9 @@ import { useState, useRef, useEffect } from "react"
 import { Heart, MessageCircle, ChevronDown, ChevronUp, Send, Lock, Globe, Trash2, X } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import { useOutsideClick } from "@/hooks/use-outside-click"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
+import { PresignedImage } from "@/components/ui/presigned-image"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
@@ -122,7 +124,7 @@ export function FeedCard({
         <div className="p-4">
           <div className="flex items-start gap-3">
             <Avatar className="h-10 w-10">
-              <AvatarImage src={feed.author.avatar} />
+              <PresignedAvatarImage src={feed.author.avatar} />
               <AvatarFallback>{getInitials(feed.author.name)}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
@@ -171,7 +173,7 @@ export function FeedCard({
           {/* Image */}
           {feed.image && (
             <div className="mt-3">
-              <img
+              <PresignedImage
                 src={feed.image}
                 alt="Post image"
                 className="rounded-lg w-full object-cover max-h-48"
@@ -239,7 +241,7 @@ export function FeedCard({
                 <div className="p-4 sm:p-6 border-b relative flex-shrink-0">
                   <div className="flex items-start gap-3">
                     <Avatar className="h-10 w-10">
-                      <AvatarImage src={feed.author.avatar} />
+                      <PresignedAvatarImage src={feed.author.avatar} />
                       <AvatarFallback>{getInitials(feed.author.name)}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0 pr-20">
@@ -307,7 +309,7 @@ export function FeedCard({
                     {/* Image */}
                     {feed.image && (
                       <div className="mt-4">
-                        <img
+                        <PresignedImage
                           src={feed.image}
                           alt="Post image"
                           className="rounded-lg w-full object-cover max-h-96"
@@ -349,7 +351,7 @@ export function FeedCard({
                         {feed.likes.slice(0, 10).map((like) => (
                           <div key={like.userId} className="group relative">
                             <Avatar className="h-8 w-8 border-2 border-white dark:border-neutral-900">
-                              <AvatarImage src={like.avatar} />
+                              <PresignedAvatarImage src={like.avatar} />
                               <AvatarFallback className="text-xs">{getInitials(like.userName)}</AvatarFallback>
                             </Avatar>
                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-neutral-800 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs rounded shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
@@ -383,7 +385,7 @@ export function FeedCard({
                         {feed.comments.map((comment) => (
                           <div key={comment.id} className="flex gap-3">
                             <Avatar className="h-8 w-8">
-                              <AvatarImage src={comment.author.avatar} />
+                              <PresignedAvatarImage src={comment.author.avatar} />
                               <AvatarFallback className="text-xs">
                                 {getInitials(comment.author.name)}
                               </AvatarFallback>
@@ -416,7 +418,7 @@ export function FeedCard({
                     {/* Add Comment */}
                     <div className="flex gap-3 pt-2 border-t border-neutral-200 dark:border-neutral-800 mt-4">
                       <Avatar className="h-8 w-8 mt-2">
-                        <AvatarImage src={currentUser.avatar} />
+                        <PresignedAvatarImage src={currentUser.avatar} />
                         <AvatarFallback className="text-xs">{getInitials(currentUser.name)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 flex gap-2">

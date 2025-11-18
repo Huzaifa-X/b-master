@@ -181,7 +181,7 @@ import {
    * @param fileUrl - Full S3 URL or just the key
    * @returns S3 key
    */
-  function extractKeyFromUrl(fileUrl: string): string | null {
+  export function extractKeyFromUrl(fileUrl: string): string | null {
     try {
       // If it's already just a key (doesn't start with http)
       if (!fileUrl.startsWith("http")) {

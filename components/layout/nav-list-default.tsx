@@ -23,7 +23,8 @@ import {
 } from "@/components/ui/sidebar"
 import Link from "next/link"
 import { usePinnedAssistants } from "@/hooks/usePinnedAssistants"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
 
 export function NavListDefault() {
   const { isMobile } = useSidebar()
@@ -67,7 +68,7 @@ export function NavListDefault() {
                 <Link href={`/assistants/${assistant.id}`}>
                   {assistant.image && (
                     <Avatar className="h-5 w-5">
-                      <AvatarImage src={assistant.image} alt={assistant.name} />
+                      <PresignedAvatarImage src={assistant.image} alt={assistant.name} />
                       <AvatarFallback className="text-xs">
                         {assistant.name.charAt(0)}
                       </AvatarFallback>

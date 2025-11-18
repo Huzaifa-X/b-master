@@ -9,7 +9,8 @@ import SecurityTab from "./_components/security-tab"
 import { useUser } from "@/hooks/useUser"
 import { Skeleton } from "@/components/ui/skeleton"
 import Image from "next/image"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
 import { changePassword } from "@/app/actions/auth.actions"
 import { toast } from "sonner"
 import { useSession } from "next-auth/react"
@@ -146,7 +147,7 @@ export default function ProfilePage() {
                             <>
 
                                 <Avatar className="h-16 w-16 rounded-full bg-muted">
-                                    <AvatarImage src={user?.image || ""} />
+                                    <PresignedAvatarImage src={user?.image || ""} />
                                     <AvatarFallback className="rounded-full">{user?.name?.charAt(0)}</AvatarFallback>
                                 </Avatar>
                                 <div className="space-y-2">

@@ -5,7 +5,8 @@ import { AnimatePresence, motion } from "motion/react"
 import { useOutsideClick } from "@/hooks/use-outside-click"
 import { Button } from "@/components/ui/button"
 import { User, MapPin, Briefcase, Mail, Search, Edit, Trash2, X, FileText } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
 import { toast } from "sonner"
 import { ContactDialog, type ContactFormData } from "./contact-dialog"
 import { deleteContact } from "@/app/actions/contact.action"
@@ -169,7 +170,7 @@ export function ExpandableContactCards({
                                 <div className="flex flex-col items-center text-center mb-6">
                                     <motion.div layoutId={`avatar-${active.id}-${id}`} className="mb-4">
                                         <Avatar className="h-24 w-24">
-                                            <AvatarImage src={active.avatar || undefined} alt={active.name} />
+                                            <PresignedAvatarImage src={active.avatar || undefined} alt={active.name} />
                                             <AvatarFallback>{active.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                                         </Avatar>
                                     </motion.div>
@@ -322,7 +323,7 @@ export function ExpandableContactCards({
                         <div className="flex items-center gap-4 mb-3">
                             <motion.div layoutId={`avatar-${contact.id}-${id}`}>
                                 <Avatar className="h-12 w-12">
-                                    <AvatarImage src={contact.avatar || undefined} alt={contact.name} />
+                                    <PresignedAvatarImage src={contact.avatar || undefined} alt={contact.name} />
                                     <AvatarFallback>{contact.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                                 </Avatar>
                             </motion.div>
