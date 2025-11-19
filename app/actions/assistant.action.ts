@@ -236,6 +236,15 @@ export async function createCompleteAssistant(
 
         console.log(`✅ Assistant created: ${assistantId}`)
 
+        // Send notification to creator about assistant creation
+        try {
+            const notificationService = (await import('@/lib/services/notifactionService')).default
+            await notificationService.notifyAssistantCreated(assistantId, session.user.id)
+        } catch (notificationError) {
+            console.error('Error sending assistant creation notification:', notificationError)
+            // Don't fail the operation if notification fails
+        }
+
         // ============================================
         // STEP 2: UPLOAD IMAGE (IF PROVIDED)
         // ============================================
@@ -425,23 +434,80 @@ export async function createCompleteAssistant(
         // STEP 6: SET UP PERMISSIONS & SHARING
         // ============================================
         
+        // Automatically create AssistantContact record for the owner
+        try {
+            await prisma.assistantContact.create({
+                data: {
+                    assistantId: assistant.id,
+                    userId: userId,
+                    access: 'admin', // Owner gets admin access
+                    permissions: JSON.stringify(['chat', 'contacts', 'messenger', 'newsfeed', 'artifacts']), // All permissions
+                }
+            })
+            console.log('✅ Owner added to AssistantContact')
+        } catch (ownerContactError) {
+            // If owner contact already exists (shouldn't happen, but handle gracefully)
+            console.error('Error creating owner contact (may already exist):', ownerContactError)
+        }
+        
+        // Add shared users (filter out owner if accidentally included)
         if (params.sharedUsers.length > 0) {
             try {
                 for (const sharedUser of params.sharedUsers) {
                     const sharedUserId = BigInt(sharedUser.id)
                     
+                    // Skip if trying to add the owner (owner is already added above)
+                    if (sharedUserId === userId) {
+                        console.log('⚠️ Skipping owner in shared users list (already added automatically)')
+                        continue
+                    }
+                    
+                    // Check if contact already exists (prevent duplicates)
+                    const existingContact = await prisma.assistantContact.findFirst({
+                        where: {
+                            assistantId: assistant.id,
+                            userId: sharedUserId,
+                        }
+                    })
+                    
+                    if (existingContact) {
+                        console.log(`⚠️ Skipping duplicate contact for user ${sharedUser.id}`)
+                        continue
+                    }
+                    
                     // Create contact record with permissions
+                    // Convert permission object to array format
+                    const permissionArray: string[] = []
+                    if (sharedUser.permissions.chat) permissionArray.push('chat')
+                    if (sharedUser.permissions.contact) permissionArray.push('contacts')
+                    if (sharedUser.permissions.messenger) permissionArray.push('messenger')
+                    if (sharedUser.permissions.newsFeed) permissionArray.push('newsfeed')
+                    if (sharedUser.permissions.artifact) permissionArray.push('artifacts')
+                    
                     await prisma.assistantContact.create({
                         data: {
                             assistantId: assistant.id,
                             userId: sharedUserId,
-                            access: 'editor',
-                            permissions: JSON.stringify(sharedUser.permissions),
+                            access: 'user', // Shared users get 'user' access, not 'editor'
+                            permissions: JSON.stringify(permissionArray),
                         }
                     })
+
+                    // Send notification to shared user
+                    try {
+                        const notificationService = (await import('@/lib/services/notifactionService')).default
+                        await notificationService.notifyAssistantShared(
+                            assistantId,
+                            sharedUser.id,
+                            session.user.id
+                        )
+                    } catch (notificationError) {
+                        console.error(`Error sending notification to shared user ${sharedUser.id}:`, notificationError)
+                        // Don't fail the operation if notification fails
+                    }
                 }
                 
-                console.log(`✅ Permissions set for ${params.sharedUsers.length} users`)
+                console.log(`✅ Permissions set for shared users`)
             } catch (permissionsError) {
                 console.error('Error setting permissions:', permissionsError)
             }
@@ -1058,6 +1124,49 @@ export async function getAssistants({
                 totalPages: 0,
                 hasMore: false
             }
+        }
+    }
+}
+
+/**
+ * Get user's permissions for an assistant
+ */
+export async function getUserAssistantPermissions(assistantId: string) {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: "Authentication required",
+                permissions: null,
+            }
+        }
+
+        const userId = BigInt(session.user.id)
+        const assistantIdBigInt = BigInt(assistantId)
+
+        // Import permission helper
+        const { getUserAssistantPermissions: getPermissions } = await import("@/lib/permissions/assistant-permissions")
+        
+        const result = await getPermissions(assistantIdBigInt, userId)
+
+        return {
+            success: true,
+            permissions: {
+                hasAccess: result.hasAccess,
+                access: result.access,
+                permissions: result.permissions,
+                isOwner: result.isOwner,
+                isPurchaser: result.isPurchaser,
+                isShared: result.isShared,
+            },
+        }
+    } catch (error) {
+        console.error("Error fetching user permissions:", error)
+        return {
+            success: false,
+            error: "Failed to fetch permissions",
+            permissions: null,
         }
     }
 }

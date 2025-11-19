@@ -1,7 +1,7 @@
 "use client"
 
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { NotificationsDropdown } from "@/components/notifications-dropdown"
+import { NotificationsDropdown } from "@/components/notifications/notifications-dropdown"
 import { useHeaderStore } from "@/lib/stores/header-store"
 import { Button } from "@/components/ui/button"
 import { Share2, Pin, Loader2 } from "lucide-react"

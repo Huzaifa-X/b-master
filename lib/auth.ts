@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import prisma from "@/lib/prisma";
 import { randomBytes } from "crypto";
+import { checkAndSendWelcomeNotification } from "@/app/actions/notification.action";
 
 export const authOptions: NextAuthOptions = {
   // Note: PrismaAdapter is NOT compatible with CredentialsProvider
@@ -92,6 +93,12 @@ export const authOptions: NextAuthOptions = {
 
           // Store session token in JWT for later reference
           token.sessionToken = sessionToken;
+
+          // Check and send welcome notification for first-time users
+          // Run this asynchronously to not block login
+          checkAndSendWelcomeNotification(user.id).catch((error) => {
+            console.error("Failed to send welcome notification:", error);
+          });
         } catch (error) {
           console.error("Failed to create session record:", error);
         }

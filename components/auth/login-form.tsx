@@ -101,7 +101,6 @@ export function LoginForm({
       }
 
       // Successful login
-      toast.success("Welcome back!")
       router.push(callbackUrl)
       router.refresh()
     } catch (error: any) {

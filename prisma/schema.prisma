@@ -334,7 +334,7 @@ model AssistantContact {
   userId      BigInt
   description String?  @db.Text
   role        String?  @db.VarChar(255) // Renamed from 'Role' to 'role' for Prisma style consistency
-  access      String   @default("admin") @db.VarChar(50) // viewer, editor, admin
+  access      String   @default("admin") @db.VarChar(50) // admin, user
   permissions String?  @db.Text // JSON: ["chat", "contacts", "messenger", "newsfeed", "artifacts"]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

@@ -3,6 +3,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
 import { SessionProvider as NextAuthSessionProvider } from "next-auth/react"
+import NotificationListener from '@/components/notifications/notificationsListener';
+import { NotificationProvider } from '@/context/notificationContext';
 import { useState } from "react"
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
@@ -21,7 +23,10 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     return (
         <NextAuthSessionProvider basePath="/api/auth">
             <QueryClientProvider client={queryClient}>
-                {children}
+                <NotificationProvider>
+                    <NotificationListener />
+                    {children}
+                </NotificationProvider>
                 <ReactQueryDevtools initialIsOpen={false} />
             </QueryClientProvider>
         </NextAuthSessionProvider>

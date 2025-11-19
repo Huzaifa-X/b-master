@@ -51,30 +51,14 @@ export async function addContact({
     const userId = BigInt(session.user.id)
     const assistantIdBigInt = BigInt(assistantId)
 
-    // Verify user owns or has access to this assistant
-    const assistant = await prisma.assistant.findFirst({
-      where: {
-        id: assistantIdBigInt,
-        OR: [
-          { userId: userId },
-          {
-            contacts: {
-              some: {
-                userId: userId,
-                access: {
-                  in: ["admin", "editor"],
-                },
-              },
-            },
-          },
-        ],
-      },
-    })
+    // Check if user can add contacts (only owners can add contacts)
+    const { canAddContacts } = await import('@/lib/permissions/assistant-permissions')
+    const canAdd = await canAddContacts(assistantIdBigInt, userId)
 
-    if (!assistant) {
+    if (!canAdd) {
       return {
         success: false,
-        error: "Assistant not found or you don't have permission to add contacts",
+        error: "Only the assistant owner can add contacts",
       }
     }
 
@@ -99,15 +83,28 @@ export async function addContact({
 
     const contactUserId = BigInt(user.id)
 
-    // Check if user is trying to add themselves
-    if (contactUserId === userId) {
+    // Check if user is trying to add the owner (owner is automatically included)
+    const assistant = await prisma.assistant.findUnique({
+      where: { id: assistantIdBigInt },
+      select: { userId: true },
+    })
+
+    if (!assistant) {
       return {
         success: false,
-        error: "You cannot add yourself as a contact",
+        error: "Assistant not found",
       }
     }
 
-    // Check if contact already exists
+    // Prevent adding the owner (owner is automatically included in AssistantContact)
+    if (contactUserId === assistant.userId) {
+      return {
+        success: false,
+        error: "The assistant owner is automatically included and cannot be added manually",
+      }
+    }
+
+    // Check if contact already exists (including owner check)
     const existingContact = await prisma.assistantContact.findFirst({
       where: {
         assistantId: assistantIdBigInt,
@@ -129,7 +126,7 @@ export async function addContact({
         userId: contactUserId,
         role: role,
         description: description || null,
-        access: "editor", // Default access level
+        access: "user", // Shared users get 'user' access (limited), not 'editor'
         permissions: JSON.stringify(["chat", "artifacts", "contacts", "newsfeed"]), // Default permissions
       },
       include: {
@@ -142,6 +139,19 @@ export async function addContact({
         },
       },
     })
+
+    // Send notification to the shared user
+    try {
+      const notificationService = (await import('@/lib/services/notifactionService')).default
+      await notificationService.notifyAssistantShared(
+        assistantId,
+        user.id.toString(),
+        session.user.id
+      )
+    } catch (notificationError) {
+      console.error('Error sending notification to shared user:', notificationError)
+      // Don't fail the operation if notification fails
+    }
 
     return {
       success: true,
@@ -189,39 +199,41 @@ export async function updateContact({
       }
     }
 
-    // Verify user owns or has admin access to the assistant
-    const contact = await prisma.assistantContact.findFirst({
-      where: {
-        id: contactIdInt,
-        assistant: {
-          OR: [
-            { userId: userId },
-            {
-              contacts: {
-                some: {
-                  userId: userId,
-                  access: "admin",
-                },
-              },
-            },
-          ],
-        },
-      },
+    // Get the contact to find the assistant ID and check if it's the owner
+    const contactRecord = await prisma.assistantContact.findUnique({
+      where: { id: contactIdInt },
       include: {
-        user: {
+        assistant: {
           select: {
-            id: true,
-            name: true,
-            email: true,
+            userId: true,
           },
         },
       },
     })
 
-    if (!contact) {
+    if (!contactRecord) {
       return {
         success: false,
-        error: "Contact not found or you don't have permission to update it",
+        error: "Contact not found",
+      }
+    }
+
+    // Prevent updating the owner's contact record (owner is protected)
+    if (contactRecord.userId === contactRecord.assistant.userId) {
+      return {
+        success: false,
+        error: "The assistant owner's contact record cannot be modified",
+      }
+    }
+
+    // Check if user is the assistant owner (only owners can update contacts)
+    const { canPerformAdminActions } = await import('@/lib/permissions/assistant-permissions')
+    const isOwner = await canPerformAdminActions(contactRecord.assistantId, userId)
+
+    if (!isOwner) {
+      return {
+        success: false,
+        error: "Only the assistant owner can update contacts",
       }
     }
 
@@ -288,30 +300,41 @@ export async function deleteContact(contactId: string): Promise<{ success: boole
       }
     }
 
-    // Verify user owns or has admin access to the assistant
-    const contact = await prisma.assistantContact.findFirst({
-      where: {
-        id: contactIdInt,
+    // Get the contact to find the assistant ID and check if it's the owner
+    const contactRecord = await prisma.assistantContact.findUnique({
+      where: { id: contactIdInt },
+      include: {
         assistant: {
-          OR: [
-            { userId: userId },
-            {
-              contacts: {
-                some: {
-                  userId: userId,
-                  access: "admin",
-                },
-              },
-            },
-          ],
+          select: {
+            userId: true,
+          },
         },
       },
     })
 
-    if (!contact) {
+    if (!contactRecord) {
       return {
         success: false,
-        error: "Contact not found or you don't have permission to delete it",
+        error: "Contact not found",
+      }
+    }
+
+    // Prevent deleting the owner's contact record (owner is protected)
+    if (contactRecord.userId === contactRecord.assistant.userId) {
+      return {
+        success: false,
+        error: "The assistant owner's contact record cannot be deleted",
+      }
+    }
+
+    // Check if user is the assistant owner (only owners can delete contacts)
+    const { canPerformAdminActions } = await import('@/lib/permissions/assistant-permissions')
+    const isOwner = await canPerformAdminActions(contactRecord.assistantId, userId)
+
+    if (!isOwner) {
+      return {
+        success: false,
+        error: "Only the assistant owner can delete contacts",
       }
     }
 
@@ -376,13 +399,10 @@ export async function getAssistantContacts(assistantId: string) {
       }
     }
 
-    // Fetch all contacts for this assistant (excluding the current user/owner)
+    // Fetch all contacts for this assistant (including owner - owner is now in AssistantContact)
     const contacts = await prisma.assistantContact.findMany({
       where: {
         assistantId: assistantIdBigInt,
-        userId: {
-          not: userId, // Exclude the current user
-        },
       },
       include: {
         user: {
@@ -401,6 +421,9 @@ export async function getAssistantContacts(assistantId: string) {
       },
     })
 
+    // Get assistant owner ID for comparison
+    const assistantOwnerId = assistant.userId
+
     const formattedContacts = contacts.map((contact) => ({
       id: contact.id.toString(),
       contactId: contact.id.toString(),
@@ -411,6 +434,9 @@ export async function getAssistantContacts(assistantId: string) {
       gender: contact.user.gender || "",
       role: (contact.role as "user" | "client" | "investor") || "user",
       address: contact.user.address || "",
+      isOwner: contact.userId === assistantOwnerId, // Mark if this is the owner
+      access: contact.access, // Include access level
+      permissions: contact.permissions ? JSON.parse(contact.permissions) : [], // Include permissions
     }))
 
     return {

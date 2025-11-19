@@ -153,13 +153,10 @@ export async function getAssistantContacts(assistantId: string) {
             }
         }
 
-        // Fetch all contacts for this assistant (excluding the current user/owner)
+        // Fetch all contacts for this assistant (including owner - owner is now in AssistantContact)
         const contacts = await prisma.assistantContact.findMany({
             where: {
                 assistantId: assistantIdBigInt,
-                userId: {
-                    not: userId // Exclude the current user
-                }
             },
             include: {
                 user: {
@@ -329,24 +326,11 @@ export async function createArtifact(data: {
         const userId = BigInt(session.user.id)
         const assistantIdBigInt = BigInt(data.assistantId)
 
-        // Verify user owns or has access to this assistant
-        const assistant = await prisma.assistant.findFirst({
-            where: {
-                id: assistantIdBigInt,
-                OR: [
-                    { userId: userId },
-                    {
-                        contacts: {
-                            some: {
-                                userId: userId
-                            }
-                        }
-                    }
-                ]
-            }
-        })
+        // Check if user can create artifacts (only owners can create artifacts)
+        const { canCreateArtifacts } = await import('@/lib/permissions/assistant-permissions')
+        const canCreate = await canCreateArtifacts(assistantIdBigInt, userId)
 
-        if (!assistant) {
+        if (!canCreate) {
             return {
                 success: false,
                 error: 'Assistant not found or access denied'
@@ -429,6 +413,74 @@ export async function createArtifact(data: {
 
             return newArtifact
         })
+
+        // Get all users with artifact permissions to notify
+        const userIdsToNotify: string[] = []
+        
+        try {
+            // Get assistant owner (always has artifact permissions)
+            const assistant = await prisma.assistant.findUnique({
+                where: { id: assistantIdBigInt },
+                select: { userId: true }
+            })
+            
+            if (assistant) {
+                userIdsToNotify.push(assistant.userId.toString())
+            }
+
+            // Get all contacts with artifact permissions
+            const contactsWithArtifactPermission = await prisma.assistantContact.findMany({
+                where: {
+                    assistantId: assistantIdBigInt,
+                    OR: [
+                        { access: 'admin' }, // Admins have all permissions
+                        {
+                            AND: [
+                                { permissions: { not: null } },
+                                {
+                                    permissions: {
+                                        contains: '"artifacts"' // Check for "artifacts" in JSON array
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                select: {
+                    userId: true,
+                    permissions: true
+                }
+            })
+
+            // Add contact user IDs to the list
+            for (const contact of contactsWithArtifactPermission) {
+                const userIdStr = contact.userId.toString()
+                if (!userIdsToNotify.includes(userIdStr)) {
+                    userIdsToNotify.push(userIdStr)
+                }
+            }
+
+            // If artifact is 'team' and has selected users, add them too
+            if (data.permissions === 'team' && data.selectedUsers.length > 0) {
+                for (const user of data.selectedUsers) {
+                    if (!userIdsToNotify.includes(user.id)) {
+                        userIdsToNotify.push(user.id)
+                    }
+                }
+            }
+
+            // Send notifications
+            const notificationService = (await import('@/lib/services/notifactionService')).default
+            await notificationService.notifyArtifactCreated(
+                artifact.id.toString(),
+                data.assistantId,
+                session.user.id,
+                userIdsToNotify
+            )
+        } catch (notificationError) {
+            console.error('Error sending artifact creation notifications:', notificationError)
+            // Don't fail the operation if notification fails
+        }
 
         return {
             success: true,

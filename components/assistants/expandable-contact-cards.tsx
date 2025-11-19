@@ -45,6 +45,7 @@ interface ExpandableContactCardsProps {
     isLoading?: boolean
     onContactDeleted?: () => void
     viewOnly?: boolean // If true, hides edit/delete buttons and role/description fields
+    canEdit?: boolean // If false, hides edit/delete buttons (for non-owners)
 }
 
 export function ExpandableContactCards({ 
@@ -53,7 +54,8 @@ export function ExpandableContactCards({
     contacts = [],
     isLoading = false,
     onContactDeleted,
-    viewOnly = false
+    viewOnly = false,
+    canEdit = true,
 }: ExpandableContactCardsProps) {
     const [active, setActive] = useState<Contact | null>(null)
     const [dialogOpen, setDialogOpen] = useState(false)
@@ -255,7 +257,7 @@ export function ExpandableContactCards({
 
                                  {/* Action Buttons */}
                                  <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4 sm:mt-6">
-                                     {!viewOnly && (
+                                     {!viewOnly && canEdit && (
                                          <>
                                      <Button
                                          variant="outline"

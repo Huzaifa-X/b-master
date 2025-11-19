@@ -210,9 +210,15 @@ import {
     if (process.env.AWS_S3_ENDPOINT) {
       return `${process.env.AWS_S3_ENDPOINT}/${BUCKET_NAME}/${key}`
     }
-  
+
     // Standard AWS S3 URL format
-    return `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`
+    // Use AWS_S3_REGION_NAME to match the S3Client configuration
+    const region = process.env.AWS_S3_REGION_NAME || process.env.AWS_REGION
+    if (!region) {
+      throw new Error('AWS region is not configured. Please set AWS_S3_REGION_NAME or AWS_REGION environment variable.')
+    }
+    
+    return `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${key}`
   }
   
   // ============================================

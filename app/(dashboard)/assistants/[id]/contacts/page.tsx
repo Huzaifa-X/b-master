@@ -11,6 +11,7 @@ import { toast } from "sonner"
 import { useSetAssistantMode } from "@/hooks/useAssistant"
 import { addContact, updateContact } from "@/app/actions/contact.action"
 import { useAssistantContacts, useInvalidateContacts } from "@/hooks/useContacts"
+import { useAssistantPermissions } from "@/hooks/usePermissions"
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -22,12 +23,18 @@ export default function ContactsPage({ params }: PageProps) {
   // Set assistant mode in header (automatically handles fetching and cleanup)
   useSetAssistantMode(assistantId)
   
+  // Fetch permissions
+  const { permissions, isLoading: isLoadingPermissions } = useAssistantPermissions(assistantId)
+  
   // Fetch contacts for this assistant
   const { contacts, isLoading: isLoadingContacts, refetch: refetchContacts } = useAssistantContacts(assistantId)
   const { invalidateAssistantContacts } = useInvalidateContacts()
   
   const [searchQuery, setSearchQuery] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
+  
+  // Check if user can add contacts (only owners can add)
+  const canAddContacts = permissions?.isOwner ?? false
 
   const handleAddContact = () => {
     setDialogOpen(true)
@@ -94,13 +101,15 @@ export default function ContactsPage({ params }: PageProps) {
                 Manage your contacts for your assistant
               </p>
             </div>
-            <Button 
-              onClick={handleAddContact} 
-              className="flex items-center justify-center gap-2 w-full sm:w-auto"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add Contact</span>
-            </Button>
+            {canAddContacts && (
+              <Button 
+                onClick={handleAddContact} 
+                className="flex items-center justify-center gap-2 w-full sm:w-auto"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add Contact</span>
+              </Button>
+            )}
           </div>
         </div>
 
@@ -127,6 +136,7 @@ export default function ContactsPage({ params }: PageProps) {
             invalidateAssistantContacts(assistantId)
             refetchContacts()
           }}
+          canEdit={canAddContacts}
         />
 
         {/* Add Contact Dialog */}
