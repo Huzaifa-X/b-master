@@ -597,6 +597,14 @@ model AssistantArtifact {
   code         String?  @db.Text // Large code blocks
   tools        Json?    @db.Json
   apiKeys      Json?    @db.Json // Encrypted API credentials
+
+  files        Json?    @db.Json // Array of {url, name, type, extractedContent}
+  images       Json?    @db.Json // Array of {url, name, alt}
+
+  videoUrl     String?  @db.Text // S3 URL for generated video
+  videoMetadata Json?   @db.Json // { duration: 8, size: 1280x720, model: "sora-2" }
+  thumbnailUrl String?  @db.Text // S3 URL for video thumbnail
+  
   isPublic     Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

@@ -6,6 +6,7 @@ export type Category =
   | "analytics"
   | "presentation"
   | "booking"
+  | "video_generation"
   | "others"
 
 export type Permission = "private" | "team" | "public"
@@ -46,5 +47,42 @@ export interface ArtifactFormData {
   permissions: Permission
   selectedUsers: SelectedUser[]
   apiConfigs: ApiConfig[]
+  uploadedFiles?: UploadedFile[];
+  uploadedImages?: UploadedImage[];
 }
 
+// types/artifacts.ts
+
+export interface UploadedFile {
+  url: string;
+  name: string;
+  type: string;
+  size: number;
+  uploadedAt: string;
+  extractedContent?: {
+    text: string;
+    html: string;
+    tables?: Array<{
+      base64: string;
+      page: number;
+    }>;
+    metadata?: {
+      pages: number;
+      model: string;
+    };
+  };
+  extractedImages?: Array<{
+    id: string;
+    page: number;
+    coordinates?: any;
+  }>;
+  extractionError?: string;
+}
+
+export interface UploadedImage {
+  url: string;
+  name: string;
+  type: string;
+  size: number;
+  uploadedAt: string;
+}

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Collapsible,
   CollapsibleContent,
@@ -17,12 +18,19 @@ import {
   Plus,
   Trash2,
   Cpu,
+  FileText,
+  X,
+  Loader2,
+  Upload,
+  Image as ImageIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 import { UserSelectTable, type SelectedUser } from "@/components/shared/user-select-table"
 import { ICON_MAP } from "./constants"
-import type { Template, ArtifactFormData, ApiConfig, Contact } from "@/types/artifacts"
+import type { Template, ArtifactFormData, ApiConfig, Contact, UploadedFile, UploadedImage } from "@/types/artifacts"
 import { ArtifactAIInstructionDialog } from "./artifact-ai-instruction-dialog"
+import { deleteArtifactFile } from "@/app/actions/artifact.action"
 
 interface ArtifactCustomizationStepProps {
   selectedTemplate: Template
@@ -47,6 +55,8 @@ export function ArtifactCustomizationStep({
 }: ArtifactCustomizationStepProps) {
   const [apiSectionOpen, setApiSectionOpen] = useState(false)
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<string>("")
 
   // Get available contacts (not yet added)
   const availableContacts = contacts.filter(
@@ -116,9 +126,107 @@ export function ArtifactCustomizationStep({
     }
   }
 
+  // File Upload Handler
+  const handleFileUpload = async (file: File, type: "image" | "document") => {
+    setIsUploading(true)
+    setUploadProgress(`Uploading ${file.name}...`)
+
+    try {
+      const uploadFormData = new FormData()
+      uploadFormData.append("file", file)
+      uploadFormData.append("type", type)
+
+      const response = await fetch("/api/artifact/upload", {
+        method: "POST",
+        body: uploadFormData,
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        if (type === "image") {
+          setFormData((prev) => ({
+            ...prev,
+            uploadedImages: [...(prev.uploadedImages || []), result.file],
+          }))
+          toast.success(`Image uploaded: ${file.name}`)
+        } else {
+          setFormData((prev) => ({
+            ...prev,
+            uploadedFiles: [...(prev.uploadedFiles || []), result.file],
+          }))
+
+          if (result.file.extractionError) {
+            toast.warning(`Uploaded ${file.name}, but content extraction failed`)
+          } else {
+            toast.success(`Document processed: ${file.name}`)
+          }
+        }
+      } else {
+        toast.error(result.error || "Upload failed")
+      }
+    } catch (error) {
+      console.error("Upload error:", error)
+      toast.error("Upload failed")
+    } finally {
+      setIsUploading(false)
+      setUploadProgress("")
+    }
+  }
+
+  const removeFile = async (index: number) => {
+    const file = formData.uploadedFiles?.[index]
+    if (!file) return
+
+    // Delete from S3 first
+    try {
+      const result = await deleteArtifactFile(file.url)
+      if (!result.success) {
+        toast.error(result.error || "Failed to delete file from storage")
+        return
+      }
+    } catch (error) {
+      console.error("Error deleting file:", error)
+      toast.error("Failed to delete file from storage")
+      return
+    }
+
+    // Remove from state
+    setFormData((prev) => ({
+      ...prev,
+      uploadedFiles: prev.uploadedFiles?.filter((_, i) => i !== index) || [],
+    }))
+    // toast.success(`File removed: ${file.name}`)
+  }
+
+  const removeImage = async (index: number) => {
+    const image = formData.uploadedImages?.[index]
+    if (!image) return
+
+    // Delete from S3 first
+    try {
+      const result = await deleteArtifactFile(image.url)
+      if (!result.success) {
+        toast.error(result.error || "Failed to delete image from storage")
+        return
+      }
+    } catch (error) {
+      console.error("Error deleting image:", error)
+      toast.error("Failed to delete image from storage")
+      return
+    }
+
+    // Remove from state
+    setFormData((prev) => ({
+      ...prev,
+      uploadedImages: prev.uploadedImages?.filter((_, i) => i !== index) || [],
+    }))
+    // toast.success(`Image removed: ${image.name}`)
+  }
+
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="space-y-6 max-w-3xl mx-auto">
+    <ScrollArea className="h-full">
+      <div className="space-y-6 p-6 max-w-3xl mx-auto">
         {/* Selected Template Display */}
         <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
           <div className="flex items-center gap-3">
@@ -187,6 +295,165 @@ export function ArtifactCustomizationStep({
               <p className="text-xs text-destructive mt-1">{errors.instructions}</p>
             )}
           </div>
+        </div>
+
+        {/* File Upload Section */}
+        <div className="space-y-4">
+          <div>
+            <Label className="text-base font-semibold">Documents & Images</Label>
+            <p className="text-sm text-muted-foreground mt-1">
+              Upload documents (PDF, Word) or images to include in your artifact
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Document Upload */}
+            <div className="border-2 border-dashed rounded-lg p-6 hover:border-primary/50 transition-colors">
+              <div className="flex flex-col items-center text-center space-y-2">
+                <FileText className="h-10 w-10 text-muted-foreground" />
+                <div>
+                  <Label
+                    htmlFor="document-upload"
+                    className="cursor-pointer text-sm font-medium text-primary hover:underline"
+                  >
+                    Click to upload document
+                  </Label>
+                  <Input
+                    id="document-upload"
+                    type="file"
+                    accept=".pdf,.docx,.doc,.txt"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleFileUpload(file, "document")
+                      e.target.value = "" // Reset input
+                    }}
+                    disabled={isUploading}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    PDF, Word, or text files
+                  </p>
+                </div>
+              </div>
+            </div>
+            {/* Image Upload */}
+            <div className="border-2 border-dashed rounded-lg p-6 hover:border-primary/50 transition-colors">
+              <div className="flex flex-col items-center text-center space-y-2">
+                <ImageIcon className="h-10 w-10 text-muted-foreground" />
+                <div>
+                  <Label
+                    htmlFor="image-upload"
+                    className="cursor-pointer text-sm font-medium text-primary hover:underline"
+                  >
+                    Click to upload images
+                  </Label>
+                  <Input
+                    id="image-upload"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || [])
+                      files.forEach((file) => handleFileUpload(file, "image"))
+                      e.target.value = "" // Reset input
+                    }}
+                    disabled={isUploading}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    PNG, JPG, WebP, etc.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Upload Progress */}
+          {isUploading && (
+            <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">{uploadProgress}</span>
+            </div>
+          )}
+
+          {/* Uploaded Files List */}
+          {formData.uploadedFiles && formData.uploadedFiles.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Uploaded Documents ({formData.uploadedFiles.length})
+              </Label>
+              <div className="space-y-2">
+                {formData.uploadedFiles.map((file, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-start gap-3 p-3 bg-muted rounded-lg group"
+                  >
+                    <FileText className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{file.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(file.size / 1024).toFixed(1)} KB
+                        {file.extractedContent && (
+                          <span className="ml-2">
+                            • {file.extractedContent.metadata?.pages || 0} pages
+                            • {file.extractedContent.text.length.toLocaleString()} characters
+                          </span>
+                        )}
+                        {/* {file.extractionError && (
+                          <span className="ml-2 text-destructive">• Extraction failed</span>
+                        )} */}
+                      </p>
+                      {/* {file.extractedContent?.tables && file.extractedContent.tables.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          📊 Contains {file.extractedContent.tables.length} table(s)
+                        </p>
+                      )} */}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeFile(idx)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Uploaded Images Grid */}
+          {formData.uploadedImages && formData.uploadedImages.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Uploaded Images ({formData.uploadedImages.length})
+              </Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {formData.uploadedImages.map((img, idx) => (
+                  <div key={idx} className="relative group aspect-square">
+                    <img
+                      src={img.url}
+                      alt={img.name}
+                      className="w-full h-full object-cover rounded-lg border-2 border-border"
+                    />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => removeImage(idx)}
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Remove
+                      </Button>
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/75 text-white text-xs p-1 truncate rounded-b-lg">
+                      {img.name}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Sharing & Permissions */}
@@ -294,6 +561,6 @@ export function ArtifactCustomizationStep({
         onOpenChange={setAiDialogOpen}
         onInsert={handleAIInstructionInsert}
       />
-    </div>
+    </ScrollArea>
   )
 }

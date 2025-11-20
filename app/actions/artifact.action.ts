@@ -4,6 +4,10 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { openai } from "@/lib/openai"
 import prisma from "@/lib/prisma"
+import { deleteFromS3 } from "@/lib/aws-s3"
+import openAISoraService from "@/lib/services/openai-sora.service"
+import s3VideoUploadService from "@/lib/services/s3-video-upload.service"
+import { generateVideoArtifactHtml } from "@/lib/templates/video-artifact.template"
 import { 
     GenerateArtifactInstructionsParams, 
     GenerateArtifactInstructionsResult 
@@ -195,17 +199,51 @@ export async function getAssistantContacts(assistantId: string) {
     }
 }
 
-const ARTIFACT_GENERATION_PROMPT = `You are an expert web developer specializing in creating interactive, production-ready HTML/CSS/JavaScript applications.
+const ARTIFACT_GENERATION_PROMPT = `You are an expert web developer specializing in creating interactive HTML/CSS/JavaScript applications.
 
-Your task is to generate complete, self-contained HTML artifacts based on the provided instructions. Follow these guidelines:
+When generating artifacts, you will receive:
+1. User instructions and requirements
+2. Extracted text content from uploaded documents (if any)
+3. Image URLs to embed (if any)
+4. Extracted tables as base64-encoded images (if any)
 
-1. **Complete HTML Document**: Generate a full HTML document with <!DOCTYPE html>, proper head section, and body
-2. **Embedded Styles**: Include all CSS in a <style> tag within the head
-3. **Embedded Scripts**: Include all JavaScript in a <script> tag before closing </body>
-4. **Self-Contained**: No external dependencies - everything must work standalone
-5. **Modern Design**: Use modern, clean UI design with proper spacing, colors, and typography
-6. **Responsive**: Ensure the artifact works on all screen sizes
-7. **Interactive**: Implement all required functionality with proper event handlers
+**CRITICAL REQUIREMENTS:**
+
+1. **Document Content Integration:**
+   - Use extracted text to populate the artifact with real, meaningful data
+   - Structure content logically based on document organization
+   - Preserve important information hierarchy
+   - Use extracted HTML structure when available
+
+2. **Image Embedding:**
+   - Embed all provided image URLs using proper <img> tags
+   - Make images responsive: max-width: 100%; height: auto;
+   - Add descriptive alt text based on context
+   - Apply appropriate styling (border-radius, shadows, margins)
+   - Use loading="lazy" for performance
+
+3. **Table Handling:**
+   - Tables extracted as base64 images should be embedded as:
+     <img src="data:image/png;base64,{BASE64_DATA}" alt="Table from page X" style="max-width: 100%; height: auto;">
+   - Position tables appropriately within content flow
+
+4. **Complete Self-Contained HTML:**
+   - Full <!DOCTYPE html> with proper structure
+   - All CSS in <style> tag in <head>
+   - All JavaScript in <script> tag before </body>
+   - Include SecureStorage wrapper (MANDATORY)
+
+5. **Responsive Design:**
+   - Mobile-first approach
+   - Flexible layouts with CSS Grid/Flexbox
+   - Responsive images and tables
+   - Touch-friendly interactions
+
+6. **Modern UI/UX:**
+   - Clean, professional design
+   - Consistent color scheme
+   - Proper spacing and typography
+   - Smooth transitions and animations
 
 8. **CRITICAL - Secure Storage Implementation**: 
    ALWAYS use this exact SecureStorage wrapper for data persistence. This is MANDATORY:
@@ -313,6 +351,38 @@ export async function createArtifact(data: {
     permissions: 'private' | 'team' | 'public'
     selectedUsers: Array<{ id: string; name: string; email: string }>
     apiConfigs: Array<{ key: string; value: string }>
+    uploadedFiles?: Array<{
+        url: string
+        name: string
+        type: string
+        size: number
+        uploadedAt: string
+        extractedContent?: {
+            text: string
+            html: string
+            tables?: Array<{
+                base64: string
+                page: number
+            }>
+            metadata?: {
+                pages: number
+                model: string
+            }
+        }
+        extractedImages?: Array<{
+            id: string
+            page: number
+            coordinates?: any
+        }>
+        extractionError?: string
+    }>
+    uploadedImages?: Array<{
+        url: string
+        name: string
+        type: string
+        size: number
+        uploadedAt: string
+    }>
 }) {
     try {
         const session = await getServerSession(authOptions)
@@ -337,35 +407,135 @@ export async function createArtifact(data: {
             }
         }
 
-        // Generate artifact code using AI
+        // Build enhanced instructions with extracted content
+        let enhancedInstructions = data.instructions
+
+        // Add document content
+        if (data.uploadedFiles && data.uploadedFiles.length > 0) {
+            enhancedInstructions += "\n\n=== EXTRACTED DOCUMENT CONTENT ===\n"
+            
+            data.uploadedFiles.forEach((file, idx) => {
+                enhancedInstructions += `\n--- Document ${idx + 1}: ${file.name} ---\n`
+                
+                if (file.extractedContent) {
+                    enhancedInstructions += `\nPages: ${file.extractedContent.metadata?.pages || "Unknown"}\n`
+                    enhancedInstructions += `\nExtracted Text:\n${file.extractedContent.text}\n`
+                    
+                    // Add tables as base64 images
+                    if (file.extractedContent.tables && file.extractedContent.tables.length > 0) {
+                        enhancedInstructions += `\nTables (${file.extractedContent.tables.length}):\n`
+                        file.extractedContent.tables.forEach((table, tableIdx) => {
+                            enhancedInstructions += `Table ${tableIdx + 1} (Page ${table.page}): data:image/png;base64,${table.base64}\n`
+                        })
+                    }
+                } else if (file.extractionError) {
+                    enhancedInstructions += `\n[Content extraction failed for this document]\n`
+                }
+            })
+            
+            enhancedInstructions += "\n=== END DOCUMENT CONTENT ===\n"
+        }
+
+        // Add image URLs
+        if (data.uploadedImages && data.uploadedImages.length > 0) {
+            enhancedInstructions += "\n\n=== IMAGES TO EMBED ===\n"
+            data.uploadedImages.forEach((img, idx) => {
+                enhancedInstructions += `Image ${idx + 1}: ${img.url} (${img.name})\n`
+            })
+            enhancedInstructions += "=== END IMAGES ===\n"
+        }
+
+        // Generate artifact code using AI or video generation
         const model = 'gpt-5'
         
         let generatedCode: string
-        try {
-            const response = await openai.responses.create({
-                model: model,
-                reasoning: { effort: "high" },
-                instructions: ARTIFACT_GENERATION_PROMPT,
-                input: `Generate a complete HTML artifact based on these instructions:\n\nName: ${data.name}\nCategory: ${data.category}\n\nInstructions:\n${data.instructions}\n\nGenerate the complete HTML code now.`,
-            })
+        let videoUrl: string | null = null
+        let thumbnailUrl: string | null = null
+        let videoMetadata: any = null
 
-            generatedCode = response.output_text
+        // Check if this is a video generation artifact
+        if (data.category === "video_generation") {
+            console.log("[Artifact] Creating video generation artifact...")
+            
+            try {
+                // Step 1: Generate video with OpenAI Sora
+                const soraResult = await openAISoraService.generateVideo({
+                    prompt: data.instructions,
+                    model: "sora-2",
+                    size: "1280x720",
+                    seconds: "8",
+                })
 
-            if (!generatedCode) {
+                console.log(`[Artifact] Video generated: ${soraResult.videoId}`)
+
+                // Step 2: Upload to S3
+                const s3Result = await s3VideoUploadService.uploadVideo(
+                    soraResult.videoBuffer,
+                    soraResult.thumbnailBuffer,
+                    assistantIdBigInt,
+                    data.name
+                )
+
+                videoUrl = s3Result.videoUrl
+                thumbnailUrl = s3Result.thumbnailUrl
+                videoMetadata = soraResult.metadata
+
+                console.log(`[Artifact] Video uploaded to S3: ${videoUrl}`)
+
+                // Step 3: Generate HTML with video player
+                generatedCode = generateVideoArtifactHtml(
+                    videoUrl,
+                    thumbnailUrl,
+                    data.name,
+                    {
+                        ...soraResult.metadata,
+                        prompt: data.instructions,
+                    }
+                )
+
+                console.log("[Artifact] Video artifact HTML generated successfully")
+            } catch (videoError) {
+                console.error("[Artifact] Video generation error:", videoError)
                 return {
                     success: false,
-                    error: 'Failed to generate artifact code'
+                    error: videoError instanceof Error ? videoError.message : 'Failed to generate video with Sora'
                 }
             }
+        } else {
+            // Existing logic for other artifact types
+            try {
+                const response = await openai.responses.create({
+                    model: model,
+                    reasoning: { effort: "high" },
+                    instructions: ARTIFACT_GENERATION_PROMPT,
+                    input: `Create a complete HTML artifact:\n\nName: ${data.name}\nCategory: ${data.category}\n\n${enhancedInstructions}\n\nGenerate the complete, production-ready HTML code now.`,
+                })
 
-            // Sanitize the generated HTML
-            generatedCode = sanitizeHtml(generatedCode)
+                generatedCode = response.output_text
 
-        } catch (aiError) {
-            console.error('AI generation error:', aiError)
-            return {
-                success: false,
-                error: 'Failed to generate artifact with AI'
+                if (!generatedCode) {
+                    return {
+                        success: false,
+                        error: 'Failed to generate artifact code'
+                    }
+                }
+
+                // Clean up markdown formatting
+                generatedCode = generatedCode
+                    .replace(/^```html\n?/i, "")
+                    .replace(/^```\n?/i, "")
+                    .replace(/\n?```$/i, "")
+                    .trim()
+
+                // Sanitize the generated HTML
+                generatedCode = sanitizeHtml(generatedCode)
+
+            } catch (aiError) {
+                console.error('AI generation error:', aiError)
+                return {
+                    success: false,
+                    error: 'Failed to generate artifact with AI'
+                }
             }
         }
 
@@ -390,11 +560,16 @@ export async function createArtifact(data: {
                     assistantId: assistantIdBigInt,
                     userId: userId,
                     name: data.name,
-                    instructions: data.instructions,
+                    instructions: enhancedInstructions, // Store enhanced version
                     category: data.category,
                     code: generatedCode, // AI-generated HTML code
                     tools: undefined,
                     apiKeys: apiKeysJson || undefined,
+                    files: data.uploadedFiles ? (data.uploadedFiles as any) : undefined,
+                    images: data.uploadedImages ? (data.uploadedImages as any) : undefined,
+                    videoUrl: videoUrl || undefined,
+                    thumbnailUrl: thumbnailUrl || undefined,
+                    videoMetadata: videoMetadata ? (videoMetadata as any) : undefined,
                     isPublic: isPublic
                 }
             })
@@ -689,6 +864,30 @@ export async function getArtifactById(artifactId: string) {
             success: false,
             error: 'Failed to fetch artifact',
             artifact: null
+        }
+    }
+}
+
+/**
+ * Delete file from S3
+ */
+export async function deleteArtifactFile(fileUrl: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: 'Authentication required'
+            }
+        }
+
+        await deleteFromS3(fileUrl)
+        return { success: true }
+    } catch (error) {
+        console.error('Error deleting file from S3:', error)
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to delete file'
         }
     }
 }

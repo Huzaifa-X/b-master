@@ -37,6 +37,8 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId }: Create
     permissions: "private",
     selectedUsers: [],
     apiConfigs: [],
+    uploadedFiles: [],
+    uploadedImages: [],
   })
 
   const [errors, setErrors] = useState<Partial<Record<keyof ArtifactFormData, string>>>({})
@@ -79,6 +81,8 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId }: Create
           permissions: "private",
           selectedUsers: [],
           apiConfigs: [],
+          uploadedFiles: [],
+          uploadedImages: [],
         })
         setErrors({})
         setContacts([])
@@ -148,7 +152,9 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId }: Create
         apiConfigs: formData.apiConfigs.map(config => ({
           key: config.key,
           value: config.value
-        }))
+        })),
+        uploadedFiles: formData.uploadedFiles,
+        uploadedImages: formData.uploadedImages,
       })
 
       toast.dismiss("artifact-creation")
