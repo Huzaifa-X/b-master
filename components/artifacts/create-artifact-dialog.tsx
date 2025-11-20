@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -174,7 +175,9 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId }: Create
           <div className="flex items-center justify-between">
             <div>
               <DialogTitle className="text-2xl">Create Artifact</DialogTitle>
-              <p className="text-sm text-muted-foreground mt-1">Step {step} of 2</p>
+              <DialogDescription className="mt-1">
+                Step {step} of 2
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>

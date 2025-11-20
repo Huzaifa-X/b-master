@@ -285,11 +285,11 @@ export function TemplateSelectionStep({
               {templateHtml ? (
                 <iframe
                   srcDoc={templateHtml}
-                        className="w-full h-full border-0 pointer-events-none"
+                  className="w-full h-full border-0"
                   title="Artifact Preview"
-                        sandbox="allow-same-origin"
-                        referrerPolicy="no-referrer"
-                        loading="lazy"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
