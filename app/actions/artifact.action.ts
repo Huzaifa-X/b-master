@@ -486,11 +486,7 @@ export async function createArtifact(data: {
                 generatedCode = generateVideoArtifactHtml(
                     videoUrl,
                     thumbnailUrl,
-                    data.name,
-                    {
-                        ...soraResult.metadata,
-                        prompt: data.instructions,
-                    }
+                    data.name
                 )
 
                 console.log("[Artifact] Video artifact HTML generated successfully")

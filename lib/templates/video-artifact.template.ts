@@ -2,11 +2,6 @@ export function generateVideoArtifactHtml(
   videoUrl: string,
   thumbnailUrl: string,
   artifactName: string,
-  metadata: {
-    duration: number
-    size: string
-    prompt: string
-  }
 ): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -138,7 +133,6 @@ export function generateVideoArtifactHtml(
 <body>
     <div class="container">
         <h1>🎬 ${artifactName}</h1>
-        <p class="subtitle">AI-Generated Video Artifact</p>
         
         <div class="video-wrapper">
             <video 
@@ -158,21 +152,6 @@ export function generateVideoArtifactHtml(
             <button class="btn btn-secondary" onclick="restartVideo()">⏮️ Restart</button>
             <button class="btn btn-secondary" onclick="downloadVideo()">⬇️ Download</button>
             <button class="btn btn-secondary" onclick="fullscreenVideo()">⛶ Fullscreen</button>
-        </div>
-        
-        <div class="metadata">
-            <div class="metadata-item">
-                <span class="metadata-label">Duration:</span> ${metadata.duration} seconds
-            </div>
-            <div class="metadata-item">
-                <span class="metadata-label">Resolution:</span> ${metadata.size}
-            </div>
-            <div class="metadata-item">
-                <span class="metadata-label">Prompt:</span> ${metadata.prompt}
-            </div>
-            <div class="metadata-item">
-                <span class="metadata-label">Generated with:</span> OpenAI Sora
-            </div>
         </div>
     </div>
     

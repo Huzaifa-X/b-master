@@ -246,24 +246,6 @@ export const TEMPLATES: Template[] = [
 
   // Video Generation (2 + Custom)
   {
-    id: "vid-1",
-    name: "AI Video Generator",
-    description: "Generate videos using AI with custom prompts",
-    category: "video_generation",
-    icon: "Video",
-    prefilledInstructions:
-      "Generate a video showing a serene sunset over mountains with birds flying across the sky. The video should be cinematic and peaceful.",
-  },
-  {
-    id: "vid-2",
-    name: "Product Demo Video",
-    description: "Create product demonstration videos",
-    category: "video_generation",
-    icon: "Layers",
-    prefilledInstructions:
-      "Create a product demonstration video showing a smartphone with its key features: camera quality, display, and performance. Make it engaging and professional.",
-  },
-  {
     id: "vid-custom",
     name: "Start from Scratch",
     description: "Create a custom video generation artifact from scratch",
@@ -328,14 +310,6 @@ export const ICON_MAP: Record<string, any> = {
   Settings,
   Users,
 }
-
-export const MOCK_CONTACTS: Contact[] = [
-  { id: "1", name: "John Doe", email: "john@example.com" },
-  { id: "2", name: "Jane Smith", email: "jane@example.com" },
-  { id: "3", name: "Mike Johnson", email: "mike@example.com" },
-  { id: "4", name: "Sarah Williams", email: "sarah@example.com" },
-  { id: "5", name: "David Brown", email: "david@example.com" },
-]
 
 export const TEMPLATE_FILES: Record<string, string> = {
   // Accounting
