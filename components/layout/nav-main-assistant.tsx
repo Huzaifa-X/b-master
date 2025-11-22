@@ -1,27 +1,23 @@
 "use client"
 
-import { MessageCircle, ChevronLeft, ArrowLeft, Users, Megaphone, Layers } from "lucide-react"
+import { MessageCircle, ChevronLeft, ArrowLeft, Users, Megaphone, Layers, Plus } from "lucide-react"
 import Link from "next/link"
-import { ThreadListNew } from "@/components/assistant-ui/thread-list"
 import {
     SidebarGroup,
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { useAssistantRuntime } from "@assistant-ui/react"
 import { useRouter, useParams } from "next/navigation"
 import { useAssistantPermissions } from "@/hooks/usePermissions"
 
 export function NavMainAssistant({ currentPath }: { currentPath: string }) {
-    const runtime = useAssistantRuntime();
     const router = useRouter();
     const params = useParams();
     const assistantId = params?.id as string || "";
     const { permissions, isLoading } = useAssistantPermissions(assistantId);
-    
+
     const handleBack = () => {
-        runtime.switchToNewThread();
         router.push("/assistants");
     };
 
@@ -47,7 +43,16 @@ export function NavMainAssistant({ currentPath }: { currentPath: string }) {
                 </SidebarMenuItem>
 
                 {/* Navigation Items */}
-                {canViewChat && <ThreadListNew />}
+                {canViewChat && (
+                    <SidebarMenuItem key={"New Chat"}>
+                        <SidebarMenuButton asChild tooltip={"New Chat"} isActive={currentPath === `/assistants/${assistantId}`}>
+                            <Link href={`/assistants/${assistantId}`} className="group/nav-item">
+                                <Plus className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
+                                <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">New Chat</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                )}
 
                 {canViewContacts && (
                     <SidebarMenuItem key={"Contacts"}>

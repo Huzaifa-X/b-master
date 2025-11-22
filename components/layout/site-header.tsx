@@ -10,12 +10,64 @@ import { useAssistantStore } from "@/lib/stores/assistant-store"
 import { usePathname } from "next/navigation"
 import { usePinnedAssistants } from "@/hooks/usePinnedAssistants"
 import { useMemo } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { getSpecificChat } from "@/app/actions/chat.action"
 
 export function SiteHeader() {
   const { title, subtitle, isThreadActive, onShare } = useHeaderStore()
   const assistantStore = useAssistantStore()
-  const isMessagesPage = usePathname().includes("/messages")
+  const pathname = usePathname()
+  const isMessagesPage = pathname.includes("/messages")
   const { assistants, togglePin, isToggling } = usePinnedAssistants()
+
+  // Extract chat ID and assistant ID from pathname
+  const { chatId, assistantIdFromPath } = useMemo(() => {
+    // For ask-b: /ask-b/[id]
+    if (pathname.startsWith("/ask-b/")) {
+      const parts = pathname.split("/ask-b/")
+      return { chatId: parts[1] || null, assistantIdFromPath: null }
+    }
+    // For assistant: /assistants/[assistantId]/[chatId]
+    if (pathname.startsWith("/assistants/")) {
+      const parts = pathname.split("/")
+      return {
+        chatId: parts.length >= 4 ? parts[3] : null,
+        assistantIdFromPath: parts.length >= 3 ? parts[2] : null
+      }
+    }
+    return { chatId: null, assistantIdFromPath: null }
+  }, [pathname])
+
+  // Determine if we're in ask-b mode or assistant mode
+  const isAskBMode = pathname.startsWith("/ask-b")
+  const isAssistantMode = pathname.startsWith("/assistants")
+
+  // Fetch chat data if chat ID exists
+  const { data: chatData } = useQuery({
+    queryKey: ["chat-header", chatId],
+    queryFn: async () => {
+      if (!chatId) return null
+      const result = await getSpecificChat(chatId)
+      return result.success ? result.chat : null
+    },
+    enabled: !!chatId,
+  })
+
+  // Get assistant name - prioritize from chatData, then store, then fallback
+  const assistantName = useMemo(() => {
+    if (chatData?.assistantName) return chatData.assistantName
+    if (assistantStore.assistantName) return assistantStore.assistantName
+    return "Assistant"
+  }, [chatData?.assistantName, assistantStore.assistantName])
+
+  // Check if topic is valid (not "New Chat" and not a full message - topics should be short)
+  const isValidTopic = useMemo(() => {
+    if (!chatData?.topic) return false
+    if (chatData.topic === "New Chat") return false
+    // Topics should be short (max 50 chars typically), if it's longer it might be a message
+    if (chatData.topic.length > 60) return false
+    return true
+  }, [chatData?.topic])
 
   // Check if current assistant is pinned
   const isPinned = useMemo(() => {
@@ -45,18 +97,19 @@ export function SiteHeader() {
           <SidebarTrigger className="-ml-1" />
         </div>
 
-        {assistantStore.isAssistantMode && (
+        {/* Assistant Mode: Show assistant name, or assistant name / chat topic */}
+        {isAssistantMode && (
           <div className="flex-1 flex items-center gap-2 min-w-0 px-4">
             <h1 className="text-base font-medium truncate">
-              {isThreadActive && title
-                ? `${assistantStore.assistantName || 'Assistant'} / ${title}`
-                : assistantStore.assistantName || 'Assistant'}
+              {chatId && isValidTopic && chatData
+                ? `${assistantName} / ${chatData.topic}`
+                : assistantName}
             </h1>
             <Button
               variant="ghost"
               size="sm"
               onClick={handleTogglePin}
-              disabled={isToggling || !assistantStore.currentAssistantId}
+              disabled={isToggling || !(assistantIdFromPath || assistantStore.currentAssistantId)}
               className="shrink-0 h-8 w-8 p-0 hover:bg-transparent hover:text-primary"
               title={isPinned ? "Unpin from sidebar" : "Pin to sidebar"}
             >
@@ -69,15 +122,16 @@ export function SiteHeader() {
           </div>
         )}
 
-        {/* Thread name on the left (ONLY when thread is active) */}
-        {!assistantStore.isAssistantMode && isThreadActive && title && (
+        {/* Ask-B Mode: Show chat topic when chat is open */}
+        {isAskBMode && chatId && isValidTopic && chatData && (
           <div className="flex-1 flex flex-col justify-center min-w-0 px-4">
-            <h1 className="text-lg font-medium truncate">Title</h1>
+            <h1 className="text-base font-medium truncate">{chatData.topic}</h1>
           </div>
         )}
 
-        {/* Spacer when no thread */}
-        {!isThreadActive && <div className="flex-1" />}
+        {/* Spacer when no content to show */}
+        {!isAssistantMode && !isAskBMode && <div className="flex-1" />}
+        {isAskBMode && !chatId && <div className="flex-1" />}
 
         {/* Right side actions - ONLY show when thread is active */}
         {isThreadActive ? (

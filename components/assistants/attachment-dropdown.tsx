@@ -1,62 +1,69 @@
-"use client";
+"use client"
 
-import { FileIcon, PlusIcon, Search, Sparkles, X, Globe } from "lucide-react";
-import { useComposerRuntime } from "@assistant-ui/react";
-import type { FC } from "react";
-import { useState, useRef } from "react";
-import * as m from "motion/react-m";
-import { Button } from "@/components/ui/button";
+import { FileIcon, PlusIcon, X, Globe, Search, Sparkles } from "lucide-react"
+import type { FC } from "react"
+import { useState, useRef } from "react"
+import { Button } from "@/components/ui/button"
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu"
+import { motion } from "motion/react"
 
-export const AttachmentDropdown: FC = () => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [selectedMode, setSelectedMode] = useState<"webSearch" | "research" | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const composerRuntime = useComposerRuntime();
+interface AttachmentDropdownProps {
+    onFileSelect?: (files: File[]) => void
+    onWebSearch?: () => void
+    onResearch?: () => void
+    onChatWithArtifact?: () => void
+}
+
+export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
+    onFileSelect,
+    onWebSearch,
+    onResearch,
+    onChatWithArtifact,
+}) => {
+    const [isOpen, setIsOpen] = useState(false)
+    const [selectedMode, setSelectedMode] = useState<"webSearch" | "research" | null>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     const handleAttachFile = () => {
-        fileInputRef.current?.click();
-    };
+        fileInputRef.current?.click()
+        setIsOpen(false)
+    }
 
     const handleWebSearch = () => {
-        setSelectedMode("webSearch");
-        setIsOpen(false);
-    };
+        setSelectedMode("webSearch")
+        setIsOpen(false)
+        onWebSearch?.()
+    }
 
     const handleResearch = () => {
-        setSelectedMode("research");
-        setIsOpen(false);
-    };
+        setSelectedMode("research")
+        setIsOpen(false)
+        onResearch?.()
+    }
 
     const handleRemoveMode = () => {
-        setSelectedMode(null);
-    };
+        setSelectedMode(null)
+    }
 
     const handleChatWithArtifact = () => {
-        // TODO: Implement chat with artifact functionality
-        console.log("Chat with Artifact clicked");
-    };
+        setIsOpen(false)
+        onChatWithArtifact?.()
+    }
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const files = event.target.files;
+        const files = event.target.files
         if (files && files.length > 0) {
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                try {
-                    await composerRuntime.addAttachment(file);
-                } catch (error) {
-                    console.error("Error adding file:", error);
-                }
-            }
+            const fileArray = Array.from(files)
+            onFileSelect?.(fileArray)
         }
         // Reset input
-        event.target.value = "";
-    };
+        event.target.value = ""
+    }
 
     return (
         <>
@@ -77,7 +84,7 @@ export const AttachmentDropdown: FC = () => {
                             className="size-[34px] rounded-full hover:bg-white hover:text-black focus:bg-muted focus:text-black"
                             aria-label="Add attachment"
                         >
-                            <m.div
+                            <motion.div
                                 key={isOpen ? "close" : "open"}
                                 initial={{ rotate: -90, opacity: 0 }}
                                 animate={{ rotate: 0, opacity: 1 }}
@@ -85,7 +92,7 @@ export const AttachmentDropdown: FC = () => {
                                 transition={{ duration: 0.2 }}
                             >
                                 {isOpen ? <X className="size-5" /> : <PlusIcon className="size-5" />}
-                            </m.div>
+                            </motion.div>
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-56">
@@ -119,6 +126,7 @@ export const AttachmentDropdown: FC = () => {
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
+
                 {selectedMode && (
                     <div className="flex items-center gap-1.5 rounded-full border border-primary bg-primary/10 px-3 py-1.5 text-sm">
                         {selectedMode === "webSearch" ? (
@@ -143,6 +151,6 @@ export const AttachmentDropdown: FC = () => {
                 )}
             </div>
         </>
-    );
-};
+    )
+}
 

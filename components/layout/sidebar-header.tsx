@@ -5,15 +5,16 @@ import Image from "next/image"
 import { ArrowLeftFromLine, ArrowRightFromLine, PanelLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/components/ui/sidebar"
+import { useRouter } from "next/navigation"
 
 export function Header() {
     const { state, toggleSidebar } = useSidebar()
     const [isHovered, setIsHovered] = useState(false)
     const isCollapsed = state === "collapsed"
-
+    const router = useRouter()
     return (
         <div className="flex items-center justify-between gap-2 px-4 py-2 group-data-[collapsible=icon]:justify-center">
-            <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
+            <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden cursor-pointer" onClick={() => router.push("/")}>
                 <Image
                     src="/bmaster-logo.svg"
                     alt="B-Master Logo"

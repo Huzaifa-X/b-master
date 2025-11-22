@@ -96,25 +96,21 @@ export type PromptInputTextareaProps = {
   disableAutosize?: boolean
 } & React.ComponentProps<typeof Textarea>
 
-function PromptInputTextarea({
-  className,
-  onKeyDown,
-  disableAutosize = false,
-  ...props
-}: PromptInputTextareaProps) {
+const PromptInputTextarea = React.forwardRef<HTMLTextAreaElement, PromptInputTextareaProps>(
+  ({ className, onKeyDown, disableAutosize = false, ...props }, forwardedRef) => {
   const { value, setValue, maxHeight, onSubmit, disabled } = usePromptInput()
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+    const internalRef = useRef<HTMLTextAreaElement>(null)
+    const ref = (forwardedRef || internalRef) as React.RefObject<HTMLTextAreaElement>
 
   useEffect(() => {
     if (disableAutosize) return
-
-    if (!textareaRef.current) return
-    textareaRef.current.style.height = "auto"
-    textareaRef.current.style.height =
+      if (!ref.current) return
+      ref.current.style.height = "auto"
+      ref.current.style.height =
       typeof maxHeight === "number"
-        ? `${Math.min(textareaRef.current.scrollHeight, maxHeight)}px`
-        : `min(${textareaRef.current.scrollHeight}px, ${maxHeight})`
-  }, [value, maxHeight, disableAutosize])
+          ? `${Math.min(ref.current.scrollHeight, maxHeight)}px`
+          : `min(${ref.current.scrollHeight}px, ${maxHeight})`
+    }, [value, maxHeight, disableAutosize, ref])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -126,7 +122,7 @@ function PromptInputTextarea({
 
   return (
     <Textarea
-      ref={textareaRef}
+        ref={ref}
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={handleKeyDown}
@@ -140,6 +136,9 @@ function PromptInputTextarea({
     />
   )
 }
+)
+
+PromptInputTextarea.displayName = "PromptInputTextarea"
 
 type PromptInputActionsProps = React.HTMLAttributes<HTMLDivElement>
 

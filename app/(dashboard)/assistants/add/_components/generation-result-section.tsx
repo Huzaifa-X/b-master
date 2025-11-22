@@ -8,7 +8,6 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { LoadingSpinner } from "./loading-spinner"
 import { FeedbackSection } from "./feedback-section"
-import { defaultComponents } from "@/components/assistant-ui/markdown-text"
 
 interface GenerationResultSectionProps {
   generatedInstructions: string
@@ -92,9 +91,7 @@ export function GenerationResultSection({
         {generatedInstructions && (
           <>
             <div className="prose prose-sm max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}
-              components={defaultComponents}
-              >
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {generatedInstructions}
               </ReactMarkdown>
             </div>

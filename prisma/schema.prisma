@@ -426,18 +426,24 @@ model AssistantTransaction {
 // ================================================================
 
 // User <-> Assistant Chat
+enum ChatType {
+  ASSISTANT
+  ASK_B
+}
+
 model AssistantUserChat {
   id          Int       @id @default(autoincrement())
   userId      BigInt
   topic       String
-  assistantId BigInt
+  assistantId BigInt?
+  chatType    String
   shareableId String?   @unique @db.VarChar(255) // For public sharing
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
   user      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assistant Assistant                  @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  assistant Assistant?                  @relation(fields: [assistantId], references: [id], onDelete: Cascade)
   messages  AssistantUserChatMessage[]
 
   @@index([userId])

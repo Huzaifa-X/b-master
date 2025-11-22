@@ -1,24 +1,20 @@
 "use client"
 
-import { MessageCircle, ChevronLeft, ArrowLeft } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
-import { ThreadListNew } from "@/components/assistant-ui/thread-list"
 import {
     SidebarGroup,
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { useAssistantRuntime } from "@assistant-ui/react"
-import { Button } from "@/components/ui/button"
+import { Plus } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 export function NavMainAskB({ currentPath }: { currentPath: string }) {
-    const runtime = useAssistantRuntime();
     const router = useRouter();
     
     const handleBack = () => {
-        runtime.switchToNewThread();
         router.push("/home");
     };
 
@@ -35,17 +31,14 @@ export function NavMainAskB({ currentPath }: { currentPath: string }) {
                     </SidebarMenuButton>
                 </SidebarMenuItem>
 
-                {/* Navigation Items */}
-                <ThreadListNew />
-
-                <SidebarMenuItem key={"Chats"}>
-                    <SidebarMenuButton asChild tooltip={"Chats"} isActive={currentPath === "/ask-b/chats"}>
-                        <Link href={"/ask-b/chats"} className="group/nav-item">
-                            <MessageCircle className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
-                            <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">Chats</span>
+                <SidebarMenuItem key={"New Chat"}>
+                    <SidebarMenuButton asChild tooltip={"New Chat"} isActive={currentPath === "/ask-b/new-chat"}>
+                        <Link href={"/ask-b"} className="group/nav-item">
+                            <Plus className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
+                            <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">New Chat</span>
                         </Link>
                     </SidebarMenuButton>
-                </SidebarMenuItem>
+                </SidebarMenuItem>   
 
             </SidebarMenu>
         </SidebarGroup>

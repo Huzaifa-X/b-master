@@ -6,8 +6,6 @@ import {
 } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/layout/sidebar/app-sidebar"
 import { SiteHeader } from "@/components/layout/site-header"
-import { AssistantRuntimeProvider } from "@assistant-ui/react"
-import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 
 export default function DashboardLayout({
@@ -15,15 +13,8 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const runtime = useChatRuntime({
-    transport: new AssistantChatTransport({
-      api: "/api/chat",
-    }),
-  })
-
   return (
     <ProtectedRoute>
-      <AssistantRuntimeProvider runtime={runtime}>
         <SidebarProvider>
           <div className="flex h-dvh w-full pr-0.5">
             <AppSidebar />
@@ -35,7 +26,6 @@ export default function DashboardLayout({
             </SidebarInset>
           </div>
         </SidebarProvider>
-      </AssistantRuntimeProvider>
     </ProtectedRoute>
   )
 }

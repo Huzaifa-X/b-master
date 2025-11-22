@@ -10,8 +10,8 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
-import { ArtifactPanel } from "@/components/assistant-ui/artifact-panel"
 import { ArtifactChatbot } from "@/components/artifacts/artifact-chatbot"
+import { ArtifactPanel } from "@/components/assistants/artifact-panel"
 import { useArtifactById } from "@/hooks/useArtifact"
 import { useArtifactStore } from "@/lib/stores/artifact-store"
 import { useIsMobile } from "@/hooks/use-mobile"

@@ -1,5 +1,9 @@
-import { Assistant } from "@/components/assistant-ui/assistant";
+import { WelcomeChatbotPage } from "@/components/assistants/welcome-chatbot-page"
 
 export default function HomePage() {
-  return <Assistant />;
+  return (
+    <div className="h-full w-full flex items-center justify-center">
+      <WelcomeChatbotPage chatType="ask-b" />
+    </div>
+  );
 }
