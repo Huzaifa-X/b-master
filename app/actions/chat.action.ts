@@ -62,7 +62,8 @@ export async function createChatWithMessage(data: {
           assistantId: data.assistantId,
           chatType: data.mode === "ask-b" ? "ASK_B" : "ASSISTANT",
           webSearch: false,
-          research: false
+          research: false,
+          extractedContent: "" // No attachments in initial message creation
         }).catch(err => {
           console.error("[createChatWithMessage] Response generation failed:", err)
           // Don't fail the request if response generation fails
@@ -374,16 +375,70 @@ Guidelines:
       throw new Error("No response generated")
     }
 
-    // Save assistant response to database
-    await prisma.assistantUserChatMessage.create({
-      data: {
+    // Check if assistant response already exists for the last user message (race condition protection)
+    // Get the last user message timestamp from database
+    const lastUserMessageInDb = await prisma.assistantUserChatMessage.findFirst({
+      where: {
         assistantUserChatId: chatIdInt,
-        role: "assistant",
-        message: assistantResponse,
-        userId: null,
-        assistantId: data.assistantId ? BigInt(data.assistantId) : null,
+        role: "user"
+      },
+      orderBy: {
+        createdAt: 'desc'
       }
     })
+
+    if (lastUserMessageInDb) {
+      // Check if there's already an assistant response after this user message
+      const existingResponse = await prisma.assistantUserChatMessage.findFirst({
+        where: {
+          assistantUserChatId: chatIdInt,
+          role: "assistant",
+          message: {
+            not: null
+          },
+          createdAt: {
+            gt: lastUserMessageInDb.createdAt
+          }
+        }
+      })
+
+      // Only create if no response exists yet (prevent duplicates)
+      if (!existingResponse) {
+        // Save assistant response to database
+        await prisma.assistantUserChatMessage.create({
+          data: {
+            assistantUserChatId: chatIdInt,
+            role: "assistant",
+            message: assistantResponse,
+            userId: null,
+            assistantId: data.assistantId ? BigInt(data.assistantId) : null,
+          }
+        })
+        console.log("[generateChatResponseInBackground] Assistant response saved to database")
+      } else {
+        console.log("[generateChatResponseInBackground] Assistant response already exists, skipping duplicate creation")
+        // Update existing response if it's empty or incomplete
+        if (!existingResponse.message || existingResponse.message.trim().length === 0) {
+          await prisma.assistantUserChatMessage.update({
+            where: { id: existingResponse.id },
+            data: { message: assistantResponse }
+          })
+          console.log("[generateChatResponseInBackground] Updated existing empty response")
+        }
+      }
+    } else {
+      // No user message found, create response anyway (shouldn't happen but safety check)
+      await prisma.assistantUserChatMessage.create({
+        data: {
+          assistantUserChatId: chatIdInt,
+          role: "assistant",
+          message: assistantResponse,
+          userId: null,
+          assistantId: data.assistantId ? BigInt(data.assistantId) : null,
+        }
+      })
+      console.log("[generateChatResponseInBackground] Assistant response saved (no user message found)")
+    }
 
     // Update chat timestamp
     await prisma.assistantUserChat.update({
@@ -913,17 +968,19 @@ export async function sendChatMessage(data: {
 
     console.log("[sendChatMessage] User message saved, triggering background response")
 
-        // Trigger background response generation (non-blocking)
-        generateChatResponseInBackground({
-          chatId: data.chatId,
-          assistantId: data.assistantId,
-          chatType: data.chatType,
-          webSearch: data.webSearch,
-          research: data.research
-        }).catch(err => {
-          console.error("[sendChatMessage] Background response generation failed:", err)
-          // Don't fail the request if background generation fails
-        })
+    // Trigger background response generation (non-blocking)
+    // Pass extracted content so AI can research about it
+    generateChatResponseInBackground({
+      chatId: data.chatId,
+      assistantId: data.assistantId,
+      chatType: data.chatType,
+      webSearch: data.webSearch,
+      research: data.research,
+      extractedContent: extractedContent // ✅ Pass extracted content from attachments
+    }).catch(err => {
+      console.error("[sendChatMessage] Background response generation failed:", err)
+      // Don't fail the request if background generation fails
+    })
 
     return {
       success: true,

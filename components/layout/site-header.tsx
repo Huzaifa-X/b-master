@@ -53,6 +53,8 @@ export function SiteHeader() {
       return result.success ? result.chat : null
     },
     enabled: !!chatId,
+    staleTime: 1000 * 5, // 5 seconds - update more frequently for topic changes
+    refetchInterval: 1000 * 10, // Refetch every 10 seconds to catch topic updates
   })
 
   // Get assistant name - prioritize from chatData, then store, then fallback

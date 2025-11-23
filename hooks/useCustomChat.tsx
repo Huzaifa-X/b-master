@@ -70,21 +70,38 @@ export function useCustomChat(options: UseCustomChatOptions) {
     },
     enabled: !!chatId,
     staleTime: 1000 * 10,
-    // Poll more frequently when waiting for background response (every 2s instead of 30s)
+    // Poll more frequently when waiting for background response
     refetchInterval: (query) => {
       if (isStreaming) return false
-      // Check if last message is from user and no assistant response yet
+      
       const msgs = query.state.data || []
-      const lastMsg = msgs[msgs.length - 1]
-      if (lastMsg && lastMsg.role === "user") {
-        // Check if there's an assistant response after this user message
-        const hasResponse = msgs.some((msg: Message) => 
-          msg.role === "assistant" && 
-          new Date(msg.createdAt) > new Date(lastMsg.createdAt)
-        )
-        return hasResponse ? 30000 : 2000 // Poll every 2s if waiting, 30s otherwise
+      if (msgs.length === 0) return false
+      
+      // Get the last user message
+      const userMessages = msgs.filter((msg: Message) => msg.role === "user")
+      if (userMessages.length === 0) return 30000
+      
+      const lastUserMsg = userMessages[userMessages.length - 1]
+      const lastUserMsgTime = new Date(lastUserMsg.createdAt).getTime()
+      
+      // Check if there's an assistant response after the last user message
+      const assistantMessages = msgs.filter((msg: Message) => 
+        msg.role === "assistant" && 
+        msg.content && 
+        msg.content.trim().length > 0
+      )
+      
+      const hasResponseAfterLastUser = assistantMessages.some((msg: Message) => 
+        new Date(msg.createdAt).getTime() > lastUserMsgTime
+      )
+      
+      // Poll every 2s if waiting for response, otherwise 30s
+      if (!hasResponseAfterLastUser) {
+        console.log("[useCustomChat] Waiting for assistant response, polling every 2s")
+        return 2000
       }
-      return 30000
+      
+      return 30000 // Default polling interval
     },
   })
 
@@ -116,8 +133,38 @@ export function useCustomChat(options: UseCustomChatOptions) {
     if (!isStreaming && dbMessageIds !== currentMessageIds) {
       console.log("[useCustomChat] Updating messages from DB:", dbMessages.length)
       setMessages(dbMessages)
+      
+      // Check if a new assistant response was added
+      const previousAssistantCount = messages.filter(m => m.role === "assistant").length
+      const currentAssistantCount = dbMessages.filter(m => m.role === "assistant").length
+      
+      // If a new assistant message was added, invalidate sidebar and header queries
+      if (currentAssistantCount > previousAssistantCount && context) {
+        console.log("[useCustomChat] New assistant response detected, invalidating queries")
+        
+      // Invalidate chat history (sidebar) and header when new response arrives
+      const mode = context.chatType === "ASK_B" ? "ask-b" : "assistant"
+      
+      // Invalidate and refetch sidebar (chat history)
+      queryClient.invalidateQueries({
+        queryKey: ["chat-history", mode, context.assistantId || undefined]
+      })
+      queryClient.refetchQueries({
+        queryKey: ["chat-history", mode, context.assistantId || undefined]
+      })
+      
+      // Invalidate and refetch header (chat topic and info)
+      queryClient.invalidateQueries({
+        queryKey: ["chat-header", context.chatId]
+      })
+      queryClient.refetchQueries({
+        queryKey: ["chat-header", context.chatId]
+      })
+      
+      console.log("[useCustomChat] Queries invalidated and refetched for sidebar and header")
+      }
     }
-  }, [dbMessageIds, currentMessageIds, isStreaming, dbMessages])
+  }, [dbMessageIds, currentMessageIds, isStreaming, dbMessages, messages, context, queryClient])
 
   // Send message with streaming
   const sendMessage = useCallback(async (content: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean }) => {
@@ -173,9 +220,15 @@ export function useCustomChat(options: UseCustomChatOptions) {
       // Replace temp message with real one from DB
       await refetchMessages()
 
-      // Invalidate chat list to update sidebar
+      // Invalidate chat list to update sidebar (will be updated when response arrives)
+      const chatMode = context.chatType === "ASK_B" ? "ask-b" : "assistant"
       queryClient.invalidateQueries({
-        queryKey: ["chat-history", mode, assistantId]
+        queryKey: ["chat-history", chatMode, context.assistantId || undefined]
+      })
+      
+      // Invalidate chat header
+      queryClient.invalidateQueries({
+        queryKey: ["chat-header", context.chatId]
       })
 
       toast.success("Message sent")
