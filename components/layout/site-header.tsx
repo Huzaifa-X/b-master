@@ -41,6 +41,8 @@ export function SiteHeader() {
   // Determine if we're in ask-b mode or assistant mode
   const isAskBMode = pathname.startsWith("/ask-b")
   const isAssistantMode = pathname.startsWith("/assistants")
+  // Check if we're on the assistant welcome page (no chatId) vs a specific chat
+  const isAssistantWelcomePage = pathname.startsWith("/assistants") && !chatId
 
   // Fetch chat data if chat ID exists
   const { data: chatData } = useQuery({
@@ -97,8 +99,8 @@ export function SiteHeader() {
           <SidebarTrigger className="-ml-1" />
         </div>
 
-        {/* Assistant Mode: Show assistant name, or assistant name / chat topic */}
-        {isAssistantMode && (
+        {/* Assistant Mode: Show assistant name, or assistant name / chat topic (only when chat is open) */}
+        {isAssistantMode && !isAssistantWelcomePage && (
           <div className="flex-1 flex items-center gap-2 min-w-0 px-4">
             <h1 className="text-base font-medium truncate">
               {chatId && isValidTopic && chatData
@@ -130,7 +132,7 @@ export function SiteHeader() {
         )}
 
         {/* Spacer when no content to show */}
-        {!isAssistantMode && !isAskBMode && <div className="flex-1" />}
+        {(!isAssistantMode || isAssistantWelcomePage) && !isAskBMode && <div className="flex-1" />}
         {isAskBMode && !chatId && <div className="flex-1" />}
 
         {/* Right side actions - ONLY show when thread is active */}

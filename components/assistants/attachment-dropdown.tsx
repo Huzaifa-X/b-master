@@ -2,7 +2,7 @@
 
 import { FileIcon, PlusIcon, X, Globe, Search, Sparkles } from "lucide-react"
 import type { FC } from "react"
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
     DropdownMenu,
@@ -14,10 +14,12 @@ import { motion } from "motion/react"
 
 interface AttachmentDropdownProps {
     onFileSelect?: (files: File[]) => void
-    onWebSearch?: () => void
-    onResearch?: () => void
+    onWebSearch?: (enabled: boolean) => void
+    onResearch?: (enabled: boolean) => void
     onChatWithArtifact?: () => void
 }
+
+const SESSION_STORAGE_KEY = "chat_search_mode"
 
 export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     onFileSelect,
@@ -29,6 +31,22 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     const [selectedMode, setSelectedMode] = useState<"webSearch" | "research" | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    // Load from session storage on mount
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const savedMode = sessionStorage.getItem(SESSION_STORAGE_KEY)
+            if (savedMode === "webSearch" || savedMode === "research") {
+                setSelectedMode(savedMode)
+                // Notify parent of the saved mode
+                if (savedMode === "webSearch") {
+                    onWebSearch?.(true)
+                } else if (savedMode === "research") {
+                    onResearch?.(true)
+                }
+            }
+        }
+    }, [onWebSearch, onResearch])
+
     const handleAttachFile = () => {
         fileInputRef.current?.click()
         setIsOpen(false)
@@ -37,17 +55,31 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     const handleWebSearch = () => {
         setSelectedMode("webSearch")
         setIsOpen(false)
-        onWebSearch?.()
+        // Save to session storage
+        if (typeof window !== "undefined") {
+            sessionStorage.setItem(SESSION_STORAGE_KEY, "webSearch")
+        }
+        onWebSearch?.(true)
     }
 
     const handleResearch = () => {
         setSelectedMode("research")
         setIsOpen(false)
-        onResearch?.()
+        // Save to session storage
+        if (typeof window !== "undefined") {
+            sessionStorage.setItem(SESSION_STORAGE_KEY, "research")
+        }
+        onResearch?.(true)
     }
 
     const handleRemoveMode = () => {
         setSelectedMode(null)
+        // Remove from session storage
+        if (typeof window !== "undefined") {
+            sessionStorage.removeItem(SESSION_STORAGE_KEY)
+        }
+        onWebSearch?.(false)
+        onResearch?.(false)
     }
 
     const handleChatWithArtifact = () => {

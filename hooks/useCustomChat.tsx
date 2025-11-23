@@ -120,7 +120,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
   }, [dbMessageIds, currentMessageIds, isStreaming, dbMessages])
 
   // Send message with streaming
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean }) => {
     if (!context || !content.trim() || isStreaming) {
       console.warn("[useCustomChat] Cannot send message:", { 
         hasContext: !!context, 
@@ -143,6 +143,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
       role: "user",
       content: content.trim(),
       createdAt: new Date(),
+      attachments: attachments
     }
 
     setMessages(prev => [...prev, userMessage])
@@ -157,7 +158,10 @@ export function useCustomChat(options: UseCustomChatOptions) {
         chatId: context.chatId,
         content: content.trim(),
         assistantId: context.assistantId,
-        chatType: context.chatType
+        chatType: context.chatType,
+        attachments: attachments,
+        webSearch: options?.webSearch,
+        research: options?.research
       })
 
       if (!result.success) {

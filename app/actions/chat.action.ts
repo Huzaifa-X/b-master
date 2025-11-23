@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { openai } from "@/lib/openai"
+import upstageService from "@/lib/services/upstageService"
 
 // ================================================================
 // CHAT CREATION & TOPIC GENERATION
@@ -55,15 +56,17 @@ export async function createChatWithMessage(data: {
       // Don't fail the request if topic generation fails
     })
 
-    // Trigger background response generation (non-blocking)
-    generateChatResponseInBackground({
-      chatId: chat.id.toString(),
-      assistantId: data.assistantId,
-      chatType: data.mode === "ask-b" ? "ASK_B" : "ASSISTANT"
-    }).catch(err => {
-      console.error("[createChatWithMessage] Response generation failed:", err)
-      // Don't fail the request if response generation fails
-    })
+        // Trigger background response generation (non-blocking)
+        generateChatResponseInBackground({
+          chatId: chat.id.toString(),
+          assistantId: data.assistantId,
+          chatType: data.mode === "ask-b" ? "ASK_B" : "ASSISTANT",
+          webSearch: false,
+          research: false
+        }).catch(err => {
+          console.error("[createChatWithMessage] Response generation failed:", err)
+          // Don't fail the request if response generation fails
+        })
 
     return {
       success: true,
@@ -122,6 +125,9 @@ async function generateChatResponseInBackground(data: {
   chatId: string
   assistantId?: string | null
   chatType: "ASK_B" | "ASSISTANT"
+  webSearch?: boolean
+  research?: boolean
+  extractedContent?: string // Content extracted from attachments
 }) {
   try {
     console.log("[generateChatResponseInBackground] Generating response for chat:", data.chatId)
@@ -138,6 +144,7 @@ async function generateChatResponseInBackground(data: {
             name: true,
             instructions: true,
             description: true,
+            vectorStoreId: true,
             knowledgebases: {
               where: { type: "text" },
               select: { note: true }
@@ -182,14 +189,14 @@ Guidelines:
 - Focus on being genuinely helpful to the user`
     } else {
       assistantName = chat.assistant?.name || "Assistant"
-      systemPrompt = `You are ${assistantName}, an AI assistant.`
+      systemPrompt = `You are ${assistantName}, a specialized AI assistant with unique knowledge and capabilities.`
 
       if (chat.assistant?.description) {
-        systemPrompt += `\n\n${chat.assistant.description}`
+        systemPrompt += `\n\n## About ${assistantName}\n${chat.assistant.description}`
       }
 
       if (chat.assistant?.instructions) {
-        systemPrompt += `\n\n## Instructions\n${chat.assistant.instructions}`
+        systemPrompt += `\n\n## Your Specific Instructions\n${chat.assistant.instructions}`
       }
 
       const knowledgeNotes = chat.assistant?.knowledgebases
@@ -197,15 +204,17 @@ Guidelines:
         .filter(Boolean) || []
 
       if (knowledgeNotes.length > 0) {
-        systemPrompt += `\n\n## Knowledge Base\n${knowledgeNotes.join("\n\n")}`
+        systemPrompt += `\n\n## Your Knowledge Base\n${knowledgeNotes.join("\n\n")}`
       }
 
-      systemPrompt += `\n\n## Guidelines
-- Stay in character as ${assistantName}
-- Provide helpful, accurate, and relevant information
-- Be conversational and engaging
-- If you don't know something, admit it honestly
-- Follow the instructions and use the knowledge base provided above`
+      systemPrompt += `\n\n## Critical Guidelines
+- You are ${assistantName} - a specific assistant with unique knowledge. ALWAYS provide answers specific to your role and knowledge base.
+- NEVER give generic or out-of-the-box answers. Every response must be tailored to your specific instructions and knowledge.
+- ALWAYS prioritize information from your knowledge base and instructions above generic knowledge.
+- When answering questions, first check if you have relevant information in your knowledge base or instructions.
+- Stay in character as ${assistantName} - be consistent with your specific role and expertise.
+- If you don't have specific information in your knowledge base, acknowledge this rather than guessing.
+- Be conversational and engaging while maintaining your specific identity as ${assistantName}.`
     }
 
     // Prepare conversation history for context
@@ -217,18 +226,149 @@ Guidelines:
         content: msg.message || ""
       }))
 
-    // Call OpenAI to generate response (non-streaming for background)
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...conversationMessages
-      ],
-      max_tokens: 4096,
-      temperature: 0.7,
-    })
+    // Get the last user message for file search
+    const lastUserMessage = conversationMessages
+      .filter(msg => msg.role === "user")
+      .slice(-1)[0]?.content || ""
 
-    const assistantResponse = response.choices[0]?.message?.content || ""
+    // Enhance the last user message with extracted content from attachments
+    let enhancedUserMessage = lastUserMessage
+    if (data.extractedContent && data.extractedContent.trim()) {
+      enhancedUserMessage = `${lastUserMessage}\n\n${data.extractedContent}\n\nPlease analyze the attached documents and provide insights based on their content. If research mode is enabled, also search the web for additional context about the topics mentioned in the documents.`
+      console.log("[generateChatResponseInBackground] Enhanced user message with extracted content from attachments")
+    }
+
+    let assistantResponse = ""
+
+    // Use Responses API with appropriate tools based on user selection
+    // Priority: webSearch > research > file_search (if vector store exists)
+    if (enhancedUserMessage) {
+      try {
+        // Build the full conversation context for the input
+        // Replace the last user message with enhanced version if extracted content exists
+        const conversationContext = conversationMessages
+          .slice(0, -1) // All messages except the last one
+          .map(msg => `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`)
+          .join("\n\n")
+        
+        // Use enhanced message (with extracted content) for the last user message
+        const fullInput = conversationContext 
+          ? `${conversationContext}\n\nUser: ${enhancedUserMessage}`
+          : `User: ${enhancedUserMessage}`
+        
+        const tools: any[] = []
+        
+        // If web search is enabled, use ONLY web_search (no file_search)
+        if (data.webSearch) {
+          console.log("[generateChatResponseInBackground] Using Responses API with web_search only")
+          tools.push({ type: "web_search" })
+        }
+        // If research is enabled, use BOTH file_search AND web_search
+        else if (data.research) {
+          console.log("[generateChatResponseInBackground] Using Responses API with BOTH file_search and web_search for research")
+          
+          // Add file_search if vector store exists
+          if (data.assistantId && chat.assistant?.vectorStoreId) {
+            tools.push({
+              type: "file_search",
+              vector_store_ids: [chat.assistant.vectorStoreId]
+            })
+          }
+          
+          // Always add web_search for research
+          tools.push({ 
+            type: "web_search",
+            // Research mode can use higher reasoning effort if needed
+          })
+        }
+        // Otherwise, use file_search if vector store exists
+        else if (data.assistantId && chat.assistant?.vectorStoreId) {
+          console.log("[generateChatResponseInBackground] Using Responses API with file_search for assistant-specific answer, vector store:", chat.assistant.vectorStoreId)
+          tools.push({
+            type: "file_search",
+            vector_store_ids: [chat.assistant.vectorStoreId]
+          })
+        }
+
+        // Only make API call if we have tools configured
+        if (tools.length > 0) {
+          const response = await openai.responses.create({
+            model: "gpt-5",
+            input: fullInput,
+            tools: tools,
+            include: data.webSearch 
+              ? ["web_search_call.action.sources"] 
+              : data.research
+              ? ["file_search_call.results", "web_search_call.action.sources"] // Include both for research
+              : ["file_search_call.results"], // Include search results in response
+          })
+
+          // Extract the message from the response
+          // The response has an output array with web_search_call/file_search_call and message items
+          const messageOutput = response.output?.find((item: any) => item.type === "message")
+          if (messageOutput && 'content' in messageOutput && Array.isArray(messageOutput.content)) {
+            // Extract text from content array
+            const textContent = messageOutput.content.find((c: any) => c.type === "output_text")
+            if (textContent && 'text' in textContent) {
+              assistantResponse = textContent.text || ""
+              const toolType = data.webSearch 
+                ? "web_search" 
+                : data.research 
+                ? "file_search + web_search (research)" 
+                : "file_search"
+              console.log(`[generateChatResponseInBackground] Response generated via ${toolType}, length:`, assistantResponse.length)
+            }
+          }
+
+          // If no response, fall back to chat completions
+          if (!assistantResponse) {
+            console.log("[generateChatResponseInBackground] No response from Responses API, falling back to chat completions")
+            throw new Error("No response from Responses API")
+          }
+        } else {
+          // No tools configured, fall through to chat completions
+          throw new Error("No tools configured")
+        }
+      } catch (responsesError) {
+        console.error("[generateChatResponseInBackground] Responses API failed, falling back to chat completions:", responsesError)
+        // Fall through to chat completions API with enhanced system prompt
+      }
+    }
+
+    // Fallback to Chat Completions API if Responses API failed or no tools configured
+    if (!assistantResponse) {
+      console.log("[generateChatResponseInBackground] Using Chat Completions API")
+      
+      // Enhance system prompt to emphasize using assistant-specific knowledge
+      let enhancedSystemPrompt = systemPrompt
+      if (data.assistantId && chat.assistant) {
+        enhancedSystemPrompt += `\n\nIMPORTANT: You are ${assistantName}, a specific assistant with unique knowledge and instructions. Always refer to your specific instructions, description, and knowledge base when answering. Do not give generic answers - provide answers specific to your role and knowledge.`
+      }
+      
+      // Replace last user message with enhanced version if extracted content exists
+      const messagesForCompletion = [...conversationMessages]
+      if (data.extractedContent && data.extractedContent.trim() && messagesForCompletion.length > 0) {
+        const lastUserMsgIndex = messagesForCompletion.map((m, i) => m.role === "user" ? i : -1).filter(i => i !== -1).pop()
+        if (lastUserMsgIndex !== undefined) {
+          messagesForCompletion[lastUserMsgIndex] = {
+            role: "user",
+            content: enhancedUserMessage
+          }
+        }
+      }
+      
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: enhancedSystemPrompt },
+          ...messagesForCompletion
+        ],
+        max_tokens: 4096,
+        temperature: 0.7,
+      })
+
+      assistantResponse = response.choices[0]?.message?.content || ""
+    }
 
     if (!assistantResponse) {
       throw new Error("No response generated")
@@ -541,14 +681,57 @@ export async function getChatMessages(chatId: string) {
 
     return {
       success: true,
-      messages: messages.map(msg => ({
-        id: msg.id.toString(),
-        role: msg.role as "user" | "assistant",
-        content: msg.message || "",
-        createdAt: msg.createdAt,
-        image: msg.image,
-        documents: msg.documents
-      }))
+      messages: messages.map(msg => {
+        // Parse attachments from documents (JSON string) and image
+        const attachments: {
+          name: string
+          url: string
+          type: string
+          size: number
+        }[] = []
+
+        // Parse documents if it exists (stored as JSON string)
+        if (msg.documents) {
+          try {
+            const documents = typeof msg.documents === 'string' 
+              ? JSON.parse(msg.documents) 
+              : msg.documents
+            
+            if (Array.isArray(documents)) {
+              documents.forEach((doc: any) => {
+                if (doc && (doc.url || doc.name)) {
+                  attachments.push({
+                    name: doc.name || 'Document',
+                    url: doc.url || '',
+                    type: doc.type || 'application/octet-stream',
+                    size: doc.size || 0
+                  })
+                }
+              })
+            }
+          } catch (e) {
+            console.error("[getChatMessages] Error parsing documents:", e)
+          }
+        }
+
+        // Add image as attachment if it exists
+        if (msg.image) {
+          attachments.push({
+            name: 'Image',
+            url: msg.image,
+            type: 'image',
+            size: 0
+          })
+        }
+
+        return {
+          id: msg.id.toString(),
+          role: msg.role as "user" | "assistant",
+          content: msg.message || "",
+          createdAt: msg.createdAt,
+          attachments: attachments.length > 0 ? attachments : undefined
+        }
+      })
     }
   } catch (error) {
     console.error("[getChatMessages] Error:", error)
@@ -626,6 +809,14 @@ export async function sendChatMessage(data: {
   content: string
   assistantId?: string | null
   chatType: "ASK_B" | "ASSISTANT"
+  attachments?: {
+    name: string
+    url: string
+    type: string
+    size: number
+  }[]
+  webSearch?: boolean
+  research?: boolean
 }) {
   try {
     const session = await getServerSession(authOptions)
@@ -658,6 +849,49 @@ export async function sendChatMessage(data: {
       return { success: false, error: "Chat not found" }
     }
 
+    // Prepare attachments data and extract content
+    let documentsJson: string | null = null
+    let imageUrl: string | null = null
+    let extractedContent: string = ""
+
+    if (data.attachments && data.attachments.length > 0) {
+      // Separate images from documents
+      const images = data.attachments.filter(att => att.type.startsWith('image/'))
+      const documents = data.attachments.filter(att => !att.type.startsWith('image/'))
+
+      // Store first image in image field
+      if (images.length > 0) {
+        imageUrl = images[0].url
+      }
+
+      // Extract content from documents using Upstage
+      const extractedTexts: string[] = []
+      for (const attachment of data.attachments) {
+        // Check if file type is supported by Upstage
+        if (upstageService.isSupportedFileType(attachment.type) && attachment.url) {
+          try {
+            console.log(`[sendChatMessage] Extracting content from attachment: ${attachment.name}`)
+            const extracted = await upstageService.extractFromUrl(attachment.url)
+            if (extracted.text) {
+              extractedTexts.push(`\n\n--- Content from ${attachment.name} ---\n${extracted.text}\n--- End of ${attachment.name} ---\n`)
+              console.log(`[sendChatMessage] Extracted ${extracted.text.length} characters from ${attachment.name}`)
+            }
+          } catch (error) {
+            console.error(`[sendChatMessage] Failed to extract content from ${attachment.name}:`, error)
+            // Continue with other attachments even if one fails
+          }
+        }
+      }
+
+      // Combine all extracted content
+      if (extractedTexts.length > 0) {
+        extractedContent = extractedTexts.join("\n\n")
+      }
+
+      // Store all attachments (including images) in documents as JSON
+      documentsJson = JSON.stringify(data.attachments)
+    }
+
     // Save user message immediately
     const userMessage = await prisma.assistantUserChatMessage.create({
       data: {
@@ -665,7 +899,9 @@ export async function sendChatMessage(data: {
         role: "user",
         message: data.content,
         userId: userId,
-        assistantId: chat.assistantId
+        assistantId: chat.assistantId,
+        image: imageUrl,
+        documents: documentsJson
       }
     })
 
@@ -677,15 +913,17 @@ export async function sendChatMessage(data: {
 
     console.log("[sendChatMessage] User message saved, triggering background response")
 
-    // Trigger background response generation (non-blocking)
-    generateChatResponseInBackground({
-      chatId: data.chatId,
-      assistantId: data.assistantId,
-      chatType: data.chatType
-    }).catch(err => {
-      console.error("[sendChatMessage] Background response generation failed:", err)
-      // Don't fail the request if background generation fails
-    })
+        // Trigger background response generation (non-blocking)
+        generateChatResponseInBackground({
+          chatId: data.chatId,
+          assistantId: data.assistantId,
+          chatType: data.chatType,
+          webSearch: data.webSearch,
+          research: data.research
+        }).catch(err => {
+          console.error("[sendChatMessage] Background response generation failed:", err)
+          // Don't fail the request if background generation fails
+        })
 
     return {
       success: true,

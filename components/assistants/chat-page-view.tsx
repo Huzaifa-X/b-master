@@ -41,9 +41,9 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
     }
   }, [messages])
 
-  const handleSend = (message: string) => {
+  const handleSend = (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean }) => {
     if (!message.trim() || isStreaming) return
-    sendMessage(message.trim())
+    sendMessage(message.trim(), attachments, options)
   }
 
   const handleCancel = () => {
@@ -88,6 +88,7 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
                   {message.role === "user" ? (
                     <UserMessage
                       content={message.content}
+                      attachments={message.attachments}
                       timestamp={message.createdAt}
                     />
                   ) : (

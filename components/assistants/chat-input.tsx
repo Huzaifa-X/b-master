@@ -20,12 +20,12 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
 interface ChatInputProps {
   value?: string
   onValueChange?: (value: string) => void
-  onSubmit: (message: string) => void // Changed signature
+  onSubmit: (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean }) => void
   isLoading?: boolean
   placeholder?: string
   onFileSelect?: (files: File[]) => void
-  onWebSearch?: () => void
-  onResearch?: () => void
+  onWebSearch?: (enabled: boolean) => void
+  onResearch?: (enabled: boolean) => void
   onChatWithArtifact?: () => void
   className?: string
 }
@@ -46,6 +46,8 @@ export function ChatInput({
   const [internalValue, setInternalValue] = useState("")
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [showPreview, setShowPreview] = useState(false)
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false)
+  const [researchEnabled, setResearchEnabled] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Use external value if provided, otherwise use internal state
@@ -66,13 +68,46 @@ export function ChatInput({
   const handleSend = () => {
     if ((!value.trim() && attachedFiles.length === 0) || isLoading) return
     
-    // Call onSubmit with the message
-    onSubmit(value.trim())
+    // Convert File objects to attachment format
+    // Note: For persistence, files should be uploaded to S3 first to get permanent URLs
+    // For now, we'll create blob URLs (these won't persist across page reloads)
+    const attachments = attachedFiles.map(file => ({
+      name: file.name,
+      url: URL.createObjectURL(file), // Temporary blob URL
+      type: file.type || 'application/octet-stream',
+      size: file.size
+    }))
+
+    // Call onSubmit with the message, attachments, and search options
+    onSubmit(
+      value.trim(), 
+      attachments.length > 0 ? attachments : undefined,
+      {
+        webSearch: webSearchEnabled,
+        research: researchEnabled
+      }
+    )
     
-    // Clear input and attachments
+    // Clear input and attachments (but keep search modes for next message)
     onValueChange("")
     setAttachedFiles([])
     setShowPreview(false)
+  }
+
+  const handleWebSearchChange = (enabled: boolean) => {
+    setWebSearchEnabled(enabled)
+    if (enabled) {
+      setResearchEnabled(false) // Disable research if web search is enabled
+    }
+    onWebSearch?.(enabled)
+  }
+
+  const handleResearchChange = (enabled: boolean) => {
+    setResearchEnabled(enabled)
+    if (enabled) {
+      setWebSearchEnabled(false) // Disable web search if research is enabled
+    }
+    onResearch?.(enabled)
   }
 
   const handleDictateTranscript = (text: string) => {
@@ -207,8 +242,8 @@ export function ChatInput({
           <div className="flex items-center gap-2">
             <AttachmentDropdown
               onFileSelect={handleFileSelect}
-              onWebSearch={onWebSearch}
-              onResearch={onResearch}
+              onWebSearch={handleWebSearchChange}
+              onResearch={handleResearchChange}
               onChatWithArtifact={onChatWithArtifact}
             />
             <DictateButton onTranscript={handleDictateTranscript} />
