@@ -117,7 +117,7 @@ export function NavListAskB() {
   if (isLoading) {
     return (
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-        <SidebarGroupLabel>Ask-B Chats</SidebarGroupLabel>
+        <SidebarGroupLabel>Chats</SidebarGroupLabel>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton disabled>

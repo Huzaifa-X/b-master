@@ -133,7 +133,7 @@ export function NavListAssistant() {
     return (
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
         <SidebarGroupLabel>
-          {assistantStore.assistantName || "Assistant"} Chats
+          Chats
         </SidebarGroupLabel>
         <SidebarMenu>
           <SidebarMenuItem>
