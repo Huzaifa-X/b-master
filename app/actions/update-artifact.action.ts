@@ -363,11 +363,7 @@ export async function updateArtifactWithAI({
                 updatedCode = generateVideoArtifactHtml(
                     videoUrl,
                     thumbnailUrl,
-                    artifact.name || "Video Artifact",
-                    {
-                        ...soraResult.metadata,
-                        prompt: userPrompt,
-                    }
+                    artifact.name || "Video Artifact"
                 )
 
                 console.log("[Artifact Update] Video artifact HTML regenerated successfully")
