@@ -69,6 +69,19 @@ class UpstageService {
    */
   async extractFromUrl(documentUrl: string): Promise<UpstageExtractedContent> {
     try {
+      // Validate URL
+      if (!documentUrl || typeof documentUrl !== 'string') {
+        throw new Error('Invalid document URL provided');
+      }
+
+      // Check if it's a blob URL (which won't work on server-side)
+      if (documentUrl.startsWith('blob:')) {
+        throw new Error(
+          'Blob URLs are not supported. Files must be uploaded to S3 first. ' +
+          'This is a client-side URL that cannot be accessed from the server.'
+        );
+      }
+
       console.log(`[Upstage] Downloading document from: ${documentUrl}`);
       
       // Download the file first using node-fetch

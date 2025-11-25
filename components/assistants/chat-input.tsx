@@ -16,6 +16,7 @@ import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
+import { uploadFilesToS3, type FileUploadData } from "@/app/actions/file-upload.action"
 
 interface ChatInputProps {
   value?: string
@@ -65,18 +66,38 @@ export function ChatInput({
     setShowPreview(hasMarkdown && value.length > 0)
   }, [value])
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if ((!value.trim() && attachedFiles.length === 0) || isLoading) return
     
-    // Convert File objects to attachment format
-    // Note: For persistence, files should be uploaded to S3 first to get permanent URLs
-    // For now, we'll create blob URLs (these won't persist across page reloads)
-    const attachments = attachedFiles.map(file => ({
-      name: file.name,
-      url: URL.createObjectURL(file), // Temporary blob URL
-      type: file.type || 'application/octet-stream',
-      size: file.size
-    }))
+    let attachments: { name: string; url: string; type: string; size: number }[] = []
+
+    // Upload files to S3 if there are any attachments
+    if (attachedFiles.length > 0) {
+      // toast.loading(`Uploading ${attachedFiles.length} file(s)...`, { id: 'file-upload' })
+
+      // Convert files to base64 for server action
+      const fileUploadData: FileUploadData[] = await Promise.all(
+        attachedFiles.map(async (file) => {
+          const base64 = await fileToBase64(file)
+          return {
+            fileName: file.name,
+            fileData: base64,
+            contentType: file.type || 'application/octet-stream',
+          }
+        })
+      )
+
+      // Upload to S3 using existing functions from lib/aws-s3.ts
+      const result = await uploadFilesToS3(fileUploadData)
+
+      if (!result.success) {
+        toast.error(result.error || 'Failed to upload files. Please try again.', { id: 'file-upload' })
+        return // Don't send message if file upload fails
+      }
+
+      attachments = result.files
+      toast.success(`Uploaded ${result.files.length} file(s)`, { id: 'file-upload' })
+    }
 
     // Call onSubmit with the message, attachments, and search options
     onSubmit(
@@ -92,6 +113,22 @@ export function ChatInput({
     onValueChange("")
     setAttachedFiles([])
     setShowPreview(false)
+  }
+
+  // Helper function to convert File to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result)
+        } else {
+          reject(new Error('Failed to read file'))
+        }
+      }
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })
   }
 
   const handleWebSearchChange = (enabled: boolean) => {
