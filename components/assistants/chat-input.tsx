@@ -96,7 +96,6 @@ export function ChatInput({
       }
 
       attachments = result.files
-      toast.success(`Uploaded ${result.files.length} file(s)`, { id: 'file-upload' })
     }
 
     // Call onSubmit with the message, attachments, and search options
@@ -153,7 +152,6 @@ export function ChatInput({
 
   const handleFileSelect = (files: File[]) => {
     setAttachedFiles((prev) => [...prev, ...files])
-    toast.success(`${files.length} file(s) attached`)
     onFileSelect?.(files)
   }
 

@@ -456,7 +456,6 @@ model AssistantUserChatMessage {
   id                  Int      @id @default(autoincrement())
   role                String   @db.VarChar(50) // user or assistant
   message             String?  @db.Text
-  image               String?  @db.VarChar(255)
   documents           String?  @db.Text
   userId              BigInt?
   assistantUserChatId Int

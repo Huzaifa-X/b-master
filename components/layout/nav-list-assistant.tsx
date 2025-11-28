@@ -176,7 +176,7 @@ export function NavListAssistant() {
                   <div onClick={() => handleSelectChat(chat.id)}>
                     <div className="flex-1 min-w-0">
                       {chat.topic === "New Chat" || (chat.topic && chat.topic.length > 60) ? (
-                        <Skeleton className="h-4 w-24 mb-1" />
+                        <div className="truncate">Untitled</div>
                       ) : (
                         <div className="truncate">{chat.topic}</div>
                       )}

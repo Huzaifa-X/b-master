@@ -68,8 +68,8 @@ export function useChatHistory(options: UseChatHistoryOptions) {
             }))
         },
         enabled: !!queryFn, // Only run query if queryFn is available
-        staleTime: 1000 * 30, // 30 seconds
-        refetchInterval: 1000 * 30, // Auto-refetch every 30 seconds for real-time updates
+        staleTime: 1000 * 5, // 5 seconds
+        refetchInterval: 1000 * 10, // Auto-refetch every 10 seconds for real-time updates
     })
 
     // Delete chat mutation

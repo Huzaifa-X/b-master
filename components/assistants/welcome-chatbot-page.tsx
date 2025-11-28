@@ -41,19 +41,26 @@ export function WelcomeChatbotPage({
     return WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)]
   }, [session?.user?.name])
 
-  const handleSend = async () => {
-    if (!input.trim() || isCreating) return
+  const handleSend = async (
+    message: string,
+    attachments?: { name: string; url: string; type: string; size: number }[],
+    options?: { webSearch?: boolean; research?: boolean }
+  ) => {
+    if (!message.trim() || isCreating) return
 
-    console.log("[WelcomePage] Creating new chat with message:", input.substring(0, 50))
+    console.log("[WelcomePage] Creating new chat with message:", message.substring(0, 50), "attachments:", attachments?.length || 0)
     
     setIsCreating(true)
 
     try {
-      // Create chat with first message
+      // Create chat with first message, attachments, and search options
       const result = await createChatWithMessage({
         mode: chatType,
         assistantId: assistantId,
-        firstMessage: input.trim()
+        firstMessage: message.trim(),
+        attachments: attachments,
+        webSearch: options?.webSearch,
+        research: options?.research
       })
 
       if (!result.success || !result.chatId) {
@@ -96,8 +103,7 @@ export function WelcomeChatbotPage({
         })
       }, 200)
 
-      // Clear input
-      setInput("")
+      // Clear input (will be cleared by ChatInput after successful send)
 
     } catch (error) {
       console.error("[WelcomePage] Error creating chat:", error)

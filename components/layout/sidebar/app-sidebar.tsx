@@ -29,9 +29,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader>
         <Header />
       </SidebarHeader>
-      <SidebarContent>
-        <NavMain />
-        <NavList />
+      <SidebarContent className="flex flex-col overflow-hidden">
+        <div className="flex-shrink-0">
+          <NavMain />
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <NavList />
+        </div>
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={session?.user as NavUserType} />
