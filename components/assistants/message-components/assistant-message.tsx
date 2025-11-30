@@ -1,9 +1,16 @@
 "use client"
 
 import type { FC } from "react"
+import { useState } from "react"
 import Image from "next/image"
-import { Copy, Share2 } from "lucide-react"
+import { Copy, Share2, Download, Eye, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -21,6 +28,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
     timestamp,
     isLoading = false,
 }) => {
+    const [previewImage, setPreviewImage] = useState<string | null>(null)
     const handleCopy = () => {
         navigator.clipboard.writeText(content)
         toast.success("Message copied to clipboard")
@@ -40,6 +48,86 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
         } else {
             handleCopy()
             toast.info("Share not supported, copied to clipboard instead")
+        }
+    }
+
+    const handleDownloadImage = async (src: string, alt: string) => {
+        try {
+            // Check if it's a base64 data URL
+            if (src.startsWith('data:image/')) {
+                // Handle base64 data URL - convert to blob and download
+                const base64Data = src.split(',')[1]
+                const mimeMatch = src.match(/data:image\/(\w+);base64/)
+                const mimeType = mimeMatch?.[1] || 'png'
+                
+                // Convert base64 to blob
+                const byteCharacters = atob(base64Data)
+                const byteNumbers = new Array(byteCharacters.length)
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i)
+                }
+                const byteArray = new Uint8Array(byteNumbers)
+                const blob = new Blob([byteArray], { type: `image/${mimeType}` })
+                
+                const url = window.URL.createObjectURL(blob)
+                const link = document.createElement('a')
+                link.href = url
+                link.download = alt || `generated-image.${mimeType}`
+                document.body.appendChild(link)
+                link.click()
+                document.body.removeChild(link)
+                window.URL.revokeObjectURL(url)
+                toast.success("Image downloaded")
+                return
+            }
+            
+            // For regular URLs (S3 or other), try to fetch
+            // If CORS fails, fall back to opening in new tab
+            try {
+                const response = await fetch(src, {
+                    mode: 'cors',
+                    credentials: 'omit',
+                    cache: 'no-cache'
+                })
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`)
+                }
+                
+                const blob = await response.blob()
+                const url = window.URL.createObjectURL(blob)
+                const link = document.createElement('a')
+                link.href = url
+                
+                // Extract file extension from URL or use default
+                try {
+                    const urlObj = new URL(src)
+                    const extension = urlObj.pathname.match(/\.(\w+)$/)?.[1] || 'png'
+                    link.download = alt || `generated-image.${extension}`
+                } catch {
+                    link.download = alt || 'generated-image.png'
+                }
+                
+                document.body.appendChild(link)
+                link.click()
+                document.body.removeChild(link)
+                window.URL.revokeObjectURL(url)
+                toast.success("Image downloaded")
+            } catch (fetchError) {
+                // If fetch fails (likely CORS issue), open in new tab as fallback
+                console.warn("Fetch failed, opening in new tab:", fetchError)
+                window.open(src, '_blank', 'noopener,noreferrer')
+                toast.info("Opening image in new tab. Right-click to save.")
+            }
+        } catch (error) {
+            console.error("Error downloading image:", error)
+            // Final fallback: try to open in new tab
+            try {
+                window.open(src, '_blank', 'noopener,noreferrer')
+                toast.info("Opening image in new tab. Right-click to save.")
+            } catch {
+                toast.error("Failed to download image. Please right-click the image and select 'Save image as'.")
+            }
         }
     }
 
@@ -103,7 +191,72 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
                                 components={{
-                                    p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                                    // ============================================
+                                    // PARAGRAPH - Handle images specially
+                                    // ============================================
+                                    p: ({ children, node }) => {
+                                        // Check if paragraph only contains an image
+                                        const hasOnlyImage = node?.children?.length === 1 && 
+                                            node.children[0]?.type === 'element' && 
+                                            node.children[0]?.tagName === 'img'
+                                        
+                                        if (hasOnlyImage) {
+                                            // Return fragment to avoid wrapping image in p tag
+                                            return <>{children}</>
+                                        }
+                                        return <p className="mb-2 last:mb-0">{children}</p>
+                                    },
+                                    
+                                    // ============================================
+                                    // IMAGE RENDERING (CRITICAL FOR IMAGE DISPLAY)
+                                    // ============================================
+                                    img: ({ src, alt }) => {
+                                        if (!src || typeof src !== 'string') return null
+                                        
+                                        return (
+                                            <span className="block my-4 relative group">
+                                                <span className="block relative rounded-lg overflow-hidden border border-border">
+                                                    <Image
+                                                        src={src}
+                                                        alt={alt || 'Generated image'}
+                                                        width={1024}
+                                                        height={1024}
+                                                        className="w-full h-auto"
+                                                        unoptimized // Important for S3 URLs and base64
+                                                        priority={false}
+                                                    />
+                                                    
+                                                    {/* Action buttons overlay */}
+                                                    <span className="absolute top-2 right-2 flex gap-2">
+                                                        <Button
+                                                            size="icon"
+                                                            variant="default"
+                                                            className="h-8 w-8 bg-primary text-primary-foreground hover:bg-primary/90"
+                                                            onClick={() => setPreviewImage(src)}
+                                                            title="Preview image"
+                                                        >
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            size="icon"
+                                                            variant="default"
+                                                            className="h-8 w-8 bg-primary text-primary-foreground hover:bg-primary/90"
+                                                            onClick={() => handleDownloadImage(src, alt || 'image')}
+                                                            title="Download image"
+                                                        >
+                                                            <Download className="h-4 w-4" />
+                                                        </Button>
+                                                    </span>
+                                                </span>
+                                                {alt && (
+                                                    <span className="block text-sm text-muted-foreground mt-2 text-center italic">
+                                                        {alt}
+                                                    </span>
+                                                )}
+                                            </span>
+                                        )
+                                    },
+                                    
                                     code(props) {
                                         const { children, className, ...rest } = props
                                         const match = /language-(\w+)/.exec(className || "")
@@ -241,6 +394,38 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* Image Preview Modal */}
+            <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
+                <DialogContent className="max-w-4xl w-full p-0 bg-background" showCloseButton={false}>
+                    <DialogHeader className="px-6 pt-6 pb-4">
+                        <DialogTitle className="flex items-center justify-between">
+                            <span>Image Preview</span>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => setPreviewImage(null)}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </DialogTitle>
+                    </DialogHeader>
+                    {previewImage && (
+                            <div className="relative w-full overflow-hidden border border-border bg-muted flex items-center justify-center">
+                                <Image
+                                    src={previewImage}
+                                    alt="Preview"
+                                    width={1200}
+                                    height={1200}
+                                    className="w-full h-auto max-h-[80vh] object-contain"
+                                    unoptimized
+                                    style={{ maxWidth: '120%' }}
+                                />
+                            </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

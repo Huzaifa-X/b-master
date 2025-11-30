@@ -459,6 +459,10 @@ model AssistantUserChatMessage {
   documents           String?  @db.Text
   userId              BigInt?
   assistantUserChatId Int
+
+  openaiResponseId    String?  @db.VarChar(255)
+  hasImages           Boolean  @default(false)
+
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

@@ -7,6 +7,52 @@ import prisma from "@/lib/prisma"
 import { openai } from "@/lib/openai"
 import upstageService from "@/lib/services/upstageService"
 import { getSystemPrompt } from "@/utils/prompts"
+import { uploadToS3 } from "@/lib/aws-s3"
+
+// ================================================================
+// IMAGE GENERATION HELPERS
+// ================================================================
+
+/**
+ * Save base64 image to S3 and return public URL
+ * Uses existing uploadToS3 function from lib/aws-s3.ts
+ * @param base64Image - Base64 encoded image string (with or without data URL prefix)
+ * @param chatId - Chat ID for organizing files
+ * @param imageIndex - Index for multiple images
+ * @returns S3 public URL
+ */
+async function saveImageToS3(
+  base64Image: string,
+  chatId: number,
+  imageIndex: number
+): Promise<string> {
+  try {
+    // Remove data URL prefix if present (data:image/png;base64,)
+    const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "")
+
+    // Convert to buffer
+    const imageBuffer = Buffer.from(base64Data, "base64")
+
+    // Generate unique filename with timestamp
+    const timestamp = Date.now()
+    const fileName = `image-${timestamp}-${imageIndex}.png`
+
+    // Upload to S3 using existing function (folder: chat-images/chat-{chatId})
+    const publicUrl = await uploadToS3(
+      imageBuffer,
+      fileName,
+      "image/png",
+      `chat-images/chat-${chatId}`
+    )
+
+    console.log(`[saveImageToS3] ✅ Saved image ${imageIndex + 1} to S3: ${publicUrl}`)
+    return publicUrl
+
+  } catch (error) {
+    console.error("[saveImageToS3] ❌ Error:", error)
+    throw new Error(`S3 upload failed: ${error instanceof Error ? error.message : "Unknown error"}`)
+  }
+}
 
 // ================================================================
 // CHAT CREATION & TOPIC GENERATION
@@ -80,7 +126,7 @@ export async function createChatWithMessage(data: {
     const webSearchEnabled = data.webSearch || false
     const researchEnabled = data.research || false
     console.log(`[createChatWithMessage] Starting background response with webSearch: ${webSearchEnabled}, research: ${researchEnabled}, attachments: ${data.attachments?.length || 0}`)
-    
+
     generateChatResponseInBackground({
       chatId: chat.id.toString(),
       assistantId: data.assistantId,
@@ -184,9 +230,13 @@ async function generateChatResponseInBackground(data: {
         messages: {
           orderBy: { createdAt: 'asc' },
           select: {
+            id: true,
             role: true,
             message: true,
-            documents: true
+            documents: true,
+            openaiResponseId: true,
+            hasImages: true,
+            createdAt: true,
           }
         }
       }
@@ -211,9 +261,13 @@ async function generateChatResponseInBackground(data: {
       systemPrompt += `\n\n## Assistant-Specific Instructions\n${chat.assistant.instructions}`
     }
 
-    let assistantName = data.chatType === "ASK_B" || !data.assistantId
-      ? "Ask-B"
-      : chat.assistant?.name || "Assistant"
+    const lastAssistantMessage = chat.messages
+      .filter(msg => msg.role === "assistant" && msg.openaiResponseId)
+      .slice(-1)[0]
+
+    const previousResponseId = lastAssistantMessage?.openaiResponseId || null
+
+    console.log("[generateChatResponseInBackground] 📝 Previous response ID:", previousResponseId || "None")
 
     // Prepare conversation history
     const conversationMessages = chat.messages
@@ -287,7 +341,42 @@ async function generateChatResponseInBackground(data: {
       console.log("[generateChatResponseInBackground] Enhanced user message with extracted content")
     }
 
+    const response = await openai.responses.create({
+      model: "gpt-5-nano",
+      input: [
+        {
+          role: "system",
+          content:
+            "You are a classifier. Respond ONLY with 'true' if the user wants to edit or modify an image. Otherwise respond ONLY with 'false'."
+        },
+        {
+          role: "user",
+          content: enhancedUserMessage
+        }
+      ],
+    });
+
+    // Extract raw text
+    const hasImageEditIntent = response.output_text?.trim().toLowerCase() === "true";
+
+    const hasImageAttachments = attachmentsToProcess.some(att =>
+      att.type.startsWith('image/')
+    )
+
+    // If user wants to edit and there was a previous image, use previous_response_id
+    const shouldUseIterativeEditing = hasImageEditIntent &&
+      previousResponseId &&
+      lastAssistantMessage?.hasImages &&
+      !hasImageAttachments // No new images uploaded
+
+    if (shouldUseIterativeEditing) {
+      console.log("[generateChatResponseInBackground] 🎨 Detected iterative image editing request")
+    }
+
     let assistantResponse = ""
+    const generatedImageUrls: string[] = []
+    const usedTools: string[] = []
+    let currentResponseId = null
 
     if (enhancedUserMessage) {
       try {
@@ -345,39 +434,153 @@ async function generateChatResponseInBackground(data: {
           include.push("web_search_call.action.sources")
         }
 
+        let inputContent: any = fullInput
+
+        // If user uploaded NEW images, include them in input
+        if (hasImageAttachments) {
+          const imageAttachments = attachmentsToProcess.filter(att =>
+            att.type.startsWith('image/')
+          )
+
+          const contentParts: any[] = [
+            {
+              type: "input_text",
+              text: fullInput
+            }
+          ]
+
+          for (const imageAtt of imageAttachments) {
+            contentParts.push({
+              type: "input_image",
+              image_url: imageAtt.url
+            })
+          }
+
+          inputContent = [
+            {
+              role: "user",
+              content: contentParts
+            }
+          ]
+
+          console.log(`[generateChatResponseInBackground] 📸 Added ${imageAttachments.length} new image(s) to input`)
+        }
+
         // Make API call - model decides which tools to use
         console.log("[generateChatResponseInBackground] Making API call with available tools:", tools.map(t => t.type).join(", "))
+        console.log("[generateChatResponseInBackground] 🔄 Using iterative editing:", shouldUseIterativeEditing)
 
-        const response = await openai.responses.create({
+        const apiParams: any = {
           model: "gpt-5",
-          input: fullInput,
+          input: inputContent,
           instructions: systemPrompt,
           tools: tools.length > 0 ? tools : undefined,
           include: include.length > 0 ? include : undefined,
-          tool_choice: "auto", // Let the model decide!
-        })
+          tool_choice: "auto",
+        }
 
-        // Extract message from response
+        if (shouldUseIterativeEditing && previousResponseId) {
+          apiParams.previous_response_id = previousResponseId
+          console.log("[generateChatResponseInBackground] ✨ Using previous_response_id:", previousResponseId)
+        }
+
+        const response = await openai.responses.create(apiParams)
+
+        currentResponseId = response.id
+        console.log("[generateChatResponseInBackground] 📝 Current response ID:", currentResponseId)
+
+        // ============================================
+        // EXTRACT & PROCESS IMAGE GENERATION OUTPUTS
+        // ============================================
+        const imageOutputs = (response.output?.filter(
+          (item: any) => item.type === "image_generation_call"
+        ) || []) as any[]
+
+        if (imageOutputs.length > 0) {
+          console.log(`[generateChatResponseInBackground] 🎨 Found ${imageOutputs.length} generated image(s)`)
+
+          for (let i = 0; i < imageOutputs.length; i++) {
+            const imageOutput = imageOutputs[i] as any
+
+            if (imageOutput.status === "completed" && imageOutput.result) {
+              try {
+                // Save to S3 using existing upload function
+                const imageUrl = await saveImageToS3(
+                  imageOutput.result as string,
+                  chatIdInt,
+                  i
+                )
+                generatedImageUrls.push(imageUrl)
+                console.log(`[generateChatResponseInBackground] ✅ Image ${i + 1} saved to S3`)
+
+              } catch (s3Error) {
+                console.error(`[generateChatResponseInBackground] ❌ S3 upload failed for image ${i + 1}:`, s3Error)
+
+                // FALLBACK: Use base64 data URL
+                const base64Url = `data:image/png;base64,${imageOutput.result as string}`
+                generatedImageUrls.push(base64Url)
+                console.log(`[generateChatResponseInBackground] ⚠️ Using base64 fallback for image ${i + 1}`)
+              }
+            } else {
+              console.warn(`[generateChatResponseInBackground] ⚠️ Image ${i + 1} generation ${(imageOutput as any).status || 'incomplete'}`)
+            }
+          }
+        }
+
+        // ============================================
+        // EXTRACT TEXT MESSAGE
+        // ============================================
         const messageOutput = response.output?.find((item: any) => item.type === "message")
         if (messageOutput && 'content' in messageOutput && Array.isArray(messageOutput.content)) {
           const textContent = messageOutput.content.find((c: any) => c.type === "output_text")
           if (textContent && 'text' in textContent) {
             assistantResponse = textContent.text || ""
-
-            // Log which tools were actually used by the model
-            const usedTools: string[] = []
-            response.output?.forEach((item: any) => {
-              if (item.type === "file_search_call") usedTools.push("file_search")
-              if (item.type === "web_search_call") usedTools.push("web_search")
-              if (item.type === "image_generation_call") usedTools.push("image_generation")
-            })
-
-            const toolsUsed = usedTools.length > 0 ? usedTools.join(" + ") : "none"
-            console.log(`[generateChatResponseInBackground] Model chose to use: ${toolsUsed}, response length:`, assistantResponse.length)
           }
         }
 
+        // ============================================
+        // COMBINE TEXT + IMAGES INTO MARKDOWN
+        // ============================================
+        if (generatedImageUrls.length > 0) {
+          // Create markdown image tags
+          const imageMarkdown = generatedImageUrls.map((url, idx) =>
+            `![Generated Image ${idx + 1}](${url})`
+          ).join('\n\n')
+
+          // Combine with text response
+          if (assistantResponse) {
+            assistantResponse = `${assistantResponse}\n\n${imageMarkdown}`
+          } else {
+            // No text response, just show images
+            const imageWord = generatedImageUrls.length === 1 ? 'image' : 'images'
+            assistantResponse = `I've generated ${generatedImageUrls.length} ${imageWord} for you:\n\n${imageMarkdown}`
+          }
+
+          console.log(`[generateChatResponseInBackground] 🖼️ Added ${generatedImageUrls.length} image(s) to response`)
+        }
+
+        // ============================================
+        // LOG TOOLS USED
+        // ============================================
+        response.output?.forEach((item: any) => {
+          if (item.type === "file_search_call") usedTools.push("file_search")
+          if (item.type === "web_search_call") usedTools.push("web_search")
+          if (item.type === "image_generation_call") usedTools.push("image_generation")
+        })
+
+        const toolsUsed = usedTools.length > 0 ? usedTools.join(" + ") : "none"
+        console.log(`[generateChatResponseInBackground] 🔧 Tools used: ${toolsUsed}, response length: ${assistantResponse.length}`)
+
+        // ============================================
+        // VALIDATE RESPONSE
+        // ============================================
         if (!assistantResponse) {
+          console.error("[generateChatResponseInBackground] ❌ No response extracted. Response structure:",
+            JSON.stringify(response.output?.map((o: any) => ({
+              type: o.type,
+              status: o.status || 'N/A'
+            })), null, 2)
+          )
           throw new Error("No response from Responses API")
         }
       } catch (responsesError) {
@@ -425,6 +628,8 @@ async function generateChatResponseInBackground(data: {
             message: assistantResponse,
             userId: null,
             assistantId: data.assistantId ? BigInt(data.assistantId) : null,
+            openaiResponseId: currentResponseId,
+            hasImages: generatedImageUrls.length > 0,
           }
         })
         console.log("[generateChatResponseInBackground] Assistant response saved")
@@ -446,6 +651,8 @@ async function generateChatResponseInBackground(data: {
           message: assistantResponse,
           userId: null,
           assistantId: data.assistantId ? BigInt(data.assistantId) : null,
+          openaiResponseId: currentResponseId,
+          hasImages: generatedImageUrls.length > 0,
         }
       })
       console.log("[generateChatResponseInBackground] Response saved (no user message found)")
@@ -457,25 +664,32 @@ async function generateChatResponseInBackground(data: {
       data: { updatedAt: new Date() }
     })
 
-    // Track usage metrics
+    // ============================================
+    // TRACK USAGE METRICS
+    // ============================================
     if (data.assistantId) {
       const inputTokens = Math.ceil(systemPrompt.length / 4) +
         Math.ceil(conversationMessages.reduce((acc, msg) =>
           acc + msg.content.length, 0) / 4)
       const outputTokens = Math.ceil(assistantResponse.length / 4)
-      const totalTokens = inputTokens + outputTokens
+
+      // Add image token costs (from OpenAI docs: ~4160 tokens per high quality square image)
+      const imageTokens = generatedImageUrls.length * 4160
+      const totalTokens = inputTokens + outputTokens + imageTokens
 
       await prisma.usageMetric.create({
         data: {
           userId: chat.userId,
           assistantId: BigInt(data.assistantId),
           inputToken: inputTokens,
-          outputToken: outputTokens,
+          outputToken: outputTokens + imageTokens,
           totalToken: totalTokens,
           totalCost: (totalTokens / 1_000_000) * 0.375,
-          costType: "chat"
+          costType: "chat",
+          toolUsing: usedTools.length > 0 ? usedTools.join(",") : undefined
         }
       })
+      console.log(`[generateChatResponseInBackground] 📊 Usage metrics tracked (${generatedImageUrls.length} images, ${imageTokens} image tokens)`)
     }
 
     console.log("[generateChatResponseInBackground] Complete")
