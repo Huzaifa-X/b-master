@@ -62,15 +62,15 @@ async function getSharedChat(shareableId: string) {
       shareableId: chat.shareableId,
       assistant: chat.assistant ? {
         name: chat.assistant.name,
-        description: chat.assistant.description,
+        description: chat.assistant.description || undefined,
       } : null,
       messages: chat.messages.map(msg => ({
         id: msg.id.toString(),
-        role: msg.role,
+        role: msg.role as "user" | "assistant",
         content: msg.message || "",
         createdAt: msg.createdAt.toISOString(), // Send as ISO string
         createdAtFormatted: msg.createdAt.toLocaleString('en-US'), // Consistent formatting
-        attachments: msg.documents ? JSON.parse(msg.documents) : undefined,
+        attachments: msg.documents ? JSON.parse(msg.documents) as Array<{ name: string; url: string; type: string; size: number }> : undefined,
       }))
     }
 
