@@ -8,6 +8,7 @@ import { openai } from "@/lib/openai"
 import upstageService from "@/lib/services/upstageService"
 import { getSystemPrompt } from "@/utils/prompts"
 import { uploadToS3 } from "@/lib/aws-s3"
+import { cleanupOrphanedMessages } from "@/lib/message-cleanup"
 
 // ================================================================
 // IMAGE GENERATION HELPERS
@@ -73,6 +74,7 @@ export async function createChatWithMessage(data: {
   }[]
   webSearch?: boolean
   research?: boolean
+  skipBackground?: boolean // Skip background processing (for streaming)
 }) {
   try {
     const session = await getServerSession(authOptions)
@@ -82,6 +84,9 @@ export async function createChatWithMessage(data: {
 
     const userId = BigInt(session.user.id)
 
+    // Generate unique shareable ID
+    const shareableId = crypto.randomUUID()
+
     // Create chat with temporary topic
     const chat = await prisma.assistantUserChat.create({
       data: {
@@ -89,6 +94,7 @@ export async function createChatWithMessage(data: {
         assistantId: data.assistantId ? BigInt(data.assistantId) : null,
         chatType: data.mode === "ask-b" ? "ASK_B" : "ASSISTANT",
         topic: "New Chat", // Temporary topic
+        shareableId,
       }
     })
 
@@ -108,6 +114,7 @@ export async function createChatWithMessage(data: {
         role: "user",
         message: data.firstMessage,
         userId: userId,
+        status: "PENDING", // Initially pending, will be updated to PROCESSING when AI starts
         assistantId: data.assistantId ? BigInt(data.assistantId) : null,
         documents: documentsJson
       }
@@ -121,23 +128,28 @@ export async function createChatWithMessage(data: {
       // Don't fail the request if topic generation fails
     })
 
-    // Trigger background response generation (non-blocking)
-    // Pass attachments and search options so content extraction can happen in background function
-    const webSearchEnabled = data.webSearch || false
-    const researchEnabled = data.research || false
-    console.log(`[createChatWithMessage] Starting background response with webSearch: ${webSearchEnabled}, research: ${researchEnabled}, attachments: ${data.attachments?.length || 0}`)
+    // Skip background processing if using streaming
+    if (!data.skipBackground) {
+      // Trigger background response generation (non-blocking)
+      // Pass attachments and search options so content extraction can happen in background function
+      const webSearchEnabled = data.webSearch || false
+      const researchEnabled = data.research || false
+      console.log(`[createChatWithMessage] Starting background response with webSearch: ${webSearchEnabled}, research: ${researchEnabled}, attachments: ${data.attachments?.length || 0}`)
 
-    generateChatResponseInBackground({
-      chatId: chat.id.toString(),
-      assistantId: data.assistantId,
-      chatType: data.mode === "ask-b" ? "ASK_B" : "ASSISTANT",
-      webSearch: webSearchEnabled,
-      research: researchEnabled,
-      attachments: data.attachments // Pass attachments for extraction
-    }).catch(err => {
-      console.error("[createChatWithMessage] Response generation failed:", err)
-      // Don't fail the request if response generation fails
-    })
+      generateChatResponseInBackground({
+        chatId: chat.id.toString(),
+        assistantId: data.assistantId,
+        chatType: data.mode === "ask-b" ? "ASK_B" : "ASSISTANT",
+        webSearch: webSearchEnabled,
+        research: researchEnabled,
+        attachments: data.attachments // Pass attachments for extraction
+      }).catch(err => {
+        console.error("[createChatWithMessage] Response generation failed:", err)
+        // Don't fail the request if response generation fails
+      })
+    } else {
+      console.log(`[createChatWithMessage] Skipping background processing (streaming will be used)`)
+    }
 
     return {
       success: true,
@@ -606,6 +618,16 @@ async function generateChatResponseInBackground(data: {
       }
     })
 
+    // Update user message status to PROCESSING when AI starts working
+    // This is especially important for research mode which can take 3-5 minutes
+    if (lastUserMessageRecord && lastUserMessageRecord.status === "PENDING") {
+      await prisma.assistantUserChatMessage.update({
+        where: { id: lastUserMessageRecord.id },
+        data: { status: "PROCESSING" }
+      })
+      console.log("[generateChatResponseInBackground] Updated user message status to PROCESSING")
+    }
+
     if (lastUserMessageRecord) {
       const existingResponse = await prisma.assistantUserChatMessage.findFirst({
         where: {
@@ -633,6 +655,15 @@ async function generateChatResponseInBackground(data: {
           }
         })
         console.log("[generateChatResponseInBackground] Assistant response saved")
+        
+        // Update user message status to COMPLETED when response is saved
+        if (lastUserMessageRecord) {
+          await prisma.assistantUserChatMessage.update({
+            where: { id: lastUserMessageRecord.id },
+            data: { status: "COMPLETED" }
+          })
+          console.log("[generateChatResponseInBackground] Updated user message status to COMPLETED")
+        }
       } else {
         console.log("[generateChatResponseInBackground] Response already exists")
         if (!existingResponse.message || existingResponse.message.trim().length === 0) {
@@ -641,9 +672,19 @@ async function generateChatResponseInBackground(data: {
             data: { message: assistantResponse }
           })
           console.log("[generateChatResponseInBackground] Updated existing empty response")
+          
+          // Update user message status to COMPLETED
+          if (lastUserMessageRecord) {
+            await prisma.assistantUserChatMessage.update({
+              where: { id: lastUserMessageRecord.id },
+              data: { status: "COMPLETED" }
+            })
+            console.log("[generateChatResponseInBackground] Updated user message status to COMPLETED")
+          }
         }
       }
     } else {
+      // No user message found, just save the assistant response
       await prisma.assistantUserChatMessage.create({
         data: {
           assistantUserChatId: chatIdInt,
@@ -697,6 +738,31 @@ async function generateChatResponseInBackground(data: {
     return { success: true, response: assistantResponse }
   } catch (error) {
     console.error("[generateChatResponseInBackground] Error:", error)
+    
+    // Update user message status to FAILED on error
+    try {
+      const chatIdInt = parseInt(data.chatId)
+      const lastUserMessageRecord = await prisma.assistantUserChatMessage.findFirst({
+        where: {
+          assistantUserChatId: chatIdInt,
+          role: "user"
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      })
+      
+      if (lastUserMessageRecord && (lastUserMessageRecord.status === "PENDING" || lastUserMessageRecord.status === "PROCESSING")) {
+        await prisma.assistantUserChatMessage.update({
+          where: { id: lastUserMessageRecord.id },
+          data: { status: "FAILED" }
+        })
+        console.log("[generateChatResponseInBackground] Updated user message status to FAILED due to error")
+      }
+    } catch (statusUpdateError) {
+      console.error("[generateChatResponseInBackground] Failed to update message status:", statusUpdateError)
+    }
+    
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
@@ -735,7 +801,14 @@ export async function getSpecificChat(chatId: string) {
         userId,
         deletedAt: null
       },
-      include: {
+      select: {
+        id: true,
+        topic: true,
+        chatType: true,
+        assistantId: true,
+        shareableId: true,
+        createdAt: true,
+        updatedAt: true,
         assistant: {
           select: {
             id: true,
@@ -771,6 +844,7 @@ export async function getSpecificChat(chatId: string) {
         assistantId: chat.assistantId?.toString() || null,
         assistantName: isAskB ? "Ask-B" : (chat.assistant?.name || "Assistant"),
         assistantInstructions: chat.assistant?.instructions || null,
+        shareableId: chat.shareableId,
         lastMessage: chat.messages[0]?.message || null,
         lastMessageAt: chat.messages[0]?.createdAt || chat.createdAt,
         createdAt: chat.createdAt,
@@ -964,7 +1038,8 @@ export async function getChatMessages(chatId: string) {
         role: true,
         message: true,
         documents: true,
-        createdAt: true
+        createdAt: true,
+        status: true
       }
     })
 
@@ -1008,13 +1083,36 @@ export async function getChatMessages(chatId: string) {
           role: msg.role as "user" | "assistant",
           content: msg.message || "",
           createdAt: msg.createdAt,
-          attachments: attachments.length > 0 ? attachments : undefined
+          attachments: attachments.length > 0 ? attachments : undefined,
+          status: msg.status
         }
       })
     }
   } catch (error) {
     console.error("[getChatMessages] Error:", error)
     return { success: false, error: "Failed to fetch messages", messages: [] }
+  }
+}
+
+/**
+ * Cleanup orphaned user messages (messages without assistant responses)
+ * This is useful when streaming was interrupted (e.g., user reloaded page)
+ * 
+ * @param chatId - The chat ID to clean up
+ * @param gracePeriodMinutes - Don't delete messages newer than this (default: 2 minutes)
+ */
+export async function cleanupChat(chatId: string, gracePeriodMinutes?: number) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return { success: false, error: "Unauthorized", deleted: 0 }
+    }
+
+    const result = await cleanupOrphanedMessages(chatId, gracePeriodMinutes)
+    return { success: true, deleted: result.deleted }
+  } catch (error) {
+    console.error("[cleanupChat] Error:", error)
+    return { success: false, error: String(error), deleted: 0 }
   }
 }
 
@@ -1034,6 +1132,7 @@ export async function sendChatMessage(data: {
   }[]
   webSearch?: boolean
   research?: boolean
+  skipBackground?: boolean // Skip background processing (for streaming)
 }) {
   try {
     const session = await getServerSession(authOptions)
@@ -1076,7 +1175,7 @@ export async function sendChatMessage(data: {
       console.log(`[sendChatMessage] Storing ${data.attachments.length} attachment(s) with S3 URLs in database`)
     }
 
-    // Save user message immediately
+    // Save user message immediately with PENDING status
     const userMessage = await prisma.assistantUserChatMessage.create({
       data: {
         assistantUserChatId: chatIdInt,
@@ -1084,7 +1183,8 @@ export async function sendChatMessage(data: {
         message: data.content,
         userId: userId,
         assistantId: chat.assistantId,
-        documents: documentsJson
+        documents: documentsJson,
+        status: "PENDING" // Initially pending, will be updated to PROCESSING when AI starts
       }
     })
 
@@ -1094,21 +1194,26 @@ export async function sendChatMessage(data: {
       data: { updatedAt: new Date() }
     })
 
-    console.log(`[sendChatMessage] User message saved, triggering background response with webSearch: ${data.webSearch || false}, research: ${data.research || false}, attachments: ${data.attachments?.length || 0}`)
+    // Skip background processing if using streaming
+    if (!data.skipBackground) {
+      console.log(`[sendChatMessage] User message saved, triggering background response with webSearch: ${data.webSearch || false}, research: ${data.research || false}, attachments: ${data.attachments?.length || 0}`)
 
-    // Trigger background response generation (non-blocking)
-    // Pass attachments and search options so content extraction can happen in background function
-    generateChatResponseInBackground({
-      chatId: data.chatId,
-      assistantId: data.assistantId,
-      chatType: data.chatType,
-      webSearch: data.webSearch || false,
-      research: data.research || false,
-      attachments: data.attachments // Pass attachments for extraction
-    }).catch(err => {
-      console.error("[sendChatMessage] Background response generation failed:", err)
-      // Don't fail the request if background generation fails
-    })
+      // Trigger background response generation (non-blocking)
+      // Pass attachments and search options so content extraction can happen in background function
+      generateChatResponseInBackground({
+        chatId: data.chatId,
+        assistantId: data.assistantId,
+        chatType: data.chatType,
+        webSearch: data.webSearch || false,
+        research: data.research || false,
+        attachments: data.attachments // Pass attachments for extraction
+      }).catch(err => {
+        console.error("[sendChatMessage] Background response generation failed:", err)
+        // Don't fail the request if background generation fails
+      })
+    } else {
+      console.log(`[sendChatMessage] User message saved, skipping background processing (streaming will be used)`)
+    }
 
     return {
       success: true,

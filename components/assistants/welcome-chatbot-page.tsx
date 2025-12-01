@@ -53,14 +53,15 @@ export function WelcomeChatbotPage({
     setIsCreating(true)
 
     try {
-      // Create chat with first message, attachments, and search options
+      // Create chat with first message, attachments, and search options (skip background for streaming)
       const result = await createChatWithMessage({
         mode: chatType,
         assistantId: assistantId,
         firstMessage: message.trim(),
         attachments: attachments,
         webSearch: options?.webSearch,
-        research: options?.research
+        research: options?.research,
+        skipBackground: true // Skip background processing, streaming will be used
       })
 
       if (!result.success || !result.chatId) {
@@ -151,6 +152,7 @@ export function WelcomeChatbotPage({
                 ? "Ask me anything..."
                 : "Ask this assistant..."
             }
+            mode={chatType}
             className="border-primary/50 shadow-[0_0_100px_0px_hsl(var(--primary)),0_0_60px_0px_hsl(var(--primary)),0_0_30px_0px_hsl(var(--primary)),0_0_15px_0px_hsl(var(--primary))] dark:border-primary/60 dark:shadow-[0_0_120px_0px_hsl(var(--primary)),0_0_80px_0px_hsl(var(--primary)),0_0_40px_0px_hsl(var(--primary)),0_0_20px_0px_hsl(var(--primary))]"
           />
         </div>

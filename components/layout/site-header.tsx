@@ -2,6 +2,7 @@
 
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { NotificationsDropdown } from "@/components/notifications/notifications-dropdown"
+import { ShareDialog } from "@/components/assistants/share-dialog"
 import { Button } from "@/components/ui/button"
 import { Share2, Pin, Loader2 } from "lucide-react"
 import { toast } from "sonner"
@@ -129,10 +130,34 @@ export function SiteHeader() {
         {(!isAssistantMode || isAssistantAddPage) && !isAskBMode && <div className="flex-1" />}
         {isAskBMode && !chatId && <div className="flex-1" />}
 
-        {/* Right side actions - ONLY show when thread is active */}
+        {/* Empty skeleton spacer to maintain consistent layout */}
+        {(isAssistantMode && !isAssistantAddPage && !chatId) || (isAskBMode && chatId && (!isValidTopic || !chatData)) ? (
+          <div className="flex-1 flex items-center gap-2 min-w-0 px-4">
+            <Skeleton className="h-4 w-32" />
+          </div>
+        ) : null}
+
+        {/* Right side actions - show share button when chat is open, otherwise notifications */}
 
         <div className="flex items-center gap-2">
-          <NotificationsDropdown />
+          {chatId ? (
+            <ShareDialog
+              shareableId={chatData?.shareableId || ""}
+              chatTopic={chatData?.topic}
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  title="Share conversation"
+                >
+                  <Share2 className="h-4 w-4" />
+                </Button>
+              }
+            />
+          ) : (
+            <NotificationsDropdown />
+          )}
         </div>
       </div>
     </header>

@@ -431,6 +431,13 @@ enum ChatType {
   ASK_B
 }
 
+enum MessageStatus {
+  PENDING     // User message waiting for response
+  PROCESSING  // AI is working on it (especially for research mode)
+  COMPLETED   // Response received
+  FAILED       // Something went wrong
+}
+
 model AssistantUserChat {
   id          Int       @id @default(autoincrement())
   userId      BigInt
@@ -453,18 +460,19 @@ model AssistantUserChat {
 }
 
 model AssistantUserChatMessage {
-  id                  Int      @id @default(autoincrement())
-  role                String   @db.VarChar(50) // user or assistant
-  message             String?  @db.Text
-  documents           String?  @db.Text
+  id                  Int           @id @default(autoincrement())
+  role                String        @db.VarChar(50) // user or assistant
+  message             String?       @db.Text
+  documents           String?       @db.Text
   userId              BigInt?
   assistantUserChatId Int
+  status              MessageStatus @default(PENDING) // Message processing status
 
-  openaiResponseId    String?  @db.VarChar(255)
-  hasImages           Boolean  @default(false)
+  openaiResponseId    String?       @db.VarChar(255)
+  hasImages           Boolean       @default(false)
 
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
   chat        AssistantUserChat @relation(fields: [assistantUserChatId], references: [id], onDelete: Cascade)
   user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)

@@ -100,16 +100,69 @@ export const UserMessage: FC<UserMessageProps> = ({ content, attachments, timest
                         <div className="prose prose-sm dark:prose-invert max-w-none">
                             <ReactMarkdown
                                 components={{
-                                    p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                                    // Simple paragraph
+                                    p: ({ children }) => (
+                                        <p className="mb-2 last:mb-0 text-foreground">
+                                            {children}
+                                        </p>
+                                    ),
+                                    
+                                    // Simple code blocks - render as plain text with monospace
+                                    pre: ({ children }) => (
+                                        <pre className="my-2 whitespace-pre-wrap break-words font-mono text-sm">
+                                            {children}
+                                        </pre>
+                                    ),
+                                    
+                                    // Simple code - no syntax highlighting, just plain text
                                     code: ({ children }) => (
-                                        <code className="rounded bg-background px-1 py-0.5 text-[0.9em] font-mono">
+                                        <code className="font-mono text-sm">
                                             {children}
                                         </code>
                                     ),
+                                    
+                                    // Basic formatting
+                                    strong: ({ children }) => (
+                                        <strong className="font-semibold">{children}</strong>
+                                    ),
+                                    em: ({ children }) => (
+                                        <em className="italic">{children}</em>
+                                    ),
+                                    
+                                    // Simple lists
+                                    ul: ({ children }) => (
+                                        <ul className="my-2 ml-4 list-disc space-y-1">
+                                            {children}
+                                        </ul>
+                                    ),
+                                    ol: ({ children }) => (
+                                        <ol className="my-2 ml-4 list-decimal space-y-1">
+                                            {children}
+                                        </ol>
+                                    ),
+                                    li: ({ children }) => (
+                                        <li className="my-1">{children}</li>
+                                    ),
+                                    
+                                    // Simple links
+                                    a: ({ href, children }) => (
+                                        <a
+                                            href={href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-primary underline"
+                                        >
+                                            {children}
+                                        </a>
+                                    ),
+                                    
+                                    // Line breaks
+                                    br: () => <br />,
                                 }}
                             >
                                 {content}
                             </ReactMarkdown>
+
                         </div>
                     </div>
 

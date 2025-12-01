@@ -23,12 +23,14 @@ interface ChatInputProps {
   onValueChange?: (value: string) => void
   onSubmit: (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean }) => void
   isLoading?: boolean
+  disabled?: boolean
   placeholder?: string
   onFileSelect?: (files: File[]) => void
   onWebSearch?: (enabled: boolean) => void
   onResearch?: (enabled: boolean) => void
   onChatWithArtifact?: () => void
   className?: string
+  mode?: "ask-b" | "assistant"
 }
 
 export function ChatInput({
@@ -36,12 +38,14 @@ export function ChatInput({
   onValueChange: externalOnValueChange,
   onSubmit,
   isLoading = false,
+  disabled = false,
   placeholder = "Send a message...",
   onFileSelect,
   onWebSearch,
   onResearch,
   onChatWithArtifact,
   className,
+  mode = "assistant",
 }: ChatInputProps) {
   // Internal state for controlled input
   const [internalValue, setInternalValue] = useState("")
@@ -67,7 +71,7 @@ export function ChatInput({
   }, [value])
 
   const handleSend = async () => {
-    if ((!value.trim() && attachedFiles.length === 0) || isLoading) return
+    if ((!value.trim() && attachedFiles.length === 0) || isLoading || disabled) return
     
     let attachments: { name: string; url: string; type: string; size: number }[] = []
 
@@ -264,6 +268,7 @@ export function ChatInput({
         onValueChange={onValueChange}
         onSubmit={handleSend}
         isLoading={isLoading}
+        disabled={disabled || isLoading}
         maxHeight={120}
         className={className}
       >
@@ -272,6 +277,7 @@ export function ChatInput({
           placeholder={placeholder}
           className="text-foreground placeholder:text-muted-foreground"
           onPaste={handlePaste}
+          disabled={disabled || isLoading}
         />
         <PromptInputActions className="px-2 pb-1 justify-between">
           <div className="flex items-center gap-2">
@@ -280,14 +286,19 @@ export function ChatInput({
               onWebSearch={handleWebSearchChange}
               onResearch={handleResearchChange}
               onChatWithArtifact={onChatWithArtifact}
+              disabled={disabled || isLoading}
+              mode={mode}
             />
-            <DictateButton onTranscript={handleDictateTranscript} />
+            <DictateButton 
+              onTranscript={handleDictateTranscript}
+              disabled={disabled || isLoading}
+            />
           </div>
           <div className="flex items-center gap-2">
             <PromptInputAction tooltip="Send message (Enter)">
               <Button
                 onClick={handleSend}
-                disabled={(!value.trim() && attachedFiles.length === 0) || isLoading}
+                disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled}
                 size="icon"
                 className="size-[34px] rounded-full p-1"
               >

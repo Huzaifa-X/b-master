@@ -13,12 +13,13 @@ import {
 
 interface DictateButtonProps {
     onTranscript?: (text: string) => void
+    disabled?: boolean
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SpeechRecognitionType = any
 
-export const DictateButton: FC<DictateButtonProps> = ({ onTranscript }) => {
+export const DictateButton: FC<DictateButtonProps> = ({ onTranscript, disabled = false }) => {
     const [isListening, setIsListening] = useState(false)
     const [isMounted, setIsMounted] = useState(false)
     const [isSupported, setIsSupported] = useState(false)
@@ -96,7 +97,7 @@ export const DictateButton: FC<DictateButtonProps> = ({ onTranscript }) => {
     }, [onTranscript])
 
     const toggleDictation = () => {
-        if (!recognitionRef.current) return
+        if (!recognitionRef.current || disabled) return
 
         if (isListening) {
             try {
@@ -136,6 +137,7 @@ export const DictateButton: FC<DictateButtonProps> = ({ onTranscript }) => {
                         }`}
                         aria-label={isListening ? "Stop dictating" : "Start dictating"}
                         onClick={toggleDictation}
+                        disabled={disabled}
                     >
                         {isListening ? <MicOff className="size-5" /> : <Mic className="size-5" />}
                     </Button>

@@ -17,6 +17,8 @@ interface AttachmentDropdownProps {
     onWebSearch?: (enabled: boolean) => void
     onResearch?: (enabled: boolean) => void
     onChatWithArtifact?: () => void
+    disabled?: boolean
+    mode?: "ask-b" | "assistant"
 }
 
 const SESSION_STORAGE_KEY = "chat_search_mode"
@@ -26,6 +28,8 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     onWebSearch,
     onResearch,
     onChatWithArtifact,
+    disabled = false,
+    mode = "assistant",
 }) => {
     const [isOpen, setIsOpen] = useState(false)
     const [selectedMode, setSelectedMode] = useState<"webSearch" | "research" | null>(null)
@@ -115,6 +119,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                             size="icon"
                             className="size-[34px] rounded-full hover:bg-white hover:text-black focus:bg-muted focus:text-black"
                             aria-label="Add attachment"
+                            disabled={disabled}
                         >
                             <motion.div
                                 key={isOpen ? "close" : "open"}
@@ -142,20 +147,24 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                             <Globe className="mr-2 size-4" />
                             <span>Web Search</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                            onClick={handleResearch}
-                            className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
-                        >
-                            <Search className="mr-2 size-4" />
-                            <span>Research</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            onClick={handleChatWithArtifact}
-                            className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
-                        >
-                            <Sparkles className="mr-2 size-4" />
-                            <span>Chat with Artifact</span>
-                        </DropdownMenuItem>
+                        {mode === "assistant" && (
+                            <>
+                                <DropdownMenuItem
+                                    onClick={handleResearch}
+                                    className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
+                                >
+                                    <Search className="mr-2 size-4" />
+                                    <span>Research</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={handleChatWithArtifact}
+                                    className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
+                                >
+                                    <Sparkles className="mr-2 size-4" />
+                                    <span>Chat with Artifact</span>
+                                </DropdownMenuItem>
+                            </>
+                        )}
                     </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -174,8 +183,9 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                         )}
                         <button
                             onClick={handleRemoveMode}
-                            className="ml-1 rounded-full hover:bg-primary/20"
+                            className="ml-1 rounded-full hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                             aria-label="Remove mode"
+                            disabled={disabled}
                         >
                             <X className="size-3.5" />
                         </button>
