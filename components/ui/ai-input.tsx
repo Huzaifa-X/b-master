@@ -30,7 +30,9 @@ export function AIInput({
     maxHeight,
   });
   const [inputValue, setInputValue] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const handleReset = () => {
     if (!inputValue.trim()) return;
@@ -47,15 +49,59 @@ export function AIInput({
     const files = e.target.files;
     if (files && files.length > 0) {
       onFileUpload?.(files);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set dragging to false if we're leaving the container
+    if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0 && onFileUpload) {
+      onFileUpload(files);
     }
   };
 
   return (
-    <div className={cn("w-full py-4 px-4", className)}>
-      <div className="relative w-full">
+    <div 
+      className={cn("w-full py-4 px-4", className)}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      ref={containerRef}
+    >
+      <div className={cn("relative w-full", isDragging && "opacity-50")}>
         <Textarea
           id={id}
-          placeholder={placeholder}
+          placeholder={isDragging ? "Drop files here..." : placeholder}
           className={cn(
             "w-full bg-black/5 dark:bg-white/5 rounded-3xl pl-6 pr-24",
             "placeholder:text-black/50 dark:placeholder:text-white/50",
@@ -63,11 +109,12 @@ export function AIInput({
             "text-black dark:text-white text-wrap",
             "overflow-y-auto resize-none",
             "focus-visible:ring-0 focus-visible:ring-offset-0",
-            "transition-[height] duration-100 ease-out",
+            "transition-all duration-200 ease-out",
             "leading-[1.2] py-[16px]",
             `min-h-[${minHeight}px]`,
             `max-h-[${maxHeight}px]`,
-            "[&::-webkit-resizer]:hidden"
+            "[&::-webkit-resizer]:hidden",
+            isDragging && "ring-2 ring-primary ring-offset-2 bg-primary/5 dark:bg-primary/10"
           )}
           ref={textareaRef}
           value={inputValue}
@@ -121,6 +168,16 @@ export function AIInput({
         >
           <CornerRightUp className="w-4 h-4 text-black/70 dark:text-white/70" />
         </button>
+
+        {/* Drag and drop overlay */}
+        {isDragging && (
+          <div className="absolute inset-0 rounded-3xl bg-primary/10 dark:bg-primary/20 border-2 border-dashed border-primary flex items-center justify-center pointer-events-none z-10">
+            <div className="text-center">
+              <Paperclip className="w-8 h-8 mx-auto mb-2 text-primary" />
+              <p className="text-sm font-medium text-primary">Drop files here to upload</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

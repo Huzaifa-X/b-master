@@ -14,7 +14,7 @@ import {
 import { SelectContactDialog } from "@/components/assistants/select-contact-dialog"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { useUserChats, useInitiateChat, useDeactivateChat } from "@/hooks/use-assistant-caht"
+import { useUserChats, useInitiateChat, useDeactivateChat } from "@/hooks/use-assistant-chat"
 import { formatDistanceToNow } from "date-fns"
 import { useSession } from "next-auth/react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -189,7 +189,7 @@ export function MessagesSidebar({ selectedConversationId, onSelectConversation }
                                                         : ""
                                                     }
                                                 </p>
-                                                {chat.unreadCount && chat.unreadCount > 0 && (
+                                                {(chat.unreadCount ?? 0) > 0 && (
                                                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shrink-0">
                                                         {chat.unreadCount}
                                                     </span>

@@ -560,7 +560,10 @@ export async function getPinnedAssistants() {
 
         const pinnedAssistants = await prisma.assistantPin.findMany({
             where: {
-                userId
+                userId, // Filter by current user
+                assistant: {
+                    deletedAt: null // Only include non-deleted assistants
+                }
             },
             include: {
                 assistant: {
@@ -1038,13 +1041,16 @@ export async function getAssistants({
                 break
 
             case 'shared':
-                // Get assistants shared with the user
+                // Get assistants shared with the user (exclude assistants owned by the user)
                 [assistants, total] = await Promise.all([
                     prisma.assistantContact.findMany({
                         where: {
                             userId,
                             assistant: {
                                 deletedAt: null,
+                                userId: {
+                                    not: userId // Exclude assistants owned by the current user
+                                },
                                 ...searchFilter
                             }
                         },
@@ -1077,6 +1083,9 @@ export async function getAssistants({
                             userId,
                             assistant: {
                                 deletedAt: null,
+                                userId: {
+                                    not: userId // Exclude assistants owned by the current user
+                                },
                                 ...searchFilter
                             }
                         }

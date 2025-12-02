@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner'
 import { useEffect, useRef, useState } from 'react'
 import Pusher from 'pusher-js'
+import { useSession } from 'next-auth/react'
 
 // ================================================================
 // PUSHER HOOK
@@ -164,6 +165,7 @@ export function useChatMessages(assistantId: string, chatId: string) {
 
 export function useSendMessage() {
     const queryClient = useQueryClient()
+    const { data: session } = useSession()
 
     return useMutation({
         mutationFn: sendChatMessage,
@@ -180,13 +182,16 @@ export function useSendMessage() {
                 variables.chatId
             ])
 
+            // Get current user ID from session
+            const currentUserId = session?.user?.id
+
             // Optimistically update to the new value
             queryClient.setQueryData(
                 ['chat-messages', variables.assistantId, variables.chatId],
                 (old: any) => {
                     if (!old?.pages) return old
 
-                    // Create optimistic message
+                    // Create optimistic message with actual user ID
                     const optimisticMessage = {
                         id: `temp-${Date.now()}`,
                         message: variables.message,
@@ -201,13 +206,14 @@ export function useSendMessage() {
                         deletedAt: null,
                         assistantChatId: variables.chatId,
                         assistantId: variables.assistantId,
-                        senderId: 'current-user', // Will be replaced by real data
+                        senderId: currentUserId || 'temp-own-message', // Use actual user ID if available
                         sender: {
-                            id: 'current-user',
-                            name: 'You',
-                            email: '',
-                            image: null
-                        }
+                            id: currentUserId || 'temp-own-message',
+                            name: session?.user?.name || 'You',
+                            email: session?.user?.email || '',
+                            image: session?.user?.image || null
+                        },
+                        _isOptimistic: true // Flag to identify optimistic messages
                     }
 
                     return {
@@ -229,11 +235,46 @@ export function useSendMessage() {
             return { previousMessages }
         },
         onSuccess: (data, variables) => {
-            if (data.success) {
-                // Invalidate to refetch real data
-                queryClient.invalidateQueries({
-                    queryKey: ['chat-messages', variables.assistantId, variables.chatId]
-                })
+            if (data.success && data.message) {
+                // Replace optimistic message with real message
+                queryClient.setQueryData(
+                    ['chat-messages', variables.assistantId, variables.chatId],
+                    (old: any) => {
+                        if (!old?.pages) return old
+
+                        return {
+                            ...old,
+                            pages: old.pages.map((page: any, index: number) => {
+                                if (index === 0) {
+                                    // Remove optimistic messages and add real message
+                                    const filteredMessages = page.messages.filter(
+                                        (msg: any) => !msg.id.startsWith('temp-') && !(msg as any)._isOptimistic
+                                    )
+                                    
+                                    // Check if real message already exists (from Pusher)
+                                    const messageExists = filteredMessages.some(
+                                        (msg: any) => msg.id === data.message.id
+                                    )
+                                    
+                                    if (!messageExists) {
+                                        return {
+                                            ...page,
+                                            messages: [data.message, ...filteredMessages]
+                                        }
+                                    }
+                                    
+                                    return {
+                                        ...page,
+                                        messages: filteredMessages
+                                    }
+                                }
+                                return page
+                            })
+                        }
+                    }
+                )
+                
+                // Update chat list
                 queryClient.invalidateQueries({
                     queryKey: ['user-chats', variables.assistantId]
                 })
@@ -374,7 +415,7 @@ export function useMessageSubscription(
         // Handle new messages
         channel.bind('new-message', (data: any) => {
             if (data.chatId === chatId) {
-                // Add new message to cache
+                // Add new message to cache and remove optimistic messages
                 queryClient.setQueryData(
                     ['chat-messages', assistantId, chatId],
                     (old: any) => {
@@ -384,15 +425,27 @@ export function useMessageSubscription(
                             ...old,
                             pages: old.pages.map((page: any, index: number) => {
                                 if (index === 0) {
+                                    // Remove all optimistic messages (temp IDs or _isOptimistic flag)
+                                    const filteredMessages = page.messages.filter(
+                                        (msg: any) => !msg.id.startsWith('temp-') && !(msg as any)._isOptimistic
+                                    )
+                                    
                                     // Check if message already exists
-                                    const exists = page.messages.some(
+                                    const exists = filteredMessages.some(
                                         (msg: any) => msg.id === data.message.id
                                     )
+                                    
                                     if (!exists) {
                                         return {
                                             ...page,
-                                            messages: [data.message, ...page.messages]
+                                            messages: [data.message, ...filteredMessages]
                                         }
+                                    }
+                                    
+                                    // If exists, just return filtered messages (real message already there)
+                                    return {
+                                        ...page,
+                                        messages: filteredMessages
                                     }
                                 }
                                 return page
