@@ -49,6 +49,7 @@ export interface ArtifactFormData {
   apiConfigs: ApiConfig[]
   uploadedFiles?: UploadedFile[];
   uploadedImages?: UploadedImage[];
+  videoDuration?: "4" | "8" | "12";
 }
 
 // types/artifacts.ts

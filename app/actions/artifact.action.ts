@@ -201,6 +201,7 @@ export async function createArtifact(data: {
         size: number
         uploadedAt: string
     }>
+    videoDuration?: "4" | "8" | "12"
 }) {
     try {
         const session = await getServerSession(authOptions)
@@ -273,13 +274,35 @@ export async function createArtifact(data: {
         if (data.category === "video_generation") {
             console.log("[Artifact] Creating video generation artifact...")
 
+            // Validate OPENAI_API_KEY is provided
+            const openAIApiKey = data.apiConfigs.find(
+                (config) => config.key === "OPENAI_API_KEY" && config.value.trim() !== ""
+            )?.value
+
+            if (!openAIApiKey) {
+                return {
+                    success: false,
+                    error: "OPENAI_API_KEY is required for video generation. Please add it in the API Configuration section."
+                }
+            }
+
+            // Validate video duration
+            const videoDuration = data.videoDuration || "8"
+            if (videoDuration !== "4" && videoDuration !== "8" && videoDuration !== "12") {
+                return {
+                    success: false,
+                    error: "Invalid video duration. Must be 4, 8, or 12 seconds."
+                }
+            }
+
             try {
-                // Step 1: Generate video with OpenAI Sora
+                // Step 1: Generate video with OpenAI Sora using custom API key
                 const soraResult = await openAISoraService.generateVideo({
                     prompt: data.instructions,
                     model: "sora-2",
                     size: "1280x720",
-                    seconds: "8",
+                    seconds: videoDuration,
+                    apiKey: openAIApiKey,
                 })
 
                 console.log(`[Artifact] Video generated: ${soraResult.videoId}`)

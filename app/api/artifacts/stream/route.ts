@@ -164,7 +164,7 @@ CRITICAL: Output ONLY the complete HTML code starting with <!DOCTYPE html> and e
 
           let generatedCode = ""
           let buffer = ""
-          const model = 'gpt-4o' // Use a stable model instead of gpt-5
+          const model = 'gpt-5' // Use a stable model instead of gpt-5
           const CHUNK_SIZE = 1024 // Send chunks of ~1KB instead of character-by-character
 
           // Create AI response with streaming
@@ -175,7 +175,6 @@ CRITICAL: Output ONLY the complete HTML code starting with <!DOCTYPE html> and e
           try {
             const response = await openai.responses.create({
               model: model,
-              reasoning: { effort: "medium" },
               instructions: ARTIFACT_GENERATION_PROMPT + "\n\nCRITICAL REMINDER: Your response must be ONLY HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.",
               input: input,
               stream: true,

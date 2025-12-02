@@ -12,10 +12,10 @@ import {
   PromptInputActions,
   PromptInputAction,
 } from "@/components/ui/prompt-input"
-import { useUpdateArtifact } from "@/hooks/useArtifact"
 import { useArtifactStore } from "@/lib/stores/artifact-store"
 import { useArtifactById } from "@/hooks/useArtifact"
 import ReactMarkdown from "react-markdown"
+import { toast } from "sonner"
 
 interface Message {
   id: string
@@ -39,32 +39,12 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
   const storageKey = `artifact-chat-${artifactId}`
   
   // Get current artifact data
-  const { artifact } = useArtifactById(artifactId)
+  const { artifact, refetch } = useArtifactById(artifactId)
   const artifactContent = useArtifactStore((state) => state.artifactContent)
+  const setArtifact = useArtifactStore((state) => state.setArtifact)
   
-  // Update artifact mutation hook
-  const { updateArtifactAsync, isLoading } = useUpdateArtifact({
-    onSuccess: (result) => {
-      // Add success message to chat
-      const successMessage: Message = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: `✅ **Artifact Updated Successfully!**\n\nThe artifact "${result.artifact?.name || artifactName}" has been updated with your requested changes. The updated code is now available in the preview panel.`,
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, successMessage])
-    },
-    onError: (error) => {
-      // Add error message to chat
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: `❌ **Update Failed**\n\n${error}\n\nPlease try again or rephrase your request.`,
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, errorMessage])
-    },
-  })
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [streamingContent, setStreamingContent] = useState<string>("")
   
   // Get user initials for avatar
   const getUserInitials = () => {
@@ -123,7 +103,7 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
   }, [messages])
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return
+    if (!input.trim() || isStreaming) return
 
     const userPrompt = input.trim()
     const userMessage: Message = {
@@ -159,43 +139,142 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
         timestamp: msg.timestamp,
       }))
 
-    // Add loading message
-    const loadingMessage: Message = {
-      id: `loading-${Date.now()}`,
+    // Start streaming update
+    setIsStreaming(true)
+    setStreamingContent("")
+    
+    // Add streaming message
+    const streamingMessage: Message = {
+      id: `streaming-${Date.now()}`,
       role: "assistant",
-      content: "🔄 Processing your request and updating the artifact...",
+      content: "🔄 Updating artifact...",
       timestamp: new Date(),
     }
-    setMessages((prev) => [...prev, loadingMessage])
+    setMessages((prev) => [...prev, streamingMessage])
 
     try {
-      // Call the update mutation
-      const result = await updateArtifactAsync({
-        artifactId,
-        userPrompt,
-        chatHistory,
-        currentHtmlCode,
+      const response = await fetch('/api/artifacts/update-stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          artifactId,
+          userPrompt,
+          chatHistory,
+          currentHtmlCode,
+        }),
       })
 
-      // Remove loading message
-      setMessages((prev) => prev.filter((msg) => msg.id !== loadingMessage.id))
-
-      // Update artifact store with new code
-      if (result.artifact?.updatedCode) {
-        useArtifactStore.getState().setArtifact({
-          type: "code",
-          language: "html",
-          content: result.artifact.updatedCode,
-          title: result.artifact.name,
-        })
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`)
       }
 
-      // Success message will be added by onSuccess callback
-    } catch (error) {
-      // Remove loading message
-      setMessages((prev) => prev.filter((msg) => msg.id !== loadingMessage.id))
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      let accumulatedCode = ""
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split('\n')
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const jsonStr = line.slice(6).trim()
+                if (!jsonStr) continue
+
+                const data = JSON.parse(jsonStr)
+
+                if (data.type === 'code' && data.content) {
+                  try {
+                    // Decode base64 content (browser-compatible)
+                    const decodedContent = atob(data.content)
+                    accumulatedCode += decodedContent
+                    setStreamingContent(accumulatedCode)
+                    
+                    // Update artifact store in real-time
+                    setArtifact({
+                      type: "code",
+                      language: "html",
+                      content: accumulatedCode,
+                      title: artifact?.name || artifactName,
+                    })
+                  } catch (decodeError) {
+                    console.error("[Artifact Chatbot] Base64 decode error:", decodeError)
+                    // Try using content as-is if base64 decode fails
+                    accumulatedCode += data.content
+                    setStreamingContent(accumulatedCode)
+                  }
+                } else if (data.type === 'done') {
+                  setIsStreaming(false)
+                  
+                  // Remove streaming message
+                  setMessages((prev) => prev.filter((msg) => msg.id !== streamingMessage.id))
+                  
+                  // Add success message
+                  const successMessage: Message = {
+                    id: Date.now().toString(),
+                    role: "assistant",
+                    content: `✅ **Artifact Updated Successfully!**\n\nThe artifact "${artifactName}" has been updated with your requested changes.`,
+                    timestamp: new Date(),
+                  }
+                  setMessages((prev) => [...prev, successMessage])
+                  
+                  // Refetch artifact to get final version
+                  await refetch()
+                  
+                  toast.success("Artifact updated successfully!")
+                  break
+                } else if (data.type === 'error') {
+                  setIsStreaming(false)
+                  
+                  // Remove streaming message
+                  setMessages((prev) => prev.filter((msg) => msg.id !== streamingMessage.id))
+                  
+                  // Add error message
+                  const errorMessage: Message = {
+                    id: Date.now().toString(),
+                    role: "assistant",
+                    content: `❌ **Update Failed**\n\n${data.error || "An error occurred"}\n\nPlease try again or rephrase your request.`,
+                    timestamp: new Date(),
+                  }
+                  setMessages((prev) => [...prev, errorMessage])
+                  
+                  toast.error(data.error || "Failed to update artifact")
+                  break
+                } else if (data.type === 'connected') {
+                  console.log("[Artifact Chatbot] Streaming connected successfully")
+                }
+              } catch (parseError) {
+                console.error("[Artifact Chatbot] JSON parse error:", parseError)
+              }
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error("[Artifact Chatbot] Streaming error:", error)
+      setIsStreaming(false)
       
-      // Error message will be added by onError callback
+      // Remove streaming message
+      setMessages((prev) => prev.filter((msg) => msg.id !== streamingMessage.id))
+      
+      // Add error message
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `❌ **Update Failed**\n\n${error.message || "An unexpected error occurred. Please try again."}`,
+        timestamp: new Date(),
+      }
+      setMessages((prev) => [...prev, errorMessage])
+      
+      toast.error("Failed to update artifact")
     }
   }
 
@@ -268,7 +347,7 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
             </div>
           ))}
 
-          {isLoading && (
+          {isStreaming && (
             <div className="animate-in duration-150 ease-out fade-in slide-in-from-bottom-1">
               <div className="flex gap-2 md:gap-4">
                 <div className="flex-shrink-0 pt-1">
@@ -323,7 +402,7 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
           value={input}
           onValueChange={setInput}
           onSubmit={handleSend}
-          isLoading={isLoading}
+          isLoading={isStreaming}
           maxHeight={120}
           disabled={disabled || isGenerating}
           className="border-primary/50 shadow-[0_0_100px_0px_hsl(var(--primary)),0_0_60px_0px_hsl(var(--primary)),0_0_30px_0px_hsl(var(--primary)),0_0_15px_0px_hsl(var(--primary))] dark:border-primary/60 dark:shadow-[0_0_120px_0px_hsl(var(--primary)),0_0_80px_0px_hsl(var(--primary)),0_0_40px_0px_hsl(var(--primary)),0_0_20px_0px_hsl(var(--primary))]"
@@ -337,11 +416,11 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
             <PromptInputAction tooltip={isGenerating ? "Generating artifact..." : "Send message (Enter)"}>
               <Button
                 onClick={handleSend}
-                disabled={!input.trim() || isLoading || disabled || isGenerating}
+                disabled={!input.trim() || isStreaming || disabled || isGenerating}
                 size="icon"
                 className="h-8 w-8"
               >
-                {isLoading ? (
+                {isStreaming ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Send className="h-4 w-4" />

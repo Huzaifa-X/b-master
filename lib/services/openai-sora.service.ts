@@ -1,11 +1,13 @@
 import { openai } from "@/lib/openai"
+import OpenAI from "openai"
 
 export interface SoraVideoParams {
   prompt: string
   model?: "sora-2" | "sora-2-pro"
   size?: "1280x720" | "1920x1080" | "720x1280"
-  seconds?: "8" | "16"
+  seconds?: "4" | "8" | "12"
   inputReference?: Buffer // Optional first frame image
+  apiKey?: string // Optional custom API key
 }
 
 export interface SoraVideoResult {
@@ -28,8 +30,13 @@ class OpenAISoraService {
     console.log(`[Sora] Starting video generation with prompt: "${params.prompt}"`)
 
     try {
+      // Use custom API key if provided, otherwise use default
+      const client = params.apiKey 
+        ? new OpenAI({ apiKey: params.apiKey })
+        : openai
+
       // Step 1: Create video generation job
-      const video = await openai.videos.create({
+      const video = await client.videos.create({
         model: params.model || "sora-2",
         prompt: params.prompt,
         size: (params.size || "1280x720") as any,
@@ -50,7 +57,7 @@ class OpenAISoraService {
       while ((updatedVideo.status === "in_progress" || updatedVideo.status === "queued") && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 3000)) // Poll every 3 seconds
         
-        updatedVideo = await openai.videos.retrieve(video.id)
+        updatedVideo = await client.videos.retrieve(video.id)
         progress = updatedVideo.progress || 0
         attempts++
         
@@ -72,11 +79,11 @@ class OpenAISoraService {
       console.log(`[Sora] Video generation completed: ${video.id}`)
 
       // Step 3: Download video content
-      const videoContent = await openai.videos.downloadContent(video.id, { variant: "video" })
+      const videoContent = await client.videos.downloadContent(video.id, { variant: "video" })
       const videoBuffer = Buffer.from(await videoContent.arrayBuffer())
 
       // Step 4: Download thumbnail
-      const thumbnailContent = await openai.videos.downloadContent(video.id, { variant: "thumbnail" })
+      const thumbnailContent = await client.videos.downloadContent(video.id, { variant: "thumbnail" })
       const thumbnailBuffer = Buffer.from(await thumbnailContent.arrayBuffer())
 
       console.log(`[Sora] Video downloaded: ${videoBuffer.length} bytes, Thumbnail: ${thumbnailBuffer.length} bytes`)
@@ -104,7 +111,7 @@ class OpenAISoraService {
   async remixVideo(videoId: string, prompt: string, params?: {
     model?: "sora-2" | "sora-2-pro"
     size?: "1280x720" | "1920x1080" | "720x1280"
-    seconds?: "8" | "16"
+    seconds?: "4" | "8" | "12"
   }): Promise<SoraVideoResult> {
     console.log(`[Sora] Remixing video ${videoId} with prompt: "${prompt}"`)
 

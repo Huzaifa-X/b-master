@@ -8,6 +8,13 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -125,6 +132,14 @@ export function ArtifactCustomizationStep({
       setErrors({ ...errors, instructions: undefined })
     }
   }
+
+  // Check if OPENAI_API_KEY is provided for video generation
+  const hasOpenAIApiKey = formData.apiConfigs.some(
+    (config) => config.key === "OPENAI_API_KEY" && config.value.trim() !== ""
+  )
+
+  // Check if this is video generation category
+  const isVideoGeneration = selectedTemplate.category === "video_generation"
 
   // File Upload Handler
   const handleFileUpload = async (file: File, type: "image" | "document") => {
@@ -264,6 +279,36 @@ export function ArtifactCustomizationStep({
             />
             {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
           </div>
+
+          {/* Video Duration Selector - Only for video generation */}
+          {isVideoGeneration && (
+            <div>
+              <Label htmlFor="video-duration">
+                Video Duration <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={formData.videoDuration || "8"}
+                onValueChange={(value: "4" | "8" | "12") => {
+                  setFormData({ ...formData, videoDuration: value })
+                  if (errors.videoDuration) {
+                    setErrors({ ...errors, videoDuration: undefined })
+                  }
+                }}
+              >
+                <SelectTrigger id="video-duration" className="mt-2 w-full">
+                  <SelectValue placeholder="Select duration" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="4">4 seconds</SelectItem>
+                  <SelectItem value="8">8 seconds</SelectItem>
+                  <SelectItem value="12">12 seconds</SelectItem>
+                </SelectContent>
+              </Select>
+              {errors.videoDuration && (
+                <p className="text-xs text-destructive mt-1">{errors.videoDuration}</p>
+              )}
+            </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -486,6 +531,11 @@ export function ArtifactCustomizationStep({
                     {formData.apiConfigs.length}
                   </Badge>
                 )}
+                {isVideoGeneration && !hasOpenAIApiKey && (
+                  <Badge variant="destructive" className="ml-2">
+                    OPENAI_API_KEY Required
+                  </Badge>
+                )}
               </div>
               <ChevronDown
                 className={cn("h-4 w-4 transition-transform", apiSectionOpen && "rotate-180")}
@@ -493,6 +543,19 @@ export function ArtifactCustomizationStep({
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent className="mt-4 space-y-4">
+            {isVideoGeneration && (
+              <div className="p-3 bg-muted rounded-lg border border-primary/20">
+                <p className="text-sm font-medium text-primary mb-1">
+                  ⚠️ OPENAI_API_KEY Required for Video Generation
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  You must provide an OPENAI_API_KEY in the API Configuration section below to generate videos.
+                </p>
+                {errors.apiConfigs && (
+                  <p className="text-xs text-destructive mt-2">{errors.apiConfigs}</p>
+                )}
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
                 Add API key-value pairs to configure external integrations

@@ -41,6 +41,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId }: Create
     apiConfigs: [],
     uploadedFiles: [],
     uploadedImages: [],
+    videoDuration: "8",
   })
 
   const [errors, setErrors] = useState<Partial<Record<keyof ArtifactFormData, string>>>({})
@@ -85,6 +86,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId }: Create
           apiConfigs: [],
           uploadedFiles: [],
           uploadedImages: [],
+          videoDuration: "8",
         })
         setErrors({})
         setContacts([])
@@ -100,6 +102,8 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId }: Create
         templateId: selectedTemplate.id,
         name: selectedTemplate.isCustom ? "" : `${selectedTemplate.name} - Copy`,
         instructions: selectedTemplate.prefilledInstructions,
+        // Set default video duration for video generation
+        videoDuration: selectedTemplate.category === "video_generation" ? "8" : prev.videoDuration,
       }))
     }
   }, [step, selectedTemplate])
@@ -131,6 +135,21 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId }: Create
       newErrors.instructions = "Instructions are required"
     }
 
+    // Validate video generation requirements
+    if (selectedTemplate?.category === "video_generation") {
+      if (!formData.videoDuration) {
+        newErrors.videoDuration = "Video duration is required"
+      }
+
+      const hasOpenAIApiKey = formData.apiConfigs.some(
+        (config) => config.key === "OPENAI_API_KEY" && config.value.trim() !== ""
+      )
+
+      if (!hasOpenAIApiKey) {
+        newErrors.apiConfigs = "OPENAI_API_KEY is required for video generation"
+      }
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -157,6 +176,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId }: Create
         })),
         uploadedFiles: formData.uploadedFiles,
         uploadedImages: formData.uploadedImages,
+        videoDuration: selectedTemplate?.category === "video_generation" ? formData.videoDuration : undefined,
       })
 
       toast.dismiss("artifact-creation")

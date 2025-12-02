@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Search, Plus, FolderOpen, Loader2 } from "lucide-react"
 import { ArtifactCard, type Artifact } from "@/components/artifacts/artifact-card"
-import { useArtifacts, useInvalidateArtifacts } from "@/hooks/useArtifact"
+import { useArtifacts, useInvalidateArtifacts, useArtifactById } from "@/hooks/useArtifact"
 import { useSetAssistantMode } from "@/hooks/useAssistant"
 import { useAssistantPermissions } from "@/hooks/usePermissions"
 
@@ -14,6 +14,13 @@ import { useAssistantPermissions } from "@/hooks/usePermissions"
 const CreateArtifactDialog = lazy(() => 
   import("@/components/artifacts/create-artifact-dialog").then(module => ({
     default: module.CreateArtifactDialog
+  }))
+)
+
+// Lazy load the ViewArtifactDialog for video artifacts
+const ViewArtifactDialog = lazy(() => 
+  import("@/components/artifacts/view-artifact-dialog").then(module => ({
+    default: module.ViewArtifactDialog
   }))
 )
 
@@ -30,10 +37,16 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
     
     const [searchQuery, setSearchQuery] = useState("")
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
+    const [viewArtifactId, setViewArtifactId] = useState<string | null>(null)
     
     // Use React Query hook to fetch artifacts
     const { artifacts, isLoading, isError } = useArtifacts(assistantId)
     const { invalidateArtifacts } = useInvalidateArtifacts()
+    
+    // Fetch full artifact data for viewing in modal (only when viewArtifactId is set)
+    const { artifact: viewArtifact } = useArtifactById(viewArtifactId || "", {
+        enabled: !!viewArtifactId
+    })
     
     // Check if user can create artifacts (only owners can create)
     const canCreateArtifacts = permissions?.isOwner ?? false
@@ -47,8 +60,14 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
         invalidateArtifacts(assistantId)
     }
 
-    const handleCardClick = (artifactId: string) => {
-        router.push(`/assistants/${assistantId}/artifacts/${artifactId}`)
+    const handleCardClick = (artifact: Artifact) => {
+        // For video_generation artifacts, show in modal instead of navigating
+        if (artifact.category === "video_generation") {
+            setViewArtifactId(artifact.id)
+        } else {
+            // For other artifacts, navigate to the detail page with chatbot
+            router.push(`/assistants/${assistantId}/artifacts/${artifact.id}`)
+        }
     }
 
     // Filter artifacts based on search
@@ -115,7 +134,7 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                             <ArtifactCard
                                 key={artifact.id}
                                 artifact={artifact}
-                                onClick={() => handleCardClick(artifact.id)}
+                                onClick={() => handleCardClick(artifact)}
                             />
                         ))}
                     </div>
@@ -153,6 +172,27 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                             }
                         }}
                         assistantId={assistantId}
+                    />
+                </Suspense>
+            )}
+
+            {/* View Artifact Dialog for Video Generation - Lazy loaded */}
+            {viewArtifactId && (
+                <Suspense fallback={null}>
+                    <ViewArtifactDialog
+                        artifact={viewArtifact ? {
+                            id: viewArtifact.id,
+                            name: viewArtifact.name,
+                            category: viewArtifact.category || "video_generation",
+                            htmlContent: viewArtifact.htmlContent,
+                            createdAt: new Date(viewArtifact.createdAt),
+                        } : null}
+                        open={!!viewArtifactId}
+                        onOpenChange={(open) => {
+                            if (!open) {
+                                setViewArtifactId(null)
+                            }
+                        }}
                     />
                 </Suspense>
             )}

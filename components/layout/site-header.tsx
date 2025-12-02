@@ -21,21 +21,31 @@ export function SiteHeader() {
   const { assistants, togglePin, isToggling } = usePinnedAssistants()
 
   // Extract chat ID and assistant ID from pathname
-  const { chatId, assistantIdFromPath } = useMemo(() => {
+  const { chatId, assistantIdFromPath, isChatPage } = useMemo(() => {
     // For ask-b: /ask-b/[id]
     if (pathname.startsWith("/ask-b/")) {
       const parts = pathname.split("/ask-b/")
-      return { chatId: parts[1] || null, assistantIdFromPath: null }
-    }
-    // For assistant: /assistants/[assistantId]/[chatId]
-    if (pathname.startsWith("/assistants/")) {
-      const parts = pathname.split("/")
-      return {
-        chatId: parts.length >= 4 ? parts[3] : null,
-        assistantIdFromPath: parts.length >= 3 ? parts[2] : null
+      return { 
+        chatId: parts[1] || null, 
+        assistantIdFromPath: null,
+        isChatPage: !!parts[1]
       }
     }
-    return { chatId: null, assistantIdFromPath: null }
+    // For assistant: /assistants/[assistantId]/[chatId]
+    // Only treat as chat if the third segment is not a known non-chat route
+    if (pathname.startsWith("/assistants/")) {
+      const parts = pathname.split("/")
+      const nonChatRoutes = ["contacts", "messages", "news", "artifacts", "add", "profile"]
+      const thirdSegment = parts.length >= 4 ? parts[3] : null
+      const isChat = thirdSegment && !nonChatRoutes.includes(thirdSegment)
+      
+      return {
+        chatId: isChat ? thirdSegment : null,
+        assistantIdFromPath: parts.length >= 3 ? parts[2] : null,
+        isChatPage: isChat
+      }
+    }
+    return { chatId: null, assistantIdFromPath: null, isChatPage: false }
   }, [pathname])
 
   // Determine if we're in ask-b mode or assistant mode
@@ -138,9 +148,8 @@ export function SiteHeader() {
         ) : null}
 
         {/* Right side actions - show share button when chat is open, otherwise notifications */}
-
         <div className="flex items-center gap-2">
-          {chatId ? (
+          {isChatPage && chatId ? (
             <ShareDialog
               shareableId={chatData?.shareableId || ""}
               chatTopic={chatData?.topic}
@@ -156,7 +165,7 @@ export function SiteHeader() {
               }
             />
           ) : (
-          <NotificationsDropdown />
+            <NotificationsDropdown />
           )}
         </div>
       </div>
