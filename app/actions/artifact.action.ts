@@ -8,53 +8,13 @@ import { deleteFromS3 } from "@/lib/aws-s3"
 import openAISoraService from "@/lib/services/openai-sora.service"
 import s3VideoUploadService from "@/lib/services/s3-video-upload.service"
 import { generateVideoArtifactHtml } from "@/lib/templates/video-artifact.template"
-import { 
-    GenerateArtifactInstructionsParams, 
-    GenerateArtifactInstructionsResult 
+import {
+    GenerateArtifactInstructionsParams,
+    GenerateArtifactInstructionsResult
 } from "@/types/artifact-ai-instruction"
+import { getArtifactInstructionsGeneratorPrompt, getArtifactCodingPrompt } from "@/utils/prompts"
 
-const ARTIFACT_INSTRUCTION_GENERATION_PROMPT = `You are an expert AI artifact creator with extensive knowledge of web development, data visualization, and interactive application design.
-
-Your task is to generate comprehensive, clear, and actionable instructions for creating AI-powered artifacts based on user descriptions. Follow these guidelines:
-
-1. **Structure**: Create well-organized instructions with clear sections covering:
-   - Purpose and Overview
-   - Key Features and Functionality
-   - Data Structure and Management
-   - User Interface Components
-   - Interactivity and User Experience
-   - Visual Design and Styling
-   - Technical Implementation Details
-
-2. **Specificity**: Be specific about:
-   - HTML structure and semantic elements
-   - CSS styling approach (colors, layout, responsiveness)
-   - JavaScript functionality and event handlers
-   - Data handling and state management
-   - Form inputs and validation
-   - Charts, graphs, or visualizations needed
-   - Export/import capabilities if mentioned
-
-3. **Completeness**: Cover all aspects mentioned in the user's description including:
-   - All requested features
-   - Data fields and their types
-   - Calculations or computations
-   - Filtering and sorting capabilities
-   - Responsive design considerations
-   - Accessibility features
-
-4. **Professional**: Use clear, professional language suitable for AI systems to generate production-ready artifacts
-
-5. **Actionable**: Provide concrete instructions that an AI can follow to create a complete, functional artifact
-
-6. **Best Practices**: Include:
-   - Modern web development practices
-   - Clean, maintainable code structure
-   - User-friendly interface design
-   - Error handling and validation
-   - Performance considerations
-
-Format your response as a complete instruction set that can be directly used to generate an HTML/CSS/JavaScript artifact. Focus on creating instructions that will result in a polished, professional, and fully functional web application.`
+const ARTIFACT_INSTRUCTION_GENERATION_PROMPT = getArtifactInstructionsGeneratorPrompt()
 
 export async function generateArtifactInstructions({
     prompt,
@@ -81,7 +41,7 @@ export async function generateArtifactInstructions({
 
         const response = await openai.responses.create({
             model: model,
-            reasoning: { effort: "medium" },
+            reasoning: { effort: "low" },
             instructions: ARTIFACT_INSTRUCTION_GENERATION_PROMPT,
             input: `Generate detailed instructions for creating the following artifact:\n\n${prompt}`,
         })
@@ -102,7 +62,7 @@ export async function generateArtifactInstructions({
 
     } catch (error) {
         console.error('Error generating artifact instructions:', error)
-        
+
         if (error instanceof Error) {
             return {
                 success: false,
@@ -199,148 +159,6 @@ export async function getAssistantContacts(assistantId: string) {
     }
 }
 
-const ARTIFACT_GENERATION_PROMPT = `You are an expert web developer specializing in creating interactive HTML/CSS/JavaScript applications.
-
-When generating artifacts, you will receive:
-1. User instructions and requirements
-2. Extracted text content from uploaded documents (if any)
-3. Image URLs to embed (if any)
-4. Extracted tables as base64-encoded images (if any)
-
-**CRITICAL REQUIREMENTS:**
-
-1. **Document Content Integration:**
-   - Use extracted text to populate the artifact with real, meaningful data
-   - Structure content logically based on document organization
-   - Preserve important information hierarchy
-   - Use extracted HTML structure when available
-
-2. **Image Embedding:**
-   - Embed all provided image URLs using proper <img> tags
-   - Make images responsive: max-width: 100%; height: auto;
-   - Add descriptive alt text based on context
-   - Apply appropriate styling (border-radius, shadows, margins)
-   - Use loading="lazy" for performance
-
-3. **Table Handling:**
-   - Tables extracted as base64 images should be embedded as:
-     <img src="data:image/png;base64,{BASE64_DATA}" alt="Table from page X" style="max-width: 100%; height: auto;">
-   - Position tables appropriately within content flow
-
-4. **Complete Self-Contained HTML:**
-   - Full <!DOCTYPE html> with proper structure
-   - All CSS in <style> tag in <head>
-   - All JavaScript in <script> tag before </body>
-   - Include SecureStorage wrapper (MANDATORY)
-
-5. **Responsive Design:**
-   - Mobile-first approach
-   - Flexible layouts with CSS Grid/Flexbox
-   - Responsive images and tables
-   - Touch-friendly interactions
-
-6. **Modern UI/UX:**
-   - Clean, professional design
-   - Consistent color scheme
-   - Proper spacing and typography
-   - Smooth transitions and animations
-
-8. **CRITICAL - Secure Storage Implementation**: 
-   ALWAYS use this exact SecureStorage wrapper for data persistence. This is MANDATORY:
-   
-   \`\`\`javascript
-   // Secure storage wrapper - MUST be included at the start of your script
-   const SecureStorage = (() => {
-     let memoryStore = {};
-     let useMemory = false;
-     
-     // Test localStorage availability
-     try {
-       localStorage.setItem('__test__', '1');
-       localStorage.removeItem('__test__');
-     } catch (e) {
-       useMemory = true;
-       console.warn('localStorage unavailable, using memory-only storage');
-     }
-     
-     return {
-       getItem: (key) => {
-         try {
-           return useMemory ? memoryStore[key] : localStorage.getItem(key);
-         } catch (e) {
-           return memoryStore[key];
-         }
-       },
-       setItem: (key, value) => {
-         try {
-           if (useMemory) {
-             memoryStore[key] = value;
-           } else {
-             localStorage.setItem(key, value);
-           }
-         } catch (e) {
-           memoryStore[key] = value;
-         }
-       },
-       removeItem: (key) => {
-         try {
-           if (useMemory) {
-             delete memoryStore[key];
-           } else {
-             localStorage.removeItem(key);
-           }
-         } catch (e) {
-           delete memoryStore[key];
-         }
-       },
-       clear: () => {
-         try {
-           if (useMemory) {
-             memoryStore = {};
-           } else {
-             localStorage.clear();
-           }
-         } catch (e) {
-           memoryStore = {};
-         }
-       }
-     };
-   })();
-   
-   // ALWAYS use SecureStorage instead of localStorage:
-   // SecureStorage.setItem('data', JSON.stringify(myData));
-   // const data = JSON.parse(SecureStorage.getItem('data') || '[]');
-   \`\`\`
-
-9. **Error Handling**: Include proper validation and error handling for all user inputs
-10. **Accessibility**: Follow basic accessibility best practices (ARIA labels, semantic HTML, keyboard navigation)
-11. **Security**: Never use inline event handlers in HTML (use addEventListener), avoid eval(), sanitize user inputs
-
-Generate ONLY the HTML code without any markdown formatting, explanations, or comments outside the code.`
-
-/**
- * Basic HTML sanitization to prevent dangerous patterns
- * Note: This is a basic layer - artifacts are AI-generated with controlled prompts
- */
-function sanitizeHtml(html: string): string {
-    let sanitized = html
-
-    // Remove external script sources (only allow inline scripts)
-    sanitized = sanitized.replace(/<script[^>]*src\s*=\s*["']https?:\/\/[^"']*["'][^>]*>/gi, '')
-    
-    // Remove javascript: protocol URLs
-    sanitized = sanitized.replace(/javascript:/gi, 'blocked:')
-    
-    // Remove data: URLs in script contexts (but allow in images)
-    sanitized = sanitized.replace(/<script[^>]*src\s*=\s*["']data:[^"']*["'][^>]*>/gi, '')
-    
-    // Log if any sanitization occurred
-    if (sanitized !== html) {
-        console.warn('HTML sanitization applied: removed potentially dangerous patterns')
-    }
-    
-    return sanitized
-}
 
 // Create artifact with AI-generated code
 export async function createArtifact(data: {
@@ -413,14 +231,14 @@ export async function createArtifact(data: {
         // Add document content
         if (data.uploadedFiles && data.uploadedFiles.length > 0) {
             enhancedInstructions += "\n\n=== EXTRACTED DOCUMENT CONTENT ===\n"
-            
+
             data.uploadedFiles.forEach((file, idx) => {
                 enhancedInstructions += `\n--- Document ${idx + 1}: ${file.name} ---\n`
-                
+
                 if (file.extractedContent) {
                     enhancedInstructions += `\nPages: ${file.extractedContent.metadata?.pages || "Unknown"}\n`
                     enhancedInstructions += `\nExtracted Text:\n${file.extractedContent.text}\n`
-                    
+
                     // Add tables as base64 images
                     if (file.extractedContent.tables && file.extractedContent.tables.length > 0) {
                         enhancedInstructions += `\nTables (${file.extractedContent.tables.length}):\n`
@@ -432,7 +250,7 @@ export async function createArtifact(data: {
                     enhancedInstructions += `\n[Content extraction failed for this document]\n`
                 }
             })
-            
+
             enhancedInstructions += "\n=== END DOCUMENT CONTENT ===\n"
         }
 
@@ -445,9 +263,7 @@ export async function createArtifact(data: {
             enhancedInstructions += "=== END IMAGES ===\n"
         }
 
-        // Generate artifact code using AI or video generation
-        const model = 'gpt-5'
-        
+        // For video generation, generate immediately (no streaming needed)
         let generatedCode: string
         let videoUrl: string | null = null
         let thumbnailUrl: string | null = null
@@ -456,7 +272,7 @@ export async function createArtifact(data: {
         // Check if this is a video generation artifact
         if (data.category === "video_generation") {
             console.log("[Artifact] Creating video generation artifact...")
-            
+
             try {
                 // Step 1: Generate video with OpenAI Sora
                 const soraResult = await openAISoraService.generateVideo({
@@ -498,45 +314,54 @@ export async function createArtifact(data: {
                 }
             }
         } else {
-            // Existing logic for other artifact types
-            try {
-                const response = await openai.responses.create({
-                    model: model,
-                    reasoning: { effort: "high" },
-                    instructions: ARTIFACT_GENERATION_PROMPT,
-                    input: `Create a complete HTML artifact:\n\nName: ${data.name}\nCategory: ${data.category}\n\n${enhancedInstructions}\n\nGenerate the complete, production-ready HTML code now.`,
-                })
-
-                generatedCode = response.output_text
-
-                if (!generatedCode) {
-                    return {
-                        success: false,
-                        error: 'Failed to generate artifact code'
-                    }
-                }
-
-                // Clean up markdown formatting
-                generatedCode = generatedCode
-                    .replace(/^```html\n?/i, "")
-                    .replace(/^```\n?/i, "")
-                    .replace(/\n?```$/i, "")
-                    .trim()
-
-                // Sanitize the generated HTML
-                generatedCode = sanitizeHtml(generatedCode)
-
-            } catch (aiError) {
-                console.error('AI generation error:', aiError)
-                return {
-                    success: false,
-                    error: 'Failed to generate artifact with AI'
-                }
-            }
+            // For HTML artifacts, use placeholder code that will be streamed later
+            generatedCode = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${data.name}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .loading {
+            text-align: center;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading">
+        <div class="spinner"></div>
+        <h2>Generating ${data.name}...</h2>
+        <p>Your artifact is being created with AI. This may take a few moments.</p>
+    </div>
+</body>
+</html>`
         }
 
         // Prepare API keys JSON
-        const apiKeysJson = data.apiConfigs.length > 0 
+        const apiKeysJson = data.apiConfigs.length > 0
             ? data.apiConfigs.reduce((acc, config) => {
                 if (config.key && config.value) {
                     acc[config.key] = config.value
@@ -587,14 +412,14 @@ export async function createArtifact(data: {
 
         // Get all users with artifact permissions to notify
         const userIdsToNotify: string[] = []
-        
+
         try {
             // Get assistant owner (always has artifact permissions)
             const assistant = await prisma.assistant.findUnique({
                 where: { id: assistantIdBigInt },
                 select: { userId: true }
             })
-            
+
             if (assistant) {
                 userIdsToNotify.push(assistant.userId.toString())
             }
@@ -664,7 +489,7 @@ export async function createArtifact(data: {
 
     } catch (error) {
         console.error('Error creating artifact:', error)
-        
+
         if (error instanceof Error) {
             return {
                 success: false,
@@ -749,8 +574,8 @@ export async function getArtifacts(assistantId: string) {
                 image: artifact.user.image
             },
             isOwner: artifact.userId === userId,
-            access: artifact.userId === userId 
-                ? 'admin' 
+            access: artifact.userId === userId
+                ? 'admin'
                 : artifact.permissions[0]?.access || 'viewer',
             isPublic: artifact.isPublic
         }))
@@ -846,8 +671,8 @@ export async function getArtifactById(artifactId: string) {
                     image: artifact.user.image
                 },
                 isOwner: artifact.userId === userId,
-                access: artifact.userId === userId 
-                    ? 'admin' 
+                access: artifact.userId === userId
+                    ? 'admin'
                     : artifact.permissions[0]?.access || 'viewer',
                 isPublic: artifact.isPublic,
                 apiKeys: artifact.apiKeys as Record<string, string> | null

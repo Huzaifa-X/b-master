@@ -532,7 +532,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
                   )
                 )
                 // Refetch to get the final message from DB
-                await refetchMessages()
+      await refetchMessages()
                 break
 
               case "error":

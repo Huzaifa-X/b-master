@@ -130,23 +130,23 @@ export async function createChatWithMessage(data: {
 
     // Skip background processing if using streaming
     if (!data.skipBackground) {
-      // Trigger background response generation (non-blocking)
-      // Pass attachments and search options so content extraction can happen in background function
-      const webSearchEnabled = data.webSearch || false
-      const researchEnabled = data.research || false
-      console.log(`[createChatWithMessage] Starting background response with webSearch: ${webSearchEnabled}, research: ${researchEnabled}, attachments: ${data.attachments?.length || 0}`)
+    // Trigger background response generation (non-blocking)
+    // Pass attachments and search options so content extraction can happen in background function
+    const webSearchEnabled = data.webSearch || false
+    const researchEnabled = data.research || false
+    console.log(`[createChatWithMessage] Starting background response with webSearch: ${webSearchEnabled}, research: ${researchEnabled}, attachments: ${data.attachments?.length || 0}`)
 
-      generateChatResponseInBackground({
-        chatId: chat.id.toString(),
-        assistantId: data.assistantId,
-        chatType: data.mode === "ask-b" ? "ASK_B" : "ASSISTANT",
-        webSearch: webSearchEnabled,
-        research: researchEnabled,
-        attachments: data.attachments // Pass attachments for extraction
-      }).catch(err => {
-        console.error("[createChatWithMessage] Response generation failed:", err)
-        // Don't fail the request if response generation fails
-      })
+    generateChatResponseInBackground({
+      chatId: chat.id.toString(),
+      assistantId: data.assistantId,
+      chatType: data.mode === "ask-b" ? "ASK_B" : "ASSISTANT",
+      webSearch: webSearchEnabled,
+      research: researchEnabled,
+      attachments: data.attachments // Pass attachments for extraction
+    }).catch(err => {
+      console.error("[createChatWithMessage] Response generation failed:", err)
+      // Don't fail the request if response generation fails
+    })
     } else {
       console.log(`[createChatWithMessage] Skipping background processing (streaming will be used)`)
     }
@@ -1196,21 +1196,21 @@ export async function sendChatMessage(data: {
 
     // Skip background processing if using streaming
     if (!data.skipBackground) {
-      console.log(`[sendChatMessage] User message saved, triggering background response with webSearch: ${data.webSearch || false}, research: ${data.research || false}, attachments: ${data.attachments?.length || 0}`)
+    console.log(`[sendChatMessage] User message saved, triggering background response with webSearch: ${data.webSearch || false}, research: ${data.research || false}, attachments: ${data.attachments?.length || 0}`)
 
-      // Trigger background response generation (non-blocking)
-      // Pass attachments and search options so content extraction can happen in background function
-      generateChatResponseInBackground({
-        chatId: data.chatId,
-        assistantId: data.assistantId,
-        chatType: data.chatType,
-        webSearch: data.webSearch || false,
-        research: data.research || false,
-        attachments: data.attachments // Pass attachments for extraction
-      }).catch(err => {
-        console.error("[sendChatMessage] Background response generation failed:", err)
-        // Don't fail the request if background generation fails
-      })
+    // Trigger background response generation (non-blocking)
+    // Pass attachments and search options so content extraction can happen in background function
+    generateChatResponseInBackground({
+      chatId: data.chatId,
+      assistantId: data.assistantId,
+      chatType: data.chatType,
+      webSearch: data.webSearch || false,
+      research: data.research || false,
+      attachments: data.attachments // Pass attachments for extraction
+    }).catch(err => {
+      console.error("[sendChatMessage] Background response generation failed:", err)
+      // Don't fail the request if background generation fails
+    })
     } else {
       console.log(`[sendChatMessage] User message saved, skipping background processing (streaming will be used)`)
     }

@@ -4,19 +4,33 @@
 import type { FC, ReactNode } from "react"
 import { useState } from "react"
 import Image from "next/image"
-import { Copy, Share2, Download, Eye, X } from "lucide-react"
+import { Copy, Share2, Download, Eye, X, Loader2, Globe, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
+    DialogFooter,
 } from "@/components/ui/dialog"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
+import { useCreatePost } from "@/hooks/use-newFeed"
+import { useRouter, useParams } from "next/navigation"
 
 interface AssistantMessageProps {
     content: string
@@ -32,27 +46,32 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
     shared = false,
 }) => {
     const [previewImage, setPreviewImage] = useState<string | null>(null)
+    const [shareDialogOpen, setShareDialogOpen] = useState(false)
+    const [shareTitle, setShareTitle] = useState("AI Assistant Response")
+    const [sharePrivacy, setSharePrivacy] = useState<"public" | "private">("public")
+
+    const router = useRouter()
+    const params = useParams()
+    const assistantId = params.id as string
+
+    const createPostMutation = useCreatePost()
 
     const handleCopy = () => {
         navigator.clipboard.writeText(content)
         toast.success("Message copied to clipboard")
     }
 
-    const handleShare = async () => {
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: "Assistant Message",
-                    text: content,
-                })
-                toast.success("Message shared")
-            } catch (error) {
-                console.error("Error sharing:", error)
-            }
-        } else {
-            handleCopy()
-            toast.info("Share not supported, copied to clipboard instead")
-        }
+    const handleShare = () => {
+        setShareDialogOpen(true)
+    }
+
+    const handleShareToFeed = () => {
+        createPostMutation.mutate({
+            assistantId,
+            content: `**${shareTitle}**\n\n${content}`,
+            isPublic: sharePrivacy === "public",
+        })
+        setShareDialogOpen(false)
     }
 
     const handleDownloadImage = async (src: string, alt: string) => {
@@ -280,8 +299,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                     </div>
                 </div>
             </div>
-
-            {/* Image Preview */}
+                {/* Image Preview */}
             <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
                 <DialogContent className="max-w-4xl w-full p-0" showCloseButton={false}>
                     <DialogHeader className="px-6 pt-6 pb-4">
@@ -297,6 +315,102 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                             <Image src={previewImage} alt="Preview" width={1200} height={1200} className="w-full h-auto max-h-[80vh] object-contain" unoptimized />
                             </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Share to News Feed Dialog */}
+            <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+                <DialogContent className="sm:max-w-[600px]">
+                    <DialogHeader>
+                        <DialogTitle>Share AI Response to News Feed</DialogTitle>
+                        <DialogDescription>
+                            Share this AI response with your team members.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        {/* Privacy Selector */}
+                        <div className="space-y-2 w-full">
+                            <Label htmlFor="share-privacy">
+                                Privacy <span className="text-destructive">*</span>
+                            </Label>
+                            <Select value={sharePrivacy} onValueChange={(value) => setSharePrivacy(value as "public" | "private")}>
+                                <SelectTrigger id="share-privacy" className="w-full">
+                                    <SelectValue placeholder="Select privacy" />
+                                </SelectTrigger>
+                                <SelectContent className="w-full">
+                                    <SelectItem value="public" className="focus:bg-muted focus:text-foreground">
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+                                                <Globe className="h-3 w-3 text-green-700 dark:text-green-400" />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="font-medium">Public</span>
+                                            </div>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="private" className="focus:bg-muted focus:text-foreground">
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30">
+                                                <Lock className="h-3 w-3 text-orange-700 dark:text-orange-400" />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="font-medium">Private</span>
+                                            </div>
+                                        </div>
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Title Input */}
+                        <div className="space-y-2">
+                            <Label htmlFor="share-title">
+                                Title <span className="text-destructive">*</span>
+                            </Label>
+                            <Input
+                                id="share-title"
+                                placeholder="Enter a catchy title..."
+                                value={shareTitle}
+                                onChange={(e) => setShareTitle(e.target.value)}
+                                maxLength={100}
+                            />
+                            <p className="text-xs text-muted-foreground text-right">{shareTitle.length}/100</p>
+                        </div>
+
+                        {/* Content Preview */}
+                        <div className="space-y-2">
+                            <Label>Preview</Label>
+                            <div className="max-h-48 overflow-y-auto border rounded-md p-3 bg-muted text-sm">
+                                <div className="font-semibold mb-2">{shareTitle || "Untitled"}</div>
+                                <div className="whitespace-pre-wrap text-xs opacity-75">
+                                    {content.length > 300 ? content.substring(0, 300) + "..." : content}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShareDialogOpen(false)} className="hover:cursor-pointer hover:bg-transparent hover:text-primary">
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleShareToFeed}
+                            disabled={!shareTitle.trim() || createPostMutation.isPending}
+                        >
+                            {createPostMutation.isPending ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Sharing...
+                                </>
+                            ) : (
+                                <>
+                                    <Share2 className="h-4 w-4 mr-2" />
+                                    Share to News Feed
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

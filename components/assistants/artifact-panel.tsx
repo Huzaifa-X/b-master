@@ -13,22 +13,25 @@ import ReactMarkdown from 'react-markdown';
 import { toast } from "sonner";
 
 interface ArtifactPanelProps {
-
   onClose?: () => void;
-
+  streamingContent?: string;
+  isStreaming?: boolean;
 }
 
-export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose }) => {
+export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose, streamingContent, isStreaming = false }) => {
 
   const { artifactContent, isPreviewMode, togglePreview } = useArtifactStore();
+
+  // Use streaming content if available, otherwise use stored content
+  const displayContent = streamingContent || artifactContent?.content || "";
 
   const [blobUrl, setBlobUrl] = useState<string>("");
 
   const handleCopy = () => {
 
-    if (artifactContent?.content) {
+    if (displayContent) {
 
-      navigator.clipboard.writeText(artifactContent.content);
+      navigator.clipboard.writeText(displayContent);
 
       toast.success("Code copied to clipboard");
 
@@ -38,11 +41,11 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose }) => {
 
   const handleDownload = () => {
 
-    if (!artifactContent?.content) return;
+    if (!displayContent) return;
 
-    const blob = new Blob([artifactContent.content], {
+    const blob = new Blob([displayContent], {
 
-      type: artifactContent.language === "html" ? "text/html" : "text/plain"
+      type: artifactContent?.language === "html" ? "text/html" : "text/plain"
 
     });
 
@@ -54,13 +57,13 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose }) => {
 
     // Generate filename based on title and language
 
-    const fileName = artifactContent.title
+    const fileName = artifactContent?.title
 
       ? `${artifactContent.title.replace(/\s+/g, "-").toLowerCase()}`
 
       : "artifact";
 
-    const extension = artifactContent.language === "html" ? "html" : "txt";
+    const extension = artifactContent?.language === "html" ? "html" : "txt";
 
     a.download = `${fileName}.${extension}`;
 
@@ -86,15 +89,15 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose }) => {
 
   const isHtmlCode = artifactContent?.language?.toLowerCase() === 'html' ||
 
-    artifactContent?.content?.trim().startsWith('<!DOCTYPE') ||
+    displayContent?.trim().startsWith('<!DOCTYPE') ||
 
-    artifactContent?.content?.trim().startsWith('<html');
+    displayContent?.trim().startsWith('<html');
 
   // Create blob URL for secure iframe isolation
 
   useEffect(() => {
 
-    if (!artifactContent?.content || !isPreviewMode || !isHtmlCode) {
+    if (!displayContent || !isPreviewMode || !isHtmlCode) {
 
       if (blobUrl) {
 
@@ -108,7 +111,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose }) => {
 
     }
 
-    const blob = new Blob([artifactContent.content], { type: "text/html" });
+    const blob = new Blob([displayContent], { type: "text/html" });
 
     const url = URL.createObjectURL(blob);
 
@@ -120,7 +123,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose }) => {
 
     };
 
-  }, [artifactContent?.content, isPreviewMode, isHtmlCode]);
+  }, [displayContent, isPreviewMode, isHtmlCode]);
 
   return (
 
@@ -256,7 +259,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose }) => {
 
       <div className="flex-1 overflow-auto">
 
-        {artifactContent ? (
+        {(displayContent || isStreaming) ? (
 
           <div className="h-full">
 
@@ -304,11 +307,11 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose }) => {
 
               <div className="h-full overflow-auto">
 
-                {artifactContent.type === "code" ? (
+                {artifactContent?.type === "code" || isStreaming ? (
 
                   <pre className="m-0 p-6 text-sm font-mono whitespace-pre-wrap break-all overflow-wrap-anywhere bg-muted rounded-lg">
 
-                    <code className="block">{artifactContent.content}</code>
+                    <code className="block">{displayContent}</code>
 
                   </pre>
 
@@ -316,7 +319,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose }) => {
 
                   <div className="p-6 prose prose-sm dark:prose-invert max-w-none break-words overflow-wrap-anywhere">
 
-                    <ReactMarkdown>{artifactContent.content}</ReactMarkdown>
+                    <ReactMarkdown>{displayContent}</ReactMarkdown>
 
                   </div>
 

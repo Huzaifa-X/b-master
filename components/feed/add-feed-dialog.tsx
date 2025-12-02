@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef } from "react"
-import { X, Upload, ImageIcon, Globe, Lock } from "lucide-react"
+import { X, Upload, ImageIcon, Globe, Lock, Loader2 } from "lucide-react"
 import {
     Dialog,
     DialogContent,
@@ -32,9 +32,10 @@ interface AddFeedDialogProps {
         image?: string
         privacy: "public" | "private"
     }) => void
+    isLoading?: boolean
 }
 
-export function AddFeedDialog({ open, onOpenChange, onSubmit }: AddFeedDialogProps) {
+export function AddFeedDialog({ open, onOpenChange, onSubmit, isLoading = false }: AddFeedDialogProps) {
     const [title, setTitle] = useState("")
     const [content, setContent] = useState("")
     const [image, setImage] = useState<string | undefined>(undefined)
@@ -196,9 +197,21 @@ export function AddFeedDialog({ open, onOpenChange, onSubmit }: AddFeedDialogPro
                     <Button variant="outline" onClick={() => handleOpenChange(false)} className="hover:cursor-pointer hover:bg-transparent hover:text-primary">
                         Cancel
                     </Button>
-                    <Button onClick={handleSubmit} disabled={!title.trim() || !content.trim()}>
-                        <ImageIcon className="h-4 w-4 mr-2" />
-                        Post
+                    <Button
+                        onClick={handleSubmit}
+                        disabled={!title.trim() || !content.trim() || isLoading}
+                    >
+                        {isLoading ? (
+                            <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Posting...
+                            </>
+                        ) : (
+                            <>
+                                <ImageIcon className="h-4 w-4 mr-2" />
+                                Post
+                            </>
+                        )}
                     </Button>
                 </DialogFooter>
             </DialogContent>

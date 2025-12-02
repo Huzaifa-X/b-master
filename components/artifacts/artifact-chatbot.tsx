@@ -27,9 +27,11 @@ interface Message {
 interface ArtifactChatbotProps {
   artifactId: string
   artifactName: string
+  disabled?: boolean
+  isGenerating?: boolean
 }
 
-export function ArtifactChatbot({ artifactId, artifactName }: ArtifactChatbotProps) {
+export function ArtifactChatbot({ artifactId, artifactName, disabled = false, isGenerating = false }: ArtifactChatbotProps) {
   const { data: session } = useSession()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -294,24 +296,48 @@ export function ArtifactChatbot({ artifactId, artifactName }: ArtifactChatbotPro
       </ScrollArea>
 
       {/* Input with PromptInput Component */}
-      <div className="px-3 md:px-6 py-3 md:py-4 flex-shrink-0">
+      <div className="px-3 md:px-6 py-3 md:py-4 flex-shrink-0 relative">
+        {/* Loading Overlay during Artifact Generation */}
+        {isGenerating && (
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm border border-primary/20 rounded-lg flex flex-col items-center justify-center z-10 p-4">
+            <div className="flex items-center gap-3 text-primary mb-3">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <div className="text-sm font-medium">
+                Generating artifact...
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full max-w-xs">
+              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-primary rounded-full animate-pulse" />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                This may take a few moments for complex artifacts
+              </p>
+            </div>
+          </div>
+        )}
+
         <PromptInput
           value={input}
           onValueChange={setInput}
           onSubmit={handleSend}
           isLoading={isLoading}
           maxHeight={120}
+          disabled={disabled || isGenerating}
           className="border-primary/50 shadow-[0_0_100px_0px_hsl(var(--primary)),0_0_60px_0px_hsl(var(--primary)),0_0_30px_0px_hsl(var(--primary)),0_0_15px_0px_hsl(var(--primary))] dark:border-primary/60 dark:shadow-[0_0_120px_0px_hsl(var(--primary)),0_0_80px_0px_hsl(var(--primary)),0_0_40px_0px_hsl(var(--primary)),0_0_20px_0px_hsl(var(--primary))]"
         >
           <PromptInputTextarea
-            placeholder="Ask about this artifact..."
+            placeholder={isGenerating ? "Generating artifact..." : "Ask about this artifact..."}
             className="text-foreground placeholder:text-muted-foreground"
+            disabled={disabled || isGenerating}
           />
           <PromptInputActions className="px-2 pb-1 justify-end">
-            <PromptInputAction tooltip="Send message (Enter)">
+            <PromptInputAction tooltip={isGenerating ? "Generating artifact..." : "Send message (Enter)"}>
               <Button
                 onClick={handleSend}
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || isLoading || disabled || isGenerating}
                 size="icon"
                 className="h-8 w-8"
               >

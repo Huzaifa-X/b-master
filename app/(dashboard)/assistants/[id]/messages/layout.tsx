@@ -24,6 +24,10 @@ export default function MessagesLayout({ children, params }: MessagesLayoutProps
     setSelectedConversationId(null)
   }
 
+  const handleSelectConversation = (id: string | null) => {
+    setSelectedConversationId(id)
+  }
+
   // Mobile view: show either sidebar or chat
   if (isMobile) {
     return (
@@ -32,7 +36,7 @@ export default function MessagesLayout({ children, params }: MessagesLayoutProps
           // Show sidebar on mobile when no conversation selected
           <MessagesSidebar 
             selectedConversationId={selectedConversationId}
-            onSelectConversation={setSelectedConversationId}
+            onSelectConversation={handleSelectConversation}
           />
         ) : (
           // Show chat with back button on mobile
@@ -50,7 +54,7 @@ export default function MessagesLayout({ children, params }: MessagesLayoutProps
     <div className="h-full w-full flex">
       <MessagesSidebar 
         selectedConversationId={selectedConversationId}
-        onSelectConversation={setSelectedConversationId}
+        onSelectConversation={handleSelectConversation}
       />
       <div className="flex-1 flex flex-col">
         <ChatView conversationId={selectedConversationId} />

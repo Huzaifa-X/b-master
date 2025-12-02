@@ -149,20 +149,20 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                         </DropdownMenuItem>
                         {mode === "assistant" && (
                             <>
-                                <DropdownMenuItem
-                                    onClick={handleResearch}
-                                    className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
-                                >
-                                    <Search className="mr-2 size-4" />
-                                    <span>Research</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    onClick={handleChatWithArtifact}
-                                    className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
-                                >
-                                    <Sparkles className="mr-2 size-4" />
-                                    <span>Chat with Artifact</span>
-                                </DropdownMenuItem>
+                        <DropdownMenuItem
+                            onClick={handleResearch}
+                            className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
+                        >
+                            <Search className="mr-2 size-4" />
+                            <span>Research</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            onClick={handleChatWithArtifact}
+                            className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
+                        >
+                            <Sparkles className="mr-2 size-4" />
+                            <span>Chat with Artifact</span>
+                        </DropdownMenuItem>
                             </>
                         )}
                     </DropdownMenuContent>

@@ -106,7 +106,7 @@ export const UserMessage: FC<UserMessageProps> = ({ content, attachments, timest
                                             {children}
                                         </p>
                                     ),
-                                    
+
                                     // Simple code blocks - render as plain text with monospace
                                     pre: ({ children }) => (
                                         <pre className="my-2 whitespace-pre-wrap break-words font-mono text-sm">
@@ -120,7 +120,7 @@ export const UserMessage: FC<UserMessageProps> = ({ content, attachments, timest
                                             {children}
                                         </code>
                                     ),
-                                    
+
                                     // Basic formatting
                                     strong: ({ children }) => (
                                         <strong className="font-semibold">{children}</strong>
@@ -128,7 +128,7 @@ export const UserMessage: FC<UserMessageProps> = ({ content, attachments, timest
                                     em: ({ children }) => (
                                         <em className="italic">{children}</em>
                                     ),
-                                    
+
                                     // Simple lists
                                     ul: ({ children }) => (
                                         <ul className="my-2 ml-4 list-disc space-y-1">
@@ -143,7 +143,7 @@ export const UserMessage: FC<UserMessageProps> = ({ content, attachments, timest
                                     li: ({ children }) => (
                                         <li className="my-1">{children}</li>
                                     ),
-                                    
+
                                     // Simple links
                                     a: ({ href, children }) => (
                                         <a
@@ -155,7 +155,7 @@ export const UserMessage: FC<UserMessageProps> = ({ content, attachments, timest
                                             {children}
                                         </a>
                                     ),
-                                    
+
                                     // Line breaks
                                     br: () => <br />,
                                 }}

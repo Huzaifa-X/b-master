@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,7 @@ interface CreateArtifactDialogProps {
 }
 
 export function CreateArtifactDialog({ open, onOpenChange, assistantId }: CreateArtifactDialogProps) {
+  const router = useRouter()
   const [step, setStep] = useState(1)
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -162,6 +164,11 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId }: Create
       if (result.success) {
         toast.success("Artifact created successfully!")
         onOpenChange(false)
+
+        // Navigate to the artifact page to see streaming generation
+        if (result.artifact) {
+          router.push(`/assistants/${assistantId}/artifacts/${result.artifact.id}`)
+        }
       } else {
         toast.error(result.error || "Failed to create artifact")
       }

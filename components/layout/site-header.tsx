@@ -156,7 +156,7 @@ export function SiteHeader() {
               }
             />
           ) : (
-            <NotificationsDropdown />
+          <NotificationsDropdown />
           )}
         </div>
       </div>

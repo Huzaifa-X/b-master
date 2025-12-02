@@ -400,9 +400,13 @@ export async function getAssistantContacts(assistantId: string) {
     }
 
     // Fetch all contacts for this assistant (including owner - owner is now in AssistantContact)
+    // Exclude the current user from the list
     const contacts = await prisma.assistantContact.findMany({
       where: {
         assistantId: assistantIdBigInt,
+        userId: {
+          not: userId, // Exclude current user
+        },
       },
       include: {
         user: {
@@ -427,6 +431,7 @@ export async function getAssistantContacts(assistantId: string) {
     const formattedContacts = contacts.map((contact) => ({
       id: contact.id.toString(),
       contactId: contact.id.toString(),
+      userId: contact.user.id.toString(), // Include user ID for initiating chats
       name: contact.user.name || "Unknown User",
       email: contact.user.email,
       description: contact.description || "",

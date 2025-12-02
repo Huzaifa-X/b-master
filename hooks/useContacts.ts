@@ -4,6 +4,7 @@ import { getAssistantContacts, getAllContacts } from "@/app/actions/contact.acti
 interface Contact {
   id: string
   contactId: string
+  userId?: string // User ID for initiating chats
   name: string
   email: string
   description: string
