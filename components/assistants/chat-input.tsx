@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Loader2, ArrowUp, X } from "lucide-react"
+import { Loader2, ArrowUp, X, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   PromptInput,
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/prompt-input"
 import { AttachmentDropdown } from "@/components/assistants/attachment-dropdown"
 import { DictateButton } from "@/components/assistants/dictate-button"
+import { SelectArtifactDialog } from "@/components/assistants/select-artifact-dialog"
 import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
@@ -21,7 +22,7 @@ import { uploadFilesToS3, type FileUploadData } from "@/app/actions/file-upload.
 interface ChatInputProps {
   value?: string
   onValueChange?: (value: string) => void
-  onSubmit: (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean }) => void
+  onSubmit: (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string } }) => void
   isLoading?: boolean
   disabled?: boolean
   placeholder?: string
@@ -31,6 +32,7 @@ interface ChatInputProps {
   onChatWithArtifact?: () => void
   className?: string
   mode?: "ask-b" | "assistant"
+  assistantId?: string
 }
 
 export function ChatInput({
@@ -46,6 +48,7 @@ export function ChatInput({
   onChatWithArtifact,
   className,
   mode = "assistant",
+  assistantId,
 }: ChatInputProps) {
   // Internal state for controlled input
   const [internalValue, setInternalValue] = useState("")
@@ -53,6 +56,8 @@ export function ChatInput({
   const [showPreview, setShowPreview] = useState(false)
   const [webSearchEnabled, setWebSearchEnabled] = useState(false)
   const [researchEnabled, setResearchEnabled] = useState(false)
+  const [selectedArtifact, setSelectedArtifact] = useState<{ id: string; name: string; instructions: string; htmlContent: string } | null>(null)
+  const [isArtifactDialogOpen, setIsArtifactDialogOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Use external value if provided, otherwise use internal state
@@ -108,7 +113,8 @@ export function ChatInput({
       attachments.length > 0 ? attachments : undefined,
       {
         webSearch: webSearchEnabled,
-        research: researchEnabled
+        research: researchEnabled,
+        artifact: selectedArtifact || undefined,
       }
     )
     
@@ -116,6 +122,7 @@ export function ChatInput({
     onValueChange("")
     setAttachedFiles([])
     setShowPreview(false)
+    setSelectedArtifact(null) // Clear selected artifact after sending
   }
 
   // Helper function to convert File to base64
@@ -159,6 +166,29 @@ export function ChatInput({
     onFileSelect?.(files)
   }
 
+  const handleFileUpload = (fileList: FileList) => {
+    // Convert FileList to File array and handle the same way as manual file selection
+    const files = Array.from(fileList)
+    handleFileSelect(files)
+  }
+
+  const handleChatWithArtifact = () => {
+    if (!assistantId) {
+      return
+    }
+    setIsArtifactDialogOpen(true)
+    onChatWithArtifact?.()
+  }
+
+  const handleArtifactSelect = (artifact: { id: string; name: string; instructions: string; htmlContent: string }) => {
+    setSelectedArtifact(artifact)
+    // Disable other modes when artifact is selected
+    setWebSearchEnabled(false)
+    setResearchEnabled(false)
+    onWebSearch?.(false)
+    onResearch?.(false)
+  }
+
   const handleRemoveFile = (index: number) => {
     setAttachedFiles((prev) => prev.filter((_, i) => i !== index))
   }
@@ -198,8 +228,8 @@ export function ChatInput({
 
   return (
     <div className="w-full">
-      {/* Attachments */}
-      {attachedFiles.length > 0 && (
+      {/* Attachments and Artifact */}
+      {(attachedFiles.length > 0 || selectedArtifact) && (
         <div className="mb-2 flex flex-wrap gap-2">
           {attachedFiles.map((file, index) => (
             <div
@@ -216,6 +246,19 @@ export function ChatInput({
               </button>
             </div>
           ))}
+          {selectedArtifact && (
+            <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="truncate max-w-[200px]">{selectedArtifact.name}</span>
+              <button
+                onClick={() => setSelectedArtifact(null)}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="Remove artifact"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -270,6 +313,7 @@ export function ChatInput({
         isLoading={isLoading}
         disabled={disabled || isLoading}
         maxHeight={120}
+        onFileUpload={handleFileUpload}
         className={className}
       >
         <PromptInputTextarea
@@ -285,10 +329,19 @@ export function ChatInput({
               onFileSelect={handleFileSelect}
               onWebSearch={handleWebSearchChange}
               onResearch={handleResearchChange}
-              onChatWithArtifact={onChatWithArtifact}
+              onChatWithArtifact={handleChatWithArtifact}
               disabled={disabled || isLoading}
               mode={mode}
+              assistantId={assistantId}
             />
+            {assistantId && (
+              <SelectArtifactDialog
+                open={isArtifactDialogOpen}
+                onOpenChange={setIsArtifactDialogOpen}
+                assistantId={assistantId}
+                onSelect={handleArtifactSelect}
+              />
+            )}
             <DictateButton 
               onTranscript={handleDictateTranscript}
               disabled={disabled || isLoading}

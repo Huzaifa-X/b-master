@@ -12,174 +12,62 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { ArrowRight, BadgeCheck, X } from "lucide-react"
-import { useState } from "react"
+import { ArrowRight, BadgeCheck, X, Loader2 } from "lucide-react"
+import { useState, useEffect } from "react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter } from "next/navigation"
-
-const monthlyPlans = [
-  {
-    id: "free",
-    name: "Free",
-    price: 0,
-    currency: "CHF",
-    period: "monthly",
-    description: "Perfect for getting started with AI assistants",
-    features: [
-      "1 AI Assistant",
-      "Basic support",
-      "Standard response time",
-      "Community access",
-    ],
-    cta: "Get Free",
-    popular: false,
-  },
-  {
-    id: "starter",
-    name: "Starter",
-    price: 29.99,
-    currency: "CHF",
-    period: "monthly",
-    description: "Great for small teams and individual users",
-    features: [
-      "5 AI Assistants",
-      "Priority support",
-      "Faster response time",
-      "Advanced customization",
-      "API access",
-      "Analytics dashboard",
-    ],
-    cta: "Get Starter",
-    popular: false,
-  },
-  {
-    id: "professional",
-    name: "Professional",
-    price: 99.99,
-    currency: "CHF",
-    period: "monthly",
-    description: "Ideal for growing businesses and teams",
-    features: [
-      "25 AI Assistants",
-      "Priority support",
-      "Fastest response time",
-      "Advanced customization",
-      "API access",
-      "Analytics dashboard",
-      "Team collaboration",
-      "Custom integrations",
-      "White-label options",
-    ],
-    cta: "Get Professional",
-    popular: true,
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    price: 299.99,
-    currency: "CHF",
-    period: "monthly",
-    description: "For large organizations with custom needs",
-    features: [
-      "Unlimited AI Assistants",
-      "24/7 dedicated support",
-      "Instant response time",
-      "Full customization",
-      "API access",
-      "Advanced analytics",
-      "Team collaboration",
-      "Custom integrations",
-      "White-label options",
-      "SLA guarantee",
-      "Custom training",
-      "On-premise deployment",
-    ],
-    cta: "Get Enterprise",
-    popular: false,
-  },
-]
-
-const yearlyPlans = [
-  {
-    id: "starter-yearly",
-    name: "Starter (Yearly)",
-    price: 287.9,
-    currency: "CHF",
-    period: "yearly",
-    description: "Great for small teams and individual users - Save 20%",
-    features: [
-      "5 AI Assistants",
-      "Priority support",
-      "Faster response time",
-      "Advanced customization",
-      "API access",
-      "Analytics dashboard",
-      "20% discount",
-    ],
-    cta: "Get Starter (Yearly)",
-    popular: false,
-    discount: true,
-  },
-  {
-    id: "professional-yearly",
-    name: "Professional (Yearly)",
-    price: 959.9,
-    currency: "CHF",
-    period: "yearly",
-    description: "Ideal for growing businesses and teams - Save 20%",
-    features: [
-      "25 AI Assistants",
-      "Priority support",
-      "Fastest response time",
-      "Advanced customization",
-      "API access",
-      "Analytics dashboard",
-      "Team collaboration",
-      "Custom integrations",
-      "White-label options",
-      "20% discount",
-    ],
-    cta: "Get Professional (Yearly)",
-    popular: true,
-    discount: true,
-  },
-  {
-    id: "enterprise-yearly",
-    name: "Enterprise (Yearly)",
-    price: 2879.9,
-    currency: "CHF",
-    period: "yearly",
-    description: "For large organizations with custom needs - Save 20%",
-    features: [
-      "Unlimited AI Assistants",
-      "24/7 dedicated support",
-      "Instant response time",
-      "Full customization",
-      "API access",
-      "Advanced analytics",
-      "Team collaboration",
-      "Custom integrations",
-      "White-label options",
-      "SLA guarantee",
-      "Custom training",
-      "On-premise deployment",
-      "20% discount",
-    ],
-    cta: "Get Enterprise (Yearly)",
-    popular: false,
-    discount: true,
-  },
-]
+import { getPlans, createCheckoutSession } from "@/app/actions/subscription.action"
+import { toast } from "sonner"
 
 export default function PricingPage() {
   const router = useRouter()
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly")
+  const [plans, setPlans] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [subscribingPlanId, setSubscribingPlanId] = useState<number | null>(null)
 
-  const currentPlans = billingCycle === "monthly" ? monthlyPlans : yearlyPlans
+  useEffect(() => {
+    async function fetchPlans() {
+      try {
+        const fetchedPlans = await getPlans()
+        console.log("fetchedPlans", fetchedPlans)
+        setPlans(fetchedPlans)
+      } catch (error) {
+        console.error("Error fetching plans:", error)
+        toast.error("Failed to load plans")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchPlans()
+  }, [])
 
-  const handleSubscribe = (planId: string) => {
-    console.log("Subscribe to plan:", planId)
-    // TODO: Implement subscription logic
+  const currentPlans = plans.filter((plan) => {
+    if (billingCycle === "monthly") {
+      return plan.period === "monthly" || plan.period === "free"
+    } else {
+      return plan.period === "yearly"
+    }
+  })
+
+  const handleSubscribe = async (planId: number) => {
+    try {
+      setSubscribingPlanId(planId)
+      
+      const result = await createCheckoutSession(planId)
+      
+      if (result.success && result.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = result.url
+      } else {
+        toast.error(result.error || "Failed to create checkout session")
+        setSubscribingPlanId(null)
+      }
+    } catch (error: any) {
+      console.error("Error subscribing:", error)
+      toast.error(error.message || "Something went wrong")
+      setSubscribingPlanId(null)
+    }
   }
 
   const handleClose = () => {
@@ -222,76 +110,97 @@ export default function PricingPage() {
         </div>
 
         {/* Pricing Cards */}
-        <div className={cn(
-          "grid gap-6 mx-auto",
-          billingCycle === "monthly" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-6xl"
-        )}>
-          {currentPlans.map((plan) => (
-            <Card
-              className={cn(
-                "relative w-full text-left flex flex-col",
-                plan.popular && "ring-2 ring-[#BDA76D]"
-              )}
-              key={plan.id}
-            >
-              {plan.popular && (
-                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white">
-                  Popular
-                </Badge>
-              )}
-              <CardHeader>
-                <CardTitle className="text-xl font-medium">
-                  {plan.name}
-                </CardTitle>
-                <CardDescription>
-                  <p className="mb-4">{plan.description}</p>
-                  {typeof plan.price === "number" ? (
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-sm text-muted-foreground">{plan.currency}</span>
-                      <NumberFlow
-                        className="font-medium text-foreground text-3xl"
-                        format={{
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        }}
-                        value={plan.price}
-                      />
-                      <span className="text-sm text-muted-foreground">/{billingCycle}</span>
-                    </div>
-                  ) : (
-                    <span className="font-medium text-foreground text-lg">
-                      {plan.price}
-                    </span>
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3 flex-1">
-                {plan.features.map((feature, index) => (
-                  <div
-                    className="flex gap-2 text-muted-foreground text-sm items-start"
-                    key={index}
-                  >
-                    <BadgeCheck className="h-5 w-5 flex-none text-[#BDA76D] mt-0.5" />
-                    <span>{feature}</span>
-                  </div>
-                ))}
-              </CardContent>
-              <CardFooter>
-                <Button
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className={cn(
+            "grid gap-6 mx-auto",
+            billingCycle === "monthly" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-6xl"
+          )}>
+            {currentPlans.map((plan) => {
+              const features = Array.isArray(plan.features) ? plan.features : []
+              const isPopular = plan.title === "Professional" || plan.title === "Professional (Yearly)"
+              const isSubscribing = subscribingPlanId === plan.id
+              const isFree = plan.period === "free"
+              
+              return (
+                <Card
                   className={cn(
-                    "w-full",
-                    plan.popular && "bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white"
+                    "relative w-full text-left flex flex-col",
+                    isPopular && "ring-2 ring-[#BDA76D]"
                   )}
-                  variant={plan.popular ? "default" : "secondary"}
-                  onClick={() => handleSubscribe(plan.id)}
+                  key={plan.id}
                 >
-                  {plan.cta}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
+                  {isPopular && (
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white">
+                      Popular
+                    </Badge>
+                  )}
+                  <CardHeader>
+                    <CardTitle className="text-xl font-medium">
+                      {plan.title}
+                    </CardTitle>
+                    <CardDescription>
+                      <p className="mb-4">{plan.description || ""}</p>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-sm text-muted-foreground">CHF</span>
+                        <NumberFlow
+                          className="font-medium text-foreground text-3xl"
+                          format={{
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }}
+                          value={Number(plan.amount)}
+                        />
+                        {!isFree && (
+                          <span className="text-sm text-muted-foreground">/{plan.period === "yearly" ? "year" : "month"}</span>
+                        )}
+                      </div>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-3 flex-1">
+                    {features.map((feature: string, index: number) => (
+                      <div
+                        className="flex gap-2 text-muted-foreground text-sm items-start"
+                        key={index}
+                      >
+                        <BadgeCheck className="h-5 w-5 flex-none text-[#BDA76D] mt-0.5" />
+                        <span>{feature}</span>
+                      </div>
+                    ))}
+                  </CardContent>
+                  <CardFooter>
+                    <Button
+                      className={cn(
+                        "w-full",
+                        isPopular && "bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white"
+                      )}
+                      variant={isPopular ? "default" : "secondary"}
+                      onClick={() => handleSubscribe(plan.id)}
+                      disabled={isSubscribing || isFree}
+                    >
+                      {isSubscribing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : isFree ? (
+                        "Current Plan"
+                      ) : (
+                        <>
+                          Get {plan.title.replace(" (Yearly)", "")}
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

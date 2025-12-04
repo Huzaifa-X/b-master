@@ -44,7 +44,7 @@ export function WelcomeChatbotPage({
   const handleSend = async (
     message: string,
     attachments?: { name: string; url: string; type: string; size: number }[],
-    options?: { webSearch?: boolean; research?: boolean }
+    options?: { webSearch?: boolean; research?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string } }
   ) => {
     if (!message.trim() || isCreating) return
 
@@ -61,6 +61,7 @@ export function WelcomeChatbotPage({
         attachments: attachments,
         webSearch: options?.webSearch,
         research: options?.research,
+        artifact: options?.artifact,
         skipBackground: true // Skip background processing, streaming will be used
       })
 
@@ -153,6 +154,7 @@ export function WelcomeChatbotPage({
                 : "Ask this assistant..."
             }
             mode={chatType}
+            assistantId={assistantId}
             className="border-primary/50 shadow-[0_0_100px_0px_hsl(var(--primary)),0_0_60px_0px_hsl(var(--primary)),0_0_30px_0px_hsl(var(--primary)),0_0_15px_0px_hsl(var(--primary))] dark:border-primary/60 dark:shadow-[0_0_120px_0px_hsl(var(--primary)),0_0_80px_0px_hsl(var(--primary)),0_0_40px_0px_hsl(var(--primary)),0_0_20px_0px_hsl(var(--primary))]"
           />
         </div>

@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { chatId, assistantId, chatType, webSearch, research, attachments } = body
+    const { chatId, assistantId, chatType, webSearch, research, attachments, artifact } = body
 
     const chatIdInt = parseInt(chatId)
     if (isNaN(chatIdInt)) {
@@ -119,6 +119,17 @@ export async function POST(req: NextRequest) {
       systemPrompt += `\n\nIMPORTANT: The user has requested research mode. Please conduct thorough research using both web search and file search to provide a comprehensive answer.`
     } else if (webSearch) {
       systemPrompt += `\n\nIMPORTANT: The user has requested web search. Please search the web for current information to answer their question.`
+    }
+
+    // Add artifact information if provided
+    if (artifact) {
+      systemPrompt += `\n\n## Artifact Information Shared by User\n`
+      systemPrompt += `The user has shared an artifact named "${artifact.name}" with the following content:\n\n`
+      systemPrompt += `Artifact HTML Content:\n${artifact.htmlContent}\n\n`
+      if (artifact.instructions) {
+        systemPrompt += `Artifact Instructions:\n${artifact.instructions}\n\n`
+      }
+      systemPrompt += `Please use this artifact information to help answer the user's question. Reference the artifact content when relevant.`
     }
 
     if (chatType === "ASSISTANT" && chat.assistant?.instructions) {

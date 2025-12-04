@@ -82,6 +82,7 @@ interface Artifact {
   name: string
   category: string
   htmlContent: string
+  instructions?: string
   createdAt: Date
   creator?: {
     id: string

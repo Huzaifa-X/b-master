@@ -49,6 +49,7 @@ type PromptInputProps = {
   maxHeight?: number | string
   onSubmit?: () => void
   disabled?: boolean
+  onFileUpload?: (files: FileList) => void
   children: React.ReactNode
   className?: string
 }
@@ -61,13 +62,51 @@ function PromptInput({
   onValueChange,
   onSubmit,
   disabled = false,
+  onFileUpload,
   children,
 }: PromptInputProps) {
   const [internalValue, setInternalValue] = useState(value || "")
+  const [isDragging, setIsDragging] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const handleChange = (newValue: string) => {
     setInternalValue(newValue)
     onValueChange?.(newValue)
+  }
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.dataTransfer.types.includes("Files") && !disabled) {
+      setIsDragging(true)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Only set dragging to false if we're leaving the container
+    if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+      setIsDragging(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    if (disabled || !onFileUpload) return
+
+    const files = e.dataTransfer.files
+    if (files && files.length > 0) {
+      onFileUpload(files)
+    }
   }
 
   return (
@@ -83,12 +122,27 @@ function PromptInput({
         }}
       >
         <div
+          ref={containerRef}
+          onDragEnter={handleDragEnter}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
           className={cn(
-            "border-input bg-background rounded-3xl border p-2 shadow-xs",
+            "border-input bg-background rounded-3xl border p-2 shadow-xs relative transition-all",
+            isDragging && "ring-2 ring-primary ring-offset-2 bg-primary/5 dark:bg-primary/10 border-primary",
             className
           )}
         >
           {children}
+          
+          {/* Drag and drop overlay */}
+          {isDragging && (
+            <div className="absolute inset-0 rounded-3xl bg-primary/10 dark:bg-primary/20 border-2 border-dashed border-primary flex items-center justify-center pointer-events-none z-10">
+              <div className="text-center">
+                <p className="text-sm font-medium text-primary">Drop files here to upload</p>
+              </div>
+            </div>
+          )}
         </div>
       </PromptInputContext.Provider>
     </TooltipProvider>

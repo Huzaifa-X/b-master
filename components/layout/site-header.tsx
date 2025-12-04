@@ -51,7 +51,7 @@ export function SiteHeader() {
   // Determine if we're in ask-b mode or assistant mode
   const isAskBMode = pathname.startsWith("/ask-b")
   const isAssistantMode = pathname.startsWith("/assistants/")
-  const isAssistantAddPage = pathname.startsWith("/assistants/add")
+  const isAssistantAddPage = pathname.startsWith("/assistants/add") || pathname.startsWith("/assistants/new") || (pathname.startsWith("/assistants/") && pathname.includes("/edit"))
 
   // Fetch chat data if chat ID exists
   const { data: chatData } = useQuery({
@@ -149,7 +149,7 @@ export function SiteHeader() {
 
         {/* Right side actions - show share button when chat is open, otherwise notifications */}
         <div className="flex items-center gap-2">
-          {isChatPage && chatId ? (
+          {isChatPage && chatId && !isAssistantAddPage ? (
             <ShareDialog
               shareableId={chatData?.shareableId || ""}
               chatTopic={chatData?.topic}

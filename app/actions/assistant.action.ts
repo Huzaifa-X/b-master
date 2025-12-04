@@ -12,6 +12,7 @@ import {
     createVectorStore,
     addNoteToVectorStore,
     uploadAndAddToVectorStore,
+    deleteFileFromVectorStore,
 } from '@/lib/vector-store'
 import { triggerWebScraping } from '@/lib/web-scraper'
 import { randomUUID } from "crypto";
@@ -1133,6 +1134,495 @@ export async function getAssistants({
                 totalPages: 0,
                 hasMore: false
             }
+        }
+    }
+}
+
+/**
+ * Get full assistant data for editing (includes knowledge base, API config, shared users)
+ */
+export async function getAssistantForEdit(assistantId: string) {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: 'Authentication required',
+                assistant: null
+            }
+        }
+
+        const userId = BigInt(session.user.id)
+        const assistantBigInt = BigInt(assistantId)
+
+        // Check if user owns the assistant
+        const assistant = await prisma.assistant.findUnique({
+            where: {
+                id: assistantBigInt,
+                deletedAt: null
+            },
+            include: {
+                knowledgebases: {
+                    select: {
+                        id: true,
+                        note: true,
+                        url: true,
+                        file: true,
+                        type: true,
+                    }
+                },
+                apiConfiguration: {
+                    select: {
+                        authenticationType: true,
+                        apiKey: true,
+                        authType: true,
+                        customHeaderName: true,
+                        clientId: true,
+                        clientSecret: true,
+                        authorizationUrl: true,
+                        tokenUrl: true,
+                        scope: true,
+                        tokenExchangeMethod: true,
+                        schemaText: true,
+                        schema: true,
+                    }
+                },
+                contacts: {
+                    where: {
+                        userId: {
+                            not: userId // Exclude owner
+                        }
+                    },
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                name: true,
+                                email: true,
+                            }
+                        }
+                    }
+                }
+            }
+        })
+
+        if (!assistant) {
+            return {
+                success: false,
+                error: 'Assistant not found',
+                assistant: null
+            }
+        }
+
+        // Check ownership
+        if (assistant.userId !== userId) {
+            return {
+                success: false,
+                error: 'You do not have permission to edit this assistant',
+                assistant: null
+            }
+        }
+
+        // Map category from enum to string
+        const categoryMap: Record<string, string> = {
+            "EDUCATION": "Education",
+            "TRAVEL": "Travelling",
+            "PROGRAMMING": "Programming",
+            "MARKETING": "Markteting",
+            "ANALYSIS": "Analysis",
+            "BOOKING": "Booking",
+            "OTHER": "Other"
+        }
+
+        // Process knowledge base
+        const notes: string[] = []
+        const urls: string[] = []
+        
+        assistant.knowledgebases.forEach((kb: any) => {
+            if (kb.type === 'text' && kb.note) {
+                notes.push(kb.note)
+            } else if (kb.type === 'url' && kb.url) {
+                urls.push(kb.url)
+            }
+        })
+
+        // Process shared users
+        const sharedUsers = assistant.contacts.map((contact: any) => {
+            const permissions = JSON.parse(contact.permissions as string || '[]')
+            return {
+                id: contact.user.id.toString(),
+                name: contact.user.name || '',
+                email: contact.user.email || '',
+                permissions: {
+                    chat: permissions.includes('chat'),
+                    contact: permissions.includes('contacts'),
+                    messenger: permissions.includes('messenger'),
+                    artifact: permissions.includes('artifacts'),
+                    newsFeed: permissions.includes('newsfeed'),
+                }
+            }
+        })
+
+        return {
+            success: true,
+            assistant: {
+                id: assistant.id.toString(),
+                name: assistant.name,
+                price: Number(assistant.price).toString(),
+                category: categoryMap[assistant.category] || "Other",
+                description: assistant.description || "",
+                imageURL: assistant.image,
+                instructions: assistant.instructions || "",
+                permissionLevel: assistant.public ? "public" : "private",
+                notes,
+                urls,
+                sharedUsers,
+                apiConfiguration: assistant.apiConfiguration ? {
+                    authenticationType: assistant.apiConfiguration.authenticationType || "none",
+                    apiKey: assistant.apiConfiguration.apiKey || "",
+                    authType: assistant.apiConfiguration.authType || "basic",
+                    customHeaderName: assistant.apiConfiguration.customHeaderName || "",
+                    clientId: assistant.apiConfiguration.clientId || "",
+                    clientSecret: assistant.apiConfiguration.clientSecret || "",
+                    authorizationUrl: assistant.apiConfiguration.authorizationUrl || "",
+                    tokenUrl: assistant.apiConfiguration.tokenUrl || "",
+                    scope: assistant.apiConfiguration.scope || "",
+                    tokenExchangeMethod: assistant.apiConfiguration.tokenExchangeMethod || "post",
+                    schemaText: assistant.apiConfiguration.schemaText || "",
+                    schema: assistant.apiConfiguration.schema,
+                } : {
+                    authenticationType: "none",
+                    apiKey: "",
+                    authType: "basic",
+                    customHeaderName: "",
+                    clientId: "",
+                    clientSecret: "",
+                    authorizationUrl: "",
+                    tokenUrl: "",
+                    scope: "",
+                    tokenExchangeMethod: "post",
+                    schemaText: "",
+                    schema: null,
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching assistant for edit:', error)
+        return {
+            success: false,
+            error: 'Failed to fetch assistant',
+            assistant: null
+        }
+    }
+}
+
+/**
+ * Update complete assistant (similar to create but updates existing)
+ */
+export async function updateCompleteAssistant(
+    assistantId: string,
+    params: CreateCompleteAssistantParams
+): Promise<AssistantActionResponse> {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: 'Authentication required'
+            }
+        }
+
+        const userId = BigInt(session.user.id)
+        const assistantBigInt = BigInt(assistantId)
+
+        // Check if assistant exists and user owns it
+        const existingAssistant = await prisma.assistant.findUnique({
+            where: { id: assistantBigInt }
+        })
+
+        if (!existingAssistant) {
+            return {
+                success: false,
+                error: 'Assistant not found'
+            }
+        }
+
+        if (existingAssistant.userId !== userId) {
+            return {
+                success: false,
+                error: 'You do not have permission to edit this assistant'
+            }
+        }
+
+        // Parse and validate price
+        const parsedPrice = parseFloat(params.price)
+        if (isNaN(parsedPrice) || parsedPrice < 0) {
+            return {
+                success: false,
+                error: 'Invalid price format'
+            }
+        }
+
+        // Map category string to enum
+        const categoryEnumMap: Record<AssistantCategory, any> = {
+            "Education": "EDUCATION",
+            "Travelling": "TRAVEL",
+            "Programming": "PROGRAMMING",
+            "Markteting": "MARKETING",
+            "Analysis": "ANALYSIS",
+            "Booking": "BOOKING",
+            "Other": "OTHER"
+        }
+
+        const mappedCategory = categoryEnumMap[params.category] || "OTHER"
+        const isPublic = params.permissionLevel === 'public'
+
+        // Update assistant basic info
+        await prisma.assistant.update({
+            where: { id: assistantBigInt },
+            data: {
+                name: params.name.trim(),
+                price: parsedPrice,
+                category: mappedCategory,
+                description: params.description.trim(),
+                instructions: params.instructions?.trim() || null,
+                public: isPublic,
+            }
+        })
+
+        // Update image if provided
+        if (params.imageData && params.imageData.startsWith('data:image/')) {
+            try {
+                const base64Data = params.imageData.split(',')[1]
+                const imageBuffer = Buffer.from(base64Data, 'base64')
+                
+                const mimeMatch = params.imageData.match(/data:image\/(\w+);/)
+                const extension = mimeMatch ? mimeMatch[1] : 'png'
+                
+                const fileName = `assistant_${assistantId}_${Date.now()}.${extension}`
+                const mimeType = `image/${extension}`
+                
+                const imageUrl = await uploadToS3(imageBuffer, fileName, mimeType, 'assistants')
+                
+                await prisma.assistant.update({
+                    where: { id: assistantBigInt },
+                    data: { image: imageUrl }
+                })
+            } catch (imageError) {
+                console.error('Error updating image:', imageError)
+            }
+        }
+
+        // Update knowledge base - delete existing and recreate
+        // First, fetch existing knowledgebase records to get file IDs
+        const existingKnowledgebase = await prisma.assistantKnowledgebase.findMany({
+            where: { assistantId: assistantBigInt },
+            select: { vectorFileId: true }
+        })
+
+        // Delete files from vector store before deleting from database
+        let vectorStoreId = existingAssistant.vectorStoreId
+        if (vectorStoreId) {
+            for (const kb of existingKnowledgebase) {
+                if (kb.vectorFileId) {
+                    try {
+                        await deleteFileFromVectorStore(vectorStoreId, kb.vectorFileId)
+                    } catch (deleteError) {
+                        console.error(`Error deleting file ${kb.vectorFileId} from vector store:`, deleteError)
+                        // Continue with other files even if one fails
+                    }
+                }
+            }
+        }
+
+        // Now delete from database
+        await prisma.assistantKnowledgebase.deleteMany({
+            where: { assistantId: assistantBigInt }
+        })
+
+        // Create vector store if needed and doesn't exist
+        if ((params.notes.length > 0 || params.urls.length > 0 || params.files.length > 0) && !vectorStoreId) {
+            try {
+                const vectorStoreName = `${params.name}_${randomUUID()}`
+                vectorStoreId = await createVectorStore(vectorStoreName)
+                
+                await prisma.assistant.update({
+                    where: { id: assistantBigInt },
+                    data: { vectorStoreId }
+                })
+            } catch (vectorStoreError) {
+                console.error('Error creating vector store:', vectorStoreError)
+            }
+        }
+
+        // Add new knowledge base items
+        if (vectorStoreId) {
+            for (const note of params.notes) {
+                if (note.trim()) {
+                    try {
+                        const noteIndex = params.notes.indexOf(note)
+                        const noteName = `note_${noteIndex + 1}_${Date.now()}`
+                        
+                        const vectorFileId = await addNoteToVectorStore(
+                            vectorStoreId!,
+                            note.trim(),
+                            noteName
+                        )
+                        
+                        await prisma.assistantKnowledgebase.create({
+                            data: {
+                                assistantId: assistantBigInt,
+                                note: note.trim(),
+                                vectorFileId: vectorFileId,
+                                type: 'text',
+                            }
+                        })
+                    } catch (noteError) {
+                        console.error(`Error processing note:`, noteError)
+                    }
+                }
+            }
+
+            for (const url of params.urls) {
+                if (url.trim()) {
+                    try {
+                        await prisma.assistantKnowledgebase.create({
+                            data: {
+                                assistantId: assistantBigInt,
+                                url: url.trim(),
+                                isCrawled: false,
+                                type: 'url',
+                            }
+                        })
+                        
+                        triggerWebScraping({
+                            url: url.trim(),
+                            vectorStoreId: vectorStoreId!,
+                            maxPages: 20,
+                        }).catch((err) => {
+                            console.error(`Error triggering scraping for ${url}:`, err)
+                        })
+                    } catch (urlError) {
+                        console.error(`Error processing URL ${url}:`, urlError)
+                    }
+                }
+            }
+
+            for (const file of params.files) {
+                try {
+                    const buffer = Buffer.from(await file.arrayBuffer())
+                    const fileFileName = `${file.name}.${file.type}`
+                    const fileUrl = await uploadToS3(buffer, fileFileName, file.type, 'knowledge-base')
+                    
+                    const vectorFileId = await uploadAndAddToVectorStore(
+                        vectorStoreId!,
+                        buffer,
+                        file.name
+                    )
+                    
+                    await prisma.assistantKnowledgebase.create({
+                        data: {
+                            assistantId: assistantBigInt,
+                            file: fileUrl,
+                            vectorFileId: vectorFileId,
+                            type: 'file',
+                        }
+                    })
+                } catch (fileError) {
+                    console.error(`Error processing file ${file.name}:`, fileError)
+                }
+            }
+        }
+
+        // Update API configuration
+        try {
+            const existingApiConfig = await prisma.assistantApiConfiguration.findUnique({
+                where: { assistantId: assistantBigInt }
+            })
+
+            const apiConfigData = {
+                authenticationType: params.authenticationType,
+                apiKey: params.authenticationType === 'api_key' ? params.apiKey : null,
+                authType: params.authenticationType === 'api_key' ? params.authType : null,
+                customHeaderName: params.authenticationType === 'api_key' ? params.customHeaderName : null,
+                clientId: params.authenticationType === 'oauth' ? params.clientId : null,
+                clientSecret: params.authenticationType === 'oauth' ? params.clientSecret : null,
+                authorizationUrl: params.authenticationType === 'oauth' ? params.authorizationUrl : null,
+                tokenUrl: params.authenticationType === 'oauth' ? params.tokenUrl : null,
+                scope: params.authenticationType === 'oauth' ? params.scope : null,
+                tokenExchangeMethod: params.authenticationType === 'oauth' ? params.tokenExchangeMethod : null,
+                schemaText: params.schemaText,
+                schema: params.schema,
+            }
+
+            if (existingApiConfig) {
+                await prisma.assistantApiConfiguration.update({
+                    where: { assistantId: assistantBigInt },
+                    data: apiConfigData
+                })
+            } else {
+                await prisma.assistantApiConfiguration.create({
+                    data: {
+                        assistantId: assistantBigInt,
+                        ...apiConfigData
+                    }
+                })
+            }
+        } catch (apiConfigError) {
+            console.error('Error updating API configuration:', apiConfigError)
+        }
+
+        // Update sharing permissions - delete existing shared users (except owner) and recreate
+        await prisma.assistantContact.deleteMany({
+            where: {
+                assistantId: assistantBigInt,
+                userId: {
+                    not: userId // Keep owner
+                }
+            }
+        })
+
+        // Add shared users
+        if (params.sharedUsers.length > 0) {
+            try {
+                for (const sharedUser of params.sharedUsers) {
+                    const sharedUserId = BigInt(sharedUser.id)
+                    
+                    if (sharedUserId === userId) continue
+                    
+                    const permissionArray: string[] = []
+                    if (sharedUser.permissions.chat) permissionArray.push('chat')
+                    if (sharedUser.permissions.contact) permissionArray.push('contacts')
+                    if (sharedUser.permissions.messenger) permissionArray.push('messenger')
+                    if (sharedUser.permissions.newsFeed) permissionArray.push('newsfeed')
+                    if (sharedUser.permissions.artifact) permissionArray.push('artifacts')
+                    
+                    await prisma.assistantContact.create({
+                        data: {
+                            assistantId: assistantBigInt,
+                            userId: sharedUserId,
+                            access: 'user',
+                            permissions: JSON.stringify(permissionArray),
+                        }
+                    })
+                }
+            } catch (permissionsError) {
+                console.error('Error updating permissions:', permissionsError)
+            }
+        }
+
+        revalidatePath('/assistants')
+        revalidatePath(`/assistants/${assistantId}`)
+
+        return {
+            success: true,
+            assistantId
+        }
+    } catch (error) {
+        console.error('Error updating assistant:', error)
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to update assistant'
         }
     }
 }

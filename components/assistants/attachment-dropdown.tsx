@@ -19,6 +19,7 @@ interface AttachmentDropdownProps {
     onChatWithArtifact?: () => void
     disabled?: boolean
     mode?: "ask-b" | "assistant"
+    assistantId?: string
 }
 
 const SESSION_STORAGE_KEY = "chat_search_mode"
@@ -30,6 +31,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     onChatWithArtifact,
     disabled = false,
     mode = "assistant",
+    assistantId,
 }) => {
     const [isOpen, setIsOpen] = useState(false)
     const [selectedMode, setSelectedMode] = useState<"webSearch" | "research" | null>(null)

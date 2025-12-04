@@ -74,6 +74,12 @@ export async function createChatWithMessage(data: {
   }[]
   webSearch?: boolean
   research?: boolean
+  artifact?: {
+    id: string
+    name: string
+    instructions: string
+    htmlContent: string
+  }
   skipBackground?: boolean // Skip background processing (for streaming)
 }) {
   try {
@@ -1132,6 +1138,12 @@ export async function sendChatMessage(data: {
   }[]
   webSearch?: boolean
   research?: boolean
+  artifact?: {
+    id: string
+    name: string
+    instructions: string
+    htmlContent: string
+  }
   skipBackground?: boolean // Skip background processing (for streaming)
 }) {
   try {

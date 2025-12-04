@@ -14,9 +14,15 @@ import { toast } from "sonner"
 import { useWizardStore } from "@/lib/stores/wizard-store"
 import { AssistantFormData } from "@/types/assistant"
 import { useRouter } from "next/navigation"
-import { createCompleteAssistant } from "@/app/actions/assistant.action"
+import { createCompleteAssistant, updateCompleteAssistant } from "@/app/actions/assistant.action"
 
-export function AssistantWizard() {
+interface AssistantWizardProps {
+  assistantId?: string
+  initialData?: AssistantFormData
+  mode?: "create" | "edit"
+}
+
+export function AssistantWizard({ assistantId, initialData, mode = "create" }: AssistantWizardProps) {
   const router = useRouter()
   const currentStep = useWizardStore((state) => state.currentStep)
   const setCurrentStep = useWizardStore((state) => state.setCurrentStep)
@@ -26,39 +32,43 @@ export function AssistantWizard() {
   // Loading state for final submission
   const [isCreating, setIsCreating] = useState(false)
 
-  const [formData, setFormData] = useState<AssistantFormData>({
-    name: "",
-    price: "",
-    category: "Other",
-    description: "",
-    image: null, // For preview (base64)
-    imageURL: null,
-    notes: [],
-    urls: [],
-    files: [],
-    instructions: "",
-    authenticationType: "none",
-    apiKey: "",
-    authType: "basic",
-    clientId: "",
-    clientSecret: "",
-    authorizationUrl: "",
-    tokenUrl: "",
-    scope: "",
-    tokenExchangeMethod: "post",
-    schema: null,
-    schemaText: "",
-    permissionLevel: "private",
-    sharedUsers: [],
-  })
-
-  // Reset wizard when component mounts
-  useEffect(() => {
-    resetWizard()
-    return () => {
-      resetWizard()
+  const [formData, setFormData] = useState<AssistantFormData>(
+    initialData || {
+      name: "",
+      price: "",
+      category: "Other",
+      description: "",
+      image: null, // For preview (base64)
+      imageURL: null,
+      notes: [],
+      urls: [],
+      files: [],
+      instructions: "",
+      authenticationType: "none",
+      apiKey: "",
+      authType: "basic",
+      clientId: "",
+      clientSecret: "",
+      authorizationUrl: "",
+      tokenUrl: "",
+      scope: "",
+      tokenExchangeMethod: "post",
+      schema: null,
+      schemaText: "",
+      permissionLevel: "private",
+      sharedUsers: [],
     }
-  }, [resetWizard])
+  )
+
+  // Reset wizard when component mounts (only for create mode)
+  useEffect(() => {
+    if (mode === "create") {
+      resetWizard()
+      return () => {
+        resetWizard()
+      }
+    }
+  }, [resetWizard, mode])
 
   const updateFormData = (data: Partial<AssistantFormData>) => {
     setFormData((prev) => ({ ...prev, ...data }))
@@ -123,7 +133,7 @@ export function AssistantWizard() {
     setIsCreating(true)
 
     try {
-      const result = await createCompleteAssistant({
+      const params = {
         // Step 1: Basic Info
         name: formData.name,
         price: formData.price,
@@ -158,10 +168,17 @@ export function AssistantWizard() {
         // Step 6: Sharing
         permissionLevel: formData.permissionLevel,
         sharedUsers: formData.sharedUsers,
-      })
+      }
+
+      let result
+      if (mode === "edit" && assistantId) {
+        result = await updateCompleteAssistant(assistantId, params)
+      } else {
+        result = await createCompleteAssistant(params)
+      }
 
       if (result.success) {
-        toast.success("Assistant created successfully!")
+        toast.success(mode === "edit" ? "Assistant updated successfully!" : "Assistant created successfully!")
         addCompletedStep(6)
         
         // Show additional info for URLs being processed
@@ -172,14 +189,18 @@ export function AssistantWizard() {
           )
         }
         
-        // Redirect to assistants list
-        router.push('/assistants')
+        // Redirect to assistant detail page or list
+        if (mode === "edit" && assistantId) {
+          router.push(`/assistants/${assistantId}`)
+        } else {
+          router.push('/assistants')
+        }
       } else {
-        toast.error(result.error || "Failed to create assistant")
+        toast.error(result.error || `Failed to ${mode === "edit" ? "update" : "create"} assistant`)
       }
     } catch (error) {
-      console.error("Error creating assistant:", error)
-      toast.error("Failed to create assistant")
+      console.error(`Error ${mode === "edit" ? "updating" : "creating"} assistant:`, error)
+      toast.error(`Failed to ${mode === "edit" ? "update" : "create"} assistant`)
     } finally {
       setIsCreating(false)
     }
@@ -236,7 +257,7 @@ export function AssistantWizard() {
             className="flex items-center gap-2"
           >
             {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
-            Create Assistant
+            {mode === "edit" ? "Update Assistant" : "Create Assistant"}
           </Button>
         )}
       </div>

@@ -187,7 +187,20 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                                         const hasOnlyImage = node?.children?.length === 1 && 
                                             node.children[0]?.type === 'element' && 
                                             node.children[0]?.tagName === 'img'
-                                        return hasOnlyImage ? <>{children}</> : <p className="mb-2 last:mb-0">{children}</p>
+                                        
+                                        // Check if paragraph is inside a blockquote for Discord-style spacing
+                                        const isInBlockquote = (node as any)?.parent?.type === 'blockquote'
+                                        
+                                        if (hasOnlyImage) {
+                                            return <>{children}</>
+                                        }
+                                        
+                                        // In blockquotes, paragraphs should have minimal margin for Discord-style compact spacing
+                                        if (isInBlockquote) {
+                                            return <p className="mb-1 last:mb-0">{children}</p>
+                                        }
+                                        
+                                        return <p className="mb-2 last:mb-0">{children}</p>
                                     },
 
                                     img: ({ src, alt }) => {
@@ -271,7 +284,25 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                                     ul: ({ children }) => <ul className="my-3 ml-6 list-disc space-y-1">{children}</ul>,
                                     ol: ({ children }) => <ol className="my-3 ml-6 list-decimal space-y-1">{children}</ol>,
                                     li: ({ children }) => <li className="my-1">{children}</li>,
-                                    blockquote: ({ children }) => <blockquote className="border-l-4 border-primary/50 pl-4 my-3 italic text-muted-foreground">{children}</blockquote>,
+                                    blockquote: ({ children, node }) => {
+                                        // Discord-style blockquote with colored left border
+                                        // Check if nested by looking at parent in the AST
+                                        const isNested = (node as any)?.parent?.type === 'blockquote'
+                                        
+                                        const borderColor = isNested 
+                                            ? 'border-l-[#FEE75C]' // Discord yellow for nested quote
+                                            : 'border-l-[#5865F2]' // Discord blurple for single quote
+                                        
+                                        return (
+                                            <blockquote 
+                                                className={`${borderColor} border-l-4 pl-4 my-2 bg-muted/30 dark:bg-muted/20 py-2 rounded-r`}
+                                            >
+                                                <div className="text-foreground whitespace-pre-wrap leading-relaxed">
+                                                    {children}
+                                                </div>
+                                            </blockquote>
+                                        )
+                                    },
                                     a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">{children}</a>,
                                     strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
                                     em: ({ children }) => <em className="italic">{children}</em>,

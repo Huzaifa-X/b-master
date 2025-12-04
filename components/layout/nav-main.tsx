@@ -24,7 +24,7 @@ export function NavMain() {
   }, [pathname, setAssistantMode, clearAssistantMode])
 
   // Show wizard progress on assistant creation routes
-  if (pathname.startsWith("/assistants/add") || pathname.startsWith("/assistants/new")) {
+  if (pathname.startsWith("/assistants/add") || pathname.startsWith("/assistants/new") || (pathname.startsWith("/assistants/") && pathname.includes("/edit"))) {
     return <NavWizardProgress />
   }
 

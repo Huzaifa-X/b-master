@@ -1,0 +1,73 @@
+import { NextRequest } from "next/server"
+import OpenAI from "openai"
+
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+})
+
+export async function POST(req: NextRequest) {
+    const encoder = new TextEncoder()
+
+    const stream = new ReadableStream({
+        async start(controller) {
+            try {
+                const formData = await req.formData()
+                const audio = formData.get("audio") as Blob
+                const language = formData.get("language") as string || "auto"
+
+                if (!audio) {
+                    controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({ error: "No audio file" })}\n\n`)
+                    )
+                    controller.close()
+                    return
+                }
+
+                // Convert Blob to File
+                const file = new File([audio], "recording.webm", { 
+                    type: audio.type || "audio/webm" 
+                })
+
+                // Use gpt-4o-mini-transcribe for streaming support
+                const transcriptionStream = await openai.audio.transcriptions.create({
+                    file: file,
+                    model: "gpt-4o-mini-transcribe",
+                    language: language === "auto" ? undefined : language,
+                    response_format: "text",
+                    stream: true,
+                })
+
+                // Stream the transcription events
+                for await (const event of transcriptionStream) {
+                    // Send each chunk to the client
+                    controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify(event)}\n\n`)
+                    )
+                }
+
+                // Send done signal
+                controller.enqueue(encoder.encode(`data: [DONE]\n\n`))
+                controller.close()
+
+            } catch (error) {
+                console.error("Transcription error:", error)
+                controller.enqueue(
+                    encoder.encode(
+                        `data: ${JSON.stringify({ 
+                            error: error instanceof Error ? error.message : "Transcription failed" 
+                        })}\n\n`
+                    )
+                )
+                controller.close()
+            }
+        },
+    })
+
+    return new Response(stream, {
+        headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    })
+}

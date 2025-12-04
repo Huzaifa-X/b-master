@@ -8,11 +8,11 @@ import { NavListAssistant } from "./nav-list-assistant"
 export function NavList() {
   const pathname = usePathname()
 
-  if (pathname.startsWith("/assistants/") && !pathname.startsWith("/assistants/add")) {
+  if (pathname.startsWith("/assistants/") && !pathname.startsWith("/assistants/add") && !pathname.includes("/edit")) {
     return <NavListAssistant />
   }
 
-  if (pathname.startsWith("/assistants/add") || pathname.startsWith("/assistants/new")) {
+  if (pathname.startsWith("/assistants/add") || pathname.startsWith("/assistants/new") || (pathname.startsWith("/assistants/") && pathname.includes("/edit"))) {
     return null
   }
 

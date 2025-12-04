@@ -589,6 +589,7 @@ export async function getArtifacts(assistantId: string) {
             name: artifact.name || 'Untitled Artifact',
             category: artifact.category || 'others',
             htmlContent: artifact.code || '',
+            instructions: artifact.instructions || '',
             createdAt: artifact.createdAt,
             creator: {
                 id: artifact.user.id.toString(),
