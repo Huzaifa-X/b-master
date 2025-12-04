@@ -1,13 +1,24 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Tabs } from "@/components/ui/vercel-tabs"
 import { AssistantCard } from "@/components/assistants/assistant-card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, Plus, Bot } from "lucide-react"
+import { Search, Plus, Bot, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
+import { useAssistants } from "@/hooks/useAssistants"
+import { useQuery } from "@tanstack/react-query"
+import { getAssistants } from "@/app/actions/assistant.action"
+import { useDebounce } from "@/hooks/useDebounce"
+import { Skeleton } from "@/components/ui/skeleton"
+import { PurchaseAssistantDialog } from "@/components/assistants/purchase-assistant-dialog"
+
+const TABS = [
+    { id: "marketplace", label: "Marketplace Assistants" },
+    { id: "my", label: "My Assistants" },
+]
 
 interface Assistant {
     id: string
@@ -19,196 +30,78 @@ interface Assistant {
     createdAt?: string
 }
 
-// Mock data for My Assistants
-const myAssistants: Assistant[] = [
-    {
-        id: "1",
-        name: "Marketing Assistant",
-        price: 29.99,
-        description: "Helps create marketing content, social media posts, and campaign strategies",
-        image: "/bmaster-icon.png",
-        category: "Marketing",
-        createdAt: "2024-01-15",
-    },
-    {
-        id: "2",
-        name: "Code Review Helper",
-        price: 49.99,
-        description: "Reviews code, suggests improvements, and helps with debugging complex issues",
-        image: "/bmaster-icon.png",
-        category: "Development",
-        createdAt: "2024-02-20",
-    },
-    {
-        id: "3",
-        name: "Content Writer",
-        price: 19.99,
-        description: "Creates blog posts, articles, and SEO-optimized content for your business",
-        image: "/bmaster-icon.png",
-        category: "Writing",
-        createdAt: "2024-03-10",
-    },
-    {
-        id: "4",
-        name: "Data Analyst",
-        price: 39.99,
-        description: "Analyzes data, creates reports, and provides insights for business decisions",
-        image: "/bmaster-icon.png",
-        category: "Analytics",
-        createdAt: "2024-03-25",
-    },
-    {
-        id: "5",
-        name: "Customer Support",
-        price: 24.99,
-        description: "Handles customer inquiries, provides support, and resolves issues efficiently",
-        image: "/bmaster-icon.png",
-        category: "Support",
-        createdAt: "2024-04-05",
-    },
-    {
-        id: "6",
-        name: "Sales Assistant",
-        price: 34.99,
-        description: "Helps with sales pitches, lead generation, and customer relationship management",
-        image: "/bmaster-icon.png",
-        category: "Sales",
-        createdAt: "2024-04-20",
-    },
-]
-
-// Mock data for Purchased Assistants
-const purchasedAssistants: Assistant[] = [
-    {
-        id: "p1",
-        name: "Email Marketing Pro",
-        price: 45.00,
-        description: "Advanced email campaign management with A/B testing and analytics",
-        image: "/bmaster-icon.png",
-        category: "Marketing",
-    },
-    {
-        id: "p2",
-        name: "SEO Optimizer",
-        price: 55.00,
-        description: "Optimize your content for search engines and improve rankings",
-        image: "/bmaster-icon.png",
-        category: "SEO",
-    },
-    {
-        id: "p3",
-        name: "Legal Document Assistant",
-        price: 89.99,
-        description: "Helps draft legal documents, contracts, and agreements",
-        image: "/bmaster-icon.png",
-        category: "Legal",
-    },
-    {
-        id: "p4",
-        name: "Financial Advisor",
-        price: 79.99,
-        description: "Provides financial advice, budgeting tips, and investment strategies",
-        image: "/bmaster-icon.png",
-        category: "Finance",
-    },
-    {
-        id: "p5",
-        name: "Fitness Coach",
-        price: 29.99,
-        description: "Creates workout plans, nutrition guides, and fitness tracking",
-        image: "/bmaster-icon.png",
-        category: "Health",
-    },
-    {
-        id: "p6",
-        name: "Language Tutor",
-        price: 39.99,
-        description: "Helps learn new languages with interactive lessons and practice",
-        image: "/bmaster-icon.png",
-        category: "Education",
-    },
-]
-
-// Mock data for Shared Assistants
-const sharedAssistants: Assistant[] = [
-    {
-        id: "s1",
-        name: "Team Productivity",
-        price: 0,
-        description: "Shared by team lead for project management and task tracking",
-        image: "/bmaster-icon.png",
-        category: "Productivity",
-    },
-    {
-        id: "s2",
-        name: "Design Review Assistant",
-        price: 0,
-        description: "Shared by design team for reviewing UI/UX and providing feedback",
-        image: "/bmaster-icon.png",
-        category: "Design",
-    },
-    {
-        id: "s3",
-        name: "HR Onboarding",
-        price: 0,
-        description: "Shared by HR for new employee onboarding and training",
-        image: "/bmaster-icon.png",
-        category: "HR",
-    },
-    {
-        id: "s4",
-        name: "Research Assistant",
-        price: 0,
-        description: "Shared by research team for academic research and literature review",
-        image: "/bmaster-icon.png",
-        category: "Research",
-    },
-    {
-        id: "s5",
-        name: "Meeting Notes",
-        price: 0,
-        description: "Shared by team for taking and organizing meeting notes",
-        image: "/bmaster-icon.png",
-        category: "Productivity",
-    },
-    {
-        id: "s6",
-        name: "Documentation Writer",
-        price: 0,
-        description: "Shared by tech team for creating technical documentation",
-        image: "/bmaster-icon.png",
-        category: "Documentation",
-    },
-]
-
-const TABS = [
-    { id: "marketplace", label: "Marketplace Assistants" },
-    { id: "my", label: "My Assistants" },
-]
-
 export default function StorePage() {
     const router = useRouter()
-    const [activeTab, setActiveTab] = useState("marketplace")
+    const [activeTab, setActiveTab] = useState<"marketplace" | "my">("marketplace")
     const [searchQuery, setSearchQuery] = useState("")
+    const debouncedSearch = useDebounce(searchQuery, 500)
+    const [selectedAssistant, setSelectedAssistant] = useState<Assistant | null>(null)
+    const [isDialogOpen, setIsDialogOpen] = useState(false)
+
+    // For "My Assistants" tab - use the same hook as assistants page
+    const {
+        assistants: myAssistants,
+        isLoading: isLoadingMy,
+        isError: isErrorMy,
+        error: errorMy,
+    } = useAssistants({
+        type: "my",
+        search: debouncedSearch,
+        limit: 100, // Get more for store page
+    })
+
+    // For "Marketplace Assistants" tab - get public assistants
+    const {
+        data: marketplaceData,
+        isLoading: isLoadingMarketplace,
+        isError: isErrorMarketplace,
+        error: errorMarketplace,
+    } = useQuery({
+        queryKey: ["assistants", "public", debouncedSearch],
+        queryFn: async () => {
+            const result = await getAssistants({
+                type: "public",
+                search: debouncedSearch,
+                limit: 100,
+            })
+            if (!result.success) {
+                throw new Error(result.error || "Failed to fetch assistants")
+            }
+            return result
+        },
+        staleTime: 2 * 60 * 1000, // 2 minutes
+    })
+
+    const marketplaceAssistants = marketplaceData?.assistants || []
 
     const getCurrentAssistants = () => {
         switch (activeTab) {
             case "marketplace":
-                return purchasedAssistants
+                return marketplaceAssistants
             case "my":
-                return myAssistants
+                return myAssistants || []
             default:
                 return []
         }
     }
 
-    const filteredAssistants = getCurrentAssistants().filter((assistant) =>
-        assistant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        assistant.description.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    const isLoading = activeTab === "marketplace" ? isLoadingMarketplace : isLoadingMy
+    const isError = activeTab === "marketplace" ? isErrorMarketplace : isErrorMy
+    const error = activeTab === "marketplace" ? errorMarketplace : errorMy
+    const filteredAssistants = getCurrentAssistants()
+
+    // Reset search when tab changes
+    useEffect(() => {
+        setSearchQuery("")
+    }, [activeTab])
 
     const handleCreateNew = () => {
         router.push("/assistants/add")
+    }
+
+    const handleMarketplaceClick = (assistant: Assistant) => {
+        setSelectedAssistant(assistant)
+        setIsDialogOpen(true)
     }
 
     return (
@@ -246,42 +139,92 @@ export default function StorePage() {
                     </div>
 
                     {/* Tabs */}
-                    <Tabs tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+                    <Tabs tabs={TABS} activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as typeof activeTab)} />
                 </div>
 
-                {/* Assistants Grid */}
-                {filteredAssistants.length > 0 ? (
+                {/* Loading State */}
+                {isLoading && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
-                        {filteredAssistants.map((assistant) => (
-                            <AssistantCard
-                                key={assistant.id}
-                                assistant={assistant}
-                                tabType={activeTab as "marketplace" | "my"}
-                            />
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <div key={i} className="space-y-3">
+                                <Skeleton className="h-48 w-full rounded-lg" />
+                                <Skeleton className="h-4 w-3/4" />
+                                <Skeleton className="h-4 w-1/2" />
+                            </div>
                         ))}
                     </div>
-                ) : searchQuery ? (
+                )}
+
+                {/* Error State */}
+                {isError && (
                     <div className="text-center py-16">
-                        <Search className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                        <h3 className="text-lg font-semibold mb-2">No results found</h3>
-                        <p className="text-sm text-muted-foreground">
-                            Try searching with different keywords
-                        </p>
-                    </div>
-                ) : (
-                    <div className="text-center py-16">
-                        <Bot className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                        <h3 className="text-lg font-semibold mb-2">
-                            {activeTab === "my" && "No assistants created yet"}
-                            {activeTab === "marketplace" && "No marketplace assistants"}
-                        </h3>
+                        <Bot className="h-16 w-16 mx-auto mb-4 text-destructive" />
+                        <h3 className="text-lg font-semibold mb-2">Error loading assistants</h3>
                         <p className="text-sm text-muted-foreground mb-4">
-                            {activeTab === "my" && "Create your first assistant to get started"}
-                            {activeTab === "marketplace" && "Browse the marketplace to discover assistants"}
+                            {typeof error === "string" ? error : error?.message || "Something went wrong"}
                         </p>
                     </div>
                 )}
+
+                {/* Assistants Grid */}
+                {!isLoading && !isError && (
+                    <>
+                        {filteredAssistants.length > 0 ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+                                {filteredAssistants.map((assistant) => (
+                                    <AssistantCard
+                                        key={assistant.id}
+                                        assistant={{
+                                            id: assistant.id,
+                                            name: assistant.name,
+                                            price: assistant.price,
+                                            description: assistant.description || "",
+                                            image: assistant.image || "/bmaster-icon.png",
+                                            category: assistant.category,
+                                            createdAt: assistant.createdAt?.toString()
+                                        }}
+                                        tabType={activeTab}
+                                        onMarketplaceClick={handleMarketplaceClick}
+                                    />
+                                ))}
+                            </div>
+                        ) : searchQuery ? (
+                            <div className="text-center py-16">
+                                <Search className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                                <h3 className="text-lg font-semibold mb-2">No results found</h3>
+                                <p className="text-sm text-muted-foreground">
+                                    Try searching with different keywords
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="text-center py-16">
+                                <Bot className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                                <h3 className="text-lg font-semibold mb-2">
+                                    {activeTab === "my" && "No assistants created yet"}
+                                    {activeTab === "marketplace" && "No marketplace assistants"}
+                                </h3>
+                                <p className="text-sm text-muted-foreground mb-4">
+                                    {activeTab === "my" && "Create your first assistant to get started"}
+                                    {activeTab === "marketplace" && "Browse the marketplace to discover assistants"}
+                                </p>
+                                {activeTab === "my" && (
+                                    <Button onClick={handleCreateNew} className="mt-4">
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Create Assistant
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+                    </>
+                )}
             </div>
+
+            {/* Purchase Dialog */}
+            <PurchaseAssistantDialog
+                open={isDialogOpen}
+                onOpenChange={setIsDialogOpen}
+                assistant={selectedAssistant}
+            />
         </div>
     )
 }

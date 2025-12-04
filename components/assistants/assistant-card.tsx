@@ -19,18 +19,21 @@ interface Assistant {
 interface AssistantCardProps {
   assistant: Assistant
   tabType: "my" | "purchased" | "shared" | "marketplace"
+  onMarketplaceClick?: (assistant: Assistant) => void
 }
 
-export function AssistantCard({ assistant, tabType }: AssistantCardProps) {
+export function AssistantCard({ assistant, tabType, onMarketplaceClick }: AssistantCardProps) {
   const router = useRouter()
   const [isHovered, setIsHovered] = useState(false)
   const isMyAssistants = tabType === "my"
   
   const handleClick = () => {
-    // Don't route for marketplace assistants
-    if (tabType === "marketplace") {
+    // Open dialog for marketplace assistants
+    if (tabType === "marketplace" && onMarketplaceClick) {
+      onMarketplaceClick(assistant)
       return
     }
+    // Route for other types
     router.push(`/assistants/${assistant.id}`)
   }
 

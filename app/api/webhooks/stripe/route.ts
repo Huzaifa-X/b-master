@@ -43,193 +43,174 @@ export async function POST(req: NextRequest) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session
 
-        console.log("📦 Checkout session completed:", {
-          sessionId: session.id,
-          mode: session.mode,
-          subscription: session.subscription,
-          metadata: session.metadata,
-        })
+        console.log("📦 Checkout session completed")
 
-        // Only handle subscription checkouts
-        if (session.mode === "subscription" && session.subscription) {
-          const subscriptionId = typeof session.subscription === "string" 
-            ? session.subscription 
-            : session.subscription.id
-
-          // ✅ Use expand to get full subscription object
-          const subscription: Stripe.Subscription = await stripe.subscriptions.retrieve(
-            subscriptionId,
-            { expand: ['items.data.price.product'] }
-          )
-
-          console.log("📋 Subscription retrieved:", {
-            subscriptionId: subscription.id,
-            status: subscription.status,
-            subscriptionMetadata: subscription.metadata,
-          })
-
-          // ✅ Get metadata from session or subscription (metadata can be on either)
-          const userIdStr = session.metadata?.userId || subscription.metadata?.userId
-          const planIdStr = session.metadata?.planId || subscription.metadata?.planId
-
-          if (!userIdStr || !planIdStr) {
-            console.error("❌ Missing userId or planId in metadata", {
-              sessionMetadata: session.metadata,
-              subscriptionMetadata: subscription.metadata,
-            })
-            break
-          }
-
-          const userId = BigInt(userIdStr)
-          const planId = parseInt(planIdStr)
-
-          if (planId === 0 || isNaN(planId)) {
-            console.error("❌ Invalid planId in metadata", { planIdStr, planId })
-            break
-          }
-
-          console.log("✅ Parsed metadata:", { userId: userId.toString(), planId })
-
-          // ✅ Get the price details
-          const priceId = subscription.items.data[0]?.price.id
-          if (!priceId) {
-            console.error("No price ID found in subscription")
-            break
-          }
-          console.log("priceId", priceId)
-          const price: Stripe.Price = await stripe.prices.retrieve(priceId)
-
-          // ✅ Check if subscription already exists to avoid duplicates
-          const existingSubscription = await prisma.subscription.findUnique({
-            where: {
-              stripeSubscriptionId: subscription.id,
-            },
-          })
-          console.log("existingSubscription", existingSubscription)
-          if (existingSubscription) {
-            console.log(`Subscription already exists: ${subscription.id}`)
-            break
-          }
-
-          // ✅ Map subscription status correctly (handle all possible statuses)
-          let status: "active" | "canceled" | "past_due" | "unpaid" | "trialing" = "active"
-          if (subscription.status === "active") {
-            status = "active"
-          } else if (subscription.status === "trialing") {
-            status = "trialing"
-          } else if (subscription.status === "canceled") {
-            status = "canceled"
-          } else if (subscription.status === "past_due") {
-            status = "past_due"
-          } else if (subscription.status === "unpaid") {
-            status = "unpaid"
-          } else if (subscription.status === "incomplete" || subscription.status === "incomplete_expired") {
-            // For incomplete subscriptions, we still create the record but mark as active
-            // The status will be updated when payment succeeds via invoice.payment_succeeded
-            status = "active"
-          }
-
-          // ✅ Create subscription in database
-          let newSubscription
+        // Handle assistant purchases (one-time payments)
+        if (session.mode === "payment" && session.metadata?.type === "assistant_purchase") {
           try {
-            newSubscription = await prisma.subscription.create({
-              data: {
-                userId,
-                planId,
-                stripeSubscriptionId: subscription.id,
-                status,
-                currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-                currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
-                cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
-                canceledAt: subscription.canceled_at 
-                  ? new Date(subscription.canceled_at * 1000)
-                  : null,
-                trialStart: subscription.trial_start
-                  ? new Date(subscription.trial_start * 1000)
-                  : null,
-                trialEnd: subscription.trial_end
-                  ? new Date(subscription.trial_end * 1000)
-                  : null,
-                amount: price.unit_amount ? price.unit_amount / 100 : 0,
-                currency: (price.currency || "usd").toUpperCase(),
+            const userId = BigInt(session.metadata?.userId || "0")
+            const assistantId = session.metadata?.assistantId
+
+            if (!userId || !assistantId) {
+              console.error("❌ Missing userId or assistantId in metadata")
+              break
+            }
+
+            const assistantIdBigInt = BigInt(assistantId)
+
+            // Find the pending purchase record
+            const purchase = await prisma.assistantPurchase.findFirst({
+              where: {
+                stripeCheckoutSessionId: session.id,
+                buyerId: userId,
+                assistantId: assistantIdBigInt,
+                status: "pending",
               },
             })
 
-            console.log(`✅ Subscription created successfully:`, {
-              subscriptionId: newSubscription.id,
-              stripeSubscriptionId: subscription.id,
-              userId: userId.toString(),
-              planId,
-              status,
+            if (!purchase) {
+              console.error("❌ Purchase record not found")
+              break
+            }
+
+            // Get payment intent ID
+            const paymentIntentId = typeof session.payment_intent === "string"
+              ? session.payment_intent
+              : session.payment_intent?.id || null
+
+            // Update purchase to completed
+            await prisma.assistantPurchase.update({
+              where: { id: purchase.id },
+              data: {
+                status: "completed",
+                stripePaymentIntentId: paymentIntentId,
+                purchaseDate: new Date(),
+              },
             })
-          } catch (createError: any) {
-            console.error("❌ Error creating subscription in database:", {
-              error: createError.message,
-              code: createError.code,
-              userId: userId.toString(),
-              planId,
-              stripeSubscriptionId: subscription.id,
-            })
-            // Re-throw to trigger webhook retry
-            throw createError
+
+            console.log(`✅ Assistant purchase completed: ${assistantId}`)
+          } catch (error: any) {
+            console.error("❌ Error processing assistant purchase:", error.message)
+            console.error("Stack:", error.stack)
+            // Don't throw - let the webhook complete
           }
+          break
+        }
 
-          // ✅ Create invoice for initial payment if amount > 0
-          if (session.invoice && price.unit_amount && price.unit_amount > 0) {
-            try {
-              const invoice: Stripe.Invoice = await stripe.invoices.retrieve(session.invoice as string)
-              
-              // Calculate discount amount
-              let discountAmount = 0
-              if (invoice.total_discount_amounts && invoice.total_discount_amounts.length > 0) {
-                discountAmount = invoice.total_discount_amounts.reduce(
-                  (sum, discount) => sum + discount.amount,
-                  0
-                ) / 100
-              }
+        // Handle subscription checkouts
+        if (session.mode === "subscription" && session.subscription) {
+          try {
+            const subscriptionId = typeof session.subscription === "string"
+              ? session.subscription
+              : session.subscription.id
 
-              // Get payment intent ID
-              const paymentIntentId = typeof (invoice as any).payment_intent === "string"
-                ? (invoice as any).payment_intent
-                : (invoice as any).payment_intent?.id || null
+            const subscriptionResponse = await stripe.subscriptions.retrieve(subscriptionId)
 
-              // Serialize billing details properly for JSON storage
-              const billingDetails = {
-                customer: typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id || null,
-                customer_email: invoice.customer_email || null,
-                customer_name: invoice.customer_name || null,
-                billing_reason: invoice.billing_reason || null,
-                collection_method: invoice.collection_method || null,
-              }
+            // Access the subscription items to get period dates
+            const subscriptionItem = subscriptionResponse.items.data[0]
+            if (!subscriptionItem) {
+              console.error("❌ No subscription item found")
+              break
+            }
+
+            const currentPeriodStart = subscriptionItem.current_period_start
+            const currentPeriodEnd = subscriptionItem.current_period_end
+
+            console.log("Subscription periods:", {
+              start: currentPeriodStart,
+              end: currentPeriodEnd,
+            })
+
+            const userId = BigInt(session.metadata?.userId || "0")
+            const planId = parseInt(session.metadata?.planId || "0")
+
+            if (!userId || !planId) {
+              console.error("❌ Missing metadata")
+              break
+            }
+
+            // Check if already exists
+            const existing = await prisma.subscription.findUnique({
+              where: { stripeSubscriptionId: subscriptionResponse.id },
+            })
+
+            if (existing) {
+              console.log("⚠️  Subscription already exists")
+              break
+            }
+
+            // Get price
+            const priceId = subscriptionItem.price.id
+            if (!priceId) {
+              console.error("❌ No price found")
+              break
+            }
+
+            const priceData = await stripe.prices.retrieve(priceId)
+
+            // Create subscription
+            const newSub = await prisma.subscription.create({
+              data: {
+                userId,
+                planId,
+                stripeSubscriptionId: subscriptionResponse.id,
+                status: subscriptionResponse.status === "active" ? "active" : "trialing",
+                currentPeriodStart: new Date(currentPeriodStart * 1000),
+                currentPeriodEnd: new Date(currentPeriodEnd * 1000),
+                cancelAtPeriodEnd: subscriptionResponse.cancel_at_period_end,
+                canceledAt: subscriptionResponse.canceled_at ? new Date(subscriptionResponse.canceled_at * 1000) : null,
+                trialStart: subscriptionResponse.trial_start ? new Date(subscriptionResponse.trial_start * 1000) : null,
+                trialEnd: subscriptionResponse.trial_end ? new Date(subscriptionResponse.trial_end * 1000) : null,
+                amount: priceData.unit_amount ? priceData.unit_amount / 100 : 0,
+                currency: (priceData.currency || "CHF").toUpperCase(),
+              },
+            })
+
+            console.log("✅ Subscription created:", newSub.id)
+
+            // Create invoice
+            if (session.invoice && priceData.unit_amount && priceData.unit_amount > 0) {
+              const invoiceId = typeof session.invoice === "string"
+                ? session.invoice
+                : session.invoice.id
+
+              const invoiceResponse = await stripe.invoices.retrieve(invoiceId)
+              const invoiceData = invoiceResponse as any
+
+              const paymentIntentId = typeof invoiceData.payment_intent === "string"
+                ? invoiceData.payment_intent
+                : invoiceData.payment_intent?.id || null
 
               await prisma.invoice.create({
                 data: {
                   userId,
-                  subscriptionId: newSubscription.id,
-                  stripeInvoiceId: invoice.id,
+                  subscriptionId: newSub.id,
+                  stripeInvoiceId: invoiceData.id,
                   stripePaymentIntentId: paymentIntentId,
-                  invoiceNumber: invoice.number || `INV-${Date.now()}`,
-                  status: (invoice as any).paid ? "paid" : "open",
-                  amount: invoice.amount_due / 100,
-                  currency: invoice.currency.toUpperCase(),
-                  taxAmount: (invoice as any).tax ? (invoice as any).tax / 100 : 0,
-                  discountAmount,
-                  totalAmount: invoice.total / 100,
-                  description: invoice.description || `Initial payment for subscription`,
-                  billingDetails: billingDetails as any,
-                  dueDate: invoice.due_date
-                    ? new Date(invoice.due_date * 1000)
-                    : null,
-                  paidAt: (invoice as any).paid ? new Date((invoice as any).status_transitions?.paid_at ? (invoice as any).status_transitions.paid_at * 1000 : Date.now()) : null,
-                  invoiceDate: new Date(invoice.created * 1000),
+                  invoiceNumber: invoiceData.number || `INV-${Date.now()}`,
+                  status: invoiceData.paid ? "paid" : "open",
+                  amount: invoiceData.amount_due / 100,
+                  currency: invoiceData.currency.toUpperCase(),
+                  taxAmount: invoiceData.tax ? invoiceData.tax / 100 : 0,
+                  discountAmount: 0,
+                  totalAmount: invoiceData.total / 100,
+                  description: invoiceData.description || "Subscription payment",
+                  billingDetails: {
+                    email: invoiceData.customer_email,
+                    name: invoiceData.customer_name,
+                  },
+                  dueDate: invoiceData.due_date ? new Date(invoiceData.due_date * 1000) : null,
+                  paidAt: invoiceData.paid ? new Date() : null,
+                  invoiceDate: new Date(invoiceData.created * 1000),
                 },
               })
 
-              console.log(`✅ Invoice created: ${invoice.id}`)
-            } catch (invoiceError: any) {
-              console.error("Error creating invoice:", invoiceError.message)
-              // Don't fail the webhook if invoice creation fails
+              console.log("✅ Invoice created:", invoiceData.id)
             }
+          } catch (error: any) {
+            console.error("❌ Error in checkout.session.completed:", error.message)
+            console.error("Stack:", error.stack)
+            throw error
           }
         }
         break
@@ -320,8 +301,8 @@ export async function POST(req: NextRequest) {
         const invoice: Stripe.Invoice = event.data.object as Stripe.Invoice
 
         // Get subscription ID
-        const subscriptionId = typeof (invoice as any).subscription === "string" 
-          ? (invoice as any).subscription 
+        const subscriptionId = typeof (invoice as any).subscription === "string"
+          ? (invoice as any).subscription
           : (invoice as any).subscription?.id
 
         if (!subscriptionId) {
@@ -433,8 +414,8 @@ export async function POST(req: NextRequest) {
         const invoice: Stripe.Invoice = event.data.object as Stripe.Invoice
 
         // Get subscription ID
-        const subscriptionId = typeof (invoice as any).subscription === "string" 
-          ? (invoice as any).subscription 
+        const subscriptionId = typeof (invoice as any).subscription === "string"
+          ? (invoice as any).subscription
           : (invoice as any).subscription?.id
 
         if (!subscriptionId) {
@@ -464,8 +445,8 @@ export async function POST(req: NextRequest) {
         const invoice: Stripe.Invoice = event.data.object as Stripe.Invoice
 
         // Get subscription ID
-        const subscriptionId = typeof (invoice as any).subscription === "string" 
-          ? (invoice as any).subscription 
+        const subscriptionId = typeof (invoice as any).subscription === "string"
+          ? (invoice as any).subscription
           : (invoice as any).subscription?.id
 
         if (!subscriptionId) {
@@ -488,7 +469,7 @@ export async function POST(req: NextRequest) {
         // For initial payments, subscription might be incomplete
         // For recurring payments, subscription should be past_due
         const isInitialPayment = subscription.status === "active" && !subscription.currentPeriodStart
-        
+
         await prisma.subscription.update({
           where: {
             id: subscription.id,

@@ -216,3 +216,126 @@ export async function getPlans() {
   }
 }
 
+/**
+ * Get user's invoices
+ */
+export async function getInvoices() {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return []
+    }
+
+    const userId = BigInt(session.user.id)
+
+    const invoices = await prisma.invoice.findMany({
+      where: {
+        userId,
+        deletedAt: null,
+      },
+      include: {
+        subscription: {
+          include: {
+            plan: true,
+          },
+        },
+      },
+      orderBy: {
+        invoiceDate: "desc",
+      },
+    })
+
+    return invoices.map((invoice) => ({
+      id: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      status: invoice.status,
+      amount: Number(invoice.amount),
+      currency: invoice.currency,
+      totalAmount: Number(invoice.totalAmount),
+      invoiceDate: invoice.invoiceDate,
+      paidAt: invoice.paidAt,
+      description: invoice.description,
+      subscription: invoice.subscription
+        ? {
+            id: invoice.subscription.id,
+            plan: invoice.subscription.plan
+              ? {
+                  id: invoice.subscription.plan.id,
+                  title: invoice.subscription.plan.title,
+                }
+              : null,
+          }
+        : null,
+    }))
+  } catch (error) {
+    console.error("Error getting invoices:", error)
+    return []
+  }
+}
+
+/**
+ * Cancel subscription
+ */
+export async function cancelSubscription() {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return {
+        success: false,
+        error: "You must be logged in to cancel your subscription",
+      }
+    }
+
+    const userId = BigInt(session.user.id)
+
+    // Get current active subscription
+    const subscription = await prisma.subscription.findFirst({
+      where: {
+        userId,
+        status: {
+          in: ["active", "trialing"],
+        },
+        deletedAt: null,
+      },
+    })
+
+    if (!subscription) {
+      return {
+        success: false,
+        error: "No active subscription found",
+      }
+    }
+
+    if (!subscription.stripeSubscriptionId) {
+      return {
+        success: false,
+        error: "Subscription is not linked to Stripe",
+      }
+    }
+
+    // Cancel subscription in Stripe
+    await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+      cancel_at_period_end: true,
+    })
+
+    // Update subscription in database
+    await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        cancelAtPeriodEnd: true,
+      },
+    })
+
+    return {
+      success: true,
+      message: "Subscription will be canceled at the end of the current period",
+    }
+  } catch (error: any) {
+    console.error("Error canceling subscription:", error)
+    return {
+      success: false,
+      error: error.message || "Failed to cancel subscription",
+    }
+  }
+}
+

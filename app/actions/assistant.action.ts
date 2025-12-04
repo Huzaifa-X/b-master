@@ -15,7 +15,9 @@ import {
     deleteFileFromVectorStore,
 } from '@/lib/vector-store'
 import { triggerWebScraping } from '@/lib/web-scraper'
-import { randomUUID } from "crypto";
+import { randomUUID } from "crypto"
+import { canCreateAssistant } from '@/lib/utils/subscription-limits'
+import { stripe } from '@/lib/stripe'
 
 const INSTRUCTION_GENERATION_PROMPT = `You are an expert AI assistant creator with extensive knowledge of prompt engineering and AI system design.
 
@@ -182,6 +184,17 @@ export async function createCompleteAssistant(
         }
 
         const userId = BigInt(session.user.id)
+
+        // ============================================
+        // CHECK SUBSCRIPTION LIMITS
+        // ============================================
+        const limitCheck = await canCreateAssistant()
+        if (!limitCheck.allowed) {
+            return {
+                success: false,
+                error: limitCheck.error || `You have reached your plan limit of ${limitCheck.limit} assistant(s). Please upgrade your plan to create more assistants.`
+            }
+        }
 
         // ============================================
         // STEP 1: CREATE ASSISTANT WITH BASIC INFO
@@ -891,7 +904,7 @@ export interface AssistantListItem {
 }
 
 interface GetAssistantsParams {
-    type: 'my' | 'purchased' | 'shared'
+    type: 'my' | 'purchased' | 'shared' | 'public'
     page?: number
     limit?: number
     search?: string
@@ -1090,6 +1103,70 @@ export async function getAssistants({
                                 ...searchFilter
                             }
                         }
+                    })
+                ])
+                break
+
+            case 'public':
+                // Get all public assistants (marketplace) excluding those already purchased by the user
+                // First, get IDs of assistants the user has already purchased
+                const purchasedAssistantIds = await prisma.assistantPurchase.findMany({
+                    where: {
+                        buyerId: userId,
+                        status: 'completed',
+                        deletedAt: null
+                    },
+                    select: {
+                        assistantId: true
+                    }
+                })
+
+                const purchasedIds: bigint[] = purchasedAssistantIds.map(p => p.assistantId)
+
+                // Build where clause - exclude purchased assistants
+                const publicWhere: any = {
+                    public: true,
+                    deletedAt: null,
+                    ...(purchasedIds.length > 0 && {
+                        id: {
+                            notIn: purchasedIds
+                        }
+                    })
+                }
+
+                // Add search filter if provided
+                if (search) {
+                    publicWhere.OR = [
+                        { name: { contains: search, mode: 'insensitive' as const } },
+                        { description: { contains: search, mode: 'insensitive' as const } }
+                    ]
+                }
+
+                [assistants, total] = await Promise.all([
+                    prisma.assistant.findMany({
+                        where: publicWhere,
+                        select: {
+                            id: true,
+                            name: true,
+                            description: true,
+                            image: true,
+                            price: true,
+                            currency: true,
+                            priceType: true,
+                            category: true,
+                            public: true,
+                            createdAt: true,
+                            pins: {
+                                where: { userId },
+                                select: { id: true }
+                            }
+                        },
+                        orderBy: { createdAt: 'desc' },
+                        skip,
+                        take: limit
+                    }),
+                    prisma.assistant.count({
+                        where: publicWhere
                     })
                 ])
                 break
@@ -1623,6 +1700,166 @@ export async function updateCompleteAssistant(
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Failed to update assistant'
+        }
+    }
+}
+
+/**
+ * Purchase an assistant - creates Stripe checkout session
+ */
+export async function purchaseAssistant(assistantId: string) {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: "You must be logged in to purchase an assistant",
+                url: undefined,
+            }
+        }
+
+        const userId = BigInt(session.user.id)
+        const assistantIdBigInt = BigInt(assistantId)
+
+        // Get the assistant
+        const assistant = await prisma.assistant.findUnique({
+            where: {
+                id: assistantIdBigInt,
+                deletedAt: null,
+            },
+        })
+
+        if (!assistant) {
+            return {
+                success: false,
+                error: "Assistant not found",
+                url: undefined,
+            }
+        }
+
+        // Check if assistant is public
+        if (!assistant.public) {
+            return {
+                success: false,
+                error: "This assistant is not available for purchase",
+                url: undefined,
+            }
+        }
+
+        // Check if user already purchased this assistant
+        const existingPurchase = await prisma.assistantPurchase.findFirst({
+            where: {
+                buyerId: userId,
+                assistantId: assistantIdBigInt,
+                status: "completed",
+                deletedAt: null,
+            },
+        })
+
+        if (existingPurchase) {
+            return {
+                success: false,
+                error: "You have already purchased this assistant",
+                url: undefined,
+            }
+        }
+
+        // Check if user is trying to purchase their own assistant
+        if (assistant.userId === userId) {
+            return {
+                success: false,
+                error: "You cannot purchase your own assistant",
+                url: undefined,
+            }
+        }
+
+        // Get or create Stripe customer
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+        })
+
+        if (!user) {
+            return {
+                success: false,
+                error: "User not found",
+                url: undefined,
+            }
+        }
+
+        let stripeCustomerId = user.stripeAccountId
+
+        // Create Stripe customer if doesn't exist
+        if (!stripeCustomerId) {
+            const customer = await stripe.customers.create({
+                email: user.email,
+                name: user.name || undefined,
+                metadata: {
+                    userId: userId.toString(),
+                },
+            })
+
+            // Save Stripe customer ID to database
+            await prisma.user.update({
+                where: { id: userId },
+                data: { stripeAccountId: customer.id },
+            })
+
+            stripeCustomerId = customer.id
+        }
+
+        // Get base URL for redirects
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000"
+
+        // Convert price to cents for Stripe
+        const amountInCents = Math.round(Number(assistant.price) * 100)
+
+        // Create Stripe Checkout Session for one-time payment
+        const checkoutSession = await stripe.checkout.sessions.create({
+            customer: stripeCustomerId,
+            payment_method_types: ["card"],
+            line_items: [
+                {
+                    price_data: {
+                        currency: assistant.currency.toLowerCase() || "chf",
+                        product_data: {
+                            name: assistant.name,
+                            description: assistant.description || undefined,
+                        },
+                        unit_amount: amountInCents,
+                    },
+                    quantity: 1,
+                },
+            ],
+            mode: "payment",
+            success_url: `${baseUrl}/store?purchase=success&session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${baseUrl}/store?purchase=cancelled`,
+            metadata: {
+                userId: userId.toString(),
+                assistantId: assistantId,
+                type: "assistant_purchase",
+            },
+        })
+
+        // Create pending purchase record
+        await prisma.assistantPurchase.create({
+            data: {
+                buyerId: userId,
+                assistantId: assistantIdBigInt,
+                status: "pending",
+                stripeCheckoutSessionId: checkoutSession.id,
+            },
+        })
+
+        return {
+            success: true,
+            url: checkoutSession.url || undefined,
+        }
+    } catch (error: any) {
+        console.error("Error creating purchase checkout session:", error)
+        return {
+            success: false,
+            error: error.message || "Failed to create checkout session",
+            url: undefined,
         }
     }
 }

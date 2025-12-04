@@ -50,9 +50,6 @@ function SubscriptionSuccessContent() {
               <Button asChild className="bg-[#BDA76D] hover:bg-[#BDA76D]/90">
                 <Link href="/home">Go to Home</Link>
               </Button>
-              <Button variant="outline" onClick={() => router.back()} className="hover:bg-muted hover:text-muted-foreground">
-                Back to Pricing
-              </Button>
             </div>
           </CardContent>
         </Card>

@@ -31,19 +31,22 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { signOut } from "next-auth/react"
 import { NavUserType } from "@/types/user"
+import { useSubscription } from "@/hooks/useSubscription"
 
 export function NavUser({
   user,
 }: {
   user: NavUserType
 }) {
+  const { subscription, loading } = useSubscription()
+  const router = useRouter()
 
   if (!user) {
     return null
   }
 
-  const router = useRouter()
-
+  // Get plan name or default to "Free"
+  const planName = subscription?.plan?.title || "Free"
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -59,7 +62,7 @@ export function NavUser({
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
-                <span className="truncate text-xs">Free</span>
+                <span className="truncate text-xs">{loading ? "Loading..." : planName}</span>
               </div>
               <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -79,7 +82,7 @@ export function NavUser({
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
-                  <span className="truncate text-xs">Free</span>
+                  <span className="truncate text-xs">{loading ? "Loading..." : planName}</span>
                 </div>
               </div>
             </DropdownMenuLabel>

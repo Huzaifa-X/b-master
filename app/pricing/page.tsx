@@ -18,9 +18,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter } from "next/navigation"
 import { getPlans, createCheckoutSession } from "@/app/actions/subscription.action"
 import { toast } from "sonner"
+import { useSubscription } from "@/hooks/useSubscription"
 
 export default function PricingPage() {
   const router = useRouter()
+  const { subscription, loading: subscriptionLoading } = useSubscription()
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly")
   const [plans, setPlans] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -124,6 +126,7 @@ export default function PricingPage() {
               const isPopular = plan.title === "Professional" || plan.title === "Professional (Yearly)"
               const isSubscribing = subscribingPlanId === plan.id
               const isFree = plan.period === "free"
+              const isCurrentPlan = subscription?.planId === plan.id
               
               return (
                 <Card
@@ -175,19 +178,25 @@ export default function PricingPage() {
                     <Button
                       className={cn(
                         "w-full",
-                        isPopular && "bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white"
+                        isPopular && !isCurrentPlan && "bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white",
+                        isCurrentPlan && "bg-green-600 hover:bg-green-600 text-white"
                       )}
-                      variant={isPopular ? "default" : "secondary"}
+                      variant={isPopular && !isCurrentPlan ? "default" : isCurrentPlan ? "default" : "secondary"}
                       onClick={() => handleSubscribe(plan.id)}
-                      disabled={isSubscribing || isFree}
+                      disabled={isSubscribing || isFree || isCurrentPlan}
                     >
                       {isSubscribing ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Processing...
                         </>
+                      ) : isCurrentPlan ? (
+                        <>
+                          <BadgeCheck className="mr-2 h-4 w-4" />
+                          Current Plan
+                        </>
                       ) : isFree ? (
-                        "Current Plan"
+                        "Free"
                       ) : (
                         <>
                           Get {plan.title.replace(" (Yearly)", "")}

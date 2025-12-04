@@ -1,4 +1,4 @@
-import prisma from "../lib/prisma"
+import prisma from "@/lib/prisma"
 
 /**
  * Populate plans table from pricing page data
