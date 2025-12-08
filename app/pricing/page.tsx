@@ -1,0 +1,217 @@
+"use client"
+
+import NumberFlow from "@number-flow/react"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { cn } from "@/lib/utils"
+import { ArrowRight, BadgeCheck, X, Loader2 } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useRouter } from "next/navigation"
+import { getPlans, createCheckoutSession } from "@/app/actions/subscription.action"
+import { toast } from "sonner"
+import { useSubscription } from "@/hooks/useSubscription"
+
+export default function PricingPage() {
+  const router = useRouter()
+  const { subscription, loading: subscriptionLoading } = useSubscription()
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly")
+  const [plans, setPlans] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [subscribingPlanId, setSubscribingPlanId] = useState<number | null>(null)
+
+  useEffect(() => {
+    async function fetchPlans() {
+      try {
+        const fetchedPlans = await getPlans()
+        console.log("fetchedPlans", fetchedPlans)
+        setPlans(fetchedPlans)
+      } catch (error) {
+        console.error("Error fetching plans:", error)
+        toast.error("Failed to load plans")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchPlans()
+  }, [])
+
+  const currentPlans = plans.filter((plan) => {
+    if (billingCycle === "monthly") {
+      return plan.period === "monthly" || plan.period === "free"
+    } else {
+      return plan.period === "yearly"
+    }
+  })
+
+  const handleSubscribe = async (planId: number) => {
+    try {
+      setSubscribingPlanId(planId)
+      
+      const result = await createCheckoutSession(planId)
+      
+      if (result.success && result.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = result.url
+      } else {
+        toast.error(result.error || "Failed to create checkout session")
+        setSubscribingPlanId(null)
+      }
+    } catch (error: any) {
+      console.error("Error subscribing:", error)
+      toast.error(error.message || "Something went wrong")
+      setSubscribingPlanId(null)
+    }
+  }
+
+  const handleClose = () => {
+    router.back()
+  }
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="container mx-auto px-4 py-12 max-w-7xl relative">
+        {/* Close Button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleClose}
+          className="absolute top-4 right-4 hover:bg-transparent hover:text-[#BDA76D]"
+        >
+          <X className="h-5 w-5" />
+        </Button>
+
+        {/* Header */}
+        <div className="flex flex-col items-center justify-center gap-8 mb-12">
+          <h1 className="text-5xl font-medium tracking-tight text-balance text-center">
+            Simple, transparent pricing
+          </h1>
+          <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground text-center">
+            Managing a business is hard enough, so why not make your life easier?
+            Our pricing plans are simple, transparent and scale with you.
+          </p>
+
+          {/* Billing Cycle Toggle */}
+          <Tabs defaultValue={billingCycle} onValueChange={(value) => setBillingCycle(value as "monthly" | "yearly")}>
+            <TabsList>
+              <TabsTrigger value="monthly">Monthly</TabsTrigger>
+              <TabsTrigger value="yearly">
+                Yearly
+                <Badge variant="secondary" className="ml-2">20% off</Badge>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        {/* Pricing Cards */}
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className={cn(
+            "grid gap-6 mx-auto",
+            billingCycle === "monthly" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-6xl"
+          )}>
+            {currentPlans.map((plan) => {
+              const features = Array.isArray(plan.features) ? plan.features : []
+              const isPopular = plan.title === "Professional" || plan.title === "Professional (Yearly)"
+              const isSubscribing = subscribingPlanId === plan.id
+              const isFree = plan.period === "free"
+              const isCurrentPlan = subscription?.planId === plan.id
+              
+              return (
+                <Card
+                  className={cn(
+                    "relative w-full text-left flex flex-col",
+                    isPopular && "ring-2 ring-[#BDA76D]"
+                  )}
+                  key={plan.id}
+                >
+                  {isPopular && (
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white">
+                      Popular
+                    </Badge>
+                  )}
+                  <CardHeader>
+                    <CardTitle className="text-xl font-medium">
+                      {plan.title}
+                    </CardTitle>
+                    <CardDescription>
+                      <p className="mb-4">{plan.description || ""}</p>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-sm text-muted-foreground">CHF</span>
+                        <NumberFlow
+                          className="font-medium text-foreground text-3xl"
+                          format={{
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }}
+                          value={Number(plan.amount)}
+                        />
+                        {!isFree && (
+                          <span className="text-sm text-muted-foreground">/{plan.period === "yearly" ? "year" : "month"}</span>
+                        )}
+                      </div>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-3 flex-1">
+                    {features.map((feature: string, index: number) => (
+                      <div
+                        className="flex gap-2 text-muted-foreground text-sm items-start"
+                        key={index}
+                      >
+                        <BadgeCheck className="h-5 w-5 flex-none text-[#BDA76D] mt-0.5" />
+                        <span>{feature}</span>
+                      </div>
+                    ))}
+                  </CardContent>
+                  <CardFooter>
+                    <Button
+                      className={cn(
+                        "w-full",
+                        isPopular && !isCurrentPlan && "bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white",
+                        isCurrentPlan && "bg-green-600 hover:bg-green-600 text-white"
+                      )}
+                      variant={isPopular && !isCurrentPlan ? "default" : isCurrentPlan ? "default" : "secondary"}
+                      onClick={() => handleSubscribe(plan.id)}
+                      disabled={isSubscribing || isFree || isCurrentPlan}
+                    >
+                      {isSubscribing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : isCurrentPlan ? (
+                        <>
+                          <BadgeCheck className="mr-2 h-4 w-4" />
+                          Current Plan
+                        </>
+                      ) : isFree ? (
+                        "Free"
+                      ) : (
+                        <>
+                          Get {plan.title.replace(" (Yearly)", "")}
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+

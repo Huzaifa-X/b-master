@@ -1,0 +1,704 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================================================================
+// CORE USER & AUTHENTICATION
+// ================================================================
+
+model User {
+  id              BigInt    @id @default(autoincrement())
+  name            String?   @db.VarChar(255)
+  email           String    @unique @db.VarChar(255)
+  password        String?   @db.VarChar(255) // Nullable for OAuth users
+  image           String?   @db.VarChar(255)
+  isEmailVerified Boolean   @default(false)
+  organization    String?   @db.VarChar(255)
+  stripeAccountId String?   @db.VarChar(255)
+  feePeriodEnd    DateTime? @db.Date
+  totalBalance    Decimal   @default(0)
+  gender          String?   @db.VarChar(50)
+  googleId        String?   @unique @db.VarChar(255)
+  loginType       String    @default("email") @db.VarChar(20) // email or google
+  status          String    @default("active") @db.VarChar(255)
+  address         String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime? // Soft delete
+
+  // Relationships
+  accounts                  Account[]
+  sessions                  Session[]
+  subscriptions             Subscription[]
+  invoices                  Invoice[]
+  wallet                    UserWallet?
+  assistants                Assistant[]
+  assistantPins             AssistantPin[]
+  assistantPurchases        AssistantPurchase[]
+  assistantTransactions     AssistantTransaction[]
+  assistantUserChats        AssistantUserChat[]
+  assistantUserChatMessages AssistantUserChatMessage[]
+  initiatedChats            AssistantChat[]            @relation("ChatInitiator")
+  participatedChats         AssistantChat[]            @relation("ChatParticipant")
+  sentMessages              AssistantChatMessage[]
+  newsFeeds                 AssistantNewsFeed[]
+  newsFeedLikes             AssistantNewsFeedLike[]
+  newsFeedComments          AssistantNewsFeedComment[]
+  artifacts                 AssistantArtifact[]
+  artifactPermissions       ArtifactPermission[]
+  assistantContacts         AssistantContact[]
+  notifications             Notification[]
+  usageMetrics              UsageMetric[]
+
+  @@index([email])
+  @@index([googleId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            BigInt
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       BigInt
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ================================================================
+// SUBSCRIPTION & BILLING
+// ================================================================
+
+model Plan {
+  id              Int       @id @default(autoincrement())
+  title           String    @db.VarChar(255)
+  description     String?   @db.Text
+  period          String    @default("monthly") @db.VarChar(50) // free, monthly, yearly
+  features        Json      @default("[]") // JSON array of features
+  amount          Decimal   @db.Decimal(10, 2)
+  stripeProductId String?   @db.VarChar(255)
+  stripePriceId   String?   @db.VarChar(255)
+  assistantLimit  Int       @default(1) // Number of assistants user can create
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  subscriptions Subscription[]
+
+  @@index([period])
+  @@index([isActive])
+  @@map("plans")
+}
+
+model Subscription {
+  id                   Int       @id @default(autoincrement())
+  userId               BigInt
+  planId               Int
+  stripeSubscriptionId String?   @unique @db.VarChar(255)
+  status               String    @default("active") @db.VarChar(50) // active, canceled, past_due, unpaid, trialing
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
+  canceledAt           DateTime?
+  trialStart           DateTime?
+  trialEnd             DateTime?
+  amount               Decimal   @db.Decimal(10, 2)
+  currency             String    @default("CHF") @db.VarChar(3)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan     Plan      @relation(fields: [planId], references: [id], onDelete: Restrict)
+  invoices Invoice[]
+
+  @@index([userId])
+  @@index([planId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id                    Int       @id @default(autoincrement())
+  userId                BigInt
+  subscriptionId        Int?
+  stripeInvoiceId       String?   @unique @db.VarChar(255)
+  stripePaymentIntentId String?   @unique @db.VarChar(255)
+  invoiceNumber         String    @unique @db.VarChar(255)
+  status                String    @default("draft") @db.VarChar(50) // draft, open, paid, void, uncollectible
+  amount                Decimal   @db.Decimal(10, 2)
+  currency              String    @default("CHF") @db.VarChar(3)
+  taxAmount             Decimal   @default(0.00) @db.Decimal(10, 2)
+  discountAmount        Decimal   @default(0.00) @db.Decimal(10, 2)
+  totalAmount           Decimal   @db.Decimal(10, 2)
+  description           String?   @db.Text
+  billingDetails        Json      @default("{}") // JSON object with billing info
+  dueDate               DateTime?
+  paidAt                DateTime?
+  invoiceDate           DateTime  @default(now())
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([invoiceDate])
+  @@index([stripeInvoiceId])
+  @@map("invoices")
+}
+
+model UserWallet {
+  id                Int       @id @default(autoincrement())
+  userId            BigInt    @unique
+  pendingAmount     Decimal   @default(0.00) @db.Decimal(10, 2)
+  availableAmount   Decimal   @default(0.00) @db.Decimal(10, 2)
+  totalEarnings     Decimal   @default(0.00) @db.Decimal(10, 2)
+  transferredAmount Decimal   @default(0.00) @db.Decimal(10, 2)
+  currency          String    @default("CHF") @db.VarChar(3)
+  lastUpdated       DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([lastUpdated])
+  @@map("user_wallets")
+}
+
+// ================================================================
+// AI ASSISTANT CORE
+// ================================================================
+
+enum AssistantCategory {
+  EDUCATION
+  TRAVEL
+  PROGRAMMING
+  MARKETING
+  ANALYSIS
+  BOOKING
+  OTHER
+}
+
+model Assistant {
+  id            BigInt            @id @default(autoincrement())
+  userId        BigInt
+  name          String            @db.VarChar(255)
+  price         Decimal           @default(0)
+  currency      String            @default("CHF") @db.Text
+  priceType     String            @default("paid") @db.VarChar(255) // free or paid
+  category      AssistantCategory @default(OTHER) // New: Category field
+  description   String?           @db.Text
+  instructions  String?           @db.Text
+  image         String?           @db.VarChar(255)
+  vectorStoreId String?           @db.VarChar(255) // OpenAI vector store ID
+  public        Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  deletedAt     DateTime?
+
+  owner               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  knowledgebases      AssistantKnowledgebase[]
+  apiConfiguration    AssistantApiConfiguration?
+  pins                AssistantPin[]
+  purchases           AssistantPurchase[]
+  userChats           AssistantUserChat[]
+  userChatMessages    AssistantUserChatMessage[]
+  assistantChats      AssistantChat[]
+  chatMessages        AssistantChatMessage[]
+  newsFeeds           AssistantNewsFeed[]
+  artifacts           AssistantArtifact[]
+  contacts            AssistantContact[]
+  artifactPermissions ArtifactPermission[]
+  usageMetrics        UsageMetric[]
+
+  @@index([userId])
+  @@index([public])
+  @@index([category])
+  @@index([deletedAt])
+  @@map("assistants")
+}
+
+model AssistantKnowledgebase {
+  id           Int      @id @default(autoincrement())
+  assistantId  BigInt
+  url          String?  @db.Text
+  note         String?  @db.Text
+  file         String?  @db.Text
+  vectorFileId String?  @db.Text // OpenAI file ID
+  type         String   @default("url") @db.VarChar(50) // url, file, text
+  isCrawled    Boolean  @default(false) // Track if URL has been crawled
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assistant Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+
+  @@index([assistantId])
+  @@index([isCrawled])
+  @@map("assistant_knowledgebases")
+}
+
+model AssistantApiConfiguration {
+  id          Int    @id @default(autoincrement())
+  assistantId BigInt @unique // One API config per assistant
+
+  // Authentication Type Selection
+  authenticationType String @default("none") @db.VarChar(50)
+  // Options: "none", "api_key", "oauth"
+
+  // ============================================
+  // API KEY AUTHENTICATION (when type = "api_key")
+  // ============================================
+  apiKey           String? @db.Text // Encrypted API key
+  authType         String? @db.VarChar(50) // Options: "basic", "bearer", "custom"
+  customHeaderName String? @db.VarChar(255) // Custom header name for API key auth
+
+  // ============================================
+  // OAUTH AUTHENTICATION (when type = "oauth")
+  // ============================================
+  clientId            String? @db.VarChar(255)
+  clientSecret        String? @db.Text // Encrypted
+  authorizationUrl    String? @db.Text
+  tokenUrl            String? @db.Text
+  scope               String? @db.Text
+  tokenExchangeMethod String? @db.VarChar(50)
+  // Options: "post", "basic_auth"
+
+  // ============================================
+  // OPENAPI SCHEMA STORAGE (2-part strategy)
+  // ============================================
+  schemaText String? @db.Text // Raw YAML/JSON (for editing)
+  schema     Json? // Parsed JSON (for validation)
+
+  // ============================================
+  // METADATA
+  // ============================================
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assistant Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+
+  @@map("assistant_api_configurations")
+}
+
+model AssistantContact {
+  id          Int      @id @default(autoincrement())
+  assistantId BigInt
+  userId      BigInt
+  description String?  @db.Text
+  role        String?  @db.VarChar(255) // Renamed from 'Role' to 'role' for Prisma style consistency
+  access      String   @default("admin") @db.VarChar(50) // admin, user
+  permissions String?  @db.Text // JSON: ["chat", "contacts", "messenger", "newsfeed", "artifacts"]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assistant Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([assistantId])
+  @@index([userId])
+  @@map("assistant_contacts")
+}
+
+// ================================================================
+// USAGE METRICS & ANALYTICS
+// ================================================================
+
+model UsageMetric {
+  id          BigInt   @id @default(autoincrement())
+  assistantId BigInt?
+  userId      BigInt
+  inputToken  Int      @default(0)
+  outputToken Int      @default(0)
+  totalToken  Int      @default(0)
+  totalCost   Float    @default(0)
+  toolUsing   String?  @db.Text // Tools/functions used in the request
+  costType    String?  @db.VarChar(100) // Type of cost calculation
+  createdAt   DateTime @default(now())
+
+  assistant Assistant? @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([assistantId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("usage_metrics")
+}
+
+// ================================================================
+// MARKETPLACE & TRANSACTIONS
+// ================================================================
+
+model AssistantPurchase {
+  id                      Int       @id @default(autoincrement())
+  buyerId                 BigInt
+  assistantId             BigInt
+  transactionId           Int?
+  purchaseDate            DateTime  @default(now())
+  status                  String    @default("pending") @db.VarChar(50) // pending, completed, failed, refunded
+  stripePaymentIntentId   String?   @unique @db.VarChar(255)
+  stripeCheckoutSessionId String?   @unique @db.VarChar(255)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  deletedAt               DateTime?
+
+  buyer       User                  @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  assistant   Assistant             @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  transaction AssistantTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@unique([buyerId, assistantId])
+  @@index([buyerId])
+  @@index([assistantId])
+  @@index([status])
+  @@index([purchaseDate])
+  @@map("assistant_purchases")
+}
+
+model AssistantTransaction {
+  id                  Int      @id @default(autoincrement())
+  assistantOwnerId    BigInt
+  amount              Decimal  @db.Decimal(10, 2)
+  currency            String   @default("CHF") @db.VarChar(3)
+  type                String   @default("sale") @db.VarChar(50) // sale, refund
+  status              String   @default("pending") @db.VarChar(50) // pending, completed, failed
+  stripeTransactionId String?  @unique @db.VarChar(255)
+  metadata            Json? // Additional transaction data
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  owner     User                @relation(fields: [assistantOwnerId], references: [id], onDelete: Cascade)
+  purchases AssistantPurchase[]
+
+  @@index([assistantOwnerId])
+  @@index([status])
+  @@map("assistant_transactions")
+}
+
+// ================================================================
+// DUAL CHAT SYSTEM
+// ================================================================
+
+// User <-> Assistant Chat
+enum ChatType {
+  ASSISTANT
+  ASK_B
+}
+
+enum MessageStatus {
+  PENDING     // User message waiting for response
+  PROCESSING  // AI is working on it (especially for research mode)
+  COMPLETED   // Response received
+  FAILED       // Something went wrong
+}
+
+model AssistantUserChat {
+  id          Int       @id @default(autoincrement())
+  userId      BigInt
+  topic       String
+  assistantId BigInt?
+  chatType    String
+  shareableId String?   @unique @db.VarChar(255) // For public sharing
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  user      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assistant Assistant?                  @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  messages  AssistantUserChatMessage[]
+
+  @@index([userId])
+  @@index([assistantId])
+  @@index([shareableId])
+  @@map("assistant_user_chats")
+}
+
+model AssistantUserChatMessage {
+  id                  Int           @id @default(autoincrement())
+  role                String        @db.VarChar(50) // user or assistant
+  message             String?       @db.Text
+  documents           String?       @db.Text
+  userId              BigInt?
+  assistantUserChatId Int
+  status              MessageStatus @default(PENDING) // Message processing status
+
+  openaiResponseId    String?       @db.VarChar(255)
+  hasImages           Boolean       @default(false)
+
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  chat        AssistantUserChat @relation(fields: [assistantUserChatId], references: [id], onDelete: Cascade)
+  user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  assistant   Assistant?        @relation(fields: [assistantId], references: [id])
+  assistantId BigInt?
+
+  @@index([assistantUserChatId])
+  @@index([userId])
+  @@index([assistantId])
+  @@map("assistant_user_chat_messages")
+}
+
+// User <-> User Chat (within Assistant context)
+model AssistantChat {
+  id            Int       @id @default(autoincrement())
+  assistantId   BigInt
+  initiatorId   BigInt // User who started the chat
+  participantId BigInt // Other user in the chat
+  isActive      Boolean   @default(true)
+  lastMessageAt DateTime?
+  lastMessageId BigInt?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  assistant   Assistant              @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  initiator   User                   @relation("ChatInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+  participant User                   @relation("ChatParticipant", fields: [participantId], references: [id], onDelete: Cascade)
+  messages    AssistantChatMessage[] @relation("ChatMessages")
+
+  @@unique([assistantId, initiatorId, participantId])
+  @@index([assistantId, initiatorId])
+  @@index([assistantId, participantId])
+  @@index([lastMessageId])
+  @@map("assistant_chats")
+}
+
+model AssistantChatMessage {
+  id              BigInt    @id @default(autoincrement())
+  assistantChatId Int
+  assistantId     BigInt
+  senderId        BigInt
+  message         String    @db.Text
+  messageType     String    @default("text") @db.VarChar(50) // text, image, file, audio, video
+  attachmentUrl   String?   @db.VarChar(255)
+  attachmentName  String?   @db.VarChar(255)
+  attachmentSize  BigInt?
+  isRead          Boolean   @default(false)
+  readAt          DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  chat          AssistantChat   @relation("ChatMessages", fields: [assistantChatId], references: [id], onDelete: Cascade)
+  assistant     Assistant       @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  sender        User            @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([assistantChatId])
+  @@index([assistantId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("assistant_chat_messages")
+}
+
+// ================================================================
+// SOCIAL FEATURES - NEWS FEED
+// ================================================================
+
+model AssistantNewsFeed {
+  id           Int      @id @default(autoincrement())
+  assistantId  BigInt
+  userId       BigInt
+  content      String?  @db.Text
+  isPublic     Boolean  @default(true)
+  likeCount    Int      @default(0)
+  commentCount Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assistant Assistant                  @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes     AssistantNewsFeedLike[]
+  comments  AssistantNewsFeedComment[]
+
+  @@index([assistantId])
+  @@index([userId])
+  @@index([isPublic])
+  @@map("assistant_news_feeds")
+}
+
+model AssistantNewsFeedLike {
+  id         Int      @id @default(autoincrement())
+  newsFeedId Int
+  userId     BigInt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  newsFeed AssistantNewsFeed @relation(fields: [newsFeedId], references: [id], onDelete: Cascade)
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([newsFeedId, userId])
+  @@index([newsFeedId])
+  @@index([userId])
+  @@map("assistant_news_feed_likes")
+}
+
+model AssistantNewsFeedComment {
+  id              Int      @id @default(autoincrement())
+  newsFeedId      Int
+  userId          BigInt
+  comment         String?  @db.Text
+  parentCommentId Int? // For nested replies
+  status          String   @default("active") @db.VarChar(50) // active or deleted
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  newsFeed      AssistantNewsFeed          @relation(fields: [newsFeedId], references: [id], onDelete: Cascade)
+  user          User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentComment AssistantNewsFeedComment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies       AssistantNewsFeedComment[] @relation("CommentReplies")
+
+  @@index([newsFeedId])
+  @@index([userId])
+  @@index([parentCommentId])
+  @@map("assistant_news_feed_comments")
+}
+
+// ================================================================
+// ARTIFACTS & PERMISSIONS
+// ================================================================
+
+model AssistantArtifact {
+  id           Int      @id @default(autoincrement())
+  assistantId  BigInt
+  userId       BigInt
+  name         String?  @db.VarChar(255)
+  instructions String?  @db.Text
+  category     String?  @db.VarChar(255)
+  code         String?  @db.Text // Large code blocks
+  tools        Json?    @db.Json
+  apiKeys      Json?    @db.Json // Encrypted API credentials
+
+  files        Json?    @db.Json // Array of {url, name, type, extractedContent}
+  images       Json?    @db.Json // Array of {url, name, alt}
+
+  videoUrl     String?  @db.Text // S3 URL for generated video
+  videoMetadata Json?   @db.Json // { duration: 8, size: 1280x720, model: "sora-2" }
+  thumbnailUrl String?  @db.Text // S3 URL for video thumbnail
+  
+  isPublic     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assistant   Assistant            @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissions ArtifactPermission[]
+
+  @@index([assistantId])
+  @@index([userId])
+  @@map("assistant_artifacts")
+}
+
+model ArtifactPermission {
+  id          Int      @id @default(autoincrement())
+  userId      BigInt
+  assistantId BigInt
+  artifactId  Int
+  access      String   @default("viewer") @db.VarChar(50) // viewer, editor, admin
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assistant Assistant         @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  artifact  AssistantArtifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, artifactId])
+  @@index([userId])
+  @@index([artifactId])
+  @@map("artifact_permissions")
+}
+
+// ================================================================
+// Pinned Assistant
+// ================================================================
+
+model AssistantPin {
+  id          Int      @id @default(autoincrement())
+  userId      BigInt
+  assistantId BigInt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assistant Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assistantId])
+  @@index([userId])
+  @@index([assistantId])
+  @@map("assistant_pins")
+}
+
+// ================================================================
+// NOTIFICATION SYSTEM
+// ================================================================
+
+model Notification {
+  id          Int       @id @default(autoincrement())
+  userId      BigInt
+  title       String?   @db.VarChar(255)
+  message     String?   @db.Text
+  type        String?   @db.VarChar(100)
+  relatedId   Int?
+  relatedType String?   @db.VarChar(100)
+  isRead      Boolean   @default(false)
+  readAt      DateTime?
+  data        Json? // Additional notification data
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([isRead])
+  @@index([createdAt])
+  @@index([relatedId, relatedType])
+  @@map("notifications")
+}

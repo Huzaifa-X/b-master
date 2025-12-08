@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Dashboard Config</title>
+    <style>
+        /* BASE CSS */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; margin: 20px; display: flex; flex-direction: column; align-items: center; }
+        form { width: 100%; max-width: 650px; margin: 20px auto; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+        label { display: block; margin-bottom: 5px; font-weight: 600; color: #495057; margin-top: 15px; }
+        input[type="text"], input[type="number"], input[type="email"], input[type="date"], input[type="url"], textarea, select { width: 100%; padding: 10px 12px; margin-bottom: 10px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; font-size: 16px; transition: border-color 0.3s; }
+        input:focus, textarea:focus, select:focus { border-color: #4c7cff; box-shadow: 0 0 0 0.1rem rgba(76, 124, 255, 0.25); outline: none; }
+        textarea { resize: vertical; min-height: 80px; }
+        button[type="submit"] { color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 17px; font-weight: 700; margin-top: 25px; width: 100%; transition: background-color 0.3s ease; }
+        /* ANALYTICS THEME */
+        form { border-bottom: 6px solid #6f42c1; background-color: #faf7ff; }
+        h3 { color: #6f42c1; border-bottom: 1px solid #e0cffc; font-size: 1.8rem; }
+        label { color: #4e3089; }
+        button[type="submit"] { background-color: #6f42c1; }
+        button[type="submit"]:hover { background-color: #553595; }
+    </style>
+</head>
+<body>
+    <form id="sales-dashboard-config">
+        <h3>Sales Dashboard Configuration</h3>
+        <label for="date-range">Report Date Range:</label>
+        <input type="text" id="date-range" name="range" value="Last 30 Days">
+
+        <label for="revenue-trend">Primary Metric (Revenue/Volume):</label>
+        <select id="revenue-trend" name="metric">
+            <option value="revenue">Total Revenue</option>
+            <option value="volume">Sales Volume</option>
+        </select>
+
+        <label for="product-focus">Focus Product for Performance Chart:</label>
+        <input type="text" id="product-focus" name="product_focus">
+
+        <label for="conversion-type">Conversion Type to Track:</label>
+        <select id="conversion-type" name="conversion_type">
+            <option value="lead-to-sale">Lead to Sale</option>
+            <option value="view-to-buy">View to Buy</option>
+        </select>
+
+        <button type="submit">Generate Dashboard</button>
+    </form>
+</body>
+</html>

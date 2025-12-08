@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAQ Document</title>
+    <style>
+        /* BASE CSS */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; margin: 20px; display: flex; flex-direction: column; align-items: center; }
+        form { width: 100%; max-width: 650px; margin: 20px auto; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+        label { display: block; margin-bottom: 5px; font-weight: 600; color: #495057; margin-top: 15px; }
+        input[type="text"], input[type="number"], input[type="email"], input[type="date"], input[type="url"], textarea, select { width: 100%; padding: 10px 12px; margin-bottom: 10px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; font-size: 16px; transition: border-color 0.3s; }
+        input:focus, textarea:focus, select:focus { border-color: #4c7cff; box-shadow: 0 0 0 0.1rem rgba(76, 124, 255, 0.25); outline: none; }
+        textarea { resize: vertical; min-height: 80px; }
+        button[type="submit"] { color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 17px; font-weight: 700; margin-top: 25px; width: 100%; transition: background-color 0.3s ease; }
+        /* DOCUMENTATION THEME */
+        form { border: 1px solid #dee2e6; background-color: #ffffff; }
+        h3 { color: #343a40; border-bottom: 3px double #adb5bd; padding-bottom: 15px; }
+        textarea { background-color: #f1f3f5; }
+        button[type="submit"] { background-color: #343a40; }
+        button[type="submit"]:hover { background-color: #212529; }
+    </style>
+</head>
+<body>
+    <form id="faq-document-form">
+        <h3>FAQ Document Entry</h3>
+        <label for="faq-category">Question Category:</label>
+        <input type="text" id="faq-category" name="category" required>
+
+        <label for="faq-question">Question:</label>
+        <input type="text" id="faq-question" name="question" required>
+
+        <label for="faq-answer">Answer:</label>
+        <textarea id="faq-answer" name="answer" rows="5" required></textarea>
+
+        <button type="submit">Add FAQ</button>
+    </form>
+</body>
+</html>

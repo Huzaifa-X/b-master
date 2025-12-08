@@ -1,0 +1,68 @@
+export type NotificationType =
+  | 'assistant_created'
+  | 'assistant_purchased'
+  | 'assistant_sold'
+  | 'assistant_shared'
+  | 'comment_added'
+  | 'subscription_purchased'
+  | 'artifact_created'
+  | 'artifact_permission_granted'
+  | 'artifact_permission_removed'
+  | 'artifact_updated'
+  | 'welcome_notification'
+  | 'notification';
+
+export interface NotificationData {
+  [key: string]: any;
+}
+
+export interface CreateNotificationParams {
+  userId: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  relatedId?: string | null;
+  relatedType?: string | null;
+  data?: NotificationData | null;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  relatedId: string | null;
+  relatedType: string | null;
+  isRead: boolean;
+  data: NotificationData | null;
+  createdAt: Date;
+  readAt?: Date | null;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+}
+
+export interface PusherNotificationPayload {
+  notification: Notification;
+  timestamp: string;
+}
+
+export interface PusherNotificationReadPayload {
+  notificationId: string;
+  userId: string;
+  timestamp: string;
+}
+
+export interface PusherNotificationDeletedPayload {
+  notificationId: string;
+  userId: string;
+  timestamp: string;
+}
+
+export interface PusherNotificationsAllReadPayload {
+  userId: string;
+  timestamp: string;
+}
