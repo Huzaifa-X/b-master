@@ -5,6 +5,7 @@ import { Tabs } from "@/components/ui/vercel-tabs"
 import { User } from "lucide-react"
 import ProfileTab from "./_components/profile-tab"
 import BillingTab from "./_components/billing-tab"
+import WalletTab from "./_components/wallet-tab"
 import SecurityTab from "./_components/security-tab"
 import { useUser } from "@/hooks/useUser"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -18,6 +19,7 @@ import { useSession } from "next-auth/react"
 const TABS = [
     { id: "profile", label: "Profile" },
     { id: "billing", label: "Billing" },
+    { id: "wallet", label: "Wallet" },
     { id: "security", label: "Security" },
 ]
 
@@ -122,6 +124,8 @@ export default function ProfilePage() {
                 )
             case "billing":
                 return <BillingTab />
+            case "wallet":
+                return <WalletTab />
             case "security":
                 return <SecurityTab onPasswordChange={handlePasswordChange} />
             default:

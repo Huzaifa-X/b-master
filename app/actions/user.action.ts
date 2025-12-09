@@ -103,7 +103,7 @@ export async function updateUserProfile(data: {
       try {
         // Extract base64 data and metadata
         const matches = data.image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/)
-        
+
         if (!matches || matches.length !== 3) {
           return {
             success: false,
@@ -235,6 +235,70 @@ export async function getAvailableContacts(): Promise<UserContact[]> {
   }
 }
 
+// ============================================
+// SEARCH USERS FOR MENTIONS
+// ============================================
+/**
+ * Search users for mentions in chat input
+ */
+export async function searchUsersForMention(query: string = "") {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return []
+    }
 
+    const currentUserId = BigInt(session.user.id)
 
+    // Search users by name or email, excluding current user
+    const users = await prisma.user.findMany({
+      where: {
+        AND: [
+          {
+            id: {
+              not: currentUserId,
+            },
+          },
+          query
+            ? {
+              OR: [
+                {
+                  name: {
+                    contains: query,
+                    mode: "insensitive",
+                  },
+                },
+                {
+                  email: {
+                    contains: query,
+                    mode: "insensitive",
+                  },
+                },
+              ],
+            }
+            : {},
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        image: true,
+      },
+      take: 10,
+      orderBy: {
+        name: "asc",
+      },
+    })
 
+    return users.map((user) => ({
+      id: user.id.toString(),
+      name: user.name || "Unknown User",
+      email: user.email,
+      image: user.image,
+    }))
+  } catch (error) {
+    console.error("Error searching users for mention:", error)
+    return []
+  }
+}

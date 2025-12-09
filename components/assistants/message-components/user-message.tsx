@@ -62,6 +62,30 @@ export const UserMessage: FC<UserMessageProps> = ({ content, attachments, timest
             className="mx-auto w-full max-w-[44rem] animate-in py-4 duration-150 ease-out fade-in slide-in-from-bottom-1"
             data-role="user"
         >
+            {/* Attachments - Display above message */}
+            {attachments && attachments.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-2 px-2">
+                    {attachments.map((attachment, index) => (
+                        <div
+                            key={index}
+                            className="flex items-center gap-2 rounded-lg border border-primary/30 bg-background/50 px-3 py-2 text-sm"
+                        >
+                            <span className="truncate max-w-[200px]">{attachment.name}</span>
+                            {attachment.url && (
+                                <a
+                                    href={attachment.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary hover:underline text-xs"
+                                >
+                                    View
+                                </a>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+
             <div className="flex gap-4 px-2">
                 {/* User Avatar */}
                 <div className="flex-shrink-0 pt-1">
@@ -72,30 +96,6 @@ export const UserMessage: FC<UserMessageProps> = ({ content, attachments, timest
 
                 {/* Message Content */}
                 <div className="flex-1 min-w-0">
-                    {/* Attachments */}
-                    {attachments && attachments.length > 0 && (
-                        <div className="mb-2 flex flex-wrap gap-2">
-                            {attachments.map((attachment, index) => (
-                                <div
-                                    key={index}
-                                    className="flex items-center gap-2 rounded-lg border border-primary/30 bg-background/50 px-3 py-2 text-sm"
-                                >
-                                    <span className="truncate max-w-[200px]">{attachment.name}</span>
-                                    {attachment.url && (
-                                        <a
-                                            href={attachment.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-primary hover:underline text-xs"
-                                        >
-                                            View
-                                        </a>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
                     <div className="inline-block rounded-2xl bg-muted px-4 py-2.5 leading-7 break-words text-foreground">
                         <div className="prose prose-sm dark:prose-invert max-w-none">
                             <ReactMarkdown

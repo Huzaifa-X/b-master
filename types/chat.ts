@@ -11,6 +11,7 @@ export interface Message {
     content: string
     createdAt: Date
     isStreaming?: boolean
+    status?: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"
     attachments?: {
         name: string
         url: string

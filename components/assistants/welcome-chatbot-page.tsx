@@ -44,13 +44,12 @@ export function WelcomeChatbotPage({
   const handleSend = async (
     message: string,
     attachments?: { name: string; url: string; type: string; size: number }[],
-    options?: { webSearch?: boolean; research?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string } }
+    options?: { webSearch?: boolean; research?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: Array<{ id: string; name: string; email: string }> }
   ) => {
     if (!message.trim() || isCreating) return
 
-    console.log("[WelcomePage] Creating new chat with message:", message.substring(0, 50), "attachments:", attachments?.length || 0)
-    
     setIsCreating(true)
+    console.log("[WelcomePage] Creating new chat with message:", message.substring(0, 50), "attachments:", attachments?.length || 0, "mentionedUsers:", options?.mentionedUsers?.length || 0)
 
     try {
       // Create chat with first message, attachments, and search options (skip background for streaming)
@@ -62,6 +61,7 @@ export function WelcomeChatbotPage({
         webSearch: options?.webSearch,
         research: options?.research,
         artifact: options?.artifact,
+        mentionedUsers: options?.mentionedUsers,
         skipBackground: true // Skip background processing, streaming will be used
       })
 
@@ -106,6 +106,7 @@ export function WelcomeChatbotPage({
       }, 200)
 
       // Clear input (will be cleared by ChatInput after successful send)
+      setIsCreating(false)
 
     } catch (error) {
       console.error("[WelcomePage] Error creating chat:", error)
@@ -148,6 +149,7 @@ export function WelcomeChatbotPage({
             onValueChange={setInput}
             onSubmit={handleSend}
             isLoading={isCreating}
+            disabled={isCreating}
             placeholder={
               chatType === "ask-b"
                 ? "Ask me anything..."

@@ -27,6 +27,7 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
   const [isAtBottom, setIsAtBottom] = useState(false) // Start as false, will be updated when viewport is found
   const viewportRef = useRef<HTMLElement | null>(null)
   const { setArtifact, isPanelOpen, closePanel } = useArtifactStore()
+  const [isCreating, setIsCreating] = useState(false)
   const isMobile = useIsMobile()
 
   // Close artifact panel when switching to a new chat
@@ -241,21 +242,40 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
     }
   }
 
-  const handleSend = (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean }) => {
-    if (!message.trim() || isStreaming) return
-    sendMessage(message.trim(), attachments, options)
+  const handleSend = async (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean }) => {
+    if (!message.trim() || isStreaming || isCreating) return
+
+    setIsCreating(true)
+    try {
+      await sendMessage(message.trim(), attachments, options)
+    } finally {
+      // Reset after a short delay to allow streaming to start
+      setTimeout(() => setIsCreating(false), 100)
+    }
   }
 
   const handleCancel = () => {
     cancelStreaming()
   }
 
-  // Check if we need to show loading indicator
-  // Show loading if last message is from user and there's no assistant response yet
-  const lastMessage = messages[messages.length - 1]
+  
+  
+  // Find the last user message
+  const lastUserMessage = messages.filter(m => m.role === "user").slice(-1)[0]
+  
+  // Check if there's an assistant message after the last user message
+  const lastUserIndex = messages.findIndex(m => m.id === lastUserMessage?.id)
+  const hasAssistantResponseAfter = lastUserIndex >= 0 && 
+    messages.slice(lastUserIndex + 1).some(m => m.role === "assistant" && m.content.trim())
+  
+  // Show loading if:
+  // 1. There's a user message
+  // 2. No assistant response with content after it
+  // 3. Not currently streaming (streaming will show its own loading indicator)
   const hasUserMessageWithoutResponse = 
     messages.length > 0 && 
-    lastMessage?.role === "user" && 
+    lastUserMessage &&
+    !hasAssistantResponseAfter &&
     !isStreaming
 
   // Loading state
@@ -303,7 +323,8 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
               ))}
               
               {/* Loading indicator when waiting for AI response */}
-              {hasUserMessageWithoutResponse && (
+              {/* Only show if no streaming assistant message exists */}
+              {hasUserMessageWithoutResponse && !messages.some(m => m.role === "assistant" && m.isStreaming) && (
                 <div className="mb-4">
                   <div
                     className="mx-auto w-full max-w-[44rem] animate-in py-4 duration-150 ease-out fade-in slide-in-from-bottom-1"
@@ -376,7 +397,7 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
           
           <ChatInput
             onSubmit={handleSend}
-            isLoading={isStreaming}
+            isLoading={isStreaming || isCreating}
             disabled={isStreaming}
             placeholder="Send a message..."
             className="border-primary/50 shadow-lg"

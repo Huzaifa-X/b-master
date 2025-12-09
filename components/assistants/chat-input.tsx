@@ -1,7 +1,7 @@
 // components/assistants/chat-input.tsx
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Loader2, ArrowUp, X, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,16 +13,41 @@ import {
 import { AttachmentDropdown } from "@/components/assistants/attachment-dropdown"
 import { DictateButton } from "@/components/assistants/dictate-button"
 import { SelectArtifactDialog } from "@/components/assistants/select-artifact-dialog"
+import { MentionDropdown } from "@/components/assistants/mention-dropdown"
+import { MentionDropdownPortal } from "@/components/assistants/mention-dropdown-portal"
+import { searchUsersForMention } from "@/app/actions/user.action"
 import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
 import { uploadFilesToS3, type FileUploadData } from "@/app/actions/file-upload.action"
 
+interface User {
+  id: string
+  name: string
+  email: string
+  image: string | null
+}
+
+interface MentionedUser {
+  id: string
+  name: string
+  email: string
+}
+
 interface ChatInputProps {
   value?: string
   onValueChange?: (value: string) => void
-  onSubmit: (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string } }) => void
+  onSubmit: (
+    message: string, 
+    attachments?: { name: string; url: string; type: string; size: number }[], 
+    options?: { 
+      webSearch?: boolean; 
+      research?: boolean; 
+      artifact?: { id: string; name: string; instructions: string; htmlContent: string }
+      mentionedUsers?: MentionedUser[]
+    }
+  ) => void
   isLoading?: boolean
   disabled?: boolean
   placeholder?: string
@@ -48,7 +73,7 @@ export function ChatInput({
   onChatWithArtifact,
   className,
   mode = "assistant",
-  assistantId,
+  assistantId
 }: ChatInputProps) {
   // Internal state for controlled input
   const [internalValue, setInternalValue] = useState("")
@@ -59,6 +84,16 @@ export function ChatInput({
   const [selectedArtifact, setSelectedArtifact] = useState<{ id: string; name: string; instructions: string; htmlContent: string } | null>(null)
   const [isArtifactDialogOpen, setIsArtifactDialogOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  
+  // Mention functionality
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false)
+  const [mentionUsers, setMentionUsers] = useState<User[]>([])
+  const [mentionQuery, setMentionQuery] = useState("")
+  const [mentionStartIndex, setMentionStartIndex] = useState(0)
+  const [mentionDropdownPosition, setMentionDropdownPosition] = useState({ top: 0, left: 0 })
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0)
+  const [isLoadingMentions, setIsLoadingMentions] = useState(false)
+  const [mentionedUsers, setMentionedUsers] = useState<MentionedUser[]>([]) // Track mentioned users
 
   // Use external value if provided, otherwise use internal state
   const value = externalValue !== undefined ? externalValue : internalValue
@@ -75,15 +110,173 @@ export function ChatInput({
     setShowPreview(hasMarkdown && value.length > 0)
   }, [value])
 
+  // Detect @ mention trigger
+  const detectMentionTrigger = useCallback((text: string, cursorPosition: number) => {
+    if (mode !== "assistant") return false
+
+    // Find the last @ before cursor
+    const textBeforeCursor = text.substring(0, cursorPosition)
+    const lastAtIndex = textBeforeCursor.lastIndexOf("@")
+    if (lastAtIndex === -1) return false
+
+    // Check if @ is at start or preceded by whitespace
+    const charBeforeAt = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : " "
+    if (charBeforeAt !== " " && charBeforeAt !== "\n") return false
+
+    // Get text after @ up to cursor
+    const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1)
+
+    // Check if there's a space after @ (which would end the mention)
+    if (textAfterAt.includes(" ") || textAfterAt.includes("\n")) return false
+
+    setMentionStartIndex(lastAtIndex)
+    setMentionQuery(textAfterAt)
+    return true
+  }, [mode])
+
+  // Load users when mention is triggered
+  useEffect(() => {
+    const loadMentionUsers = async () => {
+      if (!showMentionDropdown) return
+
+      setIsLoadingMentions(true)
+      try {
+        const users = await searchUsersForMention(mentionQuery)
+        setMentionUsers(users)
+        setSelectedMentionIndex(0)
+      } catch (error) {
+        console.error("Error loading mention users:", error)
+        setMentionUsers([])
+      } finally {
+        setIsLoadingMentions(false)
+      }
+    }
+
+    loadMentionUsers()
+  }, [showMentionDropdown, mentionQuery])
+
+  // Calculate dropdown position relative to textarea element
+  const getDropdownPosition = useCallback(() => {
+    if (!textareaRef.current) return null
+
+    const textarea = textareaRef.current
+    const rect = textarea.getBoundingClientRect()
+    
+    // Position dropdown below the textarea, aligned to the left
+    // Similar to Material-UI Menu's default positioning
+    return {
+      top: rect.bottom + 4, // 4px gap below textarea
+      left: rect.left
+    }
+  }, [])
+
+  // Handle text changes and detect mentions
+  const handleValueChange = useCallback((newValue: string) => {
+    onValueChange(newValue)
+
+    // Use setTimeout to ensure the cursor position is updated
+    setTimeout(() => {
+      if (!textareaRef.current) return
+
+      const cursorPosition = textareaRef.current.selectionStart
+      const shouldShowMention = detectMentionTrigger(newValue, cursorPosition)
+
+      if (shouldShowMention) {
+        const dropdownPos = getDropdownPosition()
+        
+        if (dropdownPos) {
+          const screenWidth = window.innerWidth
+          const screenHeight = window.innerHeight
+          const dropdownWidth = 256
+          const dropdownMaxHeight = 240
+          
+          let { left, top } = dropdownPos
+          
+          // Adjust if too close to edges
+          if (left + dropdownWidth > screenWidth - 20) {
+            left = screenWidth - dropdownWidth - 20
+          }
+          left = Math.max(20, left)
+          
+          // Show above if too close to bottom
+          if (top + dropdownMaxHeight > screenHeight - 20) {
+            if (textareaRef.current) {
+              const rect = textareaRef.current.getBoundingClientRect()
+              top = rect.top - dropdownMaxHeight - 4
+            }
+          }
+          
+          setMentionDropdownPosition({ top, left })
+          setShowMentionDropdown(true)
+        }
+      } else {
+        setShowMentionDropdown(false)
+      }
+    }, 0)
+  }, [onValueChange, detectMentionTrigger, mode, getDropdownPosition])
+
+  // Insert mention into text
+  const insertMention = useCallback((user: User) => {
+    const beforeMention = value.substring(0, mentionStartIndex)
+    const afterMention = value.substring(textareaRef.current?.selectionStart || value.length)
+    const mentionText = `@${user.name} `
+    
+    const newValue = beforeMention + mentionText + afterMention
+    onValueChange(newValue)
+    
+    // Track this user as mentioned (including email)
+    setMentionedUsers(prev => {
+      // Avoid duplicates
+      if (prev.some(u => u.id === user.id)) return prev
+      return [...prev, { id: user.id, name: user.name, email: user.email }]
+    })
+    
+    // Set cursor position after mention
+    setTimeout(() => {
+      if (textareaRef.current) {
+        const newCursorPosition = beforeMention.length + mentionText.length
+        textareaRef.current.focus()
+        textareaRef.current.setSelectionRange(newCursorPosition, newCursorPosition)
+      }
+    }, 0)
+    
+    setShowMentionDropdown(false)
+    setMentionUsers([])
+    setMentionQuery("")
+  }, [value, mentionStartIndex, onValueChange])
+
+  // Handle keyboard navigation in mention dropdown
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // If mention dropdown is open, handle navigation and prevent other actions
+    if (showMentionDropdown && mentionUsers.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        setSelectedMentionIndex((prev) => (prev + 1) % mentionUsers.length)
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault()
+        setSelectedMentionIndex((prev) => (prev - 1 + mentionUsers.length) % mentionUsers.length)
+      } else if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault()
+        if (mentionUsers[selectedMentionIndex]) {
+          insertMention(mentionUsers[selectedMentionIndex])
+        }
+      } else if (e.key === "Escape") {
+        e.preventDefault()
+        setShowMentionDropdown(false)
+      }
+    }
+  }, [showMentionDropdown, mentionUsers, selectedMentionIndex, insertMention])
+
   const handleSend = async () => {
+    // Don't send if mention dropdown is open
+    if (showMentionDropdown) return
+    
     if ((!value.trim() && attachedFiles.length === 0) || isLoading || disabled) return
     
     let attachments: { name: string; url: string; type: string; size: number }[] = []
 
     // Upload files to S3 if there are any attachments
     if (attachedFiles.length > 0) {
-      // toast.loading(`Uploading ${attachedFiles.length} file(s)...`, { id: 'file-upload' })
-
       // Convert files to base64 for server action
       const fileUploadData: FileUploadData[] = await Promise.all(
         attachedFiles.map(async (file) => {
@@ -96,18 +289,18 @@ export function ChatInput({
         })
       )
 
-      // Upload to S3 using existing functions from lib/aws-s3.ts
+      // Upload to S3
       const result = await uploadFilesToS3(fileUploadData)
 
       if (!result.success) {
-        toast.error(result.error || 'Failed to upload files. Please try again.', { id: 'file-upload' })
-        return // Don't send message if file upload fails
+        toast.error(result.error || 'Failed to upload files. Please try again.')
+        return
       }
 
       attachments = result.files
     }
 
-    // Call onSubmit with the message, attachments, and search options
+    // Call onSubmit with the message, attachments, search options, and mentioned users
     onSubmit(
       value.trim(), 
       attachments.length > 0 ? attachments : undefined,
@@ -115,14 +308,16 @@ export function ChatInput({
         webSearch: webSearchEnabled,
         research: researchEnabled,
         artifact: selectedArtifact || undefined,
+        mentionedUsers: mentionedUsers.length > 0 ? mentionedUsers : undefined,
       }
     )
     
-    // Clear input and attachments (but keep search modes for next message)
+    // Clear input, attachments, and mentioned users
     onValueChange("")
     setAttachedFiles([])
     setShowPreview(false)
-    setSelectedArtifact(null) // Clear selected artifact after sending
+    setSelectedArtifact(null)
+    setMentionedUsers([])
   }
 
   // Helper function to convert File to base64
@@ -306,23 +501,39 @@ export function ChatInput({
         </div>
       )}
 
-      <PromptInput
-        value={value}
-        onValueChange={onValueChange}
-        onSubmit={handleSend}
-        isLoading={isLoading}
-        disabled={disabled || isLoading}
-        maxHeight={120}
-        onFileUpload={handleFileUpload}
-        className={className}
-      >
-        <PromptInputTextarea
-          ref={textareaRef}
-          placeholder={placeholder}
-          className="text-foreground placeholder:text-muted-foreground"
-          onPaste={handlePaste}
+      <div className="relative">
+        <PromptInput
+          value={value}
+          onValueChange={handleValueChange}
+          onSubmit={handleSend}
+          isLoading={isLoading}
           disabled={disabled || isLoading}
-        />
+          maxHeight={120}
+          onFileUpload={handleFileUpload}
+          className={className}
+        >
+          <PromptInputTextarea
+            ref={textareaRef}
+            placeholder={placeholder}
+            className="text-foreground placeholder:text-muted-foreground"
+            onPaste={handlePaste}
+            onKeyDown={handleKeyDown}
+            disabled={disabled || isLoading}
+          />
+        
+        {/* Mention Dropdown - Portal to body */}
+        {showMentionDropdown && (
+          <MentionDropdownPortal>
+            <MentionDropdown
+              users={mentionUsers}
+              isLoading={isLoadingMentions}
+              onSelect={insertMention}
+              position={mentionDropdownPosition}
+              selectedIndex={selectedMentionIndex}
+              onSelectedIndexChange={setSelectedMentionIndex}
+            />
+          </MentionDropdownPortal>
+        )}
         <PromptInputActions className="px-2 pb-1 justify-between">
           <div className="flex items-center gap-2">
             <AttachmentDropdown
@@ -364,7 +575,8 @@ export function ChatInput({
             </PromptInputAction>
           </div>
         </PromptInputActions>
-      </PromptInput>
+        </PromptInput>
+      </div>
     </div>
   )
 }

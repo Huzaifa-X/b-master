@@ -3,6 +3,8 @@ export type NotificationType =
   | 'assistant_purchased'
   | 'assistant_sold'
   | 'assistant_shared'
+  | 'assistant_refund'
+  | 'assistant_refund_seller'
   | 'comment_added'
   | 'subscription_purchased'
   | 'artifact_created'
