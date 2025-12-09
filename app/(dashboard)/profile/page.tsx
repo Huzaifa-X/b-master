@@ -25,7 +25,7 @@ const TABS = [
 
 export default function ProfilePage() {
     const [activeTab, setActiveTab] = useState("profile")
-    const { user, loading, error, updateProfile } = useUser()
+    const { user, loading, error, updateProfile, isUpdating } = useUser()
     const { data: session } = useSession()
 
     const handleProfileSave = async (data: {
@@ -120,6 +120,7 @@ export default function ProfilePage() {
                             image: user.image,
                         }}
                         onSave={handleProfileSave}
+                        isLoading={isUpdating}
                     />
                 )
             case "billing":

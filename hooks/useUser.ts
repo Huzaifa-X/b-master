@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useSession } from "next-auth/react"
 import { getCurrentUser, updateUserProfile } from "@/app/actions/user.action"
 import { toast } from "sonner"
 
@@ -21,37 +22,44 @@ interface UseUserReturn {
   user: UserData | null
   loading: boolean
   error: string | null
-  refetch: () => Promise<void>
+  refetch: () => void
   updateProfile: (data: Partial<UserData>) => Promise<boolean>
+  isUpdating: boolean
 }
 
-export function useUser(): UseUserReturn {
-  const [user, setUser] = useState<UserData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+const USER_QUERY_KEY = ["user", "profile"]
 
-  const fetchUser = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      
+export function useUser(): UseUserReturn {
+  const queryClient = useQueryClient()
+  const { update: updateSession } = useSession()
+
+  // Fetch user with React Query
+  const {
+    data: user,
+    isLoading: loading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: USER_QUERY_KEY,
+    queryFn: async () => {
       const result = await getCurrentUser()
       
       if (result.success && result.user) {
-        setUser(result.user as UserData)
+        return result.user as UserData
       } else {
-        setError(result.error || "Failed to fetch user")
+        throw new Error(result.error || "Failed to fetch user")
       }
-    } catch (err) {
-      setError("An unexpected error occurred")
-      console.error("Error in useUser:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh
+    gcTime: 10 * 60 * 1000, // 10 minutes - cache persistence (formerly cacheTime)
+    retry: 2,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  })
 
-  const updateProfile = async (data: Partial<UserData>): Promise<boolean> => {
-    try {
+  // Update profile mutation
+  const mutation = useMutation({
+    mutationFn: async (data: Partial<UserData>) => {
       const result = await updateUserProfile({
         name: data.name,
         email: data.email,
@@ -61,31 +69,73 @@ export function useUser(): UseUserReturn {
         image: data.image,
       })
 
-      if (result.success && result.user) {
-        setUser((prev) => (prev ? { ...prev, ...result.user } : null))
-        toast.success(result.message || "Profile updated successfully")
-        return true
-      } else {
-        toast.error(result.error || "Failed to update profile")
-        return false
+      if (!result.success) {
+        throw new Error(result.error || "Failed to update profile")
       }
+
+      return result.user
+    },
+    onMutate: async (newData) => {
+      // Cancel outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: USER_QUERY_KEY })
+
+      // Snapshot previous value for rollback
+      const previousUser = queryClient.getQueryData<UserData>(USER_QUERY_KEY)
+
+      // Optimistically update cache
+      if (previousUser) {
+        queryClient.setQueryData<UserData>(USER_QUERY_KEY, {
+          ...previousUser,
+          ...newData,
+        })
+      }
+
+      return { previousUser }
+    },
+    onSuccess: async (updatedUser) => {
+      // Invalidate and refetch user data everywhere
+      await queryClient.invalidateQueries({ queryKey: USER_QUERY_KEY })
+      
+      // Update NextAuth session so sidebar updates
+      if (updatedUser) {
+        await updateSession({
+          user: {
+            name: updatedUser.name,
+            image: updatedUser.image,
+            email: updatedUser.email,
+          },
+        })
+      }
+
+      toast.success("Profile updated successfully")
+    },
+    onError: (error, _newData, context) => {
+      // Rollback on error
+      if (context?.previousUser) {
+        queryClient.setQueryData(USER_QUERY_KEY, context.previousUser)
+      }
+      
+      toast.error(error instanceof Error ? error.message : "Failed to update profile")
+    },
+  })
+
+  const updateProfile = async (data: Partial<UserData>): Promise<boolean> => {
+    try {
+      await mutation.mutateAsync(data)
+      return true
     } catch (err) {
       console.error("Error updating profile:", err)
-      toast.error("An unexpected error occurred")
       return false
     }
   }
 
-  useEffect(() => {
-    fetchUser()
-  }, [])
-
   return {
-    user,
+    user: user || null,
     loading,
-    error,
-    refetch: fetchUser,
+    error: error ? (error as Error).message : null,
+    refetch: () => refetch(),
     updateProfile,
+    isUpdating: mutation.isPending,
   }
 }
 

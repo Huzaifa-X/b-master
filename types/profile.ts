@@ -10,4 +10,5 @@ export interface ProfileData {
 export interface ProfileTabProps {
     initialData: ProfileData
     onSave: (data: ProfileData) => void
+    isLoading: boolean
 }
