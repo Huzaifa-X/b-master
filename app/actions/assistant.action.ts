@@ -1108,7 +1108,10 @@ export async function getAssistants({
                 break
 
             case 'public':
-                // Get all public assistants (marketplace) excluding those already purchased by the user
+                // Get all public assistants (marketplace) excluding:
+                // 1. User's own assistants
+                // 2. Assistants already purchased by the user
+                
                 // First, get IDs of assistants the user has already purchased
                 const purchasedAssistantIds = await prisma.assistantPurchase.findMany({
                     where: {
@@ -1123,10 +1126,13 @@ export async function getAssistants({
 
                 const purchasedIds: bigint[] = purchasedAssistantIds.map(p => p.assistantId)
 
-                // Build where clause - exclude purchased assistants
+                // Build where clause - exclude user's own and purchased assistants
                 const publicWhere: any = {
                     public: true,
                     deletedAt: null,
+                    userId: {
+                        not: userId // Exclude user's own assistants
+                    },
                     ...(purchasedIds.length > 0 && {
                         id: {
                             notIn: purchasedIds

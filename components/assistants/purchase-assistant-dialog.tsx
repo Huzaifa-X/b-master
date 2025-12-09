@@ -69,18 +69,6 @@ export function PurchaseAssistantDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Assistant Image */}
-          {assistant.image && (
-            <div className="relative w-full h-48 rounded-lg overflow-hidden bg-muted">
-              <Image
-                src={assistant.image}
-                alt={assistant.name}
-                fill
-                className="object-cover"
-              />
-            </div>
-          )}
-
           {/* Price Display */}
           <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
             <span className="text-lg font-semibold">Price</span>

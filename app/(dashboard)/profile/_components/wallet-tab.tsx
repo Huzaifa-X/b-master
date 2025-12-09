@@ -359,8 +359,8 @@ export default function WalletTab() {
                         {transaction.type === "sale" ? "+" : ""}
                         {formatCurrency(transaction.amount, transaction.currency)}
                       </div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {transaction.metadata?.assistantId ? `Assistant #${transaction.metadata.assistantId}` : "-"}
+                      <div className="text-xs text-muted-foreground truncate" title={transaction.metadata?.assistantName || "-"}>
+                        {transaction.metadata?.assistantName || "-"}
                       </div>
                     </div>
                   ))}

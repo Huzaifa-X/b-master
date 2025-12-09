@@ -21,7 +21,13 @@ export interface WalletTransaction {
   type: string
   status: string
   stripeTransactionId: string | null
-  metadata: any
+  metadata: {
+    assistantId?: string
+    assistantName?: string | null
+    buyerId?: string
+    purchaseId?: number
+    [key: string]: any
+  }
   createdAt: Date
   updatedAt: Date
 }

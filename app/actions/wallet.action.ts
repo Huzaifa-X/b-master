@@ -52,7 +52,7 @@ export async function getUserWallet() {
 }
 
 /**
- * Get wallet transaction history
+ * Get wallet transaction history with assistant details
  */
 export async function getWalletTransactions(limit = 50, offset = 0) {
   try {
@@ -66,6 +66,19 @@ export async function getWalletTransactions(limit = 50, offset = 0) {
     const transactions = await prisma.assistantTransaction.findMany({
       where: {
         assistantOwnerId: userId,
+      },
+      include: {
+        purchases: {
+          select: {
+            assistant: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+          take: 1, // Only need one purchase to get the assistant
+        },
       },
       orderBy: {
         createdAt: "desc",
@@ -82,18 +95,31 @@ export async function getWalletTransactions(limit = 50, offset = 0) {
 
     return {
       success: true,
-      transactions: transactions.map((t) => ({
-        id: t.id,
-        assistantOwnerId: t.assistantOwnerId.toString(),
-        amount: Number(t.amount),
-        currency: t.currency,
-        type: t.type,
-        status: t.status,
-        stripeTransactionId: t.stripeTransactionId,
-        metadata: t.metadata,
-        createdAt: t.createdAt,
-        updatedAt: t.updatedAt,
-      })),
+      transactions: transactions.map((t) => {
+        // Get assistant info from the first purchase (if available)
+        const assistantInfo = t.purchases[0]?.assistant || null
+        
+        // Safely merge metadata
+        const existingMetadata = (t.metadata && typeof t.metadata === 'object') 
+          ? t.metadata as Record<string, any>
+          : {}
+        
+        return {
+          id: t.id,
+          assistantOwnerId: t.assistantOwnerId.toString(),
+          amount: Number(t.amount),
+          currency: t.currency,
+          type: t.type,
+          status: t.status,
+          stripeTransactionId: t.stripeTransactionId,
+          metadata: {
+            ...existingMetadata,
+            assistantName: assistantInfo?.name || null,
+          },
+          createdAt: t.createdAt,
+          updatedAt: t.updatedAt,
+        }
+      }),
       total,
     }
   } catch (error: any) {
