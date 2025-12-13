@@ -288,7 +288,7 @@ export async function POST(req: NextRequest) {
 
     // API params with streaming enabled
     const apiParams: any = {
-      model: "gpt-5",
+      model: "gpt-5.2",
       input: inputContent,
       instructions: systemPrompt,
       tools: tools.length > 0 ? tools : undefined,

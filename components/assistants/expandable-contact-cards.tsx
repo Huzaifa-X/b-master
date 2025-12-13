@@ -4,7 +4,7 @@ import React, { useEffect, useId, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { useOutsideClick } from "@/hooks/use-outside-click"
 import { Button } from "@/components/ui/button"
-import { User, MapPin, Briefcase, Mail, Search, Edit, Trash2, X, FileText } from "lucide-react"
+import { User, MapPin, Briefcase, Mail, Search, Edit, Trash2, X, FileText, Phone } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
 import { toast } from "sonner"
@@ -21,6 +21,8 @@ interface Contact {
     gender: string
     role: "user" | "client" | "investor"
     address: string
+    telephone?: string // Contact telephone number
+    information?: string // Additional contact information
     assistantName?: string
     assistantId?: string
 }
@@ -249,6 +251,26 @@ export function ExpandableContactCards({
                                             <div>
                                                 <p className="text-xs text-muted-foreground">Address</p>
                                                 <p className="text-sm font-medium">{active.address}</p>
+                                            </div>
+                                        </div>
+                                        )}
+
+                                        {active.telephone && active.telephone.trim() !== "" && (
+                                        <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                                            <Phone className="h-5 w-5 text-muted-foreground mt-0.5" />
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Telephone</p>
+                                                <p className="text-sm font-medium">{active.telephone}</p>
+                                            </div>
+                                        </div>
+                                        )}
+
+                                        {active.information && active.information.trim() !== "" && (
+                                        <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                                            <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Additional Information</p>
+                                                <p className="text-sm">{active.information}</p>
                                             </div>
                                         </div>
                                         )}

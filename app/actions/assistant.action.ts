@@ -54,7 +54,7 @@ export async function generateAssistantInstructions({
             }
         }
 
-        const model = 'gpt-5'
+        const model = 'gpt-5.2'
 
         const response = await openai.responses.create({
             model: model,

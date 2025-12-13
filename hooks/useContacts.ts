@@ -12,6 +12,8 @@ interface Contact {
   gender: string
   role: "user" | "client" | "investor"
   address: string
+  telephone?: string // Contact telephone number
+  information?: string // Additional contact information
   assistantName?: string
   assistantId?: string
 }

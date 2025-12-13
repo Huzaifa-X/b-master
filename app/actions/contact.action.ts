@@ -9,12 +9,16 @@ export interface AddContactParams {
   email: string
   role: "user" | "client" | "investor"
   description?: string
+  telephone?: string
+  information?: string
 }
 
 export interface UpdateContactParams {
   contactId: string
   role: "user" | "client" | "investor"
   description?: string
+  telephone?: string
+  information?: string
 }
 
 export interface ContactResult {
@@ -26,6 +30,8 @@ export interface ContactResult {
     name: string
     role: string
     description: string | null
+    telephone?: string | null
+    information?: string | null
   }
 }
 
@@ -38,6 +44,8 @@ export async function addContact({
   email,
   role,
   description,
+  telephone,
+  information,
 }: AddContactParams): Promise<ContactResult> {
   try {
     const session = await getServerSession(authOptions)
@@ -126,6 +134,8 @@ export async function addContact({
         userId: contactUserId,
         role: role,
         description: description || null,
+        telephone: telephone || null,
+        information: information || null,
         access: "user", // Shared users get 'user' access (limited), not 'editor'
         permissions: JSON.stringify(["chat", "artifacts", "contacts", "newsfeed"]), // Default permissions
       },
@@ -161,6 +171,8 @@ export async function addContact({
         name: contact.user.name || "",
         role: contact.role || "user",
         description: contact.description,
+        telephone: contact.telephone,
+        information: contact.information,
       },
     }
   } catch (error) {
@@ -173,12 +185,14 @@ export async function addContact({
 }
 
 /**
- * Update a contact's role and description
+ * Update a contact's role, description, telephone, and information
  */
 export async function updateContact({
   contactId,
   role,
   description,
+  telephone,
+  information,
 }: UpdateContactParams): Promise<ContactResult> {
   try {
     const session = await getServerSession(authOptions)
@@ -245,6 +259,8 @@ export async function updateContact({
       data: {
         role: role,
         description: description || null,
+        telephone: telephone || null,
+        information: information || null,
         updatedAt: new Date(),
       },
       include: {
@@ -266,6 +282,8 @@ export async function updateContact({
         name: updatedContact.user.name || "",
         role: updatedContact.role || "user",
         description: updatedContact.description,
+        telephone: updatedContact.telephone,
+        information: updatedContact.information,
       },
     }
   } catch (error) {
@@ -439,6 +457,8 @@ export async function getAssistantContacts(assistantId: string) {
       gender: contact.user.gender || "",
       role: (contact.role as "user" | "client" | "investor") || "user",
       address: contact.user.address || "",
+      telephone: contact.telephone || "",
+      information: contact.information || "",
       isOwner: contact.userId === assistantOwnerId, // Mark if this is the owner
       access: contact.access, // Include access level
       permissions: contact.permissions ? JSON.parse(contact.permissions) : [], // Include permissions

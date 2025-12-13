@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma"
 import { openai } from "@/lib/openai"
 import upstageService from "@/lib/services/upstageService"
 import { getArtifactCodingPrompt } from "@/utils/prompts"
+import { createArtifactVersion } from "@/app/actions/update-artifact.action"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -164,7 +165,7 @@ CRITICAL: Output ONLY the complete HTML code starting with <!DOCTYPE html> and e
 
           let generatedCode = ""
           let buffer = ""
-          const model = 'gpt-5' // Use a stable model instead of gpt-5
+          const model = 'gpt-5.2' // Use a stable model instead of gpt-5.2
           const CHUNK_SIZE = 1024 // Send chunks of ~1KB instead of character-by-character
 
           // Create AI response with streaming
@@ -321,16 +322,21 @@ CRITICAL: Output ONLY the complete HTML code starting with <!DOCTYPE html> and e
             generatedCode = sanitizeHtml(generatedCode)
           }
 
-          // Update the artifact with the generated code
-          await prisma.assistantArtifact.update({
-            where: { id: artifactIdInt },
-            data: {
-              code: generatedCode,
-              updatedAt: new Date()
-            }
+          // Create a new version with the generated code and set it as active
+          const versionResult = await createArtifactVersion({
+            artifactId: artifactIdInt,
+            userId: userId,
+            code: generatedCode,
+            description: 'Initial AI-generated artifact',
+            changeType: 'ai',
+            setAsActive: true
           })
 
-          console.log("[Artifact Stream] Artifact updated with generated code")
+          if (!versionResult.success) {
+            throw new Error(versionResult.error || "Failed to create artifact version")
+          }
+
+          console.log("[Artifact Stream] Artifact version created:", versionResult.version?.versionNumber)
 
           // Send completion signal
           controller.enqueue(

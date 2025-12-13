@@ -54,6 +54,7 @@ model User {
   assistantContacts         AssistantContact[]
   notifications             Notification[]
   usageMetrics              UsageMetric[]
+  artifactVersions          ArtifactVersion[]
 
   @@index([email])
   @@index([googleId])
@@ -334,6 +335,8 @@ model AssistantContact {
   userId      BigInt
   description String?  @db.Text
   role        String?  @db.VarChar(255) // Renamed from 'Role' to 'role' for Prisma style consistency
+  telephone   String?  @db.VarChar(50) // Contact telephone number
+  information String?  @db.Text // Additional contact information
   access      String   @default("admin") @db.VarChar(50) // admin, user
   permissions String?  @db.Text // JSON: ["chat", "contacts", "messenger", "newsfeed", "artifacts"]
   createdAt   DateTime @default(now())
@@ -601,38 +604,76 @@ model AssistantNewsFeedComment {
 }
 
 // ================================================================
-// ARTIFACTS & PERMISSIONS
+// ARTIFACTS & PERMISSIONS WITH SIMPLE SHAREABLE LINK
 // ================================================================
 
 model AssistantArtifact {
-  id           Int      @id @default(autoincrement())
-  assistantId  BigInt
-  userId       BigInt
-  name         String?  @db.VarChar(255)
-  instructions String?  @db.Text
-  category     String?  @db.VarChar(255)
-  code         String?  @db.Text // Large code blocks
-  tools        Json?    @db.Json
-  apiKeys      Json?    @db.Json // Encrypted API credentials
-
-  files        Json?    @db.Json // Array of {url, name, type, extractedContent}
-  images       Json?    @db.Json // Array of {url, name, alt}
-
-  videoUrl     String?  @db.Text // S3 URL for generated video
-  videoMetadata Json?   @db.Json // { duration: 8, size: 1280x720, model: "sora-2" }
-  thumbnailUrl String?  @db.Text // S3 URL for video thumbnail
+  id              Int      @id @default(autoincrement())
+  assistantId     BigInt
+  userId          BigInt
+  name            String?  @db.VarChar(255)
+  instructions    String?  @db.Text
+  category        String?  @db.VarChar(255)
+  activeVersionId Int?
   
-  isPublic     Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  shareableId     String?  @unique @db.VarChar(255) // Short code for public sharing
+  
+  tools           Json?    @db.Json
+  apiKeys         Json?    @db.Json
+  files           Json?    @db.Json
+  images          Json?    @db.Json
+  videoUrl        String?  @db.Text
+  videoMetadata   Json?    @db.Json
+  thumbnailUrl    String?  @db.Text
+  
+  isPublic        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime? // Soft delete
 
-  assistant   Assistant            @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  permissions ArtifactPermission[]
+  assistant       Assistant            @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissions     ArtifactPermission[]
+  versions        ArtifactVersion[]
+  activeVersion   ArtifactVersion?     @relation("ActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
 
   @@index([assistantId])
   @@index([userId])
+  @@index([activeVersionId])
+  @@index([shareableId])  // ✅ NEW: Index for fast lookups
   @@map("assistant_artifacts")
+}
+
+model ArtifactVersion {
+  id              Int      @id @default(autoincrement())
+  artifactId      Int
+  userId          BigInt
+  
+  versionNumber   Int
+  versionName     String?  @db.VarChar(255)
+  
+  code            String   @db.Text
+  description     String?  @db.Text
+  
+  changeType      String   @default("manual") @db.VarChar(50)
+  changedFrom     Int?
+  isSnapshot      Boolean  @default(false)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  artifact            AssistantArtifact   @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  creator             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeForArtifacts  AssistantArtifact[] @relation("ActiveVersion")
+
+  @@unique([artifactId, versionNumber])
+  @@index([artifactId])
+  @@index([userId])
+  @@index([versionNumber])
+  @@index([createdAt])
+  @@index([isSnapshot])
+  @@map("artifact_versions")
 }
 
 model ArtifactPermission {
@@ -640,7 +681,16 @@ model ArtifactPermission {
   userId      BigInt
   assistantId BigInt
   artifactId  Int
-  access      String   @default("viewer") @db.VarChar(50) // viewer, editor, admin
+  access      String   @default("viewer") @db.VarChar(50)
+  permissions Json?    @db.Json
+  // Example:
+  // {
+  //   "canViewActiveVersion": true,
+  //   "canViewVersionHistory": true,
+  //   "canDownloadAnyVersion": true,
+  //   "canSetActiveVersion": true,
+  //   "canRollbackVersions": true
+  // }
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

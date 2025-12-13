@@ -30,6 +30,8 @@ export interface ContactFormData {
   gender: string
   role: "user" | "client" | "investor"
   address: string
+  telephone?: string // Contact telephone number
+  information?: string // Additional contact information
 }
 
 interface ContactDialogProps {
@@ -49,6 +51,8 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
     gender: "",
     role: "user",
     address: "",
+    telephone: "",
+    information: "",
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -66,6 +70,8 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
         gender: "",
         role: "user",
         address: "",
+        telephone: "",
+        information: "",
       })
     }
   }, [contact, open])
@@ -158,6 +164,33 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
             />
           </div>
 
+              {/* Telephone - Optional */}
+          <div className="space-y-2">
+            <Label htmlFor="telephone">Telephone</Label>
+            <Input
+              id="telephone"
+              type="tel"
+              placeholder="+1 (555) 123-4567"
+              value={formData.telephone || ""}
+              onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
+              disabled={isSubmitting}
+            />
+          </div>
+
+              {/* Information - Optional */}
+          <div className="space-y-2">
+            <Label htmlFor="information">Additional Information</Label>
+            <Textarea
+              id="information"
+              placeholder="Any additional information about this contact..."
+              value={formData.information || ""}
+              onChange={(e) => setFormData({ ...formData, information: e.target.value })}
+              rows={3}
+              className="resize-none"
+              disabled={isSubmitting}
+            />
+          </div>
+
               {/* Role - Required */}
             <div className="space-y-2">
                 <Label htmlFor="role">
@@ -215,6 +248,33 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
                   placeholder="Add a brief description about this contact..."
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows={3}
+                  className="resize-none"
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              {/* Telephone - Editable */}
+              <div className="space-y-2">
+                <Label htmlFor="telephone">Telephone</Label>
+                <Input
+                  id="telephone"
+                  type="tel"
+                  placeholder="+1 (555) 123-4567"
+                  value={formData.telephone || ""}
+                  onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              {/* Information - Editable */}
+              <div className="space-y-2">
+                <Label htmlFor="information">Additional Information</Label>
+                <Textarea
+                  id="information"
+                  placeholder="Any additional information about this contact..."
+                  value={formData.information || ""}
+                  onChange={(e) => setFormData({ ...formData, information: e.target.value })}
                   rows={3}
                   className="resize-none"
                   disabled={isSubmitting}

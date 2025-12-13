@@ -48,6 +48,8 @@ export default function ContactsPage({ params }: PageProps) {
           contactId: contact.id,
           role: contact.role,
           description: contact.description,
+          telephone: contact.telephone,
+          information: contact.information,
         })
 
         if (result.success) {
@@ -71,6 +73,8 @@ export default function ContactsPage({ params }: PageProps) {
           email: contact.email,
           role: contact.role,
           description: contact.description,
+          telephone: contact.telephone,
+          information: contact.information,
         })
 
         if (result.success) {

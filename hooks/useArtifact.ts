@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { getArtifactById, getArtifacts } from "@/app/actions/artifact.action"
+import { getArtifactById, getArtifacts, getArtifactVersions, setActiveArtifactVersion } from "@/app/actions/artifact.action"
 import { updateArtifactWithAI, type UpdateArtifactParams, type UpdateArtifactResult } from "@/app/actions/update-artifact.action"
+import { getArtifactEditData, updateArtifact, type EditArtifactParams } from "@/app/actions/edit-artifact.action"
 import { toast } from "sonner"
 
 interface ArtifactData {
@@ -11,6 +12,8 @@ interface ArtifactData {
   instructions: string
   createdAt: Date
   updatedAt: Date
+  versionsCount: number
+  hasVersions: boolean
   creator: {
     id: string
     name: string
@@ -201,6 +204,228 @@ export function useUpdateArtifact(options?: UseUpdateArtifactOptions) {
       
       // Call custom success callback
       options?.onSuccess?.(result)
+    },
+    onError: (error: Error) => {
+      // Show error toast
+      toast.error(error.message || "Failed to update artifact")
+      
+      // Call custom error callback
+      options?.onError?.(error.message)
+    },
+  })
+
+  return {
+    updateArtifact: mutation.mutate,
+    updateArtifactAsync: mutation.mutateAsync,
+    isLoading: mutation.isPending,
+    isError: mutation.isError,
+    error: mutation.error,
+    isSuccess: mutation.isSuccess,
+    data: mutation.data,
+  }
+}
+
+interface ArtifactVersion {
+  id: string
+  versionNumber: number
+  versionName: string | null
+  code: string
+  description: string | null
+  changeType: string
+  isSnapshot: boolean
+  createdAt: Date
+  isActive: boolean
+  creator: {
+    id: string
+    name: string
+    email: string
+    image: string | null
+  }
+}
+
+interface UseArtifactVersionsResult {
+  versions: ArtifactVersion[]
+  activeVersionId: string | null
+  isLoading: boolean
+  isError: boolean
+  error: Error | null
+  refetch: () => void
+}
+
+/**
+ * Hook to fetch all versions for an artifact
+ * @param artifactId - The ID of the artifact
+ * @param options - Optional configuration
+ */
+export function useArtifactVersions(
+  artifactId: string,
+  options?: {
+    enabled?: boolean
+  }
+): UseArtifactVersionsResult {
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["artifactVersions", artifactId],
+    queryFn: async () => {
+      const result = await getArtifactVersions(artifactId)
+      
+      if (!result.success) {
+        throw new Error(result.error || "Failed to fetch artifact versions")
+      }
+      
+      return result
+    },
+    enabled: options?.enabled ?? true,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    retry: 1,
+  })
+
+  return {
+    versions: (data?.versions || []) as ArtifactVersion[],
+    activeVersionId: data?.activeVersionId || null,
+    isLoading,
+    isError,
+    error: error as Error | null,
+    refetch,
+  }
+}
+
+interface UseSetActiveVersionOptions {
+  onSuccess?: () => void
+  onError?: (error: string) => void
+}
+
+/**
+ * Hook to set active version for an artifact
+ * @param options - Optional callbacks for success and error handling
+ */
+export function useSetActiveVersion(options?: UseSetActiveVersionOptions) {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async ({ artifactId, versionId }: { artifactId: string; versionId: string }) => {
+      const result = await setActiveArtifactVersion(artifactId, versionId)
+      
+      if (!result.success) {
+        throw new Error(result.error || "Failed to set active version")
+      }
+      
+      return result
+    },
+    onSuccess: (_, variables) => {
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: ["artifact", variables.artifactId] })
+      queryClient.invalidateQueries({ queryKey: ["artifactVersions", variables.artifactId] })
+      
+      // Show success toast
+      toast.success("Active version updated successfully!")
+      
+      // Call custom success callback
+      options?.onSuccess?.()
+    },
+    onError: (error: Error) => {
+      // Show error toast
+      toast.error(error.message || "Failed to set active version")
+      
+      // Call custom error callback
+      options?.onError?.(error.message)
+    },
+  })
+
+  return {
+    setActiveVersion: mutation.mutate,
+    setActiveVersionAsync: mutation.mutateAsync,
+    isLoading: mutation.isPending,
+    isError: mutation.isError,
+    error: mutation.error,
+    isSuccess: mutation.isSuccess,
+  }
+}
+
+/**
+ * Hook to fetch artifact edit data
+ * @param artifactId - The ID of the artifact to edit
+ * @param options - Optional configuration
+ */
+export function useArtifactEditData(
+  artifactId: string,
+  options?: {
+    enabled?: boolean
+  }
+) {
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["artifactEditData", artifactId],
+    queryFn: async () => {
+      const result = await getArtifactEditData(artifactId)
+      
+      if (!result.success) {
+        throw new Error(result.error || "Failed to fetch artifact edit data")
+      }
+      
+      return result.data
+    },
+    enabled: options?.enabled ?? true,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1,
+  })
+
+  return {
+    editData: data || null,
+    isLoading,
+    isError,
+    error: error as Error | null,
+    refetch,
+  }
+}
+
+interface UseUpdateArtifactMutationOptions {
+  onSuccess?: (artifactId: string) => void
+  onError?: (error: string) => void
+}
+
+/**
+ * Hook to update artifact (instructions, contacts, APIs)
+ * @param options - Optional callbacks for success and error handling
+ */
+export function useUpdateArtifactMutation(options?: UseUpdateArtifactMutationOptions) {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async (params: EditArtifactParams) => {
+      const result = await updateArtifact(params)
+      
+      if (!result.success) {
+        throw new Error(result.error || "Failed to update artifact")
+      }
+      
+      return result
+    },
+    onSuccess: (result) => {
+      if (result.artifact) {
+        // Invalidate artifact queries
+        queryClient.invalidateQueries({ queryKey: ["artifact", result.artifact.id] })
+        queryClient.invalidateQueries({ queryKey: ["artifactEditData", result.artifact.id] })
+        queryClient.invalidateQueries({ queryKey: ["artifacts"] })
+      }
+      
+      // Show success toast
+      toast.success("Artifact updated successfully!")
+      
+      // Call custom success callback
+      if (result.artifact) {
+        options?.onSuccess?.(result.artifact.id)
+      }
     },
     onError: (error: Error) => {
       // Show error toast

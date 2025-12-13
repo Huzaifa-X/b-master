@@ -506,7 +506,7 @@ async function generateChatResponseInBackground(data: {
         console.log("[generateChatResponseInBackground] 🔄 Using iterative editing:", shouldUseIterativeEditing)
 
         const apiParams: any = {
-          model: "gpt-5",
+          model: "gpt-5.2",
           input: inputContent,
           instructions: systemPrompt,
           tools: tools.length > 0 ? tools : undefined,
