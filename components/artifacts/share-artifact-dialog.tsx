@@ -11,6 +11,19 @@ import { useAssistantContacts } from "@/hooks/useContacts"
 import { toast } from "sonner"
 import { shareArtifact } from "@/app/actions/artifact.action"
 
+interface Contact {
+  id: string
+  contactId: string
+  userId?: string
+  name: string
+  email: string
+  avatar: string
+  description?: string
+  role?: string
+  telephone?: string
+  information?: string
+}
+
 interface ShareArtifactDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -124,9 +137,9 @@ export function ShareArtifactDialog({
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                        {contact.image ? (
+                        {contact.avatar ? (
                           <img
-                            src={contact.image}
+                            src={contact.avatar}
                             alt={contact.name}
                             className="w-full h-full rounded-full object-cover"
                           />
