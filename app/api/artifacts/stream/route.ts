@@ -11,7 +11,7 @@ import { createArtifactVersion } from "@/app/actions/update-artifact.action"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const ARTIFACT_GENERATION_PROMPT = getArtifactCodingPrompt()
+const ARTIFACT_GENERATION_PROMPT = await getArtifactCodingPrompt()
 
 /**
  * Basic HTML sanitization to prevent dangerous patterns

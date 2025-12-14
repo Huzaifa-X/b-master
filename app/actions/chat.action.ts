@@ -276,7 +276,7 @@ async function generateChatResponseInBackground(data: {
     }
 
     // Build system prompt
-    let systemPrompt = getSystemPrompt()
+    let systemPrompt = await getSystemPrompt()
 
     // Add to system prompt based on user selection
     if (data.research) {

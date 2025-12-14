@@ -10,7 +10,7 @@ import { createArtifactVersion } from "@/app/actions/update-artifact.action"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const ARTIFACT_UPDATE_PROMPT = getArtifactCodingPrompt()
+const ARTIFACT_UPDATE_PROMPT = await getArtifactCodingPrompt()
 
 interface UploadedFile {
   name: string

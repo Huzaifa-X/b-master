@@ -18,19 +18,8 @@ import { triggerWebScraping } from '@/lib/web-scraper'
 import { randomUUID } from "crypto"
 import { canCreateAssistant } from '@/lib/utils/subscription-limits'
 import { stripe } from '@/lib/stripe'
+import { getAssistantGptPromptGeneratorPrompt } from "@/utils/prompts"
 
-const INSTRUCTION_GENERATION_PROMPT = `You are an expert AI assistant creator with extensive knowledge of prompt engineering and AI system design.
-
-Your task is to generate comprehensive, clear, and actionable instructions for AI assistants based on user descriptions. Follow these guidelines:
-
-1. **Structure**: Create well-organized instructions with clear sections and formatting
-2. **Specificity**: Be specific about behaviors, tone, and capabilities
-3. **Completeness**: Cover all aspects mentioned in the user's description
-4. **Professional**: Use clear, professional language suitable for AI systems
-5. **Actionable**: Provide concrete instructions that an AI can follow
-6. **Extensible**: Make instructions that can handle variations and edge cases
-
-Format your response as a complete instruction set that can be directly used as an AI assistant's system prompt.`
 
 export async function generateAssistantInstructions({
     prompt,
@@ -59,7 +48,7 @@ export async function generateAssistantInstructions({
         const response = await openai.responses.create({
             model: model,
             reasoning: { effort: "low" },
-            instructions: INSTRUCTION_GENERATION_PROMPT,
+            instructions: await getAssistantGptPromptGeneratorPrompt(),
             input: prompt,
         });
 

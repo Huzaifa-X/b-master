@@ -12,11 +12,9 @@ import {
     GenerateArtifactInstructionsParams,
     GenerateArtifactInstructionsResult
 } from "@/types/artifact-ai-instruction"
-import { getArtifactInstructionsGeneratorPrompt, getArtifactCodingPrompt } from "@/utils/prompts"
+import { getArtifactInstructionsGeneratorPrompt } from "@/utils/prompts"
 import pusher from "@/lib/pusher"
 import notificationService from "@/lib/services/notifactionService"
-
-const ARTIFACT_INSTRUCTION_GENERATION_PROMPT = getArtifactInstructionsGeneratorPrompt()
 
 export async function generateArtifactInstructions({
     prompt,
@@ -44,7 +42,7 @@ export async function generateArtifactInstructions({
         const response = await openai.responses.create({
             model: model,
             reasoning: { effort: "low" },
-            instructions: ARTIFACT_INSTRUCTION_GENERATION_PROMPT,
+            instructions: await getArtifactInstructionsGeneratorPrompt(),
             input: `Generate detailed instructions for creating the following artifact:\n\n${prompt}`,
         })
 

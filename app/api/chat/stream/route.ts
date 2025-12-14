@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Build system prompt
-    let systemPrompt = getSystemPrompt()
+    let systemPrompt = await getSystemPrompt()
 
     // Add important note about mentioned users
     systemPrompt += `\n\n## Mentioned Users\nWhen you see "[This message mentions: Name <email>]" at the start of a user message, those are people the user has specifically mentioned using @ mentions. You have their full contact information (name and email). Use this information when relevant - for example, if the user asks you to create an invoice for someone, send an email, or perform any action involving the mentioned person, you already have their email address and don't need to ask for it.`
