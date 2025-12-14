@@ -9,12 +9,16 @@ export interface AddContactParams {
   email: string
   role: "user" | "client" | "investor"
   description?: string
+  telephone?: string
+  information?: string
 }
 
 export interface UpdateContactParams {
   contactId: string
   role: "user" | "client" | "investor"
   description?: string
+  telephone?: string
+  information?: string
 }
 
 export interface ContactResult {
@@ -26,6 +30,8 @@ export interface ContactResult {
     name: string
     role: string
     description: string | null
+    telephone?: string | null
+    information?: string | null
   }
 }
 
@@ -38,6 +44,8 @@ export async function addContact({
   email,
   role,
   description,
+  telephone,
+  information,
 }: AddContactParams): Promise<ContactResult> {
   try {
     const session = await getServerSession(authOptions)
@@ -126,8 +134,10 @@ export async function addContact({
         userId: contactUserId,
         role: role,
         description: description || null,
+        telephone: telephone || null,
+        information: information || null,
         access: "user", // Shared users get 'user' access (limited), not 'editor'
-        permissions: JSON.stringify(["chat", "artifacts", "contacts", "newsfeed"]), // Default permissions
+        permissions: JSON.stringify(["chat", "artifacts", "contacts", "newsfeed", "messenger"]), // Default permissions
       },
       include: {
         user: {
@@ -161,6 +171,8 @@ export async function addContact({
         name: contact.user.name || "",
         role: contact.role || "user",
         description: contact.description,
+        telephone: contact.telephone,
+        information: contact.information,
       },
     }
   } catch (error) {
@@ -173,12 +185,14 @@ export async function addContact({
 }
 
 /**
- * Update a contact's role and description
+ * Update a contact's role, description, telephone, and information
  */
 export async function updateContact({
   contactId,
   role,
   description,
+  telephone,
+  information,
 }: UpdateContactParams): Promise<ContactResult> {
   try {
     const session = await getServerSession(authOptions)
@@ -245,6 +259,8 @@ export async function updateContact({
       data: {
         role: role,
         description: description || null,
+        telephone: telephone || null,
+        information: information || null,
         updatedAt: new Date(),
       },
       include: {
@@ -266,6 +282,8 @@ export async function updateContact({
         name: updatedContact.user.name || "",
         role: updatedContact.role || "user",
         description: updatedContact.description,
+        telephone: updatedContact.telephone,
+        information: updatedContact.information,
       },
     }
   } catch (error) {
@@ -439,6 +457,8 @@ export async function getAssistantContacts(assistantId: string) {
       gender: contact.user.gender || "",
       role: (contact.role as "user" | "client" | "investor") || "user",
       address: contact.user.address || "",
+      telephone: contact.telephone || "",
+      information: contact.information || "",
       isOwner: contact.userId === assistantOwnerId, // Mark if this is the owner
       access: contact.access, // Include access level
       permissions: contact.permissions ? JSON.parse(contact.permissions) : [], // Include permissions
@@ -558,3 +578,135 @@ export async function getAllContacts() {
   }
 }
 
+/**
+ * Get contact statistics (artifact count and newsfeed count)
+ * Only accessible by assistant owner/admin
+ */
+export async function getContactStatistics(data: {
+    assistantId: string
+    contactUserId: string // The user ID of the contact
+}) {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: 'Authentication required'
+            }
+        }
+
+        const currentUserId = BigInt(session.user.id)
+        const assistantId = BigInt(data.assistantId)
+        const contactUserId = BigInt(data.contactUserId)
+
+        // Verify the current user is the owner or admin of the assistant
+        const assistant = await prisma.assistant.findFirst({
+            where: {
+                id: assistantId,
+                deletedAt: null
+            }
+        })
+
+        if (!assistant) {
+            return {
+                success: false,
+                error: 'Assistant not found'
+            }
+        }
+
+        // Check if current user is the owner
+        const isOwner = assistant.userId === currentUserId
+
+        // Check if current user is an admin contact
+        let isAdmin = false
+        if (!isOwner) {
+            const contact = await prisma.assistantContact.findFirst({
+                where: {
+                    assistantId,
+                    userId: currentUserId,
+                    access: 'admin'
+                }
+            })
+            isAdmin = !!contact
+        }
+
+        // Only owner or admin can view contact statistics
+        if (!isOwner && !isAdmin) {
+            return {
+                success: false,
+                error: 'You do not have permission to view contact statistics'
+            }
+        }
+
+        // Get artifacts for this contact in this assistant
+        const artifacts = await prisma.assistantArtifact.findMany({
+            where: {
+                assistantId,
+                userId: contactUserId,
+                deletedAt: null
+            },
+            select: {
+                id: true,
+                name: true,
+                category: true,
+                createdAt: true,
+                updatedAt: true
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        })
+
+        // Get newsfeed posts for this contact in this assistant
+        const newsfeeds = await prisma.assistantNewsFeed.findMany({
+            where: {
+                assistantId,
+                userId: contactUserId
+            },
+            select: {
+                id: true,
+                title: true,
+                content: true,
+                isPublic: true,
+                likeCount: true,
+                commentCount: true,
+                createdAt: true,
+                updatedAt: true
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        })
+
+        return {
+            success: true,
+            statistics: {
+                artifactCount: artifacts.length,
+                newsfeedCount: newsfeeds.length,
+                artifacts: artifacts.map(artifact => ({
+                    id: artifact.id.toString(),
+                    name: artifact.name || 'Untitled Artifact',
+                    category: artifact.category,
+                    createdAt: artifact.createdAt,
+                    updatedAt: artifact.updatedAt
+                })),
+                newsfeeds: newsfeeds.map(newsfeed => ({
+                    id: newsfeed.id.toString(),
+                    title: newsfeed.title || 'Untitled Post',
+                    content: newsfeed.content,
+                    isPublic: newsfeed.isPublic,
+                    likeCount: newsfeed.likeCount,
+                    commentCount: newsfeed.commentCount,
+                    createdAt: newsfeed.createdAt,
+                    updatedAt: newsfeed.updatedAt
+                }))
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching contact statistics:', error)
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to fetch contact statistics'
+        }
+    }
+}

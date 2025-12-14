@@ -48,6 +48,7 @@ interface ArtifactCustomizationStepProps {
   onBack: () => void
   contacts: Contact[]
   loadingContacts: boolean
+  isEditMode?: boolean // NEW: Flag to indicate edit mode
 }
 
 export function ArtifactCustomizationStep({
@@ -59,6 +60,7 @@ export function ArtifactCustomizationStep({
   onBack,
   contacts,
   loadingContacts,
+  isEditMode = false, // Default to false
 }: ArtifactCustomizationStepProps) {
   const [apiSectionOpen, setApiSectionOpen] = useState(false)
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
@@ -82,15 +84,22 @@ export function ArtifactCustomizationStep({
       setFormData((prev) => ({
         ...prev,
         selectedUsers: [...prev.selectedUsers, newUser],
+        // Automatically set permissions to 'team' when users are added
+        permissions: 'team',
       }))
     }
   }
 
   const handleRemoveUser = (userId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      selectedUsers: prev.selectedUsers.filter((user) => user.id !== userId),
-    }))
+    setFormData((prev) => {
+      const newSelectedUsers = prev.selectedUsers.filter((user) => user.id !== userId)
+      return {
+        ...prev,
+        selectedUsers: newSelectedUsers,
+        // If no users left, set back to private
+        permissions: newSelectedUsers.length > 0 ? 'team' : 'private',
+      }
+    })
   }
 
   // API Config Handlers
@@ -242,46 +251,64 @@ export function ArtifactCustomizationStep({
   return (
     <ScrollArea className="h-full">
       <div className="space-y-6 p-6 max-w-3xl mx-auto">
-        {/* Selected Template Display */}
-        <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-background">
-              {(() => {
-                const Icon = ICON_MAP[selectedTemplate.icon]
-                return <Icon className="h-5 w-5" />
-              })()}
+        {/* Selected Template Display - Hide in edit mode */}
+        {!isEditMode && (
+          <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-background">
+                {(() => {
+                  const Icon = ICON_MAP[selectedTemplate.icon]
+                  return <Icon className="h-5 w-5" />
+                })()}
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Selected Template</p>
+                <p className="font-semibold">{selectedTemplate.name}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Selected Template</p>
-              <p className="font-semibold">{selectedTemplate.name}</p>
-            </div>
+            <Button variant="outline" size="sm" onClick={onBack}>
+              Change Template
+            </Button>
           </div>
-          <Button variant="outline" size="sm" onClick={onBack}>
-            Change Template
-          </Button>
-        </div>
+        )}
 
         {/* Basic Information */}
         <div className="space-y-4">
-          <div>
-            <Label htmlFor="name">
-              Artifact Name <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => {
-                setFormData({ ...formData, name: e.target.value })
-                if (errors.name) setErrors({ ...errors, name: undefined })
-              }}
-              placeholder="Enter artifact name"
-              className="mt-2"
-            />
-            {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
-          </div>
+          {/* Show artifact name in edit mode but make it read-only */}
+          {isEditMode ? (
+            <div>
+              <Label htmlFor="name">Artifact Name</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                disabled
+                className="mt-2 bg-muted cursor-not-allowed"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Artifact name cannot be changed
+              </p>
+            </div>
+          ) : (
+            <div>
+              <Label htmlFor="name">
+                Artifact Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => {
+                  setFormData({ ...formData, name: e.target.value })
+                  if (errors.name) setErrors({ ...errors, name: undefined })
+                }}
+                placeholder="Enter artifact name"
+                className="mt-2"
+              />
+              {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
+            </div>
+          )}
 
-          {/* Video Duration Selector - Only for video generation */}
-          {isVideoGeneration && (
+          {/* Video Duration Selector - Only for video generation and not in edit mode */}
+          {isVideoGeneration && !isEditMode && (
             <div>
               <Label htmlFor="video-duration">
                 Video Duration <span className="text-destructive">*</span>
@@ -342,14 +369,15 @@ export function ArtifactCustomizationStep({
           </div>
         </div>
 
-        {/* File Upload Section */}
-        <div className="space-y-4">
-          <div>
-            <Label className="text-base font-semibold">Documents & Images</Label>
-            <p className="text-sm text-muted-foreground mt-1">
-              Upload documents (PDF, Word) or images to include in your artifact
-            </p>
-          </div>
+        {/* File Upload Section - Hide in edit mode */}
+        {!isEditMode && (
+          <div className="space-y-4">
+            <div>
+              <Label className="text-base font-semibold">Documents & Images</Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                Upload documents (PDF, Word) or images to include in your artifact
+              </p>
+            </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Document Upload */}
             <div className="border-2 border-dashed rounded-lg p-6 hover:border-primary/50 transition-colors">
@@ -499,11 +527,17 @@ export function ArtifactCustomizationStep({
               </div>
             </div>
           )}
-        </div>
+          </div>
+        )}
 
         {/* Sharing & Permissions */}
         <div>
-          <h3 className="text-lg font-semibold mb-4">Sharing & Permissions</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Sharing & Permissions</h3>
+            <Badge variant={formData.permissions === 'team' ? 'default' : 'secondary'}>
+              {formData.permissions === 'team' ? '🔓 Team Access' : '🔒 Private'}
+            </Badge>
+          </div>
           {loadingContacts ? (
             <div className="text-center py-8 border rounded-lg border-dashed">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-3" />

@@ -3,7 +3,8 @@
  * 
  * This module provides utilities to check user permissions for assistants.
  * It enforces the permission system where:
- * - Owners, creators, and purchasers get 'admin' access with all permissions
+ * - Owners get 'admin' access with all permissions
+ * - Purchasers (buyers) get 'user' access with permissions from buyerPermissions
  * - Shared users get 'user' access with custom permissions
  */
 
@@ -33,6 +34,7 @@ export async function getUserAssistantPermissions(
     where: { id: assistantId },
     select: {
       userId: true,
+      buyerPermissions: true,
     },
   });
 
@@ -72,12 +74,27 @@ export async function getUserAssistantPermissions(
 
   const isPurchaser = !!purchase;
 
-  // If purchaser, return admin access with all permissions
+  // If purchaser, use buyerPermissions (same as shared users, not admin)
   if (isPurchaser) {
+    // Parse buyerPermissions from JSON string
+    let permissions: AssistantPermission[] = [];
+    if (assistant.buyerPermissions) {
+      try {
+        const parsed = JSON.parse(assistant.buyerPermissions);
+        if (Array.isArray(parsed)) {
+          permissions = parsed.filter((p): p is AssistantPermission =>
+            ['chat', 'contacts', 'messenger', 'newsfeed', 'artifacts'].includes(p)
+          );
+        }
+      } catch (error) {
+        console.error('Error parsing buyerPermissions:', error);
+      }
+    }
+
     return {
       hasAccess: true,
-      access: 'admin',
-      permissions: ['chat', 'contacts', 'messenger', 'newsfeed', 'artifacts'],
+      access: 'user', // Buyers get 'user' access, not 'admin'
+      permissions,
       isOwner: false,
       isPurchaser: true,
       isShared: false,
@@ -161,14 +178,15 @@ export async function hasAssistantPermission(
 }
 
 /**
- * Check if user can perform admin actions (owner, creator, or purchaser)
+ * Check if user can perform admin actions (only owners)
  */
 export async function canPerformAdminActions(
   assistantId: bigint,
   userId: bigint
 ): Promise<boolean> {
   const result = await getUserAssistantPermissions(assistantId, userId);
-  return result.access === 'admin';
+  // Only owners can perform admin actions, not purchasers
+  return result.isOwner;
 }
 
 /**

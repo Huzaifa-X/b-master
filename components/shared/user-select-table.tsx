@@ -110,7 +110,7 @@ export function UserSelectTable({
 
       {selectedUsers.length > 0 && (
         <p className="text-xs text-muted-foreground">
-          {selectedUsers.length} {selectedUsers.length === 1 ? "user" : "users"} will have full access to this artifact
+          {selectedUsers.length} {selectedUsers.length === 1 ? "user" : "users"} will have access to this artifact
         </p>
       )}
     </div>

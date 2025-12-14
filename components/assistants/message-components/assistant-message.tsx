@@ -68,6 +68,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
     const handleShareToFeed = () => {
         createPostMutation.mutate({
             assistantId,
+            title: shareTitle,
             content: `**${shareTitle}**\n\n${content}`,
             isPublic: sharePrivacy === "public",
         })

@@ -49,7 +49,7 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
     })
     
     // Check if user can create artifacts (only owners can create)
-    const canCreateArtifacts = permissions?.isOwner ?? false
+    const canCreateArtifacts = permissions?.isOwner || permissions?.permissions?.includes('artifacts') || false
 
     const handleCreateArtifact = () => {
         setCreateDialogOpen(true)

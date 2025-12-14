@@ -5,11 +5,26 @@ import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { openai } from "@/lib/openai"
 import { getArtifactCodingPrompt } from "@/utils/prompts"
+import { createArtifactVersion } from "@/app/actions/update-artifact.action"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const ARTIFACT_UPDATE_PROMPT = getArtifactCodingPrompt()
+const ARTIFACT_UPDATE_PROMPT = await getArtifactCodingPrompt()
+
+interface UploadedFile {
+  name: string
+  url: string
+  type: string
+  size: number
+  preview?: string
+  extractedContent?: {
+    text: string
+    html: string
+    tables?: Array<{ base64: string; page: number }>
+    metadata?: { pages: number; model: string }
+  }
+}
 
 /**
  * Basic HTML sanitization to prevent dangerous patterns
@@ -77,14 +92,14 @@ export async function POST(req: NextRequest) {
     console.log("[Artifact Update Stream API] User authenticated:", session.user.id)
 
     const body = await req.json()
-    const { artifactId, userPrompt, chatHistory, currentHtmlCode } = body
+    const { artifactId, userPrompt, chatHistory, currentHtmlCode, uploadedFiles } = body
 
     if (!artifactId) {
       return new Response(JSON.stringify({ error: "artifactId is required" }), { status: 400 })
     }
 
-    if (!userPrompt?.trim()) {
-      return new Response(JSON.stringify({ error: "userPrompt is required" }), { status: 400 })
+    if (!userPrompt?.trim() && (!uploadedFiles || uploadedFiles.length === 0)) {
+      return new Response(JSON.stringify({ error: "userPrompt or uploadedFiles is required" }), { status: 400 })
     }
 
     if (!currentHtmlCode?.trim()) {
@@ -107,7 +122,7 @@ export async function POST(req: NextRequest) {
               some: {
                 userId: userId,
                 access: {
-                  in: ['editor', 'admin'] // Only editors and admins can update
+                  in: ['EDITOR', 'ADMIN'] // Only editors and admins can update
                 }
               }
             }
@@ -136,9 +151,51 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("[Artifact Update Stream API] Artifact found:", artifact.name)
+    console.log("[Artifact Update Stream API] Using active version code - length:", currentHtmlCode.length, "characters")
 
     // Build conversation context
     const conversationContext = buildConversationContext(chatHistory || [])
+
+    // Build file context if files are uploaded
+    let fileContext = ""
+    if (uploadedFiles && uploadedFiles.length > 0) {
+      fileContext = "\n\n=== UPLOADED FILES CONTEXT ===\n"
+      
+      const files = uploadedFiles as UploadedFile[]
+      
+      files.forEach((file, index) => {
+        fileContext += `\n--- File ${index + 1}: ${file.name} ---\n`
+        
+        // Add image URLs
+        if (file.preview) {
+          fileContext += `Image URL: ${file.preview}\n`
+          fileContext += `Note: This is an image that should be embedded in the HTML using an <img> tag with this URL.\n`
+        }
+        
+        // Add extracted document content
+        if (file.extractedContent) {
+          fileContext += `\nExtracted Text:\n${file.extractedContent.text}\n`
+          
+          if (file.extractedContent.html) {
+            fileContext += `\nExtracted HTML:\n${file.extractedContent.html}\n`
+          }
+          
+          // Add tables as base64 images if available
+          if (file.extractedContent.tables && file.extractedContent.tables.length > 0) {
+            fileContext += `\nTables (${file.extractedContent.tables.length}):\n`
+            file.extractedContent.tables.forEach((table, tableIdx) => {
+              fileContext += `Table ${tableIdx + 1} (Page ${table.page}): data:image/png;base64,${table.base64}\n`
+            })
+          }
+          
+          if (file.extractedContent.metadata) {
+            fileContext += `\nDocument Metadata: ${file.extractedContent.metadata.pages} page(s)\n`
+          }
+        }
+      })
+      
+      fileContext += "\n=== END UPLOADED FILES CONTEXT ===\n"
+    }
 
     // Prepare input for AI
     const aiInput = `${conversationContext}
@@ -146,12 +203,14 @@ export async function POST(req: NextRequest) {
 === CURRENT ARTIFACT CODE ===
 ${currentHtmlCode}
 === END CURRENT CODE ===
-
+${fileContext}
 === USER REQUEST ===
-${userPrompt}
+${userPrompt || "Update the artifact using the uploaded files."}
 === END USER REQUEST ===
 
-Please update the artifact code based on the user's request while considering the entire conversation history. Generate the complete updated HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.`
+Please update the artifact code based on the user's request while considering the entire conversation history${uploadedFiles && uploadedFiles.length > 0 ? ' and the uploaded files' : ''}. 
+
+${uploadedFiles && uploadedFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are provided, embed them in the HTML using <img> tags with the provided URLs.\n- If documents are provided, use the extracted text/html content to enhance the artifact.\n- Make sure all image URLs are properly used in src attributes.\n\n' : ''}Generate the complete updated HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.`
 
     const vectorStoreId = artifact.assistant?.vectorStoreId
 
@@ -168,7 +227,7 @@ Please update the artifact code based on the user's request while considering th
 
           let generatedCode = ""
           let buffer = ""
-          const model = 'gpt-5'
+          const model = 'gpt-5.2'
           const CHUNK_SIZE = 1024 // Send chunks of ~1KB
 
           // Create AI response with streaming
@@ -321,16 +380,23 @@ Please update the artifact code based on the user's request while considering th
             generatedCode = sanitizeHtml(generatedCode)
           }
 
-          // Update the artifact with the generated code
-          await prisma.assistantArtifact.update({
-            where: { id: artifactIdInt },
-            data: {
-              code: generatedCode,
-              updatedAt: new Date()
-            }
+          // Create a new version with the AI-generated code
+          // This will create a new version based on the ACTIVE version's code
+          // and set it as the new active version (setAsActive: true)
+          const versionResult = await createArtifactVersion({
+            artifactId: artifactIdInt,
+            userId: userId,
+            code: generatedCode,
+            description: `AI update: ${userPrompt?.substring(0, 100) || 'Updated with files'}`,
+            changeType: 'ai',
+            setAsActive: true // ✅ This will update artifact.activeVersionId to this new version
           })
 
-          console.log("[Artifact Update Stream] Artifact updated with generated code")
+          if (!versionResult.success) {
+            throw new Error(versionResult.error || "Failed to create artifact version")
+          }
+
+          console.log("[Artifact Update Stream] New artifact version created:", versionResult.version?.versionNumber)
 
           // Send completion signal
           controller.enqueue(

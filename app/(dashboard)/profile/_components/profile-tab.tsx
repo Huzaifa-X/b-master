@@ -9,9 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { ProfileData, ProfileTabProps } from "@/types/profile"
 
-export default function ProfileTab({ initialData, onSave }: ProfileTabProps) {
+export default function ProfileTab({ initialData, onSave, isLoading }: ProfileTabProps) {
     const [formData, setFormData] = useState<ProfileData>(initialData)
     const [isModified, setIsModified] = useState(false)
+
+    // Reset form when initialData changes (after successful update)
+    useEffect(() => {
+        setFormData(initialData)
+    }, [initialData])
 
     // Check if form has been modified (excluding email as it's read-only)
     useEffect(() => {
@@ -135,10 +140,16 @@ export default function ProfileTab({ initialData, onSave }: ProfileTabProps) {
                 {/* Action Buttons - Only show when modified */}
                 {isModified && (
                     <div className="flex gap-3 pt-4">
-                        <Button onClick={handleSave}>Save Changes</Button>
+                        <Button 
+                            onClick={handleSave}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? "Saving..." : "Save Changes"}
+                        </Button>
                         <Button
                             variant="outline"
                             onClick={handleCancel}
+                            disabled={isLoading}
                             className="hover:text-primary hover:bg-transparent"
                         >
                             Cancel

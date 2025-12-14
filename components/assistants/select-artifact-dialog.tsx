@@ -87,7 +87,6 @@ export function SelectArtifactDialog({
                   className={cn(
                     "w-full text-left p-4 rounded-lg border transition-colors",
                     "hover:bg-muted hover:border-muted/50",
-                    "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                   )}    
                 >
                   <div className="flex items-start justify-between gap-4">

@@ -63,6 +63,7 @@ export interface AssistantFormData {
   // Step 6: Sharing & Permissions
   permissionLevel: PermissionLevel
   sharedUsers: SharedUser[]
+  buyerPermissions: UserPermissions // Permissions for public buyers
 }
 
 // ================================================================

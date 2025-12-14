@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Send, Loader2 } from "lucide-react"
+import { Send, Loader2, Plus, X, File, FileText, Image as ImageIcon, Pencil, ArrowLeft, Maximize2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useSession } from "next-auth/react"
@@ -16,36 +16,67 @@ import { useArtifactStore } from "@/lib/stores/artifact-store"
 import { useArtifactById } from "@/hooks/useArtifact"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
+import { CreateArtifactDialog } from "./create-artifact-dialog"
+
+interface UploadedFileData {
+  name: string
+  url: string
+  type: string
+  size: number
+  preview?: string // For image previews
+  extractedContent?: {
+    text: string
+    html: string
+    tables?: Array<{ base64: string; page: number }>
+    metadata?: { pages: number; model: string }
+  }
+}
 
 interface Message {
   id: string
   role: "user" | "assistant"
   content: string
   timestamp: Date
+  files?: UploadedFileData[] // Attached files
 }
 
 interface ArtifactChatbotProps {
   artifactId: string
   artifactName: string
+  assistantId: string
   disabled?: boolean
   isGenerating?: boolean
+  isPanelOpen?: boolean
+  onTogglePanel?: () => void
+  onclose?: () => void
 }
 
-export function ArtifactChatbot({ artifactId, artifactName, disabled = false, isGenerating = false }: ArtifactChatbotProps) {
+export function ArtifactChatbot({ artifactId, artifactName, assistantId, disabled = false, isGenerating = false, isPanelOpen = true, onTogglePanel, onclose }: ArtifactChatbotProps) {
   const { data: session } = useSession()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const storageKey = `artifact-chat-${artifactId}`
-  
+
   // Get current artifact data
   const { artifact, refetch } = useArtifactById(artifactId)
   const artifactContent = useArtifactStore((state) => state.artifactContent)
   const setArtifact = useArtifactStore((state) => state.setArtifact)
-  
+
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState<string>("")
-  
+
+  // File upload state
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false)
+
+  // Edit dialog state
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+
+  // ✅ Check if user can edit this artifact (OWNER or EDITOR)
+  const canEditArtifact = artifact?.isOwner || artifact?.access === 'ADMIN'
+
   // Get user initials for avatar
   const getUserInitials = () => {
     if (!session?.user?.name) return "U"
@@ -54,6 +85,89 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
       return `${names[0][0]}${names[1][0]}`.toUpperCase()
     }
     return session.user.name.substring(0, 2).toUpperCase()
+  }
+
+  // Handle file selection
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+
+    // Validate file sizes (10MB max per file)
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    const invalidFiles = files.filter(file => file.size > maxSize)
+
+    if (invalidFiles.length > 0) {
+      toast.error(`Some files exceed 10MB limit: ${invalidFiles.map(f => f.name).join(", ")}`)
+      return
+    }
+
+    // Add to selected files
+    setSelectedFiles(prev => [...prev, ...files])
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  // Remove file from selection
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // Upload files to S3
+  const uploadFilesToS3 = async (files: File[]): Promise<UploadedFileData[]> => {
+    try {
+      const uploadedFiles: UploadedFileData[] = []
+
+      for (const file of files) {
+        // Convert file to base64
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+
+        // Upload to S3 (the API will handle document extraction automatically)
+        const uploadResponse = await fetch("/api/artifact/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            fileData: base64,
+            contentType: file.type,
+          }),
+        })
+
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json()
+          throw new Error(errorData.error || `Failed to upload ${file.name}`)
+        }
+
+        const uploadResult = await uploadResponse.json()
+
+        if (!uploadResult.success) {
+          throw new Error(uploadResult.error || `Failed to upload ${file.name}`)
+        }
+
+        const uploadedFile = uploadResult.file
+
+        uploadedFiles.push({
+          name: uploadedFile.name,
+          url: uploadedFile.url,
+          type: uploadedFile.type,
+          size: uploadedFile.size,
+          preview: file.type.startsWith("image/") ? uploadedFile.url : undefined,
+          extractedContent: uploadedFile.extractedContent, // Already extracted by API
+        })
+      }
+
+      return uploadedFiles
+    } catch (error) {
+      console.error("Error uploading files:", error)
+      throw error
+    }
   }
 
   // Load messages from sessionStorage
@@ -103,27 +217,53 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
   }, [messages])
 
   const handleSend = async () => {
-    if (!input.trim() || isStreaming) return
+    if ((!input.trim() && selectedFiles.length === 0) || isStreaming) return
 
     const userPrompt = input.trim()
+
+    // Upload files first if any
+    let uploadedFiles: UploadedFileData[] | undefined
+    if (selectedFiles.length > 0) {
+      setIsUploadingFiles(true)
+      try {
+        uploadedFiles = await uploadFilesToS3(selectedFiles)
+        toast.success(`${selectedFiles.length} file(s) uploaded successfully`)
+      } catch (error) {
+        console.error("File upload error:", error)
+        toast.error("Failed to upload files. Please try again.")
+        setIsUploadingFiles(false)
+        return
+      }
+      setIsUploadingFiles(false)
+      setSelectedFiles([]) // Clear selected files
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: userPrompt,
+      content: userPrompt || "📎 Attached files",
       timestamp: new Date(),
+      files: uploadedFiles,
     }
 
     setMessages((prev) => [...prev, userMessage])
     setInput("")
 
-    // Get current HTML code from artifact store or artifact data
-    const currentHtmlCode = artifactContent?.content || artifact?.htmlContent || ""
-    
-    if (!currentHtmlCode) {
+    // IMPORTANT: Always use the active version's code (from artifact data)
+    // Don't use artifactContent from store as it might be a historical version
+    const currentHtmlCode = artifact?.htmlContent || ""
+
+    console.log("[Artifact Chatbot] Using artifact code:", {
+      source: 'artifact.htmlContent (active version)',
+      codeLength: currentHtmlCode.length,
+      artifactId: artifact?.id
+    })
+
+    if (!currentHtmlCode || currentHtmlCode.trim() === '') {
       const errorMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
-        content: "❌ **Error**: Unable to find the current artifact code. Please refresh the page and try again.",
+        content: "❌ **Error**: Unable to find the current artifact code. The artifact may not have any content yet. Please refresh the page and try again.",
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, errorMessage])
@@ -142,7 +282,7 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
     // Start streaming update
     setIsStreaming(true)
     setStreamingContent("")
-    
+
     // Add streaming message
     const streamingMessage: Message = {
       id: `streaming-${Date.now()}`,
@@ -163,6 +303,7 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
           userPrompt,
           chatHistory,
           currentHtmlCode,
+          uploadedFiles, // Include uploaded files
         }),
       })
 
@@ -197,7 +338,7 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
                     const decodedContent = atob(data.content)
                     accumulatedCode += decodedContent
                     setStreamingContent(accumulatedCode)
-                    
+
                     // Update artifact store in real-time
                     setArtifact({
                       type: "code",
@@ -213,10 +354,10 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
                   }
                 } else if (data.type === 'done') {
                   setIsStreaming(false)
-                  
+
                   // Remove streaming message
                   setMessages((prev) => prev.filter((msg) => msg.id !== streamingMessage.id))
-                  
+
                   // Add success message
                   const successMessage: Message = {
                     id: Date.now().toString(),
@@ -225,18 +366,18 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
                     timestamp: new Date(),
                   }
                   setMessages((prev) => [...prev, successMessage])
-                  
+
                   // Refetch artifact to get final version
                   await refetch()
-                  
+
                   toast.success("Artifact updated successfully!")
                   break
                 } else if (data.type === 'error') {
                   setIsStreaming(false)
-                  
+
                   // Remove streaming message
                   setMessages((prev) => prev.filter((msg) => msg.id !== streamingMessage.id))
-                  
+
                   // Add error message
                   const errorMessage: Message = {
                     id: Date.now().toString(),
@@ -245,7 +386,7 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
                     timestamp: new Date(),
                   }
                   setMessages((prev) => [...prev, errorMessage])
-                  
+
                   toast.error(data.error || "Failed to update artifact")
                   break
                 } else if (data.type === 'connected') {
@@ -261,10 +402,10 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
     } catch (error: any) {
       console.error("[Artifact Chatbot] Streaming error:", error)
       setIsStreaming(false)
-      
+
       // Remove streaming message
       setMessages((prev) => prev.filter((msg) => msg.id !== streamingMessage.id))
-      
+
       // Add error message
       const errorMessage: Message = {
         id: Date.now().toString(),
@@ -273,13 +414,58 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, errorMessage])
-      
+
       toast.error("Failed to update artifact")
     }
   }
 
   return (
     <div className="h-full flex flex-col bg-background overflow-hidden">
+      {/* Header with Edit Button */}
+      <div className="flex-shrink-0 px-4 py-3 border-b flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hover:bg-muted hover:text-primary"
+            onClick={onclose}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h6>Ask questions or request changes</h6>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Show Close Panel button when panel is open, Show Open Panel button when closed */}
+          {onTogglePanel && !isPanelOpen && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onTogglePanel}
+              className="hover:bg-muted hover:text-primary"
+              title={isPanelOpen ? "Close preview panel" : "Open preview panel"}
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+          )}
+          {
+            canEditArtifact && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditDialogOpen(true)}
+                disabled={disabled || isGenerating}
+                className="gap-2"
+                title="Edit artifact settings"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )
+          }
+        </div>
+      </div>
+
       {/* Messages */}
       <ScrollArea className="flex-1 min-h-0 px-2 md:px-4 py-4" ref={scrollRef}>
         <div className="space-y-4">
@@ -309,11 +495,10 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
 
                 {/* Message Content */}
                 <div className="flex-1 min-w-0">
-                  <div className={`inline-block rounded-2xl px-3 md:px-4 py-2 md:py-2.5 leading-6 md:leading-7 break-words ${
-                    message.role === "assistant" 
-                      ? "text-foreground" 
-                      : "bg-muted text-foreground"
-                  }`}>
+                  <div className={`inline-block rounded-2xl px-3 md:px-4 py-2 md:py-2.5 leading-6 md:leading-7 break-words ${message.role === "assistant"
+                    ? "text-foreground"
+                    : "bg-muted text-foreground"
+                    }`}>
                     <div className="text-xs md:text-sm prose prose-sm dark:prose-invert max-w-none">
                       <ReactMarkdown
                         components={{
@@ -333,6 +518,46 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
                         {message.content}
                       </ReactMarkdown>
                     </div>
+
+                    {/* Display attached files */}
+                    {message.files && message.files.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        {message.files.map((file, idx) => (
+                          <div key={idx} className="rounded-lg border bg-background/50 p-2">
+                            {file.preview ? (
+                              // Image preview
+                              <div className="relative w-full max-w-xs">
+                                <Image
+                                  src={file.preview}
+                                  alt={file.name}
+                                  width={300}
+                                  height={200}
+                                  className="rounded-md object-cover w-full"
+                                  unoptimized
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">{file.name}</p>
+                              </div>
+                            ) : (
+                              // File attachment
+                              <div className="flex items-center gap-2">
+                                {file.type === "application/pdf" ? (
+                                  <FileText className="h-4 w-4 text-red-500" />
+                                ) : (
+                                  <File className="h-4 w-4 text-blue-500" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium truncate">{file.name}</p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    {(file.size / 1024).toFixed(1)} KB
+                                    {file.extractedContent && " • Text extracted"}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="mt-1 flex items-center gap-2">
                     <span className="text-[10px] md:text-xs text-muted-foreground">
@@ -398,29 +623,92 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
           </div>
         )}
 
+        {/* File Upload Overlay */}
+        {isUploadingFiles && (
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm border border-primary/20 rounded-lg flex flex-col items-center justify-center z-10 p-4">
+            <div className="flex items-center gap-3 text-primary mb-3">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <div className="text-sm font-medium">
+                Uploading files...
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Selected Files Preview */}
+        {selectedFiles.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {selectedFiles.map((file, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-2 bg-muted rounded-lg px-2 py-1.5 text-xs"
+              >
+                {file.type.startsWith("image/") ? (
+                  <ImageIcon className="h-3 w-3 text-green-500" />
+                ) : file.type === "application/pdf" ? (
+                  <FileText className="h-3 w-3 text-red-500" />
+                ) : (
+                  <File className="h-3 w-3 text-blue-500" />
+                )}
+                <span className="max-w-[120px] truncate">{file.name}</span>
+                <button
+                  onClick={() => handleRemoveFile(index)}
+                  className="hover:bg-background rounded p-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,.pdf,.doc,.docx,.txt"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+
         <PromptInput
           value={input}
           onValueChange={setInput}
           onSubmit={handleSend}
           isLoading={isStreaming}
           maxHeight={120}
-          disabled={disabled || isGenerating}
+          disabled={disabled || isGenerating || isUploadingFiles}
           className="border-primary/50 shadow-[0_0_100px_0px_hsl(var(--primary)),0_0_60px_0px_hsl(var(--primary)),0_0_30px_0px_hsl(var(--primary)),0_0_15px_0px_hsl(var(--primary))] dark:border-primary/60 dark:shadow-[0_0_120px_0px_hsl(var(--primary)),0_0_80px_0px_hsl(var(--primary)),0_0_40px_0px_hsl(var(--primary)),0_0_20px_0px_hsl(var(--primary))]"
         >
           <PromptInputTextarea
-            placeholder={isGenerating ? "Generating artifact..." : "Ask about this artifact..."}
+            placeholder={isGenerating ? "Generating artifact..." : isUploadingFiles ? "Uploading files..." : "Ask about this artifact..."}
             className="text-foreground placeholder:text-muted-foreground"
-            disabled={disabled || isGenerating}
+            disabled={disabled || isGenerating || isUploadingFiles}
           />
-          <PromptInputActions className="px-2 pb-1 justify-end">
+          <PromptInputActions className="px-2 pb-1 justify-between">
+            {/* Left side: Plus icon for file upload */}
+            <PromptInputAction tooltip="Attach files or images">
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled || isGenerating || isUploadingFiles || isStreaming}
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </PromptInputAction>
+
+            {/* Right side: Send button */}
             <PromptInputAction tooltip={isGenerating ? "Generating artifact..." : "Send message (Enter)"}>
               <Button
                 onClick={handleSend}
-                disabled={!input.trim() || isStreaming || disabled || isGenerating}
+                disabled={(!input.trim() && selectedFiles.length === 0) || isStreaming || disabled || isGenerating || isUploadingFiles}
                 size="icon"
                 className="h-8 w-8"
               >
-                {isStreaming ? (
+                {isStreaming || isUploadingFiles ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Send className="h-4 w-4" />
@@ -430,6 +718,16 @@ export function ArtifactChatbot({ artifactId, artifactName, disabled = false, is
           </PromptInputActions>
         </PromptInput>
       </div>
+
+      {/* Edit Artifact Dialog */}
+      {
+        canEditArtifact && (<CreateArtifactDialog
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          assistantId={assistantId}
+          editArtifactId={artifactId}
+        />
+        )}
     </div>
   )
 }

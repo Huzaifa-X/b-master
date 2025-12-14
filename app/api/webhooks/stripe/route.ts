@@ -2,6 +2,46 @@ import { NextRequest, NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
 import prisma from "@/lib/prisma"
 import Stripe from "stripe"
+import NotificationService from "@/lib/services/notifactionService"
+
+// Helper function to update user wallet
+async function updateUserWallet(
+  userId: BigInt,
+  amount: number,
+  currency: string,
+  type: "add_pending" | "pending_to_available" | "deduct_available",
+  tx: any
+) {
+  const wallet = await tx.userWallet.upsert({
+    where: { userId },
+    create: {
+      userId,
+      pendingAmount: type === "add_pending" ? amount : 0,
+      availableAmount: type === "pending_to_available" ? amount : 0,
+      totalEarnings: type === "add_pending" || type === "pending_to_available" ? amount : 0,
+      transferredAmount: 0,
+      currency,
+      lastUpdated: new Date(),
+    },
+    update: {
+      pendingAmount: {
+        increment: 
+          type === "add_pending" ? amount : 
+          type === "pending_to_available" ? -amount : 0,
+      },
+      availableAmount: {
+        increment: 
+          type === "pending_to_available" ? amount : 
+          type === "deduct_available" ? -amount : 0,
+      },
+      totalEarnings: {
+        increment: type === "add_pending" || type === "pending_to_available" ? amount : 0,
+      },
+      lastUpdated: new Date(),
+    },
+  })
+  return wallet
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
@@ -58,13 +98,20 @@ export async function POST(req: NextRequest) {
 
             const assistantIdBigInt = BigInt(assistantId)
 
-            // Find the pending purchase record
+            // Find the pending purchase record with assistant owner info
             const purchase = await prisma.assistantPurchase.findFirst({
               where: {
                 stripeCheckoutSessionId: session.id,
                 buyerId: userId,
                 assistantId: assistantIdBigInt,
                 status: "pending",
+              },
+              include: {
+                assistant: {
+                  include: {
+                    owner: true,
+                  },
+                },
               },
             })
 
@@ -78,17 +125,130 @@ export async function POST(req: NextRequest) {
               ? session.payment_intent
               : session.payment_intent?.id || null
 
-            // Update purchase to completed
-            await prisma.assistantPurchase.update({
-              where: { id: purchase.id },
-              data: {
-                status: "completed",
-                stripePaymentIntentId: paymentIntentId,
-                purchaseDate: new Date(),
-              },
+            // Get the purchase amount from session
+            const amountTotal = session.amount_total ? session.amount_total / 100 : 0
+            const currency = (session.currency || "CHF").toUpperCase()
+
+            // Calculate platform fee (e.g., 10%)
+            const platformFeePercentage = 0.1 // 10% platform fee
+            const platformFee = amountTotal * platformFeePercentage
+            const sellerAmount = amountTotal - platformFee
+
+            // Update purchase to completed and create transaction
+            const [updatedPurchase, transaction] = await prisma.$transaction(async (tx) => {
+              // 1. Update purchase status
+              const updatedPurchase = await tx.assistantPurchase.update({
+                where: { id: purchase.id },
+                data: {
+                  status: "completed",
+                  stripePaymentIntentId: paymentIntentId,
+                  purchaseDate: new Date(),
+                },
+              })
+
+              // 2. Create transaction record for the sale
+              const transaction = await tx.assistantTransaction.create({
+                data: {
+                  assistantOwnerId: purchase.assistant.userId,
+                  amount: sellerAmount,
+                  currency: currency,
+                  type: "sale",
+                  status: "completed",
+                  stripeTransactionId: paymentIntentId,
+                  metadata: {
+                    assistantId: assistantId,
+                    buyerId: userId.toString(),
+                    purchaseId: purchase.id,
+                    grossAmount: amountTotal,
+                    platformFee: platformFee,
+                    netAmount: sellerAmount,
+                  },
+                },
+              })
+
+              // 3. Update or create seller's wallet (add to pending)
+              await updateUserWallet(
+                purchase.assistant.userId,
+                sellerAmount,
+                currency,
+                "add_pending",
+                tx
+              )
+
+              // 4. Link transaction to purchase
+              await tx.assistantPurchase.update({
+                where: { id: purchase.id },
+                data: {
+                  transactionId: transaction.id,
+                },
+              })
+
+              // 5. Create AssistantContact entry for buyer with buyerPermissions
+              // Check if contact already exists
+              const existingContact = await tx.assistantContact.findFirst({
+                where: {
+                  assistantId: assistantIdBigInt,
+                  userId: userId,
+                },
+              })
+
+              if (!existingContact) {
+                // Parse buyerPermissions from assistant
+                let buyerPermissionsArray: string[] = []
+                if (purchase.assistant.buyerPermissions) {
+                  try {
+                    const parsed = JSON.parse(purchase.assistant.buyerPermissions)
+                    if (Array.isArray(parsed)) {
+                      buyerPermissionsArray = parsed.filter((p: string) =>
+                        ['chat', 'contacts', 'messenger', 'newsfeed', 'artifacts'].includes(p)
+                      )
+                    }
+                  } catch (error) {
+                    console.error('Error parsing buyerPermissions:', error)
+                    // Default to empty array if parsing fails
+                  }
+                }
+
+                // Create AssistantContact with buyerPermissions
+                await tx.assistantContact.create({
+                  data: {
+                    assistantId: assistantIdBigInt,
+                    userId: userId,
+                    access: "user", // Buyers get 'user' access, not 'admin'
+                    permissions: JSON.stringify(buyerPermissionsArray), // Use buyerPermissions from assistant
+                  },
+                })
+
+                console.log(`✅ AssistantContact created for buyer with permissions: ${buyerPermissionsArray.join(', ')}`)
+              } else {
+                console.log(`ℹ️ AssistantContact already exists for buyer, skipping creation`)
+              }
+
+              return [updatedPurchase, transaction]
             })
 
             console.log(`✅ Assistant purchase completed: ${assistantId}`)
+            console.log(`💰 Seller wallet updated: +${sellerAmount} ${currency} (pending)`)
+            console.log(`🏦 Platform fee: ${platformFee} ${currency}`)
+
+            // Send notifications to buyer and seller
+            try {
+              await Promise.all([
+                NotificationService.notifyAssistantPurchased(
+                  assistantId,
+                  userId.toString(),
+                  purchase.assistant.userId.toString()
+                ),
+                NotificationService.notifyAssistantSold(
+                  assistantId,
+                  userId.toString(),
+                  purchase.assistant.userId.toString()
+                ),
+              ])
+            } catch (notifError) {
+              console.error("Error sending notifications:", notifError)
+              // Don't fail the webhook if notifications fail
+            }
           } catch (error: any) {
             console.error("❌ Error processing assistant purchase:", error.message)
             console.error("Stack:", error.stack)
@@ -167,6 +327,9 @@ export async function POST(req: NextRequest) {
             })
 
             console.log("✅ Subscription created:", newSub.id)
+
+            // Note: Subscription payments go to the platform, not individual user wallets
+            // If you have a referral/affiliate system, wallet updates would go here
 
             // Create invoice
             if (session.invoice && priceData.unit_amount && priceData.unit_amount > 0) {
@@ -539,6 +702,175 @@ export async function POST(req: NextRequest) {
         }
 
         console.log(`⚠️  Payment failed for subscription: ${subscriptionId}`)
+        break
+      }
+
+      case "charge.refunded": {
+        const charge: Stripe.Charge = event.data.object as Stripe.Charge
+
+        // Get payment intent ID
+        const paymentIntentId = typeof charge.payment_intent === "string"
+          ? charge.payment_intent
+          : charge.payment_intent?.id
+
+        if (!paymentIntentId) {
+          console.error("No payment intent in refunded charge")
+          break
+        }
+
+        // Find the purchase associated with this payment
+        const purchase = await prisma.assistantPurchase.findFirst({
+          where: {
+            stripePaymentIntentId: paymentIntentId,
+          },
+          include: {
+            assistant: true,
+            transaction: true,
+          },
+        })
+
+        if (!purchase) {
+          console.log("⚠️  No purchase found for refunded charge (might be subscription)")
+          break
+        }
+
+        // Only process if purchase was completed
+        if (purchase.status !== "completed") {
+          console.log("⚠️  Purchase was not completed, skipping refund")
+          break
+        }
+
+        const refundAmount = charge.amount_refunded / 100
+        const currency = charge.currency.toUpperCase()
+
+        // Calculate seller's portion of refund (after platform fee)
+        const platformFeePercentage = 0.1
+        const sellerRefundAmount = refundAmount * (1 - platformFeePercentage)
+
+        await prisma.$transaction(async (tx) => {
+          // 1. Update purchase status to refunded
+          await tx.assistantPurchase.update({
+            where: { id: purchase.id },
+            data: {
+              status: "refunded",
+              updatedAt: new Date(),
+            },
+          })
+
+          // 2. Create refund transaction
+          await tx.assistantTransaction.create({
+            data: {
+              assistantOwnerId: purchase.assistant.userId,
+              amount: -sellerRefundAmount, // Negative amount for refund
+              currency: currency,
+              type: "refund",
+              status: "completed",
+              stripeTransactionId: charge.id,
+              metadata: {
+                assistantId: purchase.assistantId.toString(),
+                buyerId: purchase.buyerId.toString(),
+                purchaseId: purchase.id,
+                originalTransactionId: purchase.transactionId,
+                refundAmount: refundAmount,
+                sellerRefundAmount: sellerRefundAmount,
+              },
+            },
+          })
+
+          // 3. Deduct from seller's wallet
+          // Try to deduct from pending first, then available
+          const sellerWallet = await tx.userWallet.findUnique({
+            where: { userId: purchase.assistant.userId },
+          })
+
+          if (sellerWallet) {
+            if (Number(sellerWallet.pendingAmount) >= sellerRefundAmount) {
+              // Deduct from pending
+              await tx.userWallet.update({
+                where: { userId: purchase.assistant.userId },
+                data: {
+                  pendingAmount: {
+                    decrement: sellerRefundAmount,
+                  },
+                  totalEarnings: {
+                    decrement: sellerRefundAmount,
+                  },
+                  lastUpdated: new Date(),
+                },
+              })
+            } else if (Number(sellerWallet.availableAmount) >= sellerRefundAmount) {
+              // Deduct from available
+              await tx.userWallet.update({
+                where: { userId: purchase.assistant.userId },
+                data: {
+                  availableAmount: {
+                    decrement: sellerRefundAmount,
+                  },
+                  totalEarnings: {
+                    decrement: sellerRefundAmount,
+                  },
+                  lastUpdated: new Date(),
+                },
+              })
+            } else {
+              // Deduct from both
+              const remainingAfterPending = sellerRefundAmount - Number(sellerWallet.pendingAmount)
+              await tx.userWallet.update({
+                where: { userId: purchase.assistant.userId },
+                data: {
+                  pendingAmount: 0,
+                  availableAmount: {
+                    decrement: remainingAfterPending,
+                  },
+                  totalEarnings: {
+                    decrement: sellerRefundAmount,
+                  },
+                  lastUpdated: new Date(),
+                },
+              })
+            }
+          }
+        })
+
+        console.log(`✅ Refund processed for assistant purchase: ${purchase.id}`)
+        console.log(`💸 Seller wallet deducted: -${sellerRefundAmount} ${currency}`)
+
+        // Send notifications to buyer and seller
+        try {
+          await Promise.all([
+            // Notify buyer about refund
+            NotificationService.createNotification({
+              userId: purchase.buyerId.toString(),
+              title: "💸 Refund Processed",
+              message: `Your purchase of "${purchase.assistant.name}" has been refunded. Amount: ${refundAmount} ${currency}`,
+              type: "assistant_refund",
+              relatedId: purchase.assistantId.toString(),
+              relatedType: "assistant",
+              data: {
+                assistantName: purchase.assistant.name,
+                refundAmount: refundAmount,
+                currency: currency,
+              },
+            }),
+            // Notify seller about refund deduction
+            NotificationService.createNotification({
+              userId: purchase.assistant.userId.toString(),
+              title: "⚠️ Refund Processed",
+              message: `A refund has been processed for "${purchase.assistant.name}". Amount deducted: ${sellerRefundAmount} ${currency}`,
+              type: "assistant_refund_seller",
+              relatedId: purchase.assistantId.toString(),
+              relatedType: "assistant",
+              data: {
+                assistantName: purchase.assistant.name,
+                refundAmount: sellerRefundAmount,
+                currency: currency,
+              },
+            }),
+          ])
+        } catch (notifError) {
+          console.error("Error sending refund notifications:", notifError)
+          // Don't fail the webhook if notifications fail
+        }
         break
       }
 

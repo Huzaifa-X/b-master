@@ -5,15 +5,23 @@ import { Tabs } from "@/components/ui/vercel-tabs"
 import { AssistantCard } from "@/components/assistants/assistant-card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, Plus, Bot, Loader2 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Search, Plus, Bot, Loader2, CheckCircle2, XCircle } from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { useAssistants } from "@/hooks/useAssistants"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { getAssistants } from "@/app/actions/assistant.action"
 import { useDebounce } from "@/hooks/useDebounce"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PurchaseAssistantDialog } from "@/components/assistants/purchase-assistant-dialog"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 
 const TABS = [
     { id: "marketplace", label: "Marketplace Assistants" },
@@ -22,6 +30,7 @@ const TABS = [
 
 interface Assistant {
     id: string
+    userId?: string
     name: string
     price: number
     description: string
@@ -32,11 +41,18 @@ interface Assistant {
 
 export default function StorePage() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const queryClient = useQueryClient()
     const [activeTab, setActiveTab] = useState<"marketplace" | "my">("marketplace")
     const [searchQuery, setSearchQuery] = useState("")
     const debouncedSearch = useDebounce(searchQuery, 500)
     const [selectedAssistant, setSelectedAssistant] = useState<Assistant | null>(null)
     const [isDialogOpen, setIsDialogOpen] = useState(false)
+    
+    // Success/Cancel dialog states
+    const [showSuccessDialog, setShowSuccessDialog] = useState(false)
+    const [showCancelDialog, setShowCancelDialog] = useState(false)
+    const [processingPayment, setProcessingPayment] = useState(false)
 
     // For "My Assistants" tab - use the same hook as assistants page
     const {
@@ -89,6 +105,30 @@ export default function StorePage() {
     const isError = activeTab === "marketplace" ? isErrorMarketplace : isErrorMy
     const error = activeTab === "marketplace" ? errorMarketplace : errorMy
     const filteredAssistants = getCurrentAssistants()
+
+    // Handle purchase success/cancel from Stripe redirect
+    useEffect(() => {
+        const purchase = searchParams.get("purchase")
+        const sessionId = searchParams.get("session_id")
+
+        if (purchase === "success" && sessionId) {
+            setProcessingPayment(true)
+            // Give webhook time to process (2 seconds)
+            const timer = setTimeout(() => {
+                setProcessingPayment(false)
+                setShowSuccessDialog(true)
+                // Invalidate queries to refresh the lists
+                queryClient.invalidateQueries({ queryKey: ["assistants"] })
+                // Clean URL
+                router.replace("/store", { scroll: false })
+            }, 2000)
+            return () => clearTimeout(timer)
+        } else if (purchase === "cancelled") {
+            setShowCancelDialog(true)
+            // Clean URL
+            router.replace("/store", { scroll: false })
+        }
+    }, [searchParams, queryClient, router])
 
     // Reset search when tab changes
     useEffect(() => {
@@ -176,6 +216,7 @@ export default function StorePage() {
                                         key={assistant.id}
                                         assistant={{
                                             id: assistant.id,
+                                            userId: assistant.userId.toString(),
                                             name: assistant.name,
                                             price: assistant.price,
                                             description: assistant.description || "",
@@ -225,6 +266,66 @@ export default function StorePage() {
                 onOpenChange={setIsDialogOpen}
                 assistant={selectedAssistant}
             />
+
+            {/* Processing Payment Dialog */}
+            <Dialog open={processingPayment} onOpenChange={() => {}}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader className="text-center">
+                        <Loader2 className="h-16 w-16 mx-auto mb-4 animate-spin text-[#BDA76D]" />
+                        <DialogTitle className="text-2xl">Processing Payment...</DialogTitle>
+                        <DialogDescription>
+                            Please wait while we confirm your purchase
+                        </DialogDescription>
+                    </DialogHeader>
+                </DialogContent>
+            </Dialog>
+
+            {/* Success Dialog */}
+            <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader className="text-center">
+                        <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-green-500" />
+                        <DialogTitle className="text-2xl">Purchase Successful!</DialogTitle>
+                        <DialogDescription className="text-base pt-2">
+                            Congratulations! Your assistant purchase is complete. 
+                            The assistant has been added to your collection.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="sm:justify-center">
+                        <Button
+                            onClick={() => {
+                                setShowSuccessDialog(false)
+                                setActiveTab("my")
+                                router.push("/assistants")
+                            }}
+                            className="bg-[#BDA76D] hover:bg-[#BDA76D]/90"
+                        >
+                            View My Assistants
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Cancel Dialog */}
+            <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader className="text-center">
+                        <XCircle className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                        <DialogTitle className="text-2xl">Purchase Cancelled</DialogTitle>
+                        <DialogDescription className="text-base pt-2">
+                            Your purchase was cancelled. No charges were made.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="sm:justify-center">
+                        <Button
+                            onClick={() => setShowCancelDialog(false)}
+                            variant="outline"
+                        >
+                            Continue Shopping
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

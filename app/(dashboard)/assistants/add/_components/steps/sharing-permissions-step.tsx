@@ -122,6 +122,18 @@ export function SharingPermissionsStep({
     })
   }
 
+  const updateBuyerPermission = (
+    permission: PermissionType,
+    value: boolean
+  ) => {
+    updateFormData({
+      buyerPermissions: {
+        ...formData.buyerPermissions,
+        [permission]: value,
+      },
+    })
+  }
+
   // Get available contacts (not already added)
   return (
     <div className="space-y-6">
@@ -323,39 +335,131 @@ export function SharingPermissionsStep({
         {/* Public Access Info */}
         {formData.permissionLevel === "public" && (
           <div className="border rounded-lg p-6 bg-primary/5 border-primary/20">
+            <div className="space-y-4">
             <div className="flex gap-3">
               <Globe className="h-6 w-6 text-primary shrink-0 mt-0.5" />
-              <div>
+                <div className="flex-1">
                 <h4 className="font-medium mb-1">Public Assistant</h4>
-                <p className="text-sm text-muted-foreground mb-3">
-                  This assistant will be available to all users in the BMaster Store. Anyone
-                  will be able to discover and use it.
+                  <p className="text-sm text-muted-foreground">
+                  This assistant will be available to all users in the BMaster Store.
                 </p>
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    All users will have full access to:
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-background border rounded-md text-xs">
-                      <Check className="h-3 w-3 text-primary" />
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">
+                  Select permissions for buyers/users:
+                </Label>
+                
+                <div className="space-y-2 bg-background rounded-lg p-4 border">
+                  {/* Chat Permission */}
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id="buyer-chat"
+                        checked={formData.buyerPermissions.chat}
+                        onCheckedChange={(checked) =>
+                          updateBuyerPermission("chat", checked as boolean)
+                        }
+                      />
+                      <label
+                        htmlFor="buyer-chat"
+                        className="text-sm font-medium leading-none cursor-pointer"
+                      >
                       Chat
+                      </label>
                     </div>
-                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-background border rounded-md text-xs">
-                      <Check className="h-3 w-3 text-primary" />
-                      Contact
+                    <p className="text-xs text-muted-foreground">
+                      Private AI conversations
+                    </p>
+                  </div>
+
+                  {/* Contacts Permission */}
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id="buyer-contact"
+                        checked={formData.buyerPermissions.contact}
+                        onCheckedChange={(checked) =>
+                          updateBuyerPermission("contact", checked as boolean)
+                        }
+                      />
+                      <label
+                        htmlFor="buyer-contact"
+                        className="text-sm font-medium leading-none cursor-pointer"
+                      >
+                        Contacts
+                      </label>
                     </div>
-                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-background border rounded-md text-xs">
-                      <Check className="h-3 w-3 text-primary" />
+                    <p className="text-xs text-muted-foreground">
+                      View team directory
+                    </p>
+                  </div>
+
+                  {/* News Feed Permission */}
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id="buyer-newsfeed"
+                        checked={formData.buyerPermissions.newsFeed}
+                        onCheckedChange={(checked) =>
+                          updateBuyerPermission("newsFeed", checked as boolean)
+                        }
+                      />
+                      <label
+                        htmlFor="buyer-newsfeed"
+                        className="text-sm font-medium leading-none cursor-pointer"
+                      >
                       News Feed
+                      </label>
                     </div>
-                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-background border rounded-md text-xs">
-                      <Check className="h-3 w-3 text-primary" />
+                    <p className="text-xs text-muted-foreground">
+                      View & post updates
+                    </p>
+                  </div>
+
+                  {/* Messenger Permission */}
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id="buyer-messenger"
+                        checked={formData.buyerPermissions.messenger}
+                        onCheckedChange={(checked) =>
+                          updateBuyerPermission("messenger", checked as boolean)
+                        }
+                      />
+                      <label
+                        htmlFor="buyer-messenger"
+                        className="text-sm font-medium leading-none cursor-pointer"
+                      >
                       Messenger
+                      </label>
                     </div>
-                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-background border rounded-md text-xs">
-                      <Check className="h-3 w-3 text-primary" />
-                      Artifact
+                    <p className="text-xs text-muted-foreground">
+                      Chat with team members
+                    </p>
+                  </div>
+
+                  {/* Artifacts Permission */}
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id="buyer-artifact"
+                        checked={formData.buyerPermissions.artifact}
+                        onCheckedChange={(checked) =>
+                          updateBuyerPermission("artifact", checked as boolean)
+                        }
+                      />
+                      <label
+                        htmlFor="buyer-artifact"
+                        className="text-sm font-medium leading-none cursor-pointer"
+                      >
+                        Artifacts
+                      </label>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      Create & share artifacts
+                    </p>
                   </div>
                 </div>
               </div>

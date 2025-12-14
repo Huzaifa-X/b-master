@@ -70,7 +70,7 @@ export const authOptions: NextAuthOptions = {
     // }), // COMMENTED OUT - Google provider disabled
   ],
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user, trigger, session }) {
       // On sign in, add user info to token and create DB session
       if (user) {
         token.id = user.id;
@@ -102,6 +102,13 @@ export const authOptions: NextAuthOptions = {
         } catch (error) {
           console.error("Failed to create session record:", error);
         }
+      }
+
+      // Handle session updates (e.g., profile updates)
+      if (trigger === "update" && session) {
+        token.name = session.user?.name || token.name;
+        token.email = session.user?.email || token.email;
+        token.picture = session.user?.image || token.picture;
       }
 
       return token;

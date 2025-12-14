@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: "Invalid chatId" }), { status: 400 })
     }
 
-    // Get chat with full context
+    // Get chat with full context including the last user message with mentioned users
     const chat = await prisma.assistantUserChat.findFirst({
       where: { id: chatIdInt },
       include: {
@@ -113,7 +113,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Build system prompt
-    let systemPrompt = getSystemPrompt()
+    let systemPrompt = await getSystemPrompt()
+
+    // Add important note about mentioned users
+    systemPrompt += `\n\n## Mentioned Users\nWhen you see "[This message mentions: Name <email>]" at the start of a user message, those are people the user has specifically mentioned using @ mentions. You have their full contact information (name and email). Use this information when relevant - for example, if the user asks you to create an invoice for someone, send an email, or perform any action involving the mentioned person, you already have their email address and don't need to ask for it.`
 
     if (research) {
       systemPrompt += `\n\nIMPORTANT: The user has requested research mode. Please conduct thorough research using both web search and file search to provide a comprehensive answer.`
@@ -136,13 +139,36 @@ export async function POST(req: NextRequest) {
       systemPrompt += `\n\n## Assistant-Specific Instructions\n${chat.assistant.instructions}`
     }
 
-    // Prepare conversation history
+    // Prepare conversation history and extract mentioned users
     const conversationMessages = chat.messages
       .filter(msg => msg.message)
-      .map(msg => ({
-        role: msg.role as "user" | "assistant" | "system",
-        content: msg.message || ""
-      }))
+      .map((msg) => {
+        let content = msg.message || ""
+        
+        // Check all user messages for mentioned users
+        if (msg.role === "user" && msg.documents) {
+          try {
+            const documentsData = JSON.parse(msg.documents)
+            console.log("[Stream] Mentioned users in message:", documentsData.mentionedUsers)
+            console.log("[Stream] Data:", documentsData)
+            if (documentsData.mentionedUsers && Array.isArray(documentsData.mentionedUsers) && documentsData.mentionedUsers.length > 0) {
+              // Prepend mentioned users info to make it more visible to AI
+              const mentionsList = documentsData.mentionedUsers
+                .map((u: { name: string; email: string }) => `${u.name} <${u.email}>`)
+                .join(', ')
+              content = `[This message mentions: ${mentionsList}]\n\n${content}`
+              console.log("[Stream] Added mentioned users to message context:", documentsData.mentionedUsers)
+            }
+          } catch (e) {
+            // Ignore parse errors
+          }
+        }
+        
+        return {
+          role: msg.role as "user" | "assistant" | "system",
+          content
+        }
+      })
 
     const lastUserMessageIndex = conversationMessages
       .map((msg, idx) => msg.role === "user" ? idx : -1)
@@ -226,6 +252,14 @@ export async function POST(req: NextRequest) {
     } else {
       tools.push({ type: "web_search" })
       tools.push({ type: "image_generation" })
+      // Add Stripe MCP tool for invoice creation
+      tools.push({
+        type: "mcp",
+        server_label: "stripe",
+        server_url: "https://mcp.stripe.com",
+        authorization: process.env.STRIPE_SECRET_KEY,
+        require_approval: "never",
+      })
       
       if (assistantId && chat.assistant?.vectorStoreId) {
         tools.push({
@@ -254,7 +288,7 @@ export async function POST(req: NextRequest) {
 
     // API params with streaming enabled
     const apiParams: any = {
-      model: "gpt-5",
+      model: "gpt-5.2",
       input: inputContent,
       instructions: systemPrompt,
       tools: tools.length > 0 ? tools : undefined,
@@ -429,6 +463,10 @@ export async function POST(req: NextRequest) {
                     }
                     if (event.item?.type === "web_search_call" && !usedTools.includes("web_search")) {
                       usedTools.push("web_search")
+                    }
+                    if (event.item?.type === "mcp_call" && !usedTools.includes("stripe")) {
+                      usedTools.push("stripe")
+                      console.log("[Stream] Stripe MCP tool used:", event.item.name)
                     }
                     break
 

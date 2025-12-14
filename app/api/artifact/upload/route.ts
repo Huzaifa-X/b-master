@@ -19,29 +19,67 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const formData = await request.formData();
-    const file = formData.get("file") as File;
-    const fileType = formData.get("type") as "image" | "document";
+    const contentType = request.headers.get("content-type");
+    let file: File | null = null;
+    let fileName: string = "";
+    let fileType: "image" | "document" = "document";
+    let buffer: Buffer;
 
-    if (!file) {
-      return NextResponse.json(
-        { success: false, error: "No file provided" },
-        { status: 400 }
-      );
+    // Handle both FormData and JSON (base64) formats
+    if (contentType?.includes("application/json")) {
+      // JSON format with base64 data
+      const body = await request.json();
+      const { fileName: name, fileData, contentType: mimeType } = body;
+
+      if (!name || !fileData) {
+        return NextResponse.json(
+          { success: false, error: "fileName and fileData are required" },
+          { status: 400 }
+        );
+      }
+
+      fileName = name;
+      
+      // Determine file type
+      if (mimeType?.startsWith("image/")) {
+        fileType = "image";
+      }
+
+      // Extract base64 data (handle both data:type;base64,data and plain base64)
+      const base64Data = fileData.includes(",")
+        ? fileData.split(",")[1]
+        : fileData;
+
+      buffer = Buffer.from(base64Data, "base64");
+    } else {
+      // FormData format
+      const formData = await request.formData();
+      file = formData.get("file") as File;
+      const type = formData.get("type") as "image" | "document";
+
+      if (!file) {
+        return NextResponse.json(
+          { success: false, error: "No file provided" },
+          { status: 400 }
+        );
+      }
+
+      fileName = file.name;
+      fileType = type || (file.type.startsWith("image/") ? "image" : "document");
+
+      // Convert file to buffer
+      const arrayBuffer = await file.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
     }
 
     // Validate file size (50MB limit)
     const MAX_FILE_SIZE = 50 * 1024 * 1024;
-    if (file.size > MAX_FILE_SIZE) {
+    if (buffer.length > MAX_FILE_SIZE) {
       return NextResponse.json(
         { success: false, error: "File size exceeds 50MB limit" },
         { status: 400 }
       );
     }
-
-    // Convert file to buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
 
     // Validate file size using S3 helper
     try {
@@ -56,26 +94,29 @@ export async function POST(request: NextRequest) {
     // Determine folder based on file type
     const folder = fileType === "image" ? "artifacts/images" : "artifacts/documents";
 
+    // Determine MIME type
+    const mimeType = file?.type || (fileType === "image" ? "image/png" : "application/octet-stream");
+
     // Upload file to S3
     const fileUrl = await uploadToS3(
       buffer,
-      file.name,
-      file.type,
+      fileName,
+      mimeType,
       folder
     );
 
     const result: any = {
       url: fileUrl,
-      name: file.name,
-      type: file.type,
-      size: file.size,
+      name: fileName,
+      type: mimeType,
+      size: buffer.length,
       uploadedAt: new Date().toISOString(),
     };
 
     // Process document with Upstage
-    if (fileType === "document" && upstageService.isSupportedFileType(file.type)) {
+    if (fileType === "document" && upstageService.isSupportedFileType(mimeType)) {
       try {
-        console.log(`Processing document with Upstage: ${file.name}`);
+        console.log(`Processing document with Upstage: ${fileName}`);
         
         const extractedContent = await upstageService.extractFromUrl(fileUrl);
 
@@ -91,7 +132,7 @@ export async function POST(request: NextRequest) {
           result.extractedImages = extractedContent.images;
         }
 
-        console.log(`Successfully processed document: ${file.name}`);
+        console.log(`Successfully processed document: ${fileName}`);
         console.log(`- Extracted text length: ${extractedContent.text.length}`);
         console.log(`- Found ${extractedContent.images?.length || 0} images`);
         console.log(`- Found ${extractedContent.tables?.length || 0} tables`);

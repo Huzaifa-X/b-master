@@ -569,6 +569,34 @@ export async function sendChatMessage(data: {
             }
         })
 
+        // Get chat details to find recipient
+        const chat = await prisma.assistantChat.findUnique({
+            where: { id: chatId },
+            include: {
+                initiator: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                },
+                participant: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            }
+        })
+
+        // Determine recipient (the other user in the chat)
+        const recipientId = chat?.initiatorId === userId 
+            ? chat?.participantId 
+            : chat?.initiatorId
+        
+        const recipient = chat?.initiatorId === userId
+            ? chat?.participant
+            : chat?.initiator
+
         // Send real-time message via Pusher
         try {
             await pusher.trigger('global-assistant-chat', 'new-message', {
@@ -591,6 +619,49 @@ export async function sendChatMessage(data: {
         } catch (pusherError) {
             console.error('Pusher error:', pusherError)
             // Don't fail the request if Pusher fails
+        }
+
+        // Send notification to recipient
+        if (recipientId && recipient) {
+            try {
+                const notificationService = (await import('@/lib/services/notifactionService')).default
+                
+                // Create notification message based on message type
+                let notificationMessage = message.message
+                if (data.messageType === 'image') {
+                    notificationMessage = '📷 Sent an image'
+                } else if (data.messageType === 'file') {
+                    notificationMessage = `📎 Sent a file: ${data.attachmentName || 'file'}`
+                } else if (data.messageType === 'audio') {
+                    notificationMessage = '🎵 Sent an audio message'
+                } else if (data.messageType === 'video') {
+                    notificationMessage = '🎥 Sent a video'
+                }
+
+                await notificationService.createNotification({
+                    userId: recipientId.toString(),
+                    title: `💬 New message from ${message.sender.name || 'Someone'}`,
+                    message: notificationMessage.length > 100 
+                        ? notificationMessage.substring(0, 100) + '...' 
+                        : notificationMessage,
+                    type: 'chat_message',
+                    relatedId: chatId.toString(),
+                    relatedType: 'chat',
+                    data: {
+                        chatId: chatId.toString(),
+                        messageId: message.id.toString(),
+                        senderId: userId.toString(),
+                        senderName: message.sender.name,
+                        assistantId: assistantId.toString(),
+                        messageType: data.messageType || 'text',
+                        attachmentUrl: data.attachmentUrl
+                    }
+                })
+                console.log(`[Chat] Notification sent to user: ${recipient.name}`)
+            } catch (notificationError) {
+                console.error('[Chat] Failed to send notification:', notificationError)
+                // Don't fail the message send if notification fails
+            }
         }
 
         revalidatePath(`/assistants/${data.assistantId}/messenger`)

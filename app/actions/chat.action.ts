@@ -80,6 +80,7 @@ export async function createChatWithMessage(data: {
     instructions: string
     htmlContent: string
   }
+  mentionedUsers?: Array<{ id: string; name: string; email: string }>
   skipBackground?: boolean // Skip background processing (for streaming)
 }) {
   try {
@@ -104,13 +105,23 @@ export async function createChatWithMessage(data: {
       }
     })
 
-    // Prepare attachments data - store S3 URLs in database
+    // Prepare documents data - store attachments and mentioned users
     let documentsJson: string | null = null
 
-    if (data.attachments && data.attachments.length > 0) {
-      // Store all attachments (including images) in documents as JSON with S3 URLs
-      documentsJson = JSON.stringify(data.attachments)
-      console.log(`[createChatWithMessage] Storing ${data.attachments.length} attachment(s) with S3 URLs in database`)
+    if (data.attachments || data.mentionedUsers) {
+      const documentsData: any = {}
+
+      if (data.attachments && data.attachments.length > 0) {
+        documentsData.attachments = data.attachments
+        console.log(`[createChatWithMessage] Storing ${data.attachments.length} attachment(s) with S3 URLs in database`)
+      }
+
+      if (data.mentionedUsers && data.mentionedUsers.length > 0) {
+        documentsData.mentionedUsers = data.mentionedUsers
+        console.log(`[createChatWithMessage] Message mentions ${data.mentionedUsers.length} user(s):`, data.mentionedUsers.map(u => `${u.name} (${u.email})`).join(", "))
+      }
+
+      documentsJson = JSON.stringify(documentsData)
     }
 
     // Save first user message
@@ -136,23 +147,23 @@ export async function createChatWithMessage(data: {
 
     // Skip background processing if using streaming
     if (!data.skipBackground) {
-    // Trigger background response generation (non-blocking)
-    // Pass attachments and search options so content extraction can happen in background function
-    const webSearchEnabled = data.webSearch || false
-    const researchEnabled = data.research || false
-    console.log(`[createChatWithMessage] Starting background response with webSearch: ${webSearchEnabled}, research: ${researchEnabled}, attachments: ${data.attachments?.length || 0}`)
+      // Trigger background response generation (non-blocking)
+      // Pass attachments and search options so content extraction can happen in background function
+      const webSearchEnabled = data.webSearch || false
+      const researchEnabled = data.research || false
+      console.log(`[createChatWithMessage] Starting background response with webSearch: ${webSearchEnabled}, research: ${researchEnabled}, attachments: ${data.attachments?.length || 0}`)
 
-    generateChatResponseInBackground({
-      chatId: chat.id.toString(),
-      assistantId: data.assistantId,
-      chatType: data.mode === "ask-b" ? "ASK_B" : "ASSISTANT",
-      webSearch: webSearchEnabled,
-      research: researchEnabled,
-      attachments: data.attachments // Pass attachments for extraction
-    }).catch(err => {
-      console.error("[createChatWithMessage] Response generation failed:", err)
-      // Don't fail the request if response generation fails
-    })
+      generateChatResponseInBackground({
+        chatId: chat.id.toString(),
+        assistantId: data.assistantId,
+        chatType: data.mode === "ask-b" ? "ASK_B" : "ASSISTANT",
+        webSearch: webSearchEnabled,
+        research: researchEnabled,
+        attachments: data.attachments // Pass attachments for extraction
+      }).catch(err => {
+        console.error("[createChatWithMessage] Response generation failed:", err)
+        // Don't fail the request if response generation fails
+      })
     } else {
       console.log(`[createChatWithMessage] Skipping background processing (streaming will be used)`)
     }
@@ -265,7 +276,7 @@ async function generateChatResponseInBackground(data: {
     }
 
     // Build system prompt
-    let systemPrompt = getSystemPrompt()
+    let systemPrompt = await getSystemPrompt()
 
     // Add to system prompt based on user selection
     if (data.research) {
@@ -317,6 +328,12 @@ async function generateChatResponseInBackground(data: {
           const parsed = typeof lastUserMsgFromDb.documents === 'string'
             ? JSON.parse(lastUserMsgFromDb.documents)
             : lastUserMsgFromDb.documents
+          
+          // Handle new structure: { attachments: [...], mentionedUsers: [...] }
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return Array.isArray(parsed.attachments) ? parsed.attachments : []
+          }
+          // Legacy structure: direct array
           return Array.isArray(parsed) ? parsed : []
         } catch (error) {
           console.error("[generateChatResponseInBackground] Error parsing attachments:", error)
@@ -377,7 +394,7 @@ async function generateChatResponseInBackground(data: {
     // Extract raw text
     const hasImageEditIntent = response.output_text?.trim().toLowerCase() === "true";
 
-    const hasImageAttachments = attachmentsToProcess.some(att =>
+    const hasImageAttachments = attachmentsToProcess.some((att: { type: string }) =>
       att.type.startsWith('image/')
     )
 
@@ -456,7 +473,7 @@ async function generateChatResponseInBackground(data: {
 
         // If user uploaded NEW images, include them in input
         if (hasImageAttachments) {
-          const imageAttachments = attachmentsToProcess.filter(att =>
+          const imageAttachments = attachmentsToProcess.filter((att: { type: string }) =>
             att.type.startsWith('image/')
           )
 
@@ -489,7 +506,7 @@ async function generateChatResponseInBackground(data: {
         console.log("[generateChatResponseInBackground] 🔄 Using iterative editing:", shouldUseIterativeEditing)
 
         const apiParams: any = {
-          model: "gpt-5",
+          model: "gpt-5.2",
           input: inputContent,
           instructions: systemPrompt,
           tools: tools.length > 0 ? tools : undefined,
@@ -661,7 +678,7 @@ async function generateChatResponseInBackground(data: {
           }
         })
         console.log("[generateChatResponseInBackground] Assistant response saved")
-        
+
         // Update user message status to COMPLETED when response is saved
         if (lastUserMessageRecord) {
           await prisma.assistantUserChatMessage.update({
@@ -678,7 +695,7 @@ async function generateChatResponseInBackground(data: {
             data: { message: assistantResponse }
           })
           console.log("[generateChatResponseInBackground] Updated existing empty response")
-          
+
           // Update user message status to COMPLETED
           if (lastUserMessageRecord) {
             await prisma.assistantUserChatMessage.update({
@@ -744,7 +761,7 @@ async function generateChatResponseInBackground(data: {
     return { success: true, response: assistantResponse }
   } catch (error) {
     console.error("[generateChatResponseInBackground] Error:", error)
-    
+
     // Update user message status to FAILED on error
     try {
       const chatIdInt = parseInt(data.chatId)
@@ -757,7 +774,7 @@ async function generateChatResponseInBackground(data: {
           createdAt: 'desc'
         }
       })
-      
+
       if (lastUserMessageRecord && (lastUserMessageRecord.status === "PENDING" || lastUserMessageRecord.status === "PROCESSING")) {
         await prisma.assistantUserChatMessage.update({
           where: { id: lastUserMessageRecord.id },
@@ -768,7 +785,7 @@ async function generateChatResponseInBackground(data: {
     } catch (statusUpdateError) {
       console.error("[generateChatResponseInBackground] Failed to update message status:", statusUpdateError)
     }
-    
+
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
@@ -1067,7 +1084,23 @@ export async function getChatMessages(chatId: string) {
               ? JSON.parse(msg.documents)
               : msg.documents
 
-            if (Array.isArray(documents)) {
+            // Handle new structure: { attachments: [...], mentionedUsers: [...] }
+            if (documents && typeof documents === 'object' && !Array.isArray(documents)) {
+              // New structure with attachments property
+              if (Array.isArray(documents.attachments)) {
+                documents.attachments.forEach((doc: any) => {
+                  if (doc && (doc.url || doc.name)) {
+                    attachments.push({
+                      name: doc.name || 'Document',
+                      url: doc.url || '',
+                      type: doc.type || 'application/octet-stream',
+                      size: doc.size || 0
+                    })
+                  }
+                })
+              }
+            } else if (Array.isArray(documents)) {
+              // Legacy structure: direct array of attachments (for backward compatibility)
               documents.forEach((doc: any) => {
                 if (doc && (doc.url || doc.name)) {
                   attachments.push({
@@ -1144,6 +1177,7 @@ export async function sendChatMessage(data: {
     instructions: string
     htmlContent: string
   }
+  mentionedUsers?: Array<{ id: string; name: string; email: string }>
   skipBackground?: boolean // Skip background processing (for streaming)
 }) {
   try {
@@ -1177,14 +1211,23 @@ export async function sendChatMessage(data: {
       return { success: false, error: "Chat not found" }
     }
 
-    // Prepare attachments data - store S3 URLs in database
-    // Content extraction will happen in background function
+    // Prepare documents data - store attachments and mentioned users
     let documentsJson: string | null = null
 
-    if (data.attachments && data.attachments.length > 0) {
-      // Store all attachments (including images) in documents as JSON with S3 URLs
-      documentsJson = JSON.stringify(data.attachments)
-      console.log(`[sendChatMessage] Storing ${data.attachments.length} attachment(s) with S3 URLs in database`)
+    if (data.attachments || data.mentionedUsers) {
+      const documentsData: any = {}
+
+      if (data.attachments && data.attachments.length > 0) {
+        documentsData.attachments = data.attachments
+        console.log(`[sendChatMessage] Storing ${data.attachments.length} attachment(s) with S3 URLs in database`)
+      }
+
+      if (data.mentionedUsers && data.mentionedUsers.length > 0) {
+        documentsData.mentionedUsers = data.mentionedUsers
+        console.log(`[sendChatMessage] Message mentions ${data.mentionedUsers.length} user(s):`, data.mentionedUsers.map(u => `${u.name} (${u.email})`).join(", "))
+      }
+
+      documentsJson = JSON.stringify(documentsData)
     }
 
     // Save user message immediately with PENDING status
@@ -1208,21 +1251,21 @@ export async function sendChatMessage(data: {
 
     // Skip background processing if using streaming
     if (!data.skipBackground) {
-    console.log(`[sendChatMessage] User message saved, triggering background response with webSearch: ${data.webSearch || false}, research: ${data.research || false}, attachments: ${data.attachments?.length || 0}`)
+      console.log(`[sendChatMessage] User message saved, triggering background response with webSearch: ${data.webSearch || false}, research: ${data.research || false}, attachments: ${data.attachments?.length || 0}`)
 
-    // Trigger background response generation (non-blocking)
-    // Pass attachments and search options so content extraction can happen in background function
-    generateChatResponseInBackground({
-      chatId: data.chatId,
-      assistantId: data.assistantId,
-      chatType: data.chatType,
-      webSearch: data.webSearch || false,
-      research: data.research || false,
-      attachments: data.attachments // Pass attachments for extraction
-    }).catch(err => {
-      console.error("[sendChatMessage] Background response generation failed:", err)
-      // Don't fail the request if background generation fails
-    })
+      // Trigger background response generation (non-blocking)
+      // Pass attachments and search options so content extraction can happen in background function
+      generateChatResponseInBackground({
+        chatId: data.chatId,
+        assistantId: data.assistantId,
+        chatType: data.chatType,
+        webSearch: data.webSearch || false,
+        research: data.research || false,
+        attachments: data.attachments // Pass attachments for extraction
+      }).catch(err => {
+        console.error("[sendChatMessage] Background response generation failed:", err)
+        // Don't fail the request if background generation fails
+      })
     } else {
       console.log(`[sendChatMessage] User message saved, skipping background processing (streaming will be used)`)
     }

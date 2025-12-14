@@ -36,6 +36,76 @@ export default function EditAssistantPage() {
 
         const assistant = result.assistant
 
+        // Convert file URLs to File objects for pre-population
+        const fileObjects: File[] = []
+        if (assistant.files && Array.isArray(assistant.files) && assistant.files.length > 0) {
+          try {
+            console.log('Loading files:', assistant.files)
+            
+            // Fetch files and convert to File objects
+            const filePromises = assistant.files.map(async (fileInfo: { url: string; name: string; type?: string; size?: number }) => {
+              try {
+                console.log(`Fetching file: ${fileInfo.name} from ${fileInfo.url}`)
+                
+                const response = await fetch(fileInfo.url, {
+                  method: 'GET',
+                  headers: {
+                    'Cache-Control': 'no-cache',
+                  },
+                })
+                
+                if (!response.ok) {
+                  console.warn(`Failed to fetch file: ${fileInfo.url} - Status: ${response.status}`)
+                  return null
+                }
+                
+                const blob = await response.blob()
+                console.log(`File fetched successfully: ${fileInfo.name}, size: ${blob.size} bytes`)
+                
+                // Ensure clean file name without MIME type contamination
+                let fileName = fileInfo.name || `file_${Date.now()}`
+                
+                // Remove any timestamp prefix patterns like "1765616734544-"
+                fileName = fileName.replace(/^\d+-/, '')
+                
+                // Remove any MIME type suffixes that might have been added (e.g., ".application_pdf")
+                fileName = fileName.replace(/\.(application|text|image|video|audio)_[a-z0-9]+$/i, '')
+                
+                // Determine proper MIME type
+                const fileType = fileInfo.type || blob.type || 'application/octet-stream'
+                
+                // Create File object with clean name
+                const file = new File([blob], fileName, { type: fileType })
+                
+                // Verify file was created correctly
+                console.log(`File created: ${file.name}, type: ${file.type}, size: ${file.size}`)
+                
+                return file
+              } catch (error) {
+                console.error(`Error converting file ${fileInfo.url}:`, error)
+                toast.error(`Failed to load file: ${fileInfo.name}`)
+                return null
+              }
+            })
+            
+            const fetchedFiles = await Promise.all(filePromises)
+            const validFiles = fetchedFiles.filter((f): f is File => f !== null)
+            
+            // console.log(`Successfully loaded ${validFiles.length} out of ${assistant.files.length} files`)
+            
+            if (validFiles.length > 0) {
+              fileObjects.push(...validFiles)
+              toast.success(`Loaded ${validFiles.length} file${validFiles.length > 1 ? 's' : ''}`)
+            } else if (assistant.files.length > 0) {
+              toast.warning('Some files could not be loaded')
+            }
+          } catch (error) {
+            console.error('Error pre-loading files:', error)
+            toast.error('Failed to load files')
+            // Continue without files if there's an error
+          }
+        }
+
         // Map the fetched data to AssistantFormData format
         const formData: AssistantFormData = {
           name: assistant.name,
@@ -46,7 +116,7 @@ export default function EditAssistantPage() {
           imageURL: assistant.imageURL,
           notes: assistant.notes || [],
           urls: assistant.urls || [],
-          files: [], // Files can't be pre-populated, user needs to re-upload
+          files: fileObjects, // Pre-populated files
           instructions: assistant.instructions || "",
           authenticationType: (assistant.apiConfiguration?.authenticationType || "none") as "none" | "api_key" | "oauth",
           apiKey: assistant.apiConfiguration?.apiKey || "",
@@ -62,6 +132,13 @@ export default function EditAssistantPage() {
           schemaText: assistant.apiConfiguration?.schemaText || "",
           permissionLevel: (assistant.permissionLevel === "public" ? "public" : "private") as "private" | "public",
           sharedUsers: assistant.sharedUsers || [],
+          buyerPermissions: assistant.buyerPermissions || {
+            chat: false,
+            contact: false,
+            messenger: false,
+            artifact: false,
+            newsFeed: false,
+          },
         }
 
         setInitialData(formData)
@@ -121,4 +198,3 @@ export default function EditAssistantPage() {
     </div>
   )
 }
-

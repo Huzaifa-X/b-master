@@ -159,7 +159,12 @@ export function useCustomChat(options: UseCustomChatOptions) {
 
     // Check if message has PENDING status (from DB)
     const dbMessage = dbMessages.find(m => m.id === lastMessage.id)
-    if (!dbMessage || (dbMessage as any).status !== "PENDING") return
+    console.log("[useCustomChat] Last message status:", dbMessage?.status, "Message:", lastMessage.id)
+    
+    if (!dbMessage || dbMessage.status !== "PENDING") {
+      console.log("[useCustomChat] Skipping auto-stream - status is not PENDING")
+      return
+    }
 
     // Check if there's already an assistant response after this user message
     const hasResponse = dbMessages.some(
@@ -167,7 +172,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
     )
 
     if (!hasResponse) {
-      console.log("[useCustomChat] Auto-starting streaming for PENDING message:", lastMessage.id)
+      console.log("[useCustomChat] ✅ Auto-starting streaming for PENDING message:", lastMessage.id)
       hasStartedAutoStream.current = true
       
       // Get attachments from the user message
@@ -337,7 +342,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
   }, [dbMessageIds, currentMessageIds, isStreaming, dbMessages, messages, context, queryClient])
 
   // Send message with streaming
-  const sendMessage = useCallback(async (content: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string } }) => {
+  const sendMessage = useCallback(async (content: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: Array<{ id: string; name: string; email: string }> }) => {
     if (!context || !content.trim() || isStreaming) {
       console.warn("[useCustomChat] Cannot send message:", { 
         hasContext: !!context, 
@@ -379,6 +384,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
         webSearch: options?.webSearch,
         research: options?.research,
         artifact: options?.artifact,
+        mentionedUsers: options?.mentionedUsers,
         skipBackground: true // Skip background processing, we'll use streaming instead
       })
 

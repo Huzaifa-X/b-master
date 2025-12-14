@@ -32,6 +32,8 @@ export default function ArtifactPage({ params }: PageProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(true)
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState<string>("")
+  const [selectedVersionCode, setSelectedVersionCode] = useState<string | null>(null)
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
   const streamingInitiatedRef = useRef(false)
   const lastUpdateRef = useRef<number>(0)
@@ -175,36 +177,78 @@ export default function ArtifactPage({ params }: PageProps) {
   // Set assistant mode in header (automatically handles fetching and cleanup)
   useSetAssistantMode(assistantId)
 
+  // Handle version selection from version history dialog
+  const handleVersionSelect = (versionCode: string, versionId: string) => {
+    setSelectedVersionCode(versionCode)
+    setSelectedVersionId(versionId)
+    
+    // Update the artifact store with the selected version
+    setArtifact({
+      type: "code",
+      language: "html",
+      content: versionCode,
+      title: artifact?.name || "Artifact",
+    })
+    
+    toast.success("Version loaded successfully")
+  }
+
   // Set artifact content in store when artifact is loaded
   useEffect(() => {
-    if (artifact?.htmlContent) {
-      // Check if this is placeholder content (indicating generation in progress)
-      const isPlaceholder = artifact.htmlContent.includes("Generating") && artifact.htmlContent.includes("spinner")
-
-      // Only auto-start streaming for very recently created artifacts (within last 30 seconds)
-      // to prevent unwanted streaming on page refresh/navigation
-      const isRecentArtifact = artifact.createdAt && (Date.now() - new Date(artifact.createdAt).getTime()) < 30000
-
-      if (isPlaceholder && !streamingInitiatedRef.current && isRecentArtifact) {
-        // Start streaming for newly created artifacts (only once and only for recent artifacts)
-        console.log("[Artifact] Detected placeholder content on recent artifact, starting streaming...")
-        streamingInitiatedRef.current = true
-        startStreaming()
-      } else if (!isPlaceholder && !isStreaming) {
-        // Show completed artifact (only when not streaming)
-        setArtifact({
-          type: "code",
-          language: "html",
-          content: artifact.htmlContent,
-          title: artifact.name,
-        })
-        // Default to preview mode for HTML artifacts
-        setPreviewMode(true)
-      } else if (isPlaceholder && !isRecentArtifact) {
-        // Handle old placeholder artifacts that weren't completed
-        console.log("[Artifact] Found old placeholder artifact, skipping auto-streaming")
-      }
+    // Don't override if user has selected a specific version
+    if (selectedVersionCode) {
+      console.log("[Artifact] Skipping - selectedVersionCode exists")
+      return
     }
+
+    // Ensure artifact is loaded
+    if (!artifact) {
+      console.log("[Artifact] Skipping - no artifact data yet")
+      return
+    }
+
+    console.log("[Artifact] State check:", {
+      versionsCount: artifact.versionsCount,
+      hasVersions: artifact.hasVersions,
+      hasHtmlContent: !!artifact.htmlContent,
+      htmlContentLength: artifact.htmlContent?.length ?? 0,
+      createdAt: artifact.createdAt,
+      ageSeconds: artifact.createdAt ? Math.floor((Date.now() - new Date(artifact.createdAt).getTime()) / 1000) : 'N/A',
+      streamingInitiated: streamingInitiatedRef.current,
+      isStreaming
+    })
+
+    // Check if this is a brand new artifact (no versions created yet)
+    const hasNoVersions = artifact.versionsCount === 0
+    const hasEmptyContent = !artifact.htmlContent || artifact.htmlContent.trim() === ''
+    const isRecentArtifact = artifact.createdAt && (Date.now() - new Date(artifact.createdAt).getTime()) < 60000 // 60 seconds
+
+    // Start streaming for brand new artifacts with no versions
+    if (hasNoVersions && hasEmptyContent && isRecentArtifact && !streamingInitiatedRef.current) {
+      console.log("[Artifact] ✅ Conditions met! Starting initial streaming for new artifact...")
+      console.log("[Artifact] - No versions exist (versionsCount:", artifact.versionsCount, ")")
+      console.log("[Artifact] - Empty content (htmlContent:", artifact.htmlContent, ")")
+      console.log("[Artifact] - Recent artifact (age:", Math.floor((Date.now() - new Date(artifact.createdAt).getTime()) / 1000), "seconds)")
+      streamingInitiatedRef.current = true
+      startStreaming()
+      return
+    }
+
+    // Show completed artifact content
+    if (artifact.htmlContent && artifact.htmlContent.trim() !== '' && !isStreaming) {
+      console.log("[Artifact] Displaying existing artifact content (", artifact.htmlContent.length, "characters)")
+      setArtifact({
+        type: "code",
+        language: "html",
+        content: artifact.htmlContent,
+        title: artifact.name,
+      })
+      // Default to preview mode for HTML artifacts
+      setPreviewMode(true)
+      return
+    }
+
+    console.log("[Artifact] No action taken - waiting for conditions to be met")
 
     // Cleanup on unmount - close panel and clear artifact
     return () => {
@@ -218,27 +262,16 @@ export default function ArtifactPage({ params }: PageProps) {
       setIsStreaming(false)
       streamingInitiatedRef.current = false
       setStreamingContent("")
+      setSelectedVersionCode(null)
+      setSelectedVersionId(null)
     }
-  }, [artifact, setArtifact, setPreviewMode, clearArtifact, closePanel, startStreaming, isStreaming])
+  }, [artifact, setArtifact, setPreviewMode, clearArtifact, closePanel, startStreaming, isStreaming, selectedVersionCode])
 
   const handleBack = () => {
     // Close panel in store before navigating
     closePanel()
     clearArtifact()
     router.push(`/assistants/${assistantId}/artifacts`)
-  }
-  
-  const handleClosePanel = () => {
-    if (isMobile) {
-      setIsPanelOpen(false)
-      // Navigate back after a short delay to allow sheet animation
-      setTimeout(() => {
-        handleBack()
-      }, 300)
-    } else {
-      // Navigate back when closing the panel
-      handleBack()
-    }
   }
 
   if (isLoading) {
@@ -318,22 +351,32 @@ export default function ArtifactPage({ params }: PageProps) {
               <ArtifactChatbot
                 artifactId={artifact.id}
                 artifactName={artifact.name}
+                assistantId={assistantId}
                 disabled={isStreaming}
                 isGenerating={isStreaming}
+                isPanelOpen={isPanelOpen}
+                onTogglePanel={() => setIsPanelOpen(!isPanelOpen)}
+                onclose={handleBack}
               />
             </ResizablePanel>
 
-            {/* Resize Handle */}
-            <ResizableHandle withHandle className="bg-border hover:bg-primary/20 transition-colors" />
+            {/* Resize Handle - Only show when panel is open */}
+            {isPanelOpen && (
+              <ResizableHandle withHandle className="bg-border hover:bg-primary/20 transition-colors" />
+            )}
 
-            {/* Right Side: Artifact Panel */}
-            <ResizablePanel defaultSize={70} minSize={50} className="min-w-0 min-h-0">
-              <ArtifactPanel
-                onClose={handleClosePanel}
-                streamingContent={isStreaming ? streamingContent : undefined}
-                isStreaming={isStreaming}
-              />
-            </ResizablePanel>
+            {/* Right Side: Artifact Panel - Only show when panel is open */}
+            {isPanelOpen && (
+              <ResizablePanel defaultSize={70} minSize={50} className="min-w-0 min-h-0">
+                <ArtifactPanel
+                  onClose={() => setIsPanelOpen(false)}
+                  streamingContent={isStreaming ? streamingContent : undefined}
+                  isStreaming={isStreaming}
+                  artifactId={artifactId}
+                  onVersionSelect={handleVersionSelect}
+                />
+              </ResizablePanel>
+            )}
           </ResizablePanelGroup>
         </div>
       ) : (
@@ -343,22 +386,27 @@ export default function ArtifactPage({ params }: PageProps) {
             <ArtifactChatbot
               artifactId={artifact.id}
               artifactName={artifact.name}
+              assistantId={assistantId}
               disabled={isStreaming}
               isGenerating={isStreaming}
+              isPanelOpen={isPanelOpen}
+              onTogglePanel={() => setIsPanelOpen(!isPanelOpen)}
             />
           </div>
           
           {/* Mobile View: Overlay Sheet for Artifact Panel */}
-          <Sheet open={isPanelOpen} onOpenChange={(open) => !open && handleClosePanel()}>
+          <Sheet open={isPanelOpen} onOpenChange={(open) => !open && setIsPanelOpen(!isPanelOpen)}>
             <SheetContent 
               side="bottom" 
               className="h-[90vh] p-0 [&>button]:hidden"
             >
               <SheetTitle className="sr-only">Artifact Preview</SheetTitle>
               <ArtifactPanel
-                onClose={handleClosePanel}
+                onClose={() => setIsPanelOpen(false)}
                 streamingContent={isStreaming ? streamingContent : undefined}
                 isStreaming={isStreaming}
+                artifactId={artifactId}
+                onVersionSelect={handleVersionSelect}
               />
             </SheetContent>
           </Sheet>

@@ -2,7 +2,7 @@
 
 import { FC, useEffect, useState } from "react";
 
-import { X, Copy, Code2, FileCode, Eye, Code, Download } from "lucide-react";
+import { X, Copy, Code2, FileCode, Eye, Code, Download, Share2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -12,20 +12,35 @@ import ReactMarkdown from 'react-markdown';
 
 import { toast } from "sonner";
 
+import { VersionHistoryDialog } from "@/components/artifacts/version-history-dialog";
+import { ShareArtifactDialog } from "@/components/artifacts/share-artifact-dialog";
+import { useParams } from "next/navigation";
+
 interface ArtifactPanelProps {
   onClose?: () => void;
   streamingContent?: string;
   isStreaming?: boolean;
+  artifactId?: string; // Add artifactId to props
+  onVersionSelect?: (versionCode: string, versionId: string) => void;
 }
 
-export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose, streamingContent, isStreaming = false }) => {
+export const ArtifactPanel: FC<ArtifactPanelProps> = ({ 
+  onClose, 
+  streamingContent, 
+  isStreaming = false,
+  artifactId,
+  onVersionSelect 
+}) => {
 
   const { artifactContent, isPreviewMode, togglePreview } = useArtifactStore();
+  const params = useParams()
+  const assistantId = params?.id as string
 
   // Use streaming content if available, otherwise use stored content
   const displayContent = streamingContent || artifactContent?.content || "";
 
   const [blobUrl, setBlobUrl] = useState<string>("");
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
 
   const handleCopy = () => {
 
@@ -131,128 +146,99 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose, streamingConten
 
       {/* Header */}
 
-      <div className="flex items-center justify-between border-b px-4 py-3 bg-muted/50">
-
-        <div className="flex items-center gap-2">
-
+      <div className="flex items-center justify-between border-b px-3 md:px-4 py-2 md:py-3 bg-muted/50">
+        {/* Left Section: Icon + Title */}
+        <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
           {artifactContent?.type === "code" ? (
-
-            <FileCode className="h-4 w-4 text-primary" />
-
+            <FileCode className="h-4 w-4 text-primary flex-shrink-0" />
           ) : (
-
-            <Code2 className="h-4 w-4 text-primary" />
-
+            <Code2 className="h-4 w-4 text-primary flex-shrink-0" />
           )}
-
-          <div className="flex-1">
-
-            <h3 className="font-semibold text-sm">
-
+          <div className="min-w-0 flex-1">
+            <h3 className="font-semibold text-sm truncate">
               {artifactContent?.title || "Artifact Preview"}
-
             </h3>
-
-            <p className="text-xs text-muted-foreground">
-
+            <p className="text-xs text-muted-foreground hidden sm:block">
               {artifactContent?.type === "code"
-
                 ? artifactContent.language || "code"
-
                 : "markdown"}
-
             </p>
-
           </div>
-
         </div>
 
-        <div className="flex items-center gap-1">
-
+        {/* Right Section: Action Buttons */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Preview/Code Toggle - Show on larger screens */}
           {isHtmlCode && (
-
             <Button
-
               variant={isPreviewMode ? "default" : "ghost"}
-
               size="icon"
-
-              className="h-8 w-8"
-
+              className="h-7 w-7 md:h-8 md:w-8 hidden sm:flex"
               title={isPreviewMode ? "Show code" : "Preview"}
-
               onClick={togglePreview}
-
             >
-
-              {isPreviewMode ? <Code className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-
+              {isPreviewMode ? <Code className="h-3 w-3 md:h-4 md:w-4" /> : <Eye className="h-3 w-3 md:h-4 md:w-4" />}
             </Button>
-
           )}
 
+          {/* Download - Hide on mobile */}
           <Button
-
             variant="ghost"
-
             size="icon"
-
-            className="h-8 w-8"
-
+            className="h-7 w-7 md:h-8 md:w-8 hidden md:flex"
             title="Download"
-
             onClick={handleDownload}
-
           >
-
-            <Download className="h-4 w-4" />
-
+            <Download className="h-3 w-3 md:h-4 md:w-4" />
           </Button>
 
+          {/* Copy - Always show */}
           <Button
-
             variant="ghost"
-
             size="icon"
-
-            className="h-8 w-8"
-
+            className="h-7 w-7 md:h-8 md:w-8"
             title="Copy code"
-
             onClick={handleCopy}
-
           >
-
-            <Copy className="h-4 w-4" />
-
+            <Copy className="h-3 w-3 md:h-4 md:w-4" />
           </Button>
 
-          {
+          {/* Share Button - NEW */}
+          {artifactId && assistantId && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 md:h-8 md:w-8"
+              title="Share artifact"
+              onClick={() => setIsShareDialogOpen(true)}
+              disabled={isStreaming}
+            >
+              <Share2 className="h-3 w-3 md:h-4 md:w-4" />
+            </Button>
+          )}
 
-            onClose && (
+          {/* Version History */}
+          {artifactId && (
+            <VersionHistoryDialog
+              artifactId={artifactId}
+              onVersionSelect={onVersionSelect}
+              disabled={isStreaming}
+            />
+          )}
 
-              <Button
-
-                variant="ghost"
-
-                size="icon"
-
-                className="h-8 w-8"
-
-                onClick={handleClose}
-
-                title="Close panel"
-
-              >
-
-                <X className="h-4 w-4" />
-
-              </Button>
-
-            )}
-
+          {/* Close Button */}
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 md:h-8 md:w-8"
+              onClick={handleClose}
+              title="Close panel"
+            >
+              <X className="h-3 w-3 md:h-4 md:w-4" />
+            </Button>
+          )}
         </div>
-
       </div>
 
       {/* Content Area */}
@@ -358,6 +344,17 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({ onClose, streamingConten
         )}
 
       </div>
+
+      {/* Share Artifact Dialog */}
+      {artifactId && assistantId && artifactContent?.title && (
+        <ShareArtifactDialog
+          open={isShareDialogOpen}
+          onOpenChange={setIsShareDialogOpen}
+          artifactId={artifactId}
+          artifactName={artifactContent.title}
+          assistantId={assistantId}
+        />
+      )}
 
     </div>
 

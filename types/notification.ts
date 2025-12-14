@@ -3,6 +3,8 @@ export type NotificationType =
   | 'assistant_purchased'
   | 'assistant_sold'
   | 'assistant_shared'
+  | 'assistant_refund'
+  | 'assistant_refund_seller'
   | 'comment_added'
   | 'subscription_purchased'
   | 'artifact_created'
@@ -10,7 +12,8 @@ export type NotificationType =
   | 'artifact_permission_removed'
   | 'artifact_updated'
   | 'welcome_notification'
-  | 'notification';
+  | 'notification'
+  | 'chat_message';
 
 export interface NotificationData {
   [key: string]: any;

@@ -116,6 +116,7 @@ export default function AssistantsPage() {
                       assistant={{
                         id: assistant.id,
                         name: assistant.name,
+                        userId: assistant.userId.toString(),
                         price: assistant.price,
                         description: assistant.description || "",
                         image: assistant.image || "/bmaster-icon.png",

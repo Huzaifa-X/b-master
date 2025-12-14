@@ -103,7 +103,7 @@ export async function updateUserProfile(data: {
       try {
         // Extract base64 data and metadata
         const matches = data.image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/)
-        
+
         if (!matches || matches.length !== 3) {
           return {
             success: false,
@@ -235,6 +235,112 @@ export async function getAvailableContacts(): Promise<UserContact[]> {
   }
 }
 
+// ============================================
+// SEARCH USERS FOR MENTIONS
+// ============================================
+/**
+ * Search users for mentions in chat input
+ */
+export async function searchUsersForMention(assistantId: string, query: string = "") {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return []
+    }
 
+    const currentUserId = BigInt(session.user.id)
+    const assistantIdBigInt = BigInt(assistantId)
 
+    // First, get the assistant to verify user has access
+    const assistant = await prisma.assistant.findFirst({
+      where: {
+        id: assistantIdBigInt,
+        OR: [
+          { userId: currentUserId }, // Owner
+          {
+            contacts: {
+              some: {
+                userId: currentUserId
+              }
+            }
+          }
+        ]
+      }
+    })
 
+    if (!assistant) {
+      return [] // User doesn't have access to this assistant
+    }
+
+    // Get all users who have access to this assistant (owner + contacts)
+    const assistantUsers = await prisma.user.findMany({
+      where: {
+        AND: [
+          {
+            id: {
+              not: currentUserId, // Exclude current user
+            },
+          },
+          query
+            ? {
+              OR: [
+                {
+                  name: {
+                    contains: query,
+                    mode: "insensitive",
+                  },
+                },
+                {
+                  email: {
+                    contains: query,
+                    mode: "insensitive",
+                  },
+                },
+              ],
+            }
+            : {},
+          {
+            OR: [
+              // Assistant owner
+              {
+                assistants: {
+                  some: {
+                    id: assistantIdBigInt
+                  }
+                }
+              },
+              // Assistant contacts
+              {
+                assistantContacts: {
+                  some: {
+                    assistantId: assistantIdBigInt
+                  }
+                }
+              }
+            ]
+          }
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        image: true,
+      },
+      take: 10,
+      orderBy: {
+        name: "asc",
+      },
+    })
+
+    return assistantUsers.map((user) => ({
+      id: user.id.toString(),
+      name: user.name || "Unknown User",
+      email: user.email,
+      image: user.image,
+    }))
+  } catch (error) {
+    console.error("Error searching users for mention:", error)
+    return []
+  }
+}

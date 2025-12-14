@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { KnowledgeBaseStepProps } from "@/types/assistant"
-import { Plus, X, Upload, File } from "lucide-react"
+import { Plus, X, Upload, File, Download } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
@@ -61,6 +61,23 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
       files: formData.files.filter((_, i) => i !== index),
     })
     toast.success("File removed")
+  }
+
+  const handleDownloadFile = (file: File, index: number) => {
+    try {
+      const url = URL.createObjectURL(file)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = file.name
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      toast.success("File downloaded")
+    } catch (error) {
+      console.error("Error downloading file:", error)
+      toast.error("Failed to download file")
+    }
   }
 
   const handleCardClick = () => {
@@ -209,18 +226,35 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
                   key={index}
                   className="flex items-center justify-between bg-muted p-3 rounded-md"
                 >
-                  <div className="flex items-center gap-2 flex-1">
-                    <File className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                     <span className="text-sm truncate break-words">{file.name}</span>
+                    {file.size && (
+                      <span className="text-xs text-muted-foreground flex-shrink-0">
+                        ({(file.size / 1024).toFixed(1)} KB)
+                      </span>
+                    )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeFile(index)}
-                    className="ml-2 bg-transparent hover:bg-transparent text-muted-foreground hover:text-black"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 ml-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDownloadFile(file, index)}
+                      className="h-8 w-8 bg-transparent hover:bg-transparent text-muted-foreground hover:text-primary"
+                      title="Download file"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeFile(index)}
+                      className="h-8 w-8 bg-transparent hover:bg-transparent text-muted-foreground hover:text-destructive"
+                      title="Remove file"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
