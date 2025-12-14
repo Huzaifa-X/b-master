@@ -65,7 +65,7 @@ export async function getArtifactEditData(artifactId: string): Promise<GetArtifa
               some: {
                 userId: userId,
                 access: {
-                  in: ['editor', 'admin'] // Only editors and admins can edit
+                  in: ['EDITOR', 'ADMIN'] // Only editors and admins can edit
                 }
               }
             }
@@ -175,7 +175,7 @@ export async function updateArtifact({
               some: {
                 userId: userId,
                 access: {
-                  in: ['editor', 'admin']
+                  in: ['EDITOR', 'ADMIN']
                 }
               }
             }
@@ -233,7 +233,7 @@ export async function updateArtifact({
             userId: BigInt(user.id),
             assistantId: artifact.assistantId,
             artifactId: artifactIdInt,
-            access: 'editor' // Default access level
+            access: 'EDITOR' // Default access level
           }))
         })
         console.log('[Artifact Update] ✅ New artifact permissions created successfully')

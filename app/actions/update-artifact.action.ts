@@ -155,6 +155,7 @@ export async function createArtifactVersion({
                         // Send notifications to each user
                         for (const user of usersToNotify) {
                             try {
+                                // Create in-app notification
                                 await notificationService.createNotification({
                                     userId: user.id.toString(),
                                     title: '🔄 Artifact Updated',
@@ -172,7 +173,25 @@ export async function createArtifactVersion({
                                         changeType
                                     }
                                 })
-                                console.log(`[Artifact Version] Notification sent to: ${user.email}`)
+                                console.log(`[Artifact Version] In-app notification sent to: ${user.email}`)
+
+                                // Send email notification
+                                try {
+                                    const { sendArtifactUpdateEmail } = await import('@/lib/email')
+                                    await sendArtifactUpdateEmail({
+                                        recipientEmail: user.email || '',
+                                        recipientName: user.name || 'User',
+                                        updaterName: updater.name || 'Someone',
+                                        artifactName: artifact.name || 'Untitled Artifact',
+                                        versionNumber: newVersionNumber,
+                                        artifactId: artifact.id.toString(),
+                                        assistantId: artifact.assistantId.toString(),
+                                    })
+                                    console.log(`[Artifact Version] Email notification sent to: ${user.email}`)
+                                } catch (emailError) {
+                                    console.error(`[Artifact Version] Failed to send email to ${user.email}:`, emailError)
+                                    // Don't fail the whole process if email fails
+                                }
                             } catch (notificationError) {
                                 console.error(`[Artifact Version] Failed to notify ${user.email}:`, notificationError)
                             }
@@ -274,20 +293,18 @@ export async function updateArtifactWithAI({
             }
         }
 
-        // Fetch artifact and verify permissions
+        // Fetch artifact and verify permissions (OWNER or EDITOR)
         const artifact = await prisma.assistantArtifact.findFirst({
             where: {
                 id: artifactIdInt,
-                deletedAt: null, // Exclude soft-deleted artifacts
+                deletedAt: null,
                 OR: [
-                    { userId: userId }, // User is the owner
+                    { userId: userId }, // User is OWNER
                     {
                         permissions: {
                             some: {
                                 userId: userId,
-                                access: {
-                                    in: ['editor', 'admin'] // Only editors and admins can update
-                                }
+                                access: 'EDITOR' // Only EDITOR can update
                             }
                         }
                     }

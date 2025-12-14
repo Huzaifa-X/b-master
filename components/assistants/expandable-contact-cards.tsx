@@ -9,7 +9,17 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
 import { toast } from "sonner"
 import { ContactDialog, type ContactFormData } from "./contact-dialog"
-import { deleteContact } from "@/app/actions/contact.action"
+import { useDeleteContact } from "@/hooks/useContacts"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Contact {
     id: string
@@ -62,9 +72,25 @@ export function ExpandableContactCards({
     const [active, setActive] = useState<Contact | null>(null)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [editingContact, setEditingContact] = useState<ContactFormData | null>(null)
-    const [isDeleting, setIsDeleting] = useState(false)
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+    const [contactToDelete, setContactToDelete] = useState<{ id: string; name: string } | null>(null)
     const ref = useRef<HTMLDivElement>(null)
     const id = useId()
+
+    // Delete contact mutation hook
+    const { deleteContact: deleteContactMutation, isLoading: isDeleting } = useDeleteContact({
+        assistantId: assistantId,
+        onSuccess: () => {
+            // Refresh contacts list
+            onContactDeleted?.()
+            // Close dialog
+            setDeleteDialogOpen(false)
+            setContactToDelete(null)
+        },
+        onError: () => {
+            // Keep dialog open on error so user can retry
+        },
+    })
 
     const filteredContacts = contacts.filter(
         (contact) =>
@@ -108,39 +134,25 @@ export function ExpandableContactCards({
         }
     }
 
-    const handleDelete = async () => {
+    const handleDeleteClick = () => {
         if (!active?.contactId) {
             toast.error("Contact ID is required")
             return
         }
 
-        // Confirm deletion
-        const confirmed = window.confirm(
-            `Are you sure you want to delete ${active.name} from your contacts? This action cannot be undone.`
-        )
+        setContactToDelete({ id: active.contactId, name: active.name })
+        setDeleteDialogOpen(true)
+        setActive(null)
+    }
 
-        if (!confirmed) {
+    const handleDeleteConfirm = () => {
+        if (!contactToDelete?.id) {
+            toast.error("Contact ID is required")
+            setDeleteDialogOpen(false)
             return
         }
 
-        setIsDeleting(true)
-        try {
-            const result = await deleteContact(active.contactId)
-
-            if (result.success) {
-        toast.success("Contact deleted successfully")
-        setActive(null)
-                // Refresh contacts list
-                onContactDeleted?.()
-            } else {
-                toast.error(result.error || "Failed to delete contact")
-            }
-        } catch (error) {
-            console.error("Error deleting contact:", error)
-            toast.error("An unexpected error occurred")
-        } finally {
-            setIsDeleting(false)
-        }
+        deleteContactMutation(contactToDelete.id)
     }
 
     const handleSaveContact = (contact: ContactFormData) => {
@@ -292,13 +304,12 @@ export function ExpandableContactCards({
                                      </Button>
                                      <Button
                                          variant="destructive"
-                                         onClick={handleDelete}
+                                         onClick={handleDeleteClick}
                                          size="sm"
                                          className="w-full sm:w-auto"
-                                                 disabled={isDeleting}
                                      >
                                          <Trash2 className="h-4 w-4 mr-2" />
-                                                 {isDeleting ? "Deleting..." : "Delete"}
+                                         Delete
                                      </Button>
                                          </>
                                      )}
@@ -410,6 +421,28 @@ export function ExpandableContactCards({
         assistantId={assistantId}
         onSave={handleSaveContact}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Contact</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {contactToDelete?.name} from your contacts? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { use } from "react"
-import { useState } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { Plus, Search, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,10 +14,16 @@ import {
 } from "@/components/ui/select"
 import { FeedCard } from "@/components/feed/feed-card"
 import { AddFeedDialog } from "@/components/feed/add-feed-dialog"
-import { toast } from "sonner"
 import { useSetAssistantMode } from "@/hooks/useAssistant"
-import { useNewsFeedPosts, useCreatePost, useDeletePost, useLikePost, useUnlikePost, useCreateComment, useComments } from "@/hooks/use-newFeed"
+import { 
+  useNewsFeedPosts, 
+  useCreatePost, 
+  useDeletePost, 
+  useToggleLike, 
+  useCreateComment 
+} from "@/hooks/use-newFeed"
 import { useSession } from "next-auth/react"
+import { useDebounce } from "@/hooks/useDebounce"
 
 // Current user from session
 const getCurrentUser = (session: any) => ({
@@ -25,7 +31,6 @@ const getCurrentUser = (session: any) => ({
   name: session?.user?.name || "You",
   avatar: session?.user?.image || "/avatars/current-user.jpg",
 })
-
 
 type SortOption = "recent" | "most-liked" | "most-commented"
 
@@ -43,7 +48,10 @@ export default function NewsFeedPage({ params }: PageProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState<SortOption>("recent")
 
-  // Set assistant mode in header (automatically handles fetching and cleanup)
+  // Debounce search query to avoid excessive filtering
+  const debouncedSearchQuery = useDebounce(searchQuery, 300)
+
+  // Set assistant mode in header
   useSetAssistantMode(assistantId)
 
   // Fetch news feed posts
@@ -54,64 +62,76 @@ export default function NewsFeedPage({ params }: PageProps) {
     error,
     fetchNextPage,
     hasNextPage,
-    isFetchingNextPage
+    isFetchingNextPage,
+    refetch
   } = useNewsFeedPosts(assistantId)
 
   // Mutations
   const createPostMutation = useCreatePost()
   const deletePostMutation = useDeletePost()
-  const likePostMutation = useLikePost()
-  const unlikePostMutation = useUnlikePost()
+  const { toggleLike, isLoading: isTogglingLike } = useToggleLike()
   const createCommentMutation = useCreateComment()
 
   // Extract posts from paginated data
-  const posts = feedData?.pages?.flatMap(page => page.posts) || []
+  const posts = useMemo(() => {
+    return feedData?.pages?.flatMap(page => page.posts) || []
+  }, [feedData])
 
-  const handleAddFeed = (newFeed: {
+  // Handle add feed with proper data structure
+  const handleAddFeed = useCallback((newFeed: {
     title: string
     content: string
     image?: string
     privacy: "public" | "private"
+    allowedUserIds?: string[]
   }) => {
-    // Combine title and content into a single content field
-    const fullContent = newFeed.title ? `${newFeed.title}\n\n${newFeed.content}` : newFeed.content
-
     createPostMutation.mutate({
       assistantId,
-      content: fullContent,
+      title: newFeed.title,
+      content: newFeed.content,
+      image: newFeed.image,
       isPublic: newFeed.privacy === "public",
+      allowedUserIds: newFeed.allowedUserIds,
+    }, {
+      onSuccess: () => {
+        setAddFeedOpen(false)
+      }
     })
-    setAddFeedOpen(false)
-  }
+  }, [assistantId, createPostMutation])
 
-  const handleToggleLike = (postId: string, isLiked: boolean) => {
-    if (isLiked) {
-      unlikePostMutation.mutate(postId)
-    } else {
-      likePostMutation.mutate(postId)
-    }
-  }
+  const handleToggleLike = useCallback((postId: string, isLiked: boolean) => {
+    toggleLike(postId, isLiked)
+  }, [toggleLike])
 
-  const handleAddComment = (postId: string, commentText: string) => {
+  const handleAddComment = useCallback((postId: string, commentText: string) => {
     createCommentMutation.mutate({
       postId,
       comment: commentText,
     })
-  }
+  }, [createCommentMutation])
 
-  const handleDeleteFeed = (postId: string) => {
-    deletePostMutation.mutate(postId)
-  }
+  const handleDeleteFeed = useCallback((postId: string) => {
+    if (window.confirm('Are you sure you want to delete this post?')) {
+      deletePostMutation.mutate(postId)
+    }
+  }, [deletePostMutation])
 
   // Filter and sort posts
-  const validPosts = posts.filter((post) => post && post.content && post.user) as any[]
-  const filteredAndSortedPosts = validPosts
-    .filter(
-      (post: any) =>
-        post.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (post.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
-    )
-    .sort((a, b) => {
+  const filteredAndSortedPosts = useMemo(() => {
+    const validPosts = posts.filter((post) => post && post.content && post.user)
+    
+    // Apply search filter
+    const filtered = validPosts.filter((post) => {
+      const searchLower = debouncedSearchQuery.toLowerCase()
+      const titleMatch = post.title?.toLowerCase().includes(searchLower)
+      const contentMatch = post.content?.toLowerCase().includes(searchLower)
+      const nameMatch = post.user?.name?.toLowerCase().includes(searchLower)
+      
+      return titleMatch || contentMatch || nameMatch
+    })
+
+    // Apply sorting
+    const sorted = [...filtered].sort((a, b) => {
       switch (sortBy) {
         case "most-liked":
           return (b.likeCount || 0) - (a.likeCount || 0)
@@ -123,6 +143,41 @@ export default function NewsFeedPage({ params }: PageProps) {
       }
     })
 
+    return sorted
+  }, [posts, debouncedSearchQuery, sortBy])
+
+  // Render loading state
+  if (isLoading) {
+    return (
+      <div className="h-full overflow-auto">
+        <div className="container max-w-4xl mx-auto py-6 px-4">
+          <div className="text-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading posts...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Render error state
+  if (isError) {
+    return (
+      <div className="h-full overflow-auto">
+        <div className="container max-w-4xl mx-auto py-6 px-4">
+          <div className="text-center py-12">
+            <p className="text-lg text-muted-foreground mb-4">
+              Failed to load posts. {error?.message || 'Please try again.'}
+            </p>
+            <Button variant="outline" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="h-full overflow-auto">
       <div className="container max-w-4xl mx-auto py-6 px-4 space-y-6">
@@ -132,7 +187,11 @@ export default function NewsFeedPage({ params }: PageProps) {
             <h1 className="text-3xl font-bold tracking-tight">News Feed</h1>
             <p className="text-muted-foreground">Stay updated with the latest from your team</p>
           </div>
-          <Button onClick={() => setAddFeedOpen(true)} className="w-full sm:w-auto">
+          <Button 
+            onClick={() => setAddFeedOpen(true)} 
+            className="w-full sm:w-auto"
+            disabled={createPostMutation.isPending}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Create Post
           </Button>
@@ -148,6 +207,7 @@ export default function NewsFeedPage({ params }: PageProps) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9"
+              aria-label="Search posts"
             />
           </div>
           <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
@@ -155,36 +215,34 @@ export default function NewsFeedPage({ params }: PageProps) {
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="recent" className="focus:bg-muted focus:text-foreground">Most Recent</SelectItem>
-              <SelectItem value="most-liked" className="focus:bg-muted focus:text-foreground">Most Liked</SelectItem>
-              <SelectItem value="most-commented" className="focus:bg-muted focus:text-foreground">Most Commented</SelectItem>
+              <SelectItem value="recent" className="focus:bg-muted focus:text-foreground">
+                Most Recent
+              </SelectItem>
+              <SelectItem value="most-liked" className="focus:bg-muted focus:text-foreground">
+                Most Liked
+              </SelectItem>
+              <SelectItem value="most-commented" className="focus:bg-muted focus:text-foreground">
+                Most Commented
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         {/* Feed List */}
         <div className="space-y-4">
-          {isLoading ? (
-            <div className="text-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-              <p className="text-muted-foreground">Loading posts...</p>
-            </div>
-          ) : isError ? (
+          {filteredAndSortedPosts.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-lg text-muted-foreground mb-4">
-                Failed to load posts. Please try again.
+                {debouncedSearchQuery 
+                  ? "No posts found matching your search." 
+                  : "No posts yet. Create the first post!"
+                }
               </p>
-              <Button variant="outline" onClick={() => window.location.reload()}>
-                Retry
-              </Button>
-            </div>
-          ) : filteredAndSortedPosts.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-lg text-muted-foreground mb-4">
-                {searchQuery ? "No posts found matching your search." : "No posts yet. Create the first post!"}
-              </p>
-              {!searchQuery && (
-                <Button onClick={() => setAddFeedOpen(true)} disabled={createPostMutation.isPending}>
+              {!debouncedSearchQuery && (
+                <Button 
+                  onClick={() => setAddFeedOpen(true)} 
+                  disabled={createPostMutation.isPending}
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Create First Post
                 </Button>
@@ -233,10 +291,10 @@ export default function NewsFeedPage({ params }: PageProps) {
       <AddFeedDialog
         open={addFeedOpen}
         onOpenChange={setAddFeedOpen}
+        assistantId={assistantId}
         onSubmit={handleAddFeed}
         isLoading={createPostMutation.isPending}
       />
     </div>
   )
 }
-

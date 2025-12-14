@@ -162,6 +162,13 @@ interface CreateCompleteAssistantParams {
             newsFeed: boolean
         }
     }>
+    buyerPermissions: {
+        chat: boolean
+        contact: boolean
+        messenger: boolean
+        artifact: boolean
+        newsFeed: boolean
+    }
 }
 
 interface AssistantActionResponse {
@@ -231,6 +238,17 @@ export async function createCompleteAssistant(
         const mappedCategory = categoryEnumMap[params.category] || "OTHER"
         const isPublic = params.permissionLevel === 'public'
 
+        // Convert buyer permissions to JSON string array
+        // Only process buyer permissions if assistant is public and buyerPermissions exists
+        const buyerPermissionArray: string[] = []
+        if (isPublic && params.buyerPermissions) {
+            if (params.buyerPermissions.chat) buyerPermissionArray.push('chat')
+            if (params.buyerPermissions.contact) buyerPermissionArray.push('contacts')
+            if (params.buyerPermissions.messenger) buyerPermissionArray.push('messenger')
+            if (params.buyerPermissions.newsFeed) buyerPermissionArray.push('newsfeed')
+            if (params.buyerPermissions.artifact) buyerPermissionArray.push('artifacts')
+        }
+
         // Create assistant with basic info
         const assistant = await prisma.assistant.create({
             data: {
@@ -243,6 +261,7 @@ export async function createCompleteAssistant(
                 description: params.description.trim(),
                 instructions: params.instructions?.trim() || null,
                 public: isPublic,
+                buyerPermissions: isPublic ? JSON.stringify(buyerPermissionArray) : null,
             }
         })
 
@@ -891,6 +910,7 @@ export async function getAssistantById(assistantId: string) {
 
 export interface AssistantListItem {
     id: string
+    userId: string
     name: string
     description: string | null
     image: string | null
@@ -975,6 +995,7 @@ export async function getAssistants({
                         },
                         select: {
                             id: true,
+                            userId: true,
                             name: true,
                             description: true,
                             image: true,
@@ -1020,6 +1041,7 @@ export async function getAssistants({
                             assistant: {
                                 select: {
                                     id: true,
+                                    userId: true,
                                     name: true,
                                     description: true,
                                     image: true,
@@ -1072,6 +1094,7 @@ export async function getAssistants({
                             assistant: {
                                 select: {
                                     id: true,
+                                    userId: true,
                                     name: true,
                                     description: true,
                                     image: true,
@@ -1153,6 +1176,7 @@ export async function getAssistants({
                         where: publicWhere,
                         select: {
                             id: true,
+                            userId: true,
                             name: true,
                             description: true,
                             image: true,
@@ -1185,6 +1209,7 @@ export async function getAssistants({
             success: true,
             assistants: assistants.map(assistant => ({
                 id: assistant.id.toString(),
+                userId: assistant.userId.toString(),
                 name: assistant.name,
                 description: assistant.description,
                 image: assistant.image,
@@ -1320,12 +1345,17 @@ export async function getAssistantForEdit(assistantId: string) {
         // Process knowledge base
         const notes: string[] = []
         const urls: string[] = []
+        const files: Array<{ url: string; name: string }> = []
         
         assistant.knowledgebases.forEach((kb: any) => {
             if (kb.type === 'text' && kb.note) {
                 notes.push(kb.note)
             } else if (kb.type === 'url' && kb.url) {
                 urls.push(kb.url)
+            } else if (kb.type === 'file' && kb.file) {
+                // Extract filename from URL or use a default name
+                const fileName = kb.file.split('/').pop() || `file_${files.length + 1}`
+                files.push({ url: kb.file, name: fileName })
             }
         })
 
@@ -1346,6 +1376,18 @@ export async function getAssistantForEdit(assistantId: string) {
             }
         })
 
+        // Process buyer permissions
+        const buyerPermissionsArray = assistant.buyerPermissions 
+            ? JSON.parse(assistant.buyerPermissions as string || '[]')
+            : []
+        const buyerPermissions = {
+            chat: buyerPermissionsArray.includes('chat'),
+            contact: buyerPermissionsArray.includes('contacts'),
+            messenger: buyerPermissionsArray.includes('messenger'),
+            artifact: buyerPermissionsArray.includes('artifacts'),
+            newsFeed: buyerPermissionsArray.includes('newsfeed'),
+        }
+
         return {
             success: true,
             assistant: {
@@ -1359,7 +1401,9 @@ export async function getAssistantForEdit(assistantId: string) {
                 permissionLevel: assistant.public ? "public" : "private",
                 notes,
                 urls,
+                files, // File URLs for pre-loading
                 sharedUsers,
+                buyerPermissions,
                 apiConfiguration: assistant.apiConfiguration ? {
                     authenticationType: assistant.apiConfiguration.authenticationType || "none",
                     apiKey: assistant.apiConfiguration.apiKey || "",
@@ -1460,6 +1504,18 @@ export async function updateCompleteAssistant(
         const mappedCategory = categoryEnumMap[params.category] || "OTHER"
         const isPublic = params.permissionLevel === 'public'
 
+        // Convert buyer permissions to JSON string array
+        // Only process buyer permissions if assistant is public and buyerPermissions exists
+        const buyerPermissionArray: string[] = []
+        console.log(params.buyerPermissions)
+        if (isPublic && params.buyerPermissions) {
+            if (params.buyerPermissions.chat) buyerPermissionArray.push('chat')
+            if (params.buyerPermissions.contact) buyerPermissionArray.push('contacts')
+            if (params.buyerPermissions.messenger) buyerPermissionArray.push('messenger')
+            if (params.buyerPermissions.newsFeed) buyerPermissionArray.push('newsfeed')
+            if (params.buyerPermissions.artifact) buyerPermissionArray.push('artifacts')
+        }
+
         // Update assistant basic info
         await prisma.assistant.update({
             where: { id: assistantBigInt },
@@ -1470,6 +1526,7 @@ export async function updateCompleteAssistant(
                 description: params.description.trim(),
                 instructions: params.instructions?.trim() || null,
                 public: isPublic,
+                buyerPermissions: isPublic ? JSON.stringify(buyerPermissionArray) : null,
             }
         })
 

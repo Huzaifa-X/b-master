@@ -12,7 +12,8 @@ export type NotificationType =
   | 'artifact_permission_removed'
   | 'artifact_updated'
   | 'welcome_notification'
-  | 'notification';
+  | 'notification'
+  | 'chat_message';
 
 export interface NotificationData {
   [key: string]: any;

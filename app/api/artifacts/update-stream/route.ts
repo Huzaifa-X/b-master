@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
               some: {
                 userId: userId,
                 access: {
-                  in: ['editor', 'admin'] // Only editors and admins can update
+                  in: ['EDITOR', 'ADMIN'] // Only editors and admins can update
                 }
               }
             }

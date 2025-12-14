@@ -137,7 +137,7 @@ export async function addContact({
         telephone: telephone || null,
         information: information || null,
         access: "user", // Shared users get 'user' access (limited), not 'editor'
-        permissions: JSON.stringify(["chat", "artifacts", "contacts", "newsfeed"]), // Default permissions
+        permissions: JSON.stringify(["chat", "artifacts", "contacts", "newsfeed", "messenger"]), // Default permissions
       },
       include: {
         user: {

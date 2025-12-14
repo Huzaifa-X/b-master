@@ -11,28 +11,68 @@ import {
     createComment,
     getComments,
     updateComment,
-    deleteComment
+    deleteComment,
+    getNewsFeedPostPermissions,
+    updateNewsFeedPostPermissions,
+    addNewsFeedPostPermission,
+    removeNewsFeedPostPermission
 } from '@/app/actions/newsFeed.action'
 import { toast } from 'sonner'
+
+// ================================================================
+// TYPES
+// ================================================================
+
+interface User {
+    id: string
+    name: string | null
+    email: string | null
+    image: string | null
+}
+
+interface Post {
+    id: string
+    assistantId: string
+    userId: string
+    title: string | null
+    content: string | null
+    image: string | null
+    isPublic: boolean
+    likeCount: number
+    commentCount: number
+    createdAt: Date
+    updatedAt: Date
+    user: User
+    isLikedByCurrentUser: boolean
+}
+
+interface PostsResponse {
+    success: boolean
+    posts: Post[]
+    pagination: {
+        page: number
+        limit: number
+        totalCount: number
+        totalPages: number
+        hasMore: boolean
+    }
+    error?: string
+}
 
 // ================================================================
 // POST QUERIES
 // ================================================================
 
 export function useNewsFeedPosts(assistantId: string, userId?: string) {
-    return useInfiniteQuery({
+    return useInfiniteQuery<PostsResponse>({
         queryKey: ['newsfeed-posts', assistantId, userId],
         queryFn: async ({ pageParam = 1 }) => {
             const result = await getNewsFeedPosts({
                 assistantId,
-                page: pageParam,
+                page: pageParam as number,
                 limit: 10,
                 userId
             })
-
-            if (!result.success) {
-                throw new Error(result.error)
-            }
 
             return result
         },
@@ -72,10 +112,11 @@ export function useCreatePost() {
     return useMutation({
         mutationFn: createNewsFeedPost,
         onSuccess: (data) => {
-            if (data.success) {
+            if (data.success && 'post' in data && data.post) {
                 toast.success('Post created successfully')
+                // Invalidate all queries for this assistant
                 queryClient.invalidateQueries({
-                    queryKey: ['newsfeed-posts', data.post?.assistantId]
+                    queryKey: ['newsfeed-posts', data.post.assistantId]
                 })
             } else {
                 toast.error(data.error || 'Failed to create post')
@@ -93,13 +134,13 @@ export function useUpdatePost() {
     return useMutation({
         mutationFn: updateNewsFeedPost,
         onSuccess: (data) => {
-            if (data.success) {
+            if (data.success && 'post' in data && data.post) {
                 toast.success('Post updated successfully')
                 queryClient.invalidateQueries({
-                    queryKey: ['newsfeed-posts', data.post?.assistantId]
+                    queryKey: ['newsfeed-posts', data.post.assistantId]
                 })
                 queryClient.invalidateQueries({
-                    queryKey: ['newsfeed-post', data.post?.id]
+                    queryKey: ['newsfeed-post', data.post.id]
                 })
             } else {
                 toast.error(data.error || 'Failed to update post')
@@ -162,33 +203,39 @@ export function useLikePost() {
     return useMutation({
         mutationFn: likeNewsFeedPost,
         onMutate: async (postId) => {
-            // Optimistically update the UI
+            // Cancel outgoing refetches
             await queryClient.cancelQueries({ queryKey: ['newsfeed-posts'] })
 
-            const previousData = queryClient.getQueriesData({ queryKey: ['newsfeed-posts'] })
-
-            // Update cache optimistically
-            queryClient.setQueriesData({ queryKey: ['newsfeed-posts'] }, (old: any) => {
-                if (!old?.pages) return old
-
-                return {
-                    ...old,
-                    pages: old.pages.map((page: any) => ({
-                        ...page,
-                        posts: page.posts?.map((post: any) =>
-                            post.id === postId
-                                ? {
-                                    ...post,
-                                    likeCount: post.likeCount + 1,
-                                    isLikedByCurrentUser: true
-                                }
-                                : post
-                        )
-                    }))
-                }
+            // Snapshot the previous value
+            const previousQueries = queryClient.getQueriesData<PostsResponse>({ 
+                queryKey: ['newsfeed-posts'] 
             })
 
-            return { previousData }
+            // Optimistically update all matching queries
+            queryClient.setQueriesData<any>(
+                { queryKey: ['newsfeed-posts'] },
+                (old: any) => {
+                    if (!old?.pages) return old
+
+                    return {
+                        ...old,
+                        pages: old.pages.map((page: PostsResponse) => ({
+                            ...page,
+                            posts: page.posts?.map((post: Post) =>
+                                post.id === postId
+                                    ? {
+                                        ...post,
+                                        likeCount: post.likeCount + 1,
+                                        isLikedByCurrentUser: true
+                                    }
+                                    : post
+                            )
+                        }))
+                    }
+                }
+            )
+
+            return { previousQueries }
         },
         onSuccess: (data) => {
             if (data.success) {
@@ -199,10 +246,16 @@ export function useLikePost() {
         },
         onError: (error: Error, postId, context) => {
             // Rollback on error
-            if (context?.previousData) {
-                queryClient.setQueriesData({ queryKey: ['newsfeed-posts'] }, context.previousData)
+            if (context?.previousQueries) {
+                context.previousQueries.forEach(([queryKey, data]) => {
+                    queryClient.setQueryData(queryKey, data)
+                })
             }
             toast.error(error.message || 'Failed to like post')
+        },
+        onSettled: () => {
+            // Always refetch after error or success
+            queryClient.invalidateQueries({ queryKey: ['newsfeed-posts'] })
         }
     })
 }
@@ -213,33 +266,39 @@ export function useUnlikePost() {
     return useMutation({
         mutationFn: unlikeNewsFeedPost,
         onMutate: async (postId) => {
-            // Optimistically update the UI
+            // Cancel outgoing refetches
             await queryClient.cancelQueries({ queryKey: ['newsfeed-posts'] })
 
-            const previousData = queryClient.getQueriesData({ queryKey: ['newsfeed-posts'] })
-
-            // Update cache optimistically
-            queryClient.setQueriesData({ queryKey: ['newsfeed-posts'] }, (old: any) => {
-                if (!old?.pages) return old
-
-                return {
-                    ...old,
-                    pages: old.pages.map((page: any) => ({
-                        ...page,
-                        posts: page.posts?.map((post: any) =>
-                            post.id === postId
-                                ? {
-                                    ...post,
-                                    likeCount: Math.max(0, post.likeCount - 1),
-                                    isLikedByCurrentUser: false
-                                }
-                                : post
-                        )
-                    }))
-                }
+            // Snapshot the previous value
+            const previousQueries = queryClient.getQueriesData<PostsResponse>({ 
+                queryKey: ['newsfeed-posts'] 
             })
 
-            return { previousData }
+            // Optimistically update all matching queries
+            queryClient.setQueriesData<any>(
+                { queryKey: ['newsfeed-posts'] },
+                (old: any) => {
+                    if (!old?.pages) return old
+
+                    return {
+                        ...old,
+                        pages: old.pages.map((page: PostsResponse) => ({
+                            ...page,
+                            posts: page.posts?.map((post: Post) =>
+                                post.id === postId
+                                    ? {
+                                        ...post,
+                                        likeCount: Math.max(0, post.likeCount - 1),
+                                        isLikedByCurrentUser: false
+                                    }
+                                    : post
+                            )
+                        }))
+                    }
+                }
+            )
+
+            return { previousQueries }
         },
         onSuccess: (data) => {
             if (data.success) {
@@ -250,10 +309,16 @@ export function useUnlikePost() {
         },
         onError: (error: Error, postId, context) => {
             // Rollback on error
-            if (context?.previousData) {
-                queryClient.setQueriesData({ queryKey: ['newsfeed-posts'] }, context.previousData)
+            if (context?.previousQueries) {
+                context.previousQueries.forEach(([queryKey, data]) => {
+                    queryClient.setQueryData(queryKey, data)
+                })
             }
             toast.error(error.message || 'Failed to unlike post')
+        },
+        onSettled: () => {
+            // Always refetch after error or success
+            queryClient.invalidateQueries({ queryKey: ['newsfeed-posts'] })
         }
     })
 }
@@ -286,9 +351,11 @@ export function useCreateComment() {
         onSuccess: (data, variables) => {
             if (data.success) {
                 toast.success('Comment added successfully')
+                // Invalidate comments for this post
                 queryClient.invalidateQueries({
                     queryKey: ['comments', variables.postId]
                 })
+                // Invalidate posts to update comment count
                 queryClient.invalidateQueries({
                     queryKey: ['newsfeed-posts']
                 })
@@ -343,6 +410,98 @@ export function useDeleteComment() {
         },
         onError: (error: Error) => {
             toast.error(error.message || 'Failed to delete comment')
+        }
+    })
+}
+
+// ================================================================
+// PERMISSION MANAGEMENT HOOKS
+// ================================================================
+
+export function usePostPermissions(postId: string) {
+    return useQuery({
+        queryKey: ['post-permissions', postId],
+        queryFn: async () => {
+            const result = await getNewsFeedPostPermissions(postId)
+
+            if (!result.success) {
+                throw new Error(result.error)
+            }
+
+            return result
+        },
+        enabled: !!postId
+    })
+}
+
+export function useUpdatePostPermissions() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: updateNewsFeedPostPermissions,
+        onSuccess: (data, variables) => {
+            if (data.success) {
+                toast.success('Post permissions updated successfully')
+                queryClient.invalidateQueries({
+                    queryKey: ['post-permissions', variables.postId]
+                })
+                queryClient.invalidateQueries({
+                    queryKey: ['newsfeed-posts']
+                })
+            } else {
+                toast.error(data.error || 'Failed to update permissions')
+            }
+        },
+        onError: (error: Error) => {
+            toast.error(error.message || 'Failed to update permissions')
+        }
+    })
+}
+
+export function useAddPostPermission() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: addNewsFeedPostPermission,
+        onSuccess: (data, variables) => {
+            if (data.success) {
+                toast.success('Permission added successfully')
+                queryClient.invalidateQueries({
+                    queryKey: ['post-permissions', variables.postId]
+                })
+                queryClient.invalidateQueries({
+                    queryKey: ['newsfeed-posts']
+                })
+            } else {
+                toast.error(data.error || 'Failed to add permission')
+            }
+        },
+        onError: (error: Error) => {
+            toast.error(error.message || 'Failed to add permission')
+        }
+    })
+}
+
+export function useRemovePostPermission() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: removeNewsFeedPostPermission,
+        onSuccess: (data, variables) => {
+            if (data.success) {
+                toast.success('Permission removed successfully')
+                queryClient.invalidateQueries({
+                    queryKey: ['post-permissions', variables.postId]
+                })
+                queryClient.invalidateQueries({
+                    queryKey: ['newsfeed-posts']
+                })
+            } else {
+                toast.error(data.error || 'Failed to remove permission')
+            }
+        },
+        onError: (error: Error) => {
+            toast.error(error.message || 'Failed to remove permission')
         }
     })
 }

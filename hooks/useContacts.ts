@@ -1,5 +1,6 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { getAssistantContacts, getAllContacts } from "@/app/actions/contact.action"
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query"
+import { getAssistantContacts, getAllContacts, deleteContact } from "@/app/actions/contact.action"
+import { toast } from "sonner"
 
 interface Contact {
   id: string
@@ -132,6 +133,61 @@ export function useInvalidateContacts() {
     invalidateAll: () => {
       queryClient.invalidateQueries({ queryKey: ["contacts"] })
     },
+  }
+}
+
+interface UseDeleteContactOptions {
+  assistantId?: string
+  onSuccess?: () => void
+  onError?: (error: string) => void
+}
+
+/**
+ * Hook to delete a contact using React Query mutation
+ * @param options - Optional configuration including assistantId for cache invalidation
+ */
+export function useDeleteContact(options?: UseDeleteContactOptions) {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async (contactId: string) => {
+      const result = await deleteContact(contactId)
+      
+      if (!result.success) {
+        throw new Error(result.error || "Failed to delete contact")
+      }
+      
+      return result
+    },
+    onSuccess: () => {
+      // Invalidate contact queries
+      if (options?.assistantId) {
+        queryClient.invalidateQueries({ queryKey: ["contacts", "assistant", options.assistantId] })
+      }
+      queryClient.invalidateQueries({ queryKey: ["contacts", "all"] })
+      
+      // Show success toast
+      toast.success("Contact deleted successfully")
+      
+      // Call custom success callback
+      options?.onSuccess?.()
+    },
+    onError: (error: Error) => {
+      // Show error toast
+      toast.error(error.message || "Failed to delete contact")
+      
+      // Call custom error callback
+      options?.onError?.(error.message)
+    },
+  })
+
+  return {
+    deleteContact: mutation.mutate,
+    deleteContactAsync: mutation.mutateAsync,
+    isLoading: mutation.isPending,
+    isError: mutation.isError,
+    error: mutation.error,
+    isSuccess: mutation.isSuccess,
   }
 }
 

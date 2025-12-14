@@ -11,9 +11,11 @@ import { Button } from "@/components/ui/button"
 import { EyeIcon, PencilIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
+import { useSession } from "next-auth/react"
 
 interface Assistant {
   id: string
+  userId?: string
   name: string
   price: number
   description: string
@@ -34,8 +36,12 @@ export function AssistantDetailsDialog({
   onOpenChange,
 }: AssistantDetailsDialogProps) {
   const router = useRouter()
+  const { data: session } = useSession()
 
   if (!assistant) return null
+
+  // Check if current user is the owner/admin of the assistant
+  const isOwner = assistant.userId && session?.user?.id && assistant.userId === session.user.id
 
   const handleView = () => {
     onOpenChange(false)
@@ -53,7 +59,7 @@ export function AssistantDetailsDialog({
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">Assistant Details</DialogTitle>
           <DialogDescription>
-            View or edit your assistant information
+            {isOwner ? "View or edit your assistant information" : "View assistant information"}
           </DialogDescription>
         </DialogHeader>
         
@@ -109,21 +115,23 @@ export function AssistantDetailsDialog({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-3 pt-4">
+          <div className={`flex items-center gap-3 pt-4 ${isOwner ? '' : 'justify-center'}`}>
             <Button
               onClick={handleView}
-              className="flex-1 bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white"
+              className={`${isOwner ? 'flex-1' : 'w-full'} bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white`}
             >
               <EyeIcon className="h-4 w-4 mr-2" />
               View Assistant
             </Button>
-            <Button
-              onClick={handleEdit}
-              className="flex-1 bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white"
-            >
-              <PencilIcon className="h-4 w-4 mr-2" />
-              Edit Assistant
-            </Button>
+            {isOwner && (
+              <Button
+                onClick={handleEdit}
+                className="flex-1 bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white"
+              >
+                <PencilIcon className="h-4 w-4 mr-2" />
+                Edit Assistant
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

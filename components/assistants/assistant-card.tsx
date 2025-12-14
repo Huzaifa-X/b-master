@@ -1,12 +1,12 @@
 "use client"
 
 import { Grid } from "@/components/blocks/feature-section-with-card-gradient"
-import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { AssistantDetailsDialog } from "./assistant-details-dialog"
 
 interface Assistant {
   id: string
+  userId?: string
   name: string
   price: number
   description: string
@@ -22,23 +22,16 @@ interface AssistantCardProps {
 }
 
 export function AssistantCard({ assistant, tabType, onMarketplaceClick }: AssistantCardProps) {
-  const router = useRouter()
   const [dialogOpen, setDialogOpen] = useState(false)
-  const isMyAssistants = tabType === "my"
   
   const handleClick = () => {
-    // Open dialog for "my" assistants
-    if (isMyAssistants) {
+    // Always open dialog to show assistant details
+    if ( tabType === "marketplace"){
+      onMarketplaceClick?.(assistant)
+      return
+    } else {
       setDialogOpen(true)
-      return
     }
-    // Open dialog for marketplace assistants
-    if (tabType === "marketplace" && onMarketplaceClick) {
-      onMarketplaceClick(assistant)
-      return
-    }
-    // Route for other types
-    router.push(`/assistants/${assistant.id}`)
   }
   
   return (

@@ -183,6 +183,47 @@ export async function POST(req: NextRequest) {
                 },
               })
 
+              // 5. Create AssistantContact entry for buyer with buyerPermissions
+              // Check if contact already exists
+              const existingContact = await tx.assistantContact.findFirst({
+                where: {
+                  assistantId: assistantIdBigInt,
+                  userId: userId,
+                },
+              })
+
+              if (!existingContact) {
+                // Parse buyerPermissions from assistant
+                let buyerPermissionsArray: string[] = []
+                if (purchase.assistant.buyerPermissions) {
+                  try {
+                    const parsed = JSON.parse(purchase.assistant.buyerPermissions)
+                    if (Array.isArray(parsed)) {
+                      buyerPermissionsArray = parsed.filter((p: string) =>
+                        ['chat', 'contacts', 'messenger', 'newsfeed', 'artifacts'].includes(p)
+                      )
+                    }
+                  } catch (error) {
+                    console.error('Error parsing buyerPermissions:', error)
+                    // Default to empty array if parsing fails
+                  }
+                }
+
+                // Create AssistantContact with buyerPermissions
+                await tx.assistantContact.create({
+                  data: {
+                    assistantId: assistantIdBigInt,
+                    userId: userId,
+                    access: "user", // Buyers get 'user' access, not 'admin'
+                    permissions: JSON.stringify(buyerPermissionsArray), // Use buyerPermissions from assistant
+                  },
+                })
+
+                console.log(`✅ AssistantContact created for buyer with permissions: ${buyerPermissionsArray.join(', ')}`)
+              } else {
+                console.log(`ℹ️ AssistantContact already exists for buyer, skipping creation`)
+              }
+
               return [updatedPurchase, transaction]
             })
 

@@ -49,6 +49,7 @@ model User {
   newsFeeds                 AssistantNewsFeed[]
   newsFeedLikes             AssistantNewsFeedLike[]
   newsFeedComments          AssistantNewsFeedComment[]
+  newsFeedPermissions       NewsFeedPermission[]
   artifacts                 AssistantArtifact[]
   artifactPermissions       ArtifactPermission[]
   assistantContacts         AssistantContact[]
@@ -228,21 +229,22 @@ enum AssistantCategory {
 }
 
 model Assistant {
-  id            BigInt            @id @default(autoincrement())
-  userId        BigInt
-  name          String            @db.VarChar(255)
-  price         Decimal           @default(0)
-  currency      String            @default("CHF") @db.Text
-  priceType     String            @default("paid") @db.VarChar(255) // free or paid
-  category      AssistantCategory @default(OTHER) // New: Category field
-  description   String?           @db.Text
-  instructions  String?           @db.Text
-  image         String?           @db.VarChar(255)
-  vectorStoreId String?           @db.VarChar(255) // OpenAI vector store ID
-  public        Boolean           @default(true)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  deletedAt     DateTime?
+  id               BigInt            @id @default(autoincrement())
+  userId           BigInt
+  name             String            @db.VarChar(255)
+  price            Decimal           @default(0)
+  currency         String            @default("CHF") @db.Text
+  priceType        String            @default("paid") @db.VarChar(255) // free or paid
+  category         AssistantCategory @default(OTHER) // New: Category field
+  description      String?           @db.Text
+  instructions     String?           @db.Text
+  image            String?           @db.VarChar(255)
+  vectorStoreId    String?           @db.VarChar(255) // OpenAI vector store ID
+  public           Boolean           @default(true)
+  buyerPermissions String?           @db.Text // JSON: ["chat", "contacts", "messenger", "newsfeed", "artifacts"]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  deletedAt        DateTime?
 
   owner               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   knowledgebases      AssistantKnowledgebase[]
@@ -435,10 +437,10 @@ enum ChatType {
 }
 
 enum MessageStatus {
-  PENDING     // User message waiting for response
-  PROCESSING  // AI is working on it (especially for research mode)
-  COMPLETED   // Response received
-  FAILED       // Something went wrong
+  PENDING // User message waiting for response
+  PROCESSING // AI is working on it (especially for research mode)
+  COMPLETED // Response received
+  FAILED // Something went wrong
 }
 
 model AssistantUserChat {
@@ -453,7 +455,7 @@ model AssistantUserChat {
   deletedAt   DateTime?
 
   user      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assistant Assistant?                  @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  assistant Assistant?                 @relation(fields: [assistantId], references: [id], onDelete: Cascade)
   messages  AssistantUserChatMessage[]
 
   @@index([userId])
@@ -471,11 +473,11 @@ model AssistantUserChatMessage {
   assistantUserChatId Int
   status              MessageStatus @default(PENDING) // Message processing status
 
-  openaiResponseId    String?       @db.VarChar(255)
-  hasImages           Boolean       @default(false)
+  openaiResponseId String? @db.VarChar(255)
+  hasImages        Boolean @default(false)
 
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   chat        AssistantUserChat @relation(fields: [assistantUserChatId], references: [id], onDelete: Cascade)
   user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -529,9 +531,9 @@ model AssistantChatMessage {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  chat          AssistantChat   @relation("ChatMessages", fields: [assistantChatId], references: [id], onDelete: Cascade)
-  assistant     Assistant       @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  sender        User            @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  chat      AssistantChat @relation("ChatMessages", fields: [assistantChatId], references: [id], onDelete: Cascade)
+  assistant Assistant     @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  sender    User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([assistantChatId])
   @@index([assistantId])
@@ -548,22 +550,40 @@ model AssistantNewsFeed {
   id           Int      @id @default(autoincrement())
   assistantId  BigInt
   userId       BigInt
+  title        String?  @db.VarChar(255)
+  image        String?  @db.Text
   content      String?  @db.Text
-  isPublic     Boolean  @default(true)
+  isPublic     Boolean  @default(true) // true = all see, false = need permission
   likeCount    Int      @default(0)
   commentCount Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  assistant Assistant                  @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  user      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  likes     AssistantNewsFeedLike[]
-  comments  AssistantNewsFeedComment[]
+  assistant   Assistant                  @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user        User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes       AssistantNewsFeedLike[]
+  comments    AssistantNewsFeedComment[]
+  permissions NewsFeedPermission[] // For private posts
 
   @@index([assistantId])
   @@index([userId])
   @@index([isPublic])
   @@map("assistant_news_feeds")
+}
+
+model NewsFeedPermission {
+  id         Int      @id @default(autoincrement())
+  newsFeedId Int
+  userId     BigInt
+  createdAt  DateTime @default(now())
+
+  newsFeed AssistantNewsFeed @relation(fields: [newsFeedId], references: [id], onDelete: Cascade)
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([newsFeedId, userId])
+  @@index([newsFeedId])
+  @@index([userId])
+  @@map("news_feed_permissions")
 }
 
 model AssistantNewsFeedLike {
@@ -607,65 +627,71 @@ model AssistantNewsFeedComment {
 // ARTIFACTS & PERMISSIONS WITH SIMPLE SHAREABLE LINK
 // ================================================================
 
+enum ArtifactAccessLevel {
+  VIEWER // Read-only
+  EDITOR // Can edit and create versions
+  ADMIN // Full control (creator default)
+}
+
 model AssistantArtifact {
-  id              Int      @id @default(autoincrement())
+  id              Int     @id @default(autoincrement())
   assistantId     BigInt
   userId          BigInt
-  name            String?  @db.VarChar(255)
-  instructions    String?  @db.Text
-  category        String?  @db.VarChar(255)
+  name            String? @db.VarChar(255)
+  instructions    String? @db.Text
+  category        String? @db.VarChar(255)
   activeVersionId Int?
-  
-  shareableId     String?  @unique @db.VarChar(255) // Short code for public sharing
-  
-  tools           Json?    @db.Json
-  apiKeys         Json?    @db.Json
-  files           Json?    @db.Json
-  images          Json?    @db.Json
-  videoUrl        String?  @db.Text
-  videoMetadata   Json?    @db.Json
-  thumbnailUrl    String?  @db.Text
-  
-  isPublic        Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime? // Soft delete
 
-  assistant       Assistant            @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  permissions     ArtifactPermission[]
-  versions        ArtifactVersion[]
-  activeVersion   ArtifactVersion?     @relation("ActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+  shareableId String? @unique @db.VarChar(255) // Short code for public sharing
+
+  tools         Json?   @db.Json
+  apiKeys       Json?   @db.Json
+  files         Json?   @db.Json
+  images        Json?   @db.Json
+  videoUrl      String? @db.Text
+  videoMetadata Json?   @db.Json
+  thumbnailUrl  String? @db.Text
+
+  isPublic  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // Soft delete
+
+  assistant     Assistant            @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissions   ArtifactPermission[]
+  versions      ArtifactVersion[]
+  activeVersion ArtifactVersion?     @relation("ActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
 
   @@index([assistantId])
   @@index([userId])
   @@index([activeVersionId])
-  @@index([shareableId])  // ✅ NEW: Index for fast lookups
+  @@index([shareableId]) // ✅ NEW: Index for fast lookups
   @@map("assistant_artifacts")
 }
 
 model ArtifactVersion {
-  id              Int      @id @default(autoincrement())
-  artifactId      Int
-  userId          BigInt
-  
-  versionNumber   Int
-  versionName     String?  @db.VarChar(255)
-  
-  code            String   @db.Text
-  description     String?  @db.Text
-  
-  changeType      String   @default("manual") @db.VarChar(50)
-  changedFrom     Int?
-  isSnapshot      Boolean  @default(false)
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
+  id         Int    @id @default(autoincrement())
+  artifactId Int
+  userId     BigInt
 
-  artifact            AssistantArtifact   @relation(fields: [artifactId], references: [id], onDelete: Cascade)
-  creator             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activeForArtifacts  AssistantArtifact[] @relation("ActiveVersion")
+  versionNumber Int
+  versionName   String? @db.VarChar(255)
+
+  code        String  @db.Text
+  description String? @db.Text
+
+  changeType  String  @default("manual") @db.VarChar(50)
+  changedFrom Int?
+  isSnapshot  Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  artifact           AssistantArtifact   @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  creator            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeForArtifacts AssistantArtifact[] @relation("ActiveVersion")
 
   @@unique([artifactId, versionNumber])
   @@index([artifactId])
@@ -677,22 +703,13 @@ model ArtifactVersion {
 }
 
 model ArtifactPermission {
-  id          Int      @id @default(autoincrement())
+  id          Int                 @id @default(autoincrement())
   userId      BigInt
   assistantId BigInt
   artifactId  Int
-  access      String   @default("viewer") @db.VarChar(50)
-  permissions Json?    @db.Json
-  // Example:
-  // {
-  //   "canViewActiveVersion": true,
-  //   "canViewVersionHistory": true,
-  //   "canDownloadAnyVersion": true,
-  //   "canSetActiveVersion": true,
-  //   "canRollbackVersions": true
-  // }
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  access      ArtifactAccessLevel @default(VIEWER) // VIEWER, EDITOR, or ADMIN
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   assistant Assistant         @relation(fields: [assistantId], references: [id], onDelete: Cascade)
@@ -751,4 +768,19 @@ model Notification {
   @@index([createdAt])
   @@index([relatedId, relatedType])
   @@map("notifications")
+}
+
+// ====================================================================
+// Prompts
+// ====================================================================
+
+model Prompt {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique @db.VarChar(255)
+  prompt     String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([name])
+  @@map("prompts")
 }

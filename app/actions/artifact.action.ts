@@ -119,10 +119,27 @@ export async function getAssistantContacts(assistantId: string) {
             }
         }
 
-        // Fetch all contacts for this assistant (including owner - owner is now in AssistantContact)
+        // Fetch all contacts for this assistant who have 'artifacts' permission
+        // Exclude the current user (creator) as they get automatic ADMIN access
         const contacts = await prisma.assistantContact.findMany({
             where: {
                 assistantId: assistantIdBigInt,
+                userId: {
+                    not: userId // Exclude the current user (creator)
+                },
+                OR: [
+                    { access: 'admin' }, // Admins have all permissions
+                    {
+                        AND: [
+                            { permissions: { not: null } },
+                            {
+                                permissions: {
+                                    contains: '"artifacts"' // Check for "artifacts" in JSON array
+                                }
+                            }
+                        ]
+                    }
+                ]
             },
             include: {
                 user: {
@@ -217,14 +234,14 @@ export async function createArtifact(data: {
         const userId = BigInt(session.user.id)
         const assistantIdBigInt = BigInt(data.assistantId)
 
-        // Check if user can create artifacts (only owners can create artifacts)
+        // Check if user can create artifacts (only owners and contacts with artifacts permission)
         const { canCreateArtifacts } = await import('@/lib/permissions/assistant-permissions')
         const canCreate = await canCreateArtifacts(assistantIdBigInt, userId)
 
         if (!canCreate) {
             return {
                 success: false,
-                error: 'Assistant not found or access denied'
+                error: 'You do not have permission to create artifacts for this assistant'
             }
         }
 
@@ -356,15 +373,15 @@ export async function createArtifact(data: {
         // Determine if artifact is public
         const isPublic = data.permissions === 'public'
 
-        // Create artifact without any initial version (version will be created during streaming)
+        // Create artifact with ADMIN permission for creator and EDITOR permissions for selected users
         const artifact = await prisma.$transaction(async (tx) => {
-            // Create the artifact (without code and without version initially)
+            // Create the artifact (creator is automatically OWNER)
             const newArtifact = await tx.assistantArtifact.create({
                 data: {
                     assistantId: assistantIdBigInt,
                     userId: userId,
                     name: data.name,
-                    instructions: enhancedInstructions, // Store enhanced version
+                    instructions: enhancedInstructions,
                     category: data.category,
                     tools: undefined,
                     apiKeys: apiKeysJson || undefined,
@@ -378,32 +395,44 @@ export async function createArtifact(data: {
                 }
             })
 
-            // Create permissions for selected users (if permissions is 'team')
+            // Always create ADMIN permission for the creator
+            console.log('[Artifact Creation] Creating ADMIN permission for creator:', userId.toString())
+            await tx.artifactPermission.create({
+                data: {
+                    userId: userId,
+                    assistantId: assistantIdBigInt,
+                    artifactId: newArtifact.id,
+                    access: 'ADMIN' // Creator always gets ADMIN access
+                }
+            })
+            console.log('[Artifact Creation] ✅ ADMIN permission created for creator')
+
+            // Create EDITOR permissions for selected users (if permissions is 'team')
             console.log('[Artifact Creation] Permissions check:', {
                 permissionsType: data.permissions,
                 selectedUsersCount: data.selectedUsers.length,
                 willCreatePermissions: data.permissions === 'team' && data.selectedUsers.length > 0
             })
-            
+
             if (data.permissions === 'team' && data.selectedUsers.length > 0) {
-                console.log('[Artifact Creation] Creating artifact permissions for users:', data.selectedUsers.map(u => u.email))
+                console.log('[Artifact Creation] Creating EDITOR permissions for users:', data.selectedUsers.map(u => u.email))
                 await tx.artifactPermission.createMany({
                     data: data.selectedUsers.map(user => ({
                         userId: BigInt(user.id),
                         assistantId: assistantIdBigInt,
                         artifactId: newArtifact.id,
-                        access: 'editor' // Default access level
+                        access: 'EDITOR' // All shared users get EDITOR access
                     }))
                 })
-                console.log('[Artifact Creation] ✅ Artifact permissions created successfully')
+                console.log('[Artifact Creation] ✅ EDITOR permissions created successfully')
             } else {
-                console.log('[Artifact Creation] ⚠️ No artifact permissions created - permissions:', data.permissions, 'users:', data.selectedUsers.length)
+                console.log('[Artifact Creation] ⚠️ No additional permissions created - permissions:', data.permissions, 'users:', data.selectedUsers.length)
             }
 
             return newArtifact
         })
 
-        // Get all users with artifact permissions to notify
+        // Get all users to notify (owner + selected EDITORs)
         const userIdsToNotify: string[] = []
 
         try {
@@ -422,13 +451,13 @@ export async function createArtifact(data: {
                 where: {
                     assistantId: assistantIdBigInt,
                     OR: [
-                        { access: 'admin' }, // Admins have all permissions
+                        { access: 'admin' },
                         {
                             AND: [
                                 { permissions: { not: null } },
                                 {
                                     permissions: {
-                                        contains: '"artifacts"' // Check for "artifacts" in JSON array
+                                        contains: '"artifacts"'
                                     }
                                 }
                             ]
@@ -441,7 +470,7 @@ export async function createArtifact(data: {
                 }
             })
 
-            // Add contact user IDs to the list
+            // Add contact user IDs
             for (const contact of contactsWithArtifactPermission) {
                 const userIdStr = contact.userId.toString()
                 if (!userIdsToNotify.includes(userIdStr)) {
@@ -449,7 +478,7 @@ export async function createArtifact(data: {
                 }
             }
 
-            // If artifact is 'team' and has selected users, add them too
+            // If artifact is 'team' and has selected users, add them
             if (data.permissions === 'team' && data.selectedUsers.length > 0) {
                 for (const user of data.selectedUsers) {
                     if (!userIdsToNotify.includes(user.id)) {
@@ -513,23 +542,23 @@ export async function getArtifacts(assistantId: string) {
         const assistantIdBigInt = BigInt(assistantId)
 
         // Fetch artifacts where:
-        // 1. User is the creator (userId matches)
-        // 2. User has permission (in ArtifactPermission table)
-        // 3. Artifact is public (isPublic = true)
+        // 1. User is the creator (OWNER)
+        // 2. User has explicit permission (EDITOR)
+        // 3. Artifact is public
         const artifacts = await prisma.assistantArtifact.findMany({
             where: {
                 assistantId: assistantIdBigInt,
-                deletedAt: null, // Exclude soft-deleted artifacts
+                deletedAt: null,
                 OR: [
-                    { userId: userId }, // User is the creator
+                    { userId: userId }, // User is OWNER
                     {
                         permissions: {
                             some: {
-                                userId: userId // User has explicit permission
+                                userId: userId // User is EDITOR
                             }
                         }
                     },
-                    { isPublic: true } // Artifact is public
+                    { isPublic: true } // Public artifacts
                 ]
             },
             include: {
@@ -562,27 +591,32 @@ export async function getArtifacts(assistantId: string) {
             }
         })
 
-        const formattedArtifacts = artifacts.map(artifact => ({
-            id: artifact.id.toString(),
-            name: artifact.name || 'Untitled Artifact',
-            category: artifact.category || 'others',
-            htmlContent: artifact.activeVersion?.code || '',
-            instructions: artifact.instructions || '',
-            createdAt: artifact.createdAt,
-            activeVersionId: artifact.activeVersionId?.toString(),
-            activeVersionNumber: artifact.activeVersion?.versionNumber,
-            creator: {
-                id: artifact.user.id.toString(),
-                name: artifact.user.name || 'Unknown User',
-                email: artifact.user.email,
-                image: artifact.user.image
-            },
-            isOwner: artifact.userId === userId,
-            access: artifact.userId === userId
-                ? 'admin'
-                : artifact.permissions[0]?.access || 'viewer',
-            isPublic: artifact.isPublic
-        }))
+        const formattedArtifacts = artifacts.map(artifact => {
+            const isOwner = artifact.userId === userId
+            const accessLevel = isOwner
+                ? 'ADMIN' // Owner has full admin access
+                : (artifact.permissions[0]?.access || 'VIEWER')
+
+            return {
+                id: artifact.id.toString(),
+                name: artifact.name || 'Untitled Artifact',
+                category: artifact.category || 'others',
+                htmlContent: artifact.activeVersion?.code || '',
+                instructions: artifact.instructions || '',
+                createdAt: artifact.createdAt,
+                activeVersionId: artifact.activeVersionId?.toString(),
+                activeVersionNumber: artifact.activeVersion?.versionNumber,
+                creator: {
+                    id: artifact.user.id.toString(),
+                    name: artifact.user.name || 'Unknown User',
+                    email: artifact.user.email,
+                    image: artifact.user.image
+                },
+                isOwner,
+                access: accessLevel,
+                isPublic: artifact.isPublic
+            }
+        })
 
         return {
             success: true,
@@ -618,17 +652,17 @@ export async function getArtifactById(artifactId: string) {
         const artifact = await prisma.assistantArtifact.findFirst({
             where: {
                 id: artifactIdInt,
-                deletedAt: null, // Exclude soft-deleted artifacts
+                deletedAt: null,
                 OR: [
-                    { userId: userId }, // User is the creator
+                    { userId: userId }, // OWNER
                     {
                         permissions: {
                             some: {
-                                userId: userId // User has explicit permission
+                                userId: userId // EDITOR
                             }
                         }
                     },
-                    { isPublic: true } // Artifact is public
+                    { isPublic: true } // Public
                 ]
             },
             include: {
@@ -676,6 +710,11 @@ export async function getArtifactById(artifactId: string) {
             }
         }
 
+        const isOwner = artifact.userId === userId
+        const accessLevel = isOwner
+            ? 'ADMIN' // Owner has full admin access
+            : (artifact.permissions[0]?.access || 'VIEWER')
+
         return {
             success: true,
             artifact: {
@@ -688,18 +727,16 @@ export async function getArtifactById(artifactId: string) {
                 updatedAt: artifact.updatedAt,
                 activeVersionId: artifact.activeVersionId?.toString(),
                 activeVersionNumber: artifact.activeVersion?.versionNumber,
-                versionsCount: artifact.versions.length, // Total number of versions
-                hasVersions: artifact.versions.length > 0, // Quick check if versions exist
+                versionsCount: artifact.versions.length,
+                hasVersions: artifact.versions.length > 0,
                 creator: {
                     id: artifact.user.id.toString(),
                     name: artifact.user.name || 'Unknown User',
                     email: artifact.user.email,
                     image: artifact.user.image
                 },
-                isOwner: artifact.userId === userId,
-                access: artifact.userId === userId
-                    ? 'admin'
-                    : artifact.permissions[0]?.access || 'viewer',
+                isOwner,
+                access: accessLevel,
                 isPublic: artifact.isPublic,
                 apiKeys: artifact.apiKeys as Record<string, string> | null
             }
@@ -732,21 +769,21 @@ export async function getArtifactVersions(artifactId: string) {
         const userId = BigInt(session.user.id)
         const artifactIdInt = parseInt(artifactId)
 
-        // First verify user has access to this artifact
+        // Verify user has access to this artifact
         const artifact = await prisma.assistantArtifact.findFirst({
             where: {
                 id: artifactIdInt,
                 deletedAt: null,
                 OR: [
-                    { userId: userId }, // User is the creator
+                    { userId: userId }, // OWNER
                     {
                         permissions: {
                             some: {
-                                userId: userId // User has explicit permission
+                                userId: userId // EDITOR
                             }
                         }
                     },
-                    { isPublic: true } // Artifact is public
+                    { isPublic: true } // Public
                 ]
             }
         })
@@ -759,7 +796,7 @@ export async function getArtifactVersions(artifactId: string) {
             }
         }
 
-        // Fetch all versions for this artifact
+        // Fetch all versions
         const versions = await prisma.artifactVersion.findMany({
             where: {
                 artifactId: artifactIdInt,
@@ -831,20 +868,18 @@ export async function setActiveArtifactVersion(artifactId: string, versionId: st
         const artifactIdInt = parseInt(artifactId)
         const versionIdInt = parseInt(versionId)
 
-        // Verify user has permission to edit this artifact
+        // Verify user has EDITOR or OWNER permission
         const artifact = await prisma.assistantArtifact.findFirst({
             where: {
                 id: artifactIdInt,
                 deletedAt: null,
                 OR: [
-                    { userId: userId }, // User is the owner
+                    { userId: userId }, // OWNER
                     {
                         permissions: {
                             some: {
                                 userId: userId,
-                                access: {
-                                    in: ['editor', 'admin'] // Only editors and admins can set active version
-                                }
+                                access: 'EDITOR' // EDITOR can set active version
                             }
                         }
                     }
@@ -859,7 +894,7 @@ export async function setActiveArtifactVersion(artifactId: string, versionId: st
             }
         }
 
-        // Verify the version exists and belongs to this artifact
+        // Verify the version exists
         const version = await prisma.artifactVersion.findFirst({
             where: {
                 id: versionIdInt,
@@ -920,7 +955,7 @@ export async function deleteArtifactFile(fileUrl: string): Promise<{ success: bo
 }
 
 /**
- * Share artifact with a user
+ * Share artifact with a user (gives them EDITOR access)
  */
 export async function shareArtifact(data: {
     artifactId: string
@@ -943,33 +978,45 @@ export async function shareArtifact(data: {
         const assistantIdBigInt = BigInt(data.assistantId)
         const recipientUserIdBigInt = BigInt(data.recipientUserId)
 
-        // Generate shareableId if doesn't exist
-        let shareableId: string
-        const artifact = await prisma.assistantArtifact.findUnique({
-            where: { id: artifactIdInt }
+        // Verify user has permission to share (OWNER or EDITOR)
+        const artifact = await prisma.assistantArtifact.findFirst({
+            where: {
+                id: artifactIdInt,
+                OR: [
+                    { userId: userId }, // OWNER
+                    {
+                        permissions: {
+                            some: {
+                                userId: userId,
+                                access: 'EDITOR' // EDITOR can share
+                            }
+                        }
+                    }
+                ]
+            }
         })
 
         if (!artifact) {
             return {
                 success: false,
-                error: 'Artifact not found'
+                error: 'Artifact not found or you do not have permission to share'
             }
         }
 
+        // Generate shareableId if doesn't exist
+        let shareableId: string
         if (artifact.shareableId) {
             shareableId = artifact.shareableId
         } else {
-            // Generate unique shareable ID (8 characters)
             shareableId = Math.random().toString(36).substring(2, 10)
             
-            // Update artifact with shareableId
             await prisma.assistantArtifact.update({
                 where: { id: artifactIdInt },
                 data: { shareableId }
             })
         }
 
-        // Create artifact permission for recipient (viewer access)
+        // Create artifact permission for recipient (EDITOR access)
         await prisma.artifactPermission.upsert({
             where: {
                 userId_artifactId: {
@@ -981,11 +1028,10 @@ export async function shareArtifact(data: {
                 userId: recipientUserIdBigInt,
                 assistantId: assistantIdBigInt,
                 artifactId: artifactIdInt,
-                access: 'viewer'
+                access: 'EDITOR' // Always give EDITOR access when sharing
             },
             update: {
-                // If permission already exists, keep it (don't downgrade to viewer if they're already editor)
-                access: 'viewer'
+                access: 'EDITOR' // Upgrade to EDITOR if they had VIEWER
             }
         })
 
@@ -1004,7 +1050,6 @@ export async function shareArtifact(data: {
         if (chat) {
             chatId = chat.id
         } else {
-            // Create new chat
             const newChat = await prisma.assistantChat.create({
                 data: {
                     assistantId: assistantIdBigInt,
@@ -1037,7 +1082,7 @@ export async function shareArtifact(data: {
         // Create shareable link
         const shareableLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/share/${shareableId}`
 
-        // Send message with artifact link (include sender info)
+        // Send message with artifact link
         const message = await prisma.assistantChatMessage.create({
             data: {
                 assistantChatId: chatId,
@@ -1067,7 +1112,7 @@ export async function shareArtifact(data: {
             }
         })
 
-        // Trigger Pusher event for real-time message delivery
+        // Trigger Pusher event
         try {
             await pusher.trigger('global-assistant-chat', 'new-message', {
                 message: {
@@ -1096,18 +1141,17 @@ export async function shareArtifact(data: {
                 assistantId: data.assistantId,
                 timestamp: new Date().toISOString()
             })
-            console.log('[Share Artifact] Pusher event triggered for message')
+            console.log('[Share Artifact] Pusher event triggered')
         } catch (pusherError) {
             console.error('[Share Artifact] Pusher error:', pusherError)
-            // Don't fail the request if Pusher fails
         }
 
-        // Send notification to recipient
+        // Send notification
         try {
             await notificationService.createNotification({
                 userId: recipientUserIdBigInt.toString(),
                 title: '🎨 Artifact Shared',
-                message: `${sender.name || 'Someone'} shared "${data.artifactName}" with you`,
+                message: `${sender.name || 'Someone'} shared "${data.artifactName}" with you as an EDITOR`,
                 type: 'artifact_permission_granted',
                 relatedId: artifactIdInt.toString(),
                 relatedType: 'artifact',
@@ -1117,21 +1161,14 @@ export async function shareArtifact(data: {
                     shareableId,
                     shareableLink,
                     senderId: userId.toString(),
-                    senderName: sender.name
+                    senderName: sender.name,
+                    access: 'EDITOR'
                 }
             })
-            console.log('[Share Artifact] Notification sent to recipient')
+            console.log('[Share Artifact] Notification sent')
         } catch (notificationError) {
             console.error('[Share Artifact] Notification error:', notificationError)
-            // Don't fail the request if notification fails
         }
-
-        console.log('[Share Artifact] Artifact shared successfully:', {
-            artifactId: artifactIdInt,
-            shareableId,
-            recipient: data.recipientName,
-            messageId: message.id.toString()
-        })
 
         return {
             success: true,

@@ -33,7 +33,8 @@ export default function ContactsPage({ params }: PageProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
   
-  // Check if user can add contacts (only owners can add)
+  // Check if user can add/edit contacts (only owners/admins can add/edit)
+  // Buyers and shared users should check their permissions, but for contacts management, only owners are allowed
   const canAddContacts = permissions?.isOwner ?? false
 
   const handleAddContact = () => {

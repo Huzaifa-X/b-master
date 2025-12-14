@@ -58,22 +58,25 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const storageKey = `artifact-chat-${artifactId}`
-  
+
   // Get current artifact data
   const { artifact, refetch } = useArtifactById(artifactId)
   const artifactContent = useArtifactStore((state) => state.artifactContent)
   const setArtifact = useArtifactStore((state) => state.setArtifact)
-  
+
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState<string>("")
-  
+
   // File upload state
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [isUploadingFiles, setIsUploadingFiles] = useState(false)
-  
+
   // Edit dialog state
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  
+
+  // ✅ Check if user can edit this artifact (OWNER or EDITOR)
+  const canEditArtifact = artifact?.isOwner || artifact?.access === 'ADMIN'
+
   // Get user initials for avatar
   const getUserInitials = () => {
     if (!session?.user?.name) return "U"
@@ -92,7 +95,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     // Validate file sizes (10MB max per file)
     const maxSize = 10 * 1024 * 1024 // 10MB
     const invalidFiles = files.filter(file => file.size > maxSize)
-    
+
     if (invalidFiles.length > 0) {
       toast.error(`Some files exceed 10MB limit: ${invalidFiles.map(f => f.name).join(", ")}`)
       return
@@ -100,7 +103,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
 
     // Add to selected files
     setSelectedFiles(prev => [...prev, ...files])
-    
+
     // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
@@ -143,7 +146,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
         }
 
         const uploadResult = await uploadResponse.json()
-        
+
         if (!uploadResult.success) {
           throw new Error(uploadResult.error || `Failed to upload ${file.name}`)
         }
@@ -217,7 +220,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     if ((!input.trim() && selectedFiles.length === 0) || isStreaming) return
 
     const userPrompt = input.trim()
-    
+
     // Upload files first if any
     let uploadedFiles: UploadedFileData[] | undefined
     if (selectedFiles.length > 0) {
@@ -249,13 +252,13 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     // IMPORTANT: Always use the active version's code (from artifact data)
     // Don't use artifactContent from store as it might be a historical version
     const currentHtmlCode = artifact?.htmlContent || ""
-    
+
     console.log("[Artifact Chatbot] Using artifact code:", {
       source: 'artifact.htmlContent (active version)',
       codeLength: currentHtmlCode.length,
       artifactId: artifact?.id
     })
-    
+
     if (!currentHtmlCode || currentHtmlCode.trim() === '') {
       const errorMessage: Message = {
         id: Date.now().toString(),
@@ -279,7 +282,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     // Start streaming update
     setIsStreaming(true)
     setStreamingContent("")
-    
+
     // Add streaming message
     const streamingMessage: Message = {
       id: `streaming-${Date.now()}`,
@@ -335,7 +338,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                     const decodedContent = atob(data.content)
                     accumulatedCode += decodedContent
                     setStreamingContent(accumulatedCode)
-                    
+
                     // Update artifact store in real-time
                     setArtifact({
                       type: "code",
@@ -351,10 +354,10 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                   }
                 } else if (data.type === 'done') {
                   setIsStreaming(false)
-                  
+
                   // Remove streaming message
                   setMessages((prev) => prev.filter((msg) => msg.id !== streamingMessage.id))
-                  
+
                   // Add success message
                   const successMessage: Message = {
                     id: Date.now().toString(),
@@ -363,18 +366,18 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                     timestamp: new Date(),
                   }
                   setMessages((prev) => [...prev, successMessage])
-                  
+
                   // Refetch artifact to get final version
                   await refetch()
-                  
+
                   toast.success("Artifact updated successfully!")
                   break
                 } else if (data.type === 'error') {
                   setIsStreaming(false)
-                  
+
                   // Remove streaming message
                   setMessages((prev) => prev.filter((msg) => msg.id !== streamingMessage.id))
-                  
+
                   // Add error message
                   const errorMessage: Message = {
                     id: Date.now().toString(),
@@ -383,7 +386,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                     timestamp: new Date(),
                   }
                   setMessages((prev) => [...prev, errorMessage])
-                  
+
                   toast.error(data.error || "Failed to update artifact")
                   break
                 } else if (data.type === 'connected') {
@@ -399,10 +402,10 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     } catch (error: any) {
       console.error("[Artifact Chatbot] Streaming error:", error)
       setIsStreaming(false)
-      
+
       // Remove streaming message
       setMessages((prev) => prev.filter((msg) => msg.id !== streamingMessage.id))
-      
+
       // Add error message
       const errorMessage: Message = {
         id: Date.now().toString(),
@@ -411,7 +414,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, errorMessage])
-      
+
       toast.error("Failed to update artifact")
     }
   }
@@ -421,9 +424,9 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
       {/* Header with Edit Button */}
       <div className="flex-shrink-0 px-4 py-3 border-b flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             className="hover:bg-muted hover:text-primary"
             onClick={onclose}
           >
@@ -437,28 +440,32 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
           {/* Show Close Panel button when panel is open, Show Open Panel button when closed */}
           {onTogglePanel && !isPanelOpen && (
             <Button
-              variant="ghost" 
-              size="icon" 
+              variant="ghost"
+              size="icon"
               onClick={onTogglePanel}
               className="hover:bg-muted hover:text-primary"
               title={isPanelOpen ? "Close preview panel" : "Open preview panel"}
             >
-                <Maximize2 className="h-4 w-4" />            
+              <Maximize2 className="h-4 w-4" />
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsEditDialogOpen(true)}
-            disabled={disabled || isGenerating}
-            className="gap-2"
-            title="Edit artifact settings"
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
+          {
+            canEditArtifact && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditDialogOpen(true)}
+                disabled={disabled || isGenerating}
+                className="gap-2"
+                title="Edit artifact settings"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )
+          }
         </div>
       </div>
-      
+
       {/* Messages */}
       <ScrollArea className="flex-1 min-h-0 px-2 md:px-4 py-4" ref={scrollRef}>
         <div className="space-y-4">
@@ -488,11 +495,10 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
 
                 {/* Message Content */}
                 <div className="flex-1 min-w-0">
-                  <div className={`inline-block rounded-2xl px-3 md:px-4 py-2 md:py-2.5 leading-6 md:leading-7 break-words ${
-                    message.role === "assistant" 
-                      ? "text-foreground" 
-                      : "bg-muted text-foreground"
-                  }`}>
+                  <div className={`inline-block rounded-2xl px-3 md:px-4 py-2 md:py-2.5 leading-6 md:leading-7 break-words ${message.role === "assistant"
+                    ? "text-foreground"
+                    : "bg-muted text-foreground"
+                    }`}>
                     <div className="text-xs md:text-sm prose prose-sm dark:prose-invert max-w-none">
                       <ReactMarkdown
                         components={{
@@ -512,7 +518,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                         {message.content}
                       </ReactMarkdown>
                     </div>
-                    
+
                     {/* Display attached files */}
                     {message.files && message.files.length > 0 && (
                       <div className="mt-2 space-y-2">
@@ -712,14 +718,16 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
           </PromptInputActions>
         </PromptInput>
       </div>
-      
+
       {/* Edit Artifact Dialog */}
-      <CreateArtifactDialog
-        open={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
-        assistantId={assistantId}
-        editArtifactId={artifactId}
-      />
+      {
+        canEditArtifact && (<CreateArtifactDialog
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          assistantId={assistantId}
+          editArtifactId={artifactId}
+        />
+        )}
     </div>
   )
 }

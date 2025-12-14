@@ -57,6 +57,13 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
       schemaText: "",
       permissionLevel: "private",
       sharedUsers: [],
+      buyerPermissions: {
+        chat: true,
+        contact: false,
+        messenger: false,
+        artifact: false,
+        newsFeed: false,
+      },
     }
   )
 
@@ -168,6 +175,7 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
         // Step 6: Sharing
         permissionLevel: formData.permissionLevel,
         sharedUsers: formData.sharedUsers,
+        buyerPermissions: formData.buyerPermissions,
       }
 
       let result

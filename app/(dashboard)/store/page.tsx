@@ -30,6 +30,7 @@ const TABS = [
 
 interface Assistant {
     id: string
+    userId?: string
     name: string
     price: number
     description: string
@@ -215,6 +216,7 @@ export default function StorePage() {
                                         key={assistant.id}
                                         assistant={{
                                             id: assistant.id,
+                                            userId: assistant.userId.toString(),
                                             name: assistant.name,
                                             price: assistant.price,
                                             description: assistant.description || "",

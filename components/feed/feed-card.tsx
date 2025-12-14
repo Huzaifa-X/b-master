@@ -15,8 +15,9 @@ import { useComments } from "@/hooks/use-newFeed"
 
 interface NewsFeedPost {
   id: string
-  content: string
-  image?: string
+  title: string | null
+  content: string | null
+  image: string | null
   isPublic: boolean
   likeCount: number
   commentCount: number
@@ -25,8 +26,8 @@ interface NewsFeedPost {
   isLikedByCurrentUser: boolean
   user: {
     id: string
-    name: string
-    email: string
+    name: string | null
+    email: string | null
     image: string | null
   }
 }
@@ -78,23 +79,9 @@ export function FeedCard({
   const likesCount = post.likeCount
   const commentsCount = post.commentCount
 
-  // Parse title and content from the stored content
-  const parseContent = (content: string) => {
-    const lines = content.split('\n\n')
-    if (lines.length > 1 && lines[0].length > 0 && lines[0].length <= 100) {
-      // First line looks like a title
-      return {
-        title: lines[0],
-        content: lines.slice(1).join('\n\n').trim()
-      }
-    }
-    return {
-      title: undefined,
-      content: content
-    }
-  }
-
-  const { title, content } = parseContent(post.content)
+  // Use title and content directly from post (now properly typed as nullable)
+  const title = post.title || undefined
+  const content = post.content || ""
 
   // Fetch comments when expanded
   const { data: commentsData, isLoading: commentsLoading } = useComments(post.id, undefined)
@@ -135,7 +122,8 @@ export function FeedCard({
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [isExpanded, onToggleExpand])
 
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | null) => {
+    if (!name) return "U"
     return name
       .split(" ")
       .map((n) => n[0])
@@ -168,7 +156,7 @@ export function FeedCard({
             </Avatar>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-semibold text-sm">{post.user.name}</p>
+                <p className="font-semibold text-sm">{post.user.name || "Unknown User"}</p>
                 <span className="text-xs text-muted-foreground">•</span>
                 <p className="text-xs text-muted-foreground">{formatTimestamp(new Date(post.createdAt))}</p>
                 <span className="text-xs text-muted-foreground">•</span>
@@ -285,7 +273,7 @@ export function FeedCard({
                     </Avatar>
                     <div className="flex-1 min-w-0 pr-20">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-sm text-neutral-800 dark:text-neutral-200">{post.user.name}</p>
+                        <p className="font-semibold text-sm text-neutral-800 dark:text-neutral-200">{post.user.name || "Unknown User"}</p>
                         <span className="text-xs text-neutral-600 dark:text-neutral-400">•</span>
                         <p className="text-xs text-neutral-600 dark:text-neutral-400">{formatTimestamp(new Date(post.createdAt))}</p>
                         <span className="text-xs text-neutral-600 dark:text-neutral-400">•</span>
@@ -316,15 +304,18 @@ export function FeedCard({
 
                   {/* Close and Delete Buttons */}
                   <div className="absolute top-4 right-4 flex gap-2">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => onDelete(post.id)}
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      title="Delete Post"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {/* Only show delete button if current user is the post owner */}
+                    {currentUser.id === post.user.id && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => onDelete(post.id)}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        title="Delete Post"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       size="icon"
                       variant="ghost"
@@ -411,12 +402,12 @@ export function FeedCard({
                       </p>
                     ) : (
                       <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
-                        {commentsData.map((comment) => (
+                        {commentsData.map((comment: any) => (
                           <div key={comment.id} className="flex gap-3">
                             <Avatar className="h-8 w-8">
                               <PresignedAvatarImage src={comment.user?.image || ""} />
                               <AvatarFallback className="text-xs">
-                                {getInitials(comment.user?.name || "User")}
+                                {getInitials(comment.user?.name || null)}
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
@@ -475,4 +466,3 @@ export function FeedCard({
     </>
   )
 }
-
