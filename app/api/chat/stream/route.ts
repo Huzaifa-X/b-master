@@ -7,6 +7,8 @@ import { openai } from "@/lib/openai"
 import upstageService from "@/lib/services/upstageService"
 import { getSystemPrompt } from "@/utils/prompts"
 import { uploadToS3 } from "@/lib/aws-s3"
+import { OpenAPITool } from "@/lib/openapi-tool-converter"
+import { executeAPITool, loadAPITools, toOpenAIToolDefinitions } from "@/lib/api-tools-loader"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -43,7 +45,7 @@ async function saveImageToS3(
  */
 export async function POST(req: NextRequest) {
   const encoder = new TextEncoder()
-  
+
   try {
     // Check authentication
     const session = await getServerSession(authOptions)
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { chatId, assistantId, chatType, webSearch, research, attachments, artifact } = body
+    const { chatId, assistantId, chatType, webSearch, research, chatWithAPI, attachments, artifact } = body
 
     const chatIdInt = parseInt(chatId)
     if (isNaN(chatIdInt)) {
@@ -122,6 +124,8 @@ export async function POST(req: NextRequest) {
       systemPrompt += `\n\nIMPORTANT: The user has requested research mode. Please conduct thorough research using both web search and file search to provide a comprehensive answer.`
     } else if (webSearch) {
       systemPrompt += `\n\nIMPORTANT: The user has requested web search. Please search the web for current information to answer their question.`
+    } else if (chatWithAPI) {
+      systemPrompt += `\n\nIMPORTANT: The user has requested chat with API. Please use the API to answer their question.`
     }
 
     // Add artifact information if provided
@@ -144,7 +148,7 @@ export async function POST(req: NextRequest) {
       .filter(msg => msg.message)
       .map((msg) => {
         let content = msg.message || ""
-        
+
         // Check all user messages for mentioned users
         if (msg.role === "user" && msg.documents) {
           try {
@@ -163,7 +167,7 @@ export async function POST(req: NextRequest) {
             // Ignore parse errors
           }
         }
-        
+
         return {
           role: msg.role as "user" | "assistant" | "system",
           content
@@ -182,7 +186,7 @@ export async function POST(req: NextRequest) {
     // Extract content from attachments
     const attachmentsToProcess = attachments || []
     let extractedContent = ""
-    
+
     if (attachmentsToProcess.length > 0) {
       const extractedTexts: string[] = []
       for (const attachment of attachmentsToProcess) {
@@ -243,9 +247,47 @@ export async function POST(req: NextRequest) {
       ? `${conversationContext}\n\nUser: ${enhancedUserMessage}`
       : `User: ${enhancedUserMessage}`
 
+
+    let apiTools: OpenAPITool[] = []
+
+    if (chatWithAPI && assistantId) {
+      const toolsResult = await loadAPITools(assistantId.toString())
+      if (toolsResult.success) {
+        apiTools = toolsResult.tools
+        console.log(`[Stream] Loaded ${apiTools.length} API tools`)
+      } else {
+        console.warn(`[Stream] Failed to load API tools: ${toolsResult.error}`)
+      }
+    }
+
+    if (apiTools.length > 0) {
+      systemPrompt += `\n\n## Available External APIs\n`
+      systemPrompt += `You have access to the following external API tools:\n\n`
+
+      apiTools.forEach(tool => {
+        systemPrompt += `### ${tool.tool.function.name}\n`
+        systemPrompt += `- **Description**: ${tool.tool.function.description}\n`
+        systemPrompt += `- **Method**: ${tool.metadata.method}\n`
+        systemPrompt += `- **Endpoint**: ${tool.metadata.baseUrl}${tool.metadata.path}\n`
+
+        // List parameters
+        const params = tool.tool.function.parameters
+        if (params.properties && Object.keys(params.properties).length > 0) {
+          systemPrompt += `- **Parameters**:\n`
+          for (const [name, prop] of Object.entries(params.properties)) {
+            const required = params.required?.includes(name) ? '(required)' : '(optional)'
+            const propAny = prop as any
+            systemPrompt += `  - \`${name}\` ${required}: ${propAny.description || propAny.type}\n`
+          }
+        }
+        systemPrompt += `\n`
+      })
+      systemPrompt += `Use these tools when the user's question requires data from external APIs.`
+    }
+
     // Build tools array
     const tools: any[] = []
-    
+
     if (chatType === "ASK_B") {
       tools.push({ type: "web_search" })
       tools.push({ type: "image_generation" })
@@ -260,7 +302,13 @@ export async function POST(req: NextRequest) {
         authorization: process.env.STRIPE_SECRET_KEY,
         require_approval: "never",
       })
-      
+
+      if (apiTools.length > 0) {
+        const apiToolDefs = toOpenAIToolDefinitions(apiTools)
+        tools.push(...apiToolDefs)
+        console.log(`[Stream] Added ${apiToolDefs.length} API tool definitions to OpenAI request`)
+      }
+
       if (assistantId && chat.assistant?.vectorStoreId) {
         tools.push({
           type: "file_search",
@@ -271,18 +319,18 @@ export async function POST(req: NextRequest) {
 
     // Prepare input content with images if any
     let inputContent: any = fullInput
-    
+
     if (hasImageAttachments) {
       const imageAttachments = attachmentsToProcess.filter((att: { type: string }) => att.type.startsWith('image/'))
       const contentParts: any[] = [{ type: "input_text", text: fullInput }]
-      
+
       for (const imageAtt of imageAttachments) {
         contentParts.push({
           type: "input_image",
           image_url: imageAtt.url
         })
       }
-      
+
       inputContent = [{ role: "user", content: contentParts }]
     }
 
@@ -305,12 +353,12 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           console.log("[Stream] Creating OpenAI response with streaming enabled")
-          
+
           // Send initial connection message
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: "connected" })}\n\n`)
           )
-          
+
           let assistantResponse = ""
           let currentResponseId: string | null = null
           const generatedImageUrls: string[] = []
@@ -318,11 +366,11 @@ export async function POST(req: NextRequest) {
 
           // Create streaming response - try streaming first, fallback if not supported
           console.log("[Stream] Starting OpenAI stream...")
-          
+
           try {
             // Try to get streaming response - don't await yet, check if it's a promise
             const responsePromise = openai.responses.create(apiParams) as any
-            
+
             // Check if it's a promise or already iterable
             let responseStream: any
             if (responsePromise instanceof Promise) {
@@ -332,13 +380,13 @@ export async function POST(req: NextRequest) {
             } else {
               throw new Error("Response is neither a promise nor async iterable")
             }
-            
+
             // Check if response is iterable after awaiting
             if (!responseStream || typeof responseStream[Symbol.asyncIterator] !== 'function') {
               console.warn("[Stream] Response is not async iterable, falling back to non-streaming mode")
               console.log("[Stream] Response type:", typeof responseStream)
               console.log("[Stream] Response structure:", JSON.stringify(Object.keys(responseStream || {}), null, 2))
-              
+
               // Fallback: treat as complete response and simulate streaming
               const fullResponse = responseStream as any
               if (fullResponse?.id) {
@@ -347,7 +395,7 @@ export async function POST(req: NextRequest) {
                 console.log("[Stream] Sending response_id:", responseIdMsg)
                 controller.enqueue(encoder.encode(responseIdMsg))
               }
-              
+
               // Process complete response and simulate streaming
               if (fullResponse?.output && Array.isArray(fullResponse.output)) {
                 for (const item of fullResponse.output) {
@@ -369,7 +417,7 @@ export async function POST(req: NextRequest) {
                       }
                     }
                   }
-                  
+
                   if (item.type === "image_generation_call" && item.status === "completed" && item.result) {
                     try {
                       const imageUrl = await saveImageToS3(
@@ -392,7 +440,7 @@ export async function POST(req: NextRequest) {
                   }
                 }
               }
-              
+
               // Skip to end of streaming logic
               console.log("[Stream] Finished fallback streaming")
             } else {
@@ -400,7 +448,7 @@ export async function POST(req: NextRequest) {
               console.log("[Stream] Response is async iterable, starting real streaming...")
               for await (const event of responseStream) {
                 console.log("[Stream] Event type:", event.type)
-                
+
                 // Handle different event types according to OpenAI's streaming events
                 switch (event.type) {
                   case "response.created":
@@ -431,7 +479,7 @@ export async function POST(req: NextRequest) {
                       if (!usedTools.includes("image_generation")) {
                         usedTools.push("image_generation")
                       }
-                      
+
                       if (event.item.status === "completed" && event.item.result) {
                         console.log("[Stream] Image generation completed")
                         try {
@@ -441,7 +489,7 @@ export async function POST(req: NextRequest) {
                             generatedImageUrls.length
                           )
                           generatedImageUrls.push(imageUrl)
-                          
+
                           controller.enqueue(
                             encoder.encode(`data: ${JSON.stringify({ type: "image", url: imageUrl })}\n\n`)
                           )
@@ -449,14 +497,14 @@ export async function POST(req: NextRequest) {
                           console.error("[Stream] S3 upload failed:", s3Error)
                           const base64Url = `data:image/png;base64,${event.item.result as string}`
                           generatedImageUrls.push(base64Url)
-                          
+
                           controller.enqueue(
                             encoder.encode(`data: ${JSON.stringify({ type: "image", url: base64Url })}\n\n`)
                           )
                         }
                       }
                     }
-                    
+
                     // Track tool usage
                     if (event.item?.type === "file_search_call" && !usedTools.includes("file_search")) {
                       usedTools.push("file_search")
@@ -467,6 +515,60 @@ export async function POST(req: NextRequest) {
                     if (event.item?.type === "mcp_call" && !usedTools.includes("stripe")) {
                       usedTools.push("stripe")
                       console.log("[Stream] Stripe MCP tool used:", event.item.name)
+                    }
+
+                    if (event.item?.type === "function_call") {
+                      const functionName = event.item.name
+                      const functionArgs = event.item.arguments
+                        ? JSON.parse(event.item.arguments)
+                        : {}
+
+                      console.log(`[Stream] Function call detected: ${functionName}`)
+
+                      // Check if this is one of our API tools
+                      const isAPITool = apiTools.some(t => t.tool.function.name === functionName)
+
+                      if (isAPITool) {
+                        console.log(`[Stream] Executing API tool: ${functionName}`)
+
+                        try {
+                          // Execute the API call
+                          const result = await executeAPITool(apiTools, functionName, functionArgs)
+
+                          // Track tool usage
+                          if (!usedTools.includes(functionName)) {
+                            usedTools.push(functionName)
+                          }
+
+                          // Format result for display
+                          const resultText = typeof result === 'string'
+                            ? result
+                            : JSON.stringify(result, null, 2)
+
+                          // Add to assistant response
+                          assistantResponse += `\n\n**API Call Result (${functionName}):**\n\`\`\`json\n${resultText}\n\`\`\`\n\n`
+
+                          // Stream the result to the client
+                          controller.enqueue(
+                            encoder.encode(`data: ${JSON.stringify({
+                              type: "tool_result",
+                              tool: functionName,
+                              result: result
+                            })}\n\n`)
+                          )
+                        } catch (apiError: any) {
+                          console.error(`[Stream] ❌ API tool error:`, apiError)
+                          const errorText = `API call failed: ${apiError.message}`
+                          assistantResponse += `\n\n**Error calling ${functionName}:** ${errorText}\n\n`
+                          controller.enqueue(
+                            encoder.encode(`data: ${JSON.stringify({
+                              type: "tool_error",
+                              tool: functionName,
+                              error: errorText
+                            })}\n\n`)
+                          )
+                        }
+                      }
                     }
                     break
 
@@ -489,14 +591,14 @@ export async function POST(req: NextRequest) {
             console.log("[Stream] Attempting non-streaming fallback...")
             const fallbackParams = { ...apiParams, stream: false }
             const fullResponse = await openai.responses.create(fallbackParams) as any
-            
+
             if (fullResponse?.id) {
               currentResponseId = fullResponse.id
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({ type: "response_id", id: currentResponseId })}\n\n`)
               )
             }
-            
+
             // Process and simulate streaming
             if (fullResponse?.output && Array.isArray(fullResponse.output)) {
               for (const item of fullResponse.output) {
@@ -504,20 +606,20 @@ export async function POST(req: NextRequest) {
                   for (const contentItem of item.content) {
                     if (contentItem.type === "output_text" && 'text' in contentItem) {
                       const text = contentItem.text || ""
-                        if (text) {
-                          assistantResponse += text
-                          const words = text.split(' ')
-                          for (const word of words) {
-                            const textMsg = `data: ${JSON.stringify({ type: "text", content: word + ' ' })}\n\n`
-                            console.log("[Stream] Sending text chunk:", word.substring(0, 20))
-                            controller.enqueue(encoder.encode(textMsg))
-                            await new Promise(resolve => setTimeout(resolve, 10))
-                          }
+                      if (text) {
+                        assistantResponse += text
+                        const words = text.split(' ')
+                        for (const word of words) {
+                          const textMsg = `data: ${JSON.stringify({ type: "text", content: word + ' ' })}\n\n`
+                          console.log("[Stream] Sending text chunk:", word.substring(0, 20))
+                          controller.enqueue(encoder.encode(textMsg))
+                          await new Promise(resolve => setTimeout(resolve, 10))
                         }
+                      }
                     }
                   }
                 }
-                
+
                 if (item.type === "image_generation_call" && item.status === "completed" && item.result) {
                   try {
                     const imageUrl = await saveImageToS3(
@@ -541,18 +643,18 @@ export async function POST(req: NextRequest) {
               }
             }
           }
-          
+
           console.log("[Stream] Finished streaming, total response length:", assistantResponse.length)
 
           // Save complete response to database
           const hasImages = generatedImageUrls.length > 0
-          
+
           // Create markdown for images if any
           if (hasImages) {
             const imageMarkdown = generatedImageUrls.map((url, idx) =>
               `![Generated Image ${idx + 1}](${url})`
             ).join('\n\n')
-            
+
             if (assistantResponse) {
               assistantResponse = `${assistantResponse}\n\n${imageMarkdown}`
             } else {
@@ -632,7 +734,7 @@ export async function POST(req: NextRequest) {
 
         } catch (error) {
           console.error("[Stream] Streaming error:", error)
-          
+
           // Update status to FAILED
           if (lastUserMessageRecord) {
             await prisma.assistantUserChatMessage.update({
@@ -641,7 +743,7 @@ export async function POST(req: NextRequest) {
             })
             console.log("[Stream] Updated user message status to FAILED")
           }
-          
+
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: "error", error: error instanceof Error ? error.message : "Unknown error" })}\n\n`)
           )

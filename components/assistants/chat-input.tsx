@@ -39,11 +39,12 @@ interface ChatInputProps {
   value?: string
   onValueChange?: (value: string) => void
   onSubmit: (
-    message: string, 
-    attachments?: { name: string; url: string; type: string; size: number }[], 
-    options?: { 
-      webSearch?: boolean; 
-      research?: boolean; 
+    message: string,
+    attachments?: { name: string; url: string; type: string; size: number }[],
+    options?: {
+      webSearch?: boolean;
+      research?: boolean;
+      chatWithAPI?: boolean;
       artifact?: { id: string; name: string; instructions: string; htmlContent: string }
       mentionedUsers?: MentionedUser[]
     }
@@ -55,6 +56,7 @@ interface ChatInputProps {
   onWebSearch?: (enabled: boolean) => void
   onResearch?: (enabled: boolean) => void
   onChatWithArtifact?: () => void
+  onChatWithAPI?: () => void
   className?: string
   mode?: "ask-b" | "assistant"
   assistantId?: string
@@ -71,6 +73,7 @@ export function ChatInput({
   onWebSearch,
   onResearch,
   onChatWithArtifact,
+  onChatWithAPI,
   className,
   mode = "assistant",
   assistantId
@@ -81,6 +84,7 @@ export function ChatInput({
   const [showPreview, setShowPreview] = useState(false)
   const [webSearchEnabled, setWebSearchEnabled] = useState(false)
   const [researchEnabled, setResearchEnabled] = useState(false)
+  const [chatWithAPIEnabled, setChatWithAPIEnabled] = useState(false)
   const [selectedArtifact, setSelectedArtifact] = useState<{ id: string; name: string; instructions: string; htmlContent: string } | null>(null)
   const [isArtifactDialogOpen, setIsArtifactDialogOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -302,11 +306,12 @@ export function ChatInput({
 
     // Call onSubmit with the message, attachments, search options, and mentioned users
     onSubmit(
-      value.trim(), 
+      value.trim(),
       attachments.length > 0 ? attachments : undefined,
       {
         webSearch: webSearchEnabled,
         research: researchEnabled,
+        chatWithAPI: chatWithAPIEnabled,
         artifact: selectedArtifact || undefined,
         mentionedUsers: mentionedUsers.length > 0 ? mentionedUsers : undefined,
       }
@@ -318,6 +323,7 @@ export function ChatInput({
     setShowPreview(false)
     setSelectedArtifact(null)
     setMentionedUsers([])
+    setChatWithAPIEnabled(false)
   }
 
   // Helper function to convert File to base64
@@ -350,6 +356,17 @@ export function ChatInput({
       setWebSearchEnabled(false) // Disable web search if research is enabled
     }
     onResearch?.(enabled)
+  }
+
+  const handleChatWithAPIChange = () => {
+    setChatWithAPIEnabled(true)
+    // Disable other modes when chat with API is enabled
+    setWebSearchEnabled(false)
+    setResearchEnabled(false)
+    setSelectedArtifact(null)
+    onWebSearch?.(false)
+    onResearch?.(false)
+    onChatWithAPI?.()
   }
 
   const handleDictateTranscript = (text: string) => {
@@ -541,6 +558,7 @@ export function ChatInput({
               onWebSearch={handleWebSearchChange}
               onResearch={handleResearchChange}
               onChatWithArtifact={handleChatWithArtifact}
+              onChatWithAPI={handleChatWithAPIChange}
               disabled={disabled || isLoading}
               mode={mode}
               assistantId={assistantId}

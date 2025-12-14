@@ -74,6 +74,7 @@ export async function createChatWithMessage(data: {
   }[]
   webSearch?: boolean
   research?: boolean
+  chatWithAPI?: boolean
   artifact?: {
     id: string
     name: string
@@ -151,6 +152,7 @@ export async function createChatWithMessage(data: {
       // Pass attachments and search options so content extraction can happen in background function
       const webSearchEnabled = data.webSearch || false
       const researchEnabled = data.research || false
+      const chatWithAPIEnabled = data.chatWithAPI || false
       console.log(`[createChatWithMessage] Starting background response with webSearch: ${webSearchEnabled}, research: ${researchEnabled}, attachments: ${data.attachments?.length || 0}`)
 
       generateChatResponseInBackground({
@@ -159,6 +161,7 @@ export async function createChatWithMessage(data: {
         chatType: data.mode === "ask-b" ? "ASK_B" : "ASSISTANT",
         webSearch: webSearchEnabled,
         research: researchEnabled,
+        chatWithAPI: chatWithAPIEnabled,
         attachments: data.attachments // Pass attachments for extraction
       }).catch(err => {
         console.error("[createChatWithMessage] Response generation failed:", err)
@@ -227,6 +230,7 @@ async function generateChatResponseInBackground(data: {
   chatType: "ASK_B" | "ASSISTANT"
   webSearch?: boolean
   research?: boolean
+  chatWithAPI?: boolean
   attachments?: {
     name: string
     url: string
@@ -283,6 +287,10 @@ async function generateChatResponseInBackground(data: {
       systemPrompt += `\n\nIMPORTANT: The user has requested research mode. Please conduct thorough research using both web search and file search to provide a comprehensive answer.`
     } else if (data.webSearch) {
       systemPrompt += `\n\nIMPORTANT: The user has requested web search. Please search the web for current information to answer their question.`
+    }
+
+    if (data.chatWithAPI) {
+      systemPrompt += `\n\nIMPORTANT: The user has requested chat with API. Please use the API to answer their question.`
     }
 
     // Add assistant-specific instructions if available
@@ -1171,6 +1179,7 @@ export async function sendChatMessage(data: {
   }[]
   webSearch?: boolean
   research?: boolean
+  chatWithAPI?: boolean
   artifact?: {
     id: string
     name: string
@@ -1261,6 +1270,7 @@ export async function sendChatMessage(data: {
         chatType: data.chatType,
         webSearch: data.webSearch || false,
         research: data.research || false,
+        chatWithAPI: data.chatWithAPI || false,
         attachments: data.attachments // Pass attachments for extraction
       }).catch(err => {
         console.error("[sendChatMessage] Background response generation failed:", err)
