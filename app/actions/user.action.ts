@@ -241,7 +241,7 @@ export async function getAvailableContacts(): Promise<UserContact[]> {
 /**
  * Search users for mentions in chat input
  */
-export async function searchUsersForMention(query: string = "") {
+export async function searchUsersForMention(assistantId: string, query: string = "") {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
@@ -249,14 +249,36 @@ export async function searchUsersForMention(query: string = "") {
     }
 
     const currentUserId = BigInt(session.user.id)
+    const assistantIdBigInt = BigInt(assistantId)
 
-    // Search users by name or email, excluding current user
-    const users = await prisma.user.findMany({
+    // First, get the assistant to verify user has access
+    const assistant = await prisma.assistant.findFirst({
+      where: {
+        id: assistantIdBigInt,
+        OR: [
+          { userId: currentUserId }, // Owner
+          {
+            contacts: {
+              some: {
+                userId: currentUserId
+              }
+            }
+          }
+        ]
+      }
+    })
+
+    if (!assistant) {
+      return [] // User doesn't have access to this assistant
+    }
+
+    // Get all users who have access to this assistant (owner + contacts)
+    const assistantUsers = await prisma.user.findMany({
       where: {
         AND: [
           {
             id: {
-              not: currentUserId,
+              not: currentUserId, // Exclude current user
             },
           },
           query
@@ -277,6 +299,26 @@ export async function searchUsersForMention(query: string = "") {
               ],
             }
             : {},
+          {
+            OR: [
+              // Assistant owner
+              {
+                assistants: {
+                  some: {
+                    id: assistantIdBigInt
+                  }
+                }
+              },
+              // Assistant contacts
+              {
+                assistantContacts: {
+                  some: {
+                    assistantId: assistantIdBigInt
+                  }
+                }
+              }
+            ]
+          }
         ],
       },
       select: {
@@ -291,7 +333,7 @@ export async function searchUsersForMention(query: string = "") {
       },
     })
 
-    return users.map((user) => ({
+    return assistantUsers.map((user) => ({
       id: user.id.toString(),
       name: user.name || "Unknown User",
       email: user.email,

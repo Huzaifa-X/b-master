@@ -137,11 +137,11 @@ export function ChatInput({
   // Load users when mention is triggered
   useEffect(() => {
     const loadMentionUsers = async () => {
-      if (!showMentionDropdown) return
+      if (!showMentionDropdown || !assistantId) return
 
       setIsLoadingMentions(true)
       try {
-        const users = await searchUsersForMention(mentionQuery)
+        const users = await searchUsersForMention(assistantId, mentionQuery)
         setMentionUsers(users)
         setSelectedMentionIndex(0)
       } catch (error) {
@@ -153,7 +153,7 @@ export function ChatInput({
     }
 
     loadMentionUsers()
-  }, [showMentionDropdown, mentionQuery])
+  }, [showMentionDropdown, mentionQuery, assistantId])
 
   // Calculate dropdown position relative to textarea element
   const getDropdownPosition = useCallback(() => {
