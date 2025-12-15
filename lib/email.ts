@@ -1,15 +1,31 @@
 import nodemailer from 'nodemailer'
 
-// Create transporter
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD,
-    },
-})
+const createTransporter = () => {
+  // Decode base64 password
+  const password = Buffer.from(process.env.SMTP_PASSWORD!, 'base64').toString('utf-8')
+  console.log('   Password decoded successfully')
+
+  return nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+          user: process.env.SMTP_USER,
+          pass: password, // Decoded password
+      },
+      tls: {
+          rejectUnauthorized: false,
+          minVersion: 'TLSv1.2'
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
+      debug: process.env.NODE_ENV === 'development',
+      logger: process.env.NODE_ENV === 'development'
+  })
+}
+
+const transporter = createTransporter()
 
 interface SendOTPEmailParams {
     email: string
