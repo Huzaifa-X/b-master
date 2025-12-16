@@ -356,6 +356,21 @@ export function useCustomChat(options: UseCustomChatOptions) {
                     )
                     await refetchMessages()
                     break
+                  case "artifact_updated":
+                    console.log("[useCustomChat] 🎨 Artifact updated:", data.artifactName, "Version:", data.versionNumber)
+
+                    // Show toast notification
+                    toast.success(`Artifact "${data.artifactName}" updated to version ${data.versionNumber}`)
+
+                    // You could also trigger a refetch of the artifact here if needed
+                    // queryClient.invalidateQueries(['artifact', data.artifactId])
+                    break
+
+                  case "artifact_update_error":
+                    console.error("[useCustomChat] ❌ Artifact update failed:", data.error)
+                    toast.error(`Failed to update artifact: ${data.error}`)
+                    break
+
                   case "error":
                     throw new Error(data.error || "Streaming error")
                 }

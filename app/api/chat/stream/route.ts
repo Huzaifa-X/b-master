@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { openai } from "@/lib/openai"
 import upstageService from "@/lib/services/upstageService"
-import { getSystemPrompt } from "@/utils/prompts"
+import { getArtifactCodingPrompt, getSystemPrompt } from "@/utils/prompts"
 import { uploadToS3 } from "@/lib/aws-s3"
 import { OpenAPITool } from "@/lib/openapi-tool-converter"
 import { executeAPITool, loadAPITools, toOpenAIToolDefinitions } from "@/lib/api-tools-loader"
@@ -144,6 +144,14 @@ export async function POST(req: NextRequest) {
         systemPrompt += `Artifact Instructions:\n${artifact.instructions}\n\n`
       }
       systemPrompt += `Please use this artifact information to help answer the user's question. Reference the artifact content when relevant.`
+
+      systemPrompt += `\n\n## Artifact Update Capability\n`
+      systemPrompt += `You can update this artifact if the user requests changes. When updating:\n`
+      systemPrompt += `1. Use the update_artifact function to save changes\n`
+      systemPrompt += `2. Create a new version with a clear description of what changed\n`
+      systemPrompt += `3. The artifact will be automatically updated with the new version\n`
+      systemPrompt += `4. Always explain what you changed after updating\n`
+      systemPrompt += `\n\n${await getArtifactCodingPrompt()}`
     }
 
     if (chatType === "ASSISTANT" && chat.assistant?.instructions) {
@@ -272,13 +280,13 @@ export async function POST(req: NextRequest) {
       systemPrompt += `You have access to the following external API tools:\n\n`
 
       apiTools.forEach(tool => {
-        systemPrompt += `### ${tool.tool.function.name}\n`
-        systemPrompt += `- **Description**: ${tool.tool.function.description}\n`
+        systemPrompt += `### ${tool.openaiTool.name}\n`
+        systemPrompt += `- **Description**: ${tool.openaiTool.description}\n`
         systemPrompt += `- **Method**: ${tool.metadata.method}\n`
         systemPrompt += `- **Endpoint**: ${tool.metadata.baseUrl}${tool.metadata.path}\n`
 
         // List parameters
-        const params = tool.tool.function.parameters
+        const params = tool.openaiTool.parameters
         if (params.properties && Object.keys(params.properties).length > 0) {
           systemPrompt += `- **Parameters**:\n`
           for (const [name, prop] of Object.entries(params.properties)) {
@@ -346,6 +354,17 @@ export async function POST(req: NextRequest) {
 
       if (apiTools.length > 0) {
         const apiToolDefs = toOpenAIToolDefinitions(apiTools)
+        apiToolDefs.forEach((tool, i) => {
+          if (tool.type === "function") {
+            if (!tool.name || !tool.parameters) {
+              console.error(
+                `[Stream] ❌ Invalid API tool at index ${i}:`,
+                JSON.stringify(tool, null, 2)
+              )
+              throw new Error("Invalid function tool shape (Responses API)")
+            }
+          }
+        })
         tools.push(...apiToolDefs)
         console.log(`[Stream] Added ${apiToolDefs.length} API tool definitions to OpenAI request`)
       }
@@ -356,6 +375,35 @@ export async function POST(req: NextRequest) {
           vector_store_ids: [chat.assistant.vectorStoreId]
         })
       }
+
+      if (artifact) {
+        tools.push({
+          type: "function",
+          name: "update_artifact",
+          description: `Update the current artifact "${artifact.name}" with new HTML code.`,
+          parameters: {
+            type: "object",
+            properties: {
+              updatedCode: {
+                type: "string",
+                description: "The complete updated HTML code for the artifact."
+              },
+              changeDescription: {
+                type: "string",
+                description: "What changed and why."
+              },
+              changeSummary: {
+                type: "string",
+                description: "One-line summary of the change."
+              }
+            },
+            required: ["updatedCode", "changeDescription", "changeSummary"]
+          }
+        })
+
+        console.log(`[Stream] ✅ Added artifact update tool`)
+      }
+
     }
 
     // Prepare input content with images if any
@@ -575,7 +623,7 @@ export async function POST(req: NextRequest) {
                           event.item.status === "completed" &&
                           event.item.result &&
                           (mcpCallName.toLowerCase().includes('invoice') ||
-                           mcpCallName.toLowerCase().includes('create'))
+                            mcpCallName.toLowerCase().includes('create'))
                         ) {
                           try {
                             console.log("[Stream] 📄 Generating invoice PDF...")
@@ -645,8 +693,93 @@ export async function POST(req: NextRequest) {
 
                       console.log(`[Stream] Function call detected: ${functionName}`)
 
+                      if (functionName === "update_artifact" && artifact) {
+                        console.log(`[Stream] 🎨 Updating artifact: ${artifact.name}`)
+
+                        try {
+                          const { updatedCode, changeDescription, changeSummary } = functionArgs
+
+                          if (!updatedCode || !changeDescription) {
+                            throw new Error("Missing required parameters for artifact update")
+                          }
+
+                          // Create new version using the artifact action
+                          const { createArtifactVersion } = await import("@/app/actions/update-artifact.action")
+
+                          const versionResult = await createArtifactVersion({
+                            artifactId: parseInt(artifact.id),
+                            userId: BigInt(session.user.id),
+                            code: updatedCode,
+                            description: changeDescription,
+                            changeType: 'ai', // Mark as AI-generated update
+                            setAsActive: true // Set as the new active version
+                          })
+
+                          if (!versionResult.success) {
+                            throw new Error(versionResult.error || "Failed to create artifact version")
+                          }
+
+                          console.log(`[Stream] ✅ Artifact updated successfully. New version: ${versionResult.version?.versionNumber}`)
+
+                          // Track that artifact was updated
+                          if (!usedTools.includes("artifact_update")) {
+                            usedTools.push("artifact_update")
+                          }
+
+                          // Add success message to assistant response
+                          const successMessage = `\n\n✅ **Artifact Updated Successfully**\n\n` +
+                            `**Version:** ${versionResult.version?.versionNumber}\n` +
+                            `**Change:** ${changeSummary}\n\n` +
+                            `The artifact "${artifact.name}" has been updated with your requested changes.\n\n`
+
+                          assistantResponse += successMessage
+
+                          // Stream the update notification to the client
+                          controller.enqueue(
+                            encoder.encode(`data: ${JSON.stringify({
+                              type: "artifact_updated",
+                              artifactId: artifact.id,
+                              artifactName: artifact.name,
+                              versionNumber: versionResult.version?.versionNumber,
+                              changeSummary: changeSummary
+                            })}\n\n`)
+                          )
+
+                          // Stream the text
+                          controller.enqueue(
+                            encoder.encode(`data: ${JSON.stringify({
+                              type: "text",
+                              content: successMessage
+                            })}\n\n`)
+                          )
+
+                        } catch (updateError: any) {
+                          console.error(`[Stream] ❌ Artifact update error:`, updateError)
+
+                          const errorMessage = `\n\n⚠️ **Failed to Update Artifact**\n\n` +
+                            `Error: ${updateError.message}\n\n` +
+                            `The artifact could not be updated. Please try again or check your permissions.\n\n`
+
+                          assistantResponse += errorMessage
+
+                          controller.enqueue(
+                            encoder.encode(`data: ${JSON.stringify({
+                              type: "artifact_update_error",
+                              error: updateError.message
+                            })}\n\n`)
+                          )
+
+                          controller.enqueue(
+                            encoder.encode(`data: ${JSON.stringify({
+                              type: "text",
+                              content: errorMessage
+                            })}\n\n`)
+                          )
+                        }
+                      }
+
                       // Check if this is one of our API tools
-                      const isAPITool = apiTools.some(t => t.tool.function.name === functionName)
+                      const isAPITool = apiTools.some(t => t.openaiTool.name === functionName)
 
                       if (isAPITool) {
                         console.log(`[Stream] Executing API tool: ${functionName}`)

@@ -3,16 +3,14 @@
 import { ParsedSchema, ParsedEndpoint, ParsedParameter } from './openapi-parser'
 
 export interface OpenAPITool {
-  tool: {
+  openaiTool: {
     type: "function"
-    function: {
-      name: string
-      description: string
-      parameters: {
-        type: "object"
-        properties: Record<string, any>
-        required: string[]
-      }
+    name: string
+    description: string
+    parameters: {
+      type: "object"
+      properties: Record<string, any>
+      required: string[]
     }
   }
   executor: (args: any, authConfig?: AuthConfig) => Promise<any>
@@ -90,7 +88,7 @@ function convertEndpointToTool(
   // Add request body parameters (for POST, PUT, PATCH)
   if (endpoint.requestBody?.content?.['application/json']?.schema) {
     const bodySchema = endpoint.requestBody.content['application/json'].schema
-    
+
     if (bodySchema.properties) {
       // Merge body properties into function parameters
       Object.assign(functionParams.properties, bodySchema.properties)
@@ -102,21 +100,19 @@ function convertEndpointToTool(
   }
 
   // Generate function name and description
-  const functionName = endpoint.operationId || 
+  const functionName = endpoint.operationId ||
     `${endpoint.method.toLowerCase()}_${endpoint.path.replace(/[^a-zA-Z0-9]/g, '_')}`
-  
-  const description = endpoint.summary || 
-    endpoint.description || 
+
+  const description = endpoint.summary ||
+    endpoint.description ||
     `${endpoint.method} ${endpoint.path}`
 
   return {
-    tool: {
+    openaiTool: {
       type: "function",
-      function: {
-        name: functionName,
-        description: description,
-        parameters: functionParams
-      }
+      name: functionName,
+      description,
+      parameters: functionParams
     },
     executor: async (args: any, auth?: AuthConfig) => {
       return await executeAPICall(
@@ -131,10 +127,11 @@ function convertEndpointToTool(
     metadata: {
       method: endpoint.method,
       path: endpoint.path,
-      baseUrl: baseUrl,
+      baseUrl,
       operationId: endpoint.operationId
     }
   }
+
 }
 
 /**
@@ -250,10 +247,10 @@ async function executeAPICall(
 
     // Handle non-JSON responses
     const contentType = response.headers.get('content-type')
-    
+
     if (!response.ok) {
       let errorMessage = `API request failed: ${response.status} ${response.statusText}`
-      
+
       try {
         if (contentType?.includes('application/json')) {
           const errorData = await response.json()
@@ -267,7 +264,7 @@ async function executeAPICall(
       } catch (e) {
         // Ignore parse errors
       }
-      
+
       throw new Error(errorMessage)
     }
 
@@ -300,21 +297,21 @@ export async function testTool(
   try {
     // Use provided args or generate empty object
     const args = exampleArgs || {}
-    
-    console.log(`[OpenAPI Test] Testing ${tool.tool.function.name}`)
+
+    console.log(`[OpenAPI Test] Testing ${tool.openaiTool.name}`)
     console.log(`[OpenAPI Test] Args:`, args)
-    
+
     const result = await tool.executor(args)
-    
+
     console.log(`[OpenAPI Test] Success:`, result)
-    
+
     return {
       success: true,
       result
     }
   } catch (error: any) {
     console.error(`[OpenAPI Test] Error:`, error.message)
-    
+
     return {
       success: false,
       error: error.message

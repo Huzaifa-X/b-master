@@ -53,7 +53,7 @@ export async function loadAPITools(assistantId: string): Promise<{
 
     console.log(`[API Tools] Loaded ${tools.length} tools for assistant ${assistantId}:`)
     tools.forEach(tool => {
-      console.log(`  - ${tool.tool.function.name}: ${tool.metadata.method} ${tool.metadata.path}`)
+      console.log(`  - ${tool.openaiTool.name}: ${tool.metadata.method} ${tool.metadata.path}`)
     })
 
     return {
@@ -78,7 +78,7 @@ export async function executeAPITool(
   functionName: string,
   args: any
 ): Promise<any> {
-  const tool = tools.find(t => t.tool.function.name === functionName)
+  const tool = tools.find(t => t.openaiTool.name === functionName)
 
   if (!tool) {
     throw new Error(`Tool "${functionName}" not found`)
@@ -100,6 +100,8 @@ export async function executeAPITool(
 /**
  * Convert OpenAPI tools to the format expected by OpenAI API
  */
-export function toOpenAIToolDefinitions(tools: OpenAPITool[]): any[] {
-  return tools.map(tool => tool.tool)
+export function toOpenAIToolDefinitions(
+  tools: OpenAPITool[]
+) {
+  return tools.map(t => t.openaiTool)
 }

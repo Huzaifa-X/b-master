@@ -28,7 +28,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
 import { useCreatePost } from "@/hooks/use-newFeed"
 import { useInitiateChat, useSendMessage } from "@/hooks/use-assistant-chat"
-import { useRouter, useParams } from "next/navigation"
+import { useRouter, useParams, usePathname } from "next/navigation"
 
 interface AssistantMessageProps {
     content: string
@@ -46,6 +46,9 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
     const [previewImage, setPreviewImage] = useState<string | null>(null)
     const [shareDialogOpen, setShareDialogOpen] = useState(false)
     const [contactDialogOpen, setContactDialogOpen] = useState(false)
+    const pathname = usePathname()
+
+    const isAskBMode = pathname.startsWith("/ask-b")
 
     const router = useRouter()
     const params = useParams()
@@ -359,7 +362,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopy} title="Copy">
                             <Copy className="h-3.5 w-3.5" />
                         </Button>
-                        {!shared && (
+                        {!shared && !isAskBMode &&(
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="h-6 w-6" title="Share">
