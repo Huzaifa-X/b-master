@@ -35,6 +35,9 @@ export function useCustomChat(options: UseCustomChatOptions) {
   // Track if auto-streaming has been started for this chat
   const hasStartedAutoStream = useRef(false)
 
+  // 🔥 NEW: Use a ref to track streaming state immediately (doesn't wait for React render)
+  const isStreamingRef = useRef(false)
+
   // Load specific chat
   const {
     data: chatData,
@@ -149,6 +152,13 @@ export function useCustomChat(options: UseCustomChatOptions) {
     }
   }, [chatData])
 
+  useEffect(() => {
+    if (dbMessages.length > 0 && messages.length === 0 && !isStreamingRef.current) {
+      console.log("[useCustomChat] 📋 Initializing messages state with", dbMessages.length, "messages from DB")
+      setMessages(dbMessages)
+    }
+  }, [dbMessages, messages.length])
+
   // Auto-start streaming if there's a PENDING user message without response
   useEffect(() => {
     if (!context || isStreaming || isLoadingMessages || !chatData || hasStartedAutoStream.current) return
@@ -238,6 +248,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
       // Start streaming automatically
       const startAutoStream = async () => {
         try {
+          isStreamingRef.current = true
           setIsStreaming(true)
           setStreamingMessage("")
           abortControllerRef.current = new AbortController()
@@ -252,7 +263,11 @@ export function useCustomChat(options: UseCustomChatOptions) {
             isStreaming: true
           }
 
-          setMessages(prev => [...prev, streamingMessage])
+          setMessages(prev => {
+            const newMessages = [...prev, streamingMessage]
+            console.log("[useCustomChat] Messages array now has:", newMessages.length, "messages")
+            return newMessages
+          })
 
           // Start streaming
           const streamResponse = await fetch("/api/chat/stream", {
@@ -301,13 +316,23 @@ export function useCustomChat(options: UseCustomChatOptions) {
                   case "text":
                     assistantContent += data.content
                     setStreamingMessage(assistantContent)
-                    setMessages(prev =>
-                      prev.map(msg =>
+                    setMessages(prev => {
+                      const updated = prev.map(msg =>
                         msg.id === tempAssistantId
                           ? { ...msg, content: assistantContent }
                           : msg
                       )
-                    )
+
+                      // Verify the update happened
+                      const streamingMsg = updated.find(msg => msg.id === tempAssistantId)
+                      if (streamingMsg) {
+                        console.log("[useCustomChat] ✅ Message updated in state, content length:", streamingMsg.content.length)
+                      } else {
+                        console.error("[useCustomChat] ❌ STREAMING MESSAGE NOT FOUND IN STATE!")
+                      }
+
+                      return updated
+                    })
                     break
                   case "image":
                     const imageMarkdown = `\n\n![Generated Image](${data.url})`
@@ -345,6 +370,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
             toast.error("Failed to generate response")
           }
         } finally {
+          isStreamingRef.current = false
           setIsStreaming(false)
           abortControllerRef.current = null
         }
@@ -365,7 +391,20 @@ export function useCustomChat(options: UseCustomChatOptions) {
   )
 
   useEffect(() => {
-    if (!isStreaming && dbMessageIds !== currentMessageIds) {
+    if (isStreamingRef.current) {
+      console.log("[useCustomChat] 🔒 Skipping DB sync - streaming in progress (ref check)")
+      return
+    }
+
+    // 🔥 Also check local state for streaming messages
+    const hasLocalStreamingMessage = messages.some(m => m.isStreaming)
+
+    if (hasLocalStreamingMessage) {
+      console.log("[useCustomChat] 🔒 Skipping DB sync - has streaming message in local state")
+      return
+    }
+
+    if (dbMessageIds !== currentMessageIds) {
       console.log("[useCustomChat] Updating messages from DB:", dbMessages.length)
       setMessages(dbMessages)
 
@@ -403,11 +442,11 @@ export function useCustomChat(options: UseCustomChatOptions) {
 
   // Send message with streaming
   const sendMessage = useCallback(async (content: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; dropbox?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: Array<{ id: string; name: string; email: string }> }) => {
-    if (!context || !content.trim() || isStreaming) {
+    if (!context || !content.trim() || isStreamingRef.current) {  // 🔥 Use ref
       console.warn("[useCustomChat] Cannot send message:", {
         hasContext: !!context,
         hasContent: !!content.trim(),
-        isStreaming
+        isStreaming: isStreamingRef.current
       })
       return
     }
@@ -416,6 +455,8 @@ export function useCustomChat(options: UseCustomChatOptions) {
       content: content.substring(0, 50),
       chatId: context.chatId
     })
+
+    isStreamingRef.current = true
 
     abortControllerRef.current = new AbortController()
 
@@ -649,6 +690,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
         ))
       }
     } finally {
+      isStreamingRef.current = false
       setIsStreaming(false)
       setStreamingMessage("")
       abortControllerRef.current = null
@@ -662,6 +704,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
     }
+    isStreamingRef.current = false
     setIsStreaming(false)
     setStreamingMessage("")
     // Remove any streaming messages
