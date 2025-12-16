@@ -5,6 +5,8 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import Pusher from 'pusher'
+import { decrypt } from '@/lib/encryption'
+import { refreshDropboxToken } from '@/lib/dropbox/refresh-token'
 
 // Initialize Pusher
 const pusher = new Pusher({
@@ -513,6 +515,7 @@ export async function sendChatMessage(data: {
     attachmentUrl?: string
     attachmentName?: string
     attachmentSize?: number
+    useDropbox?: boolean
 }) {
     try {
         const session = await getServerSession(authOptions)
@@ -533,6 +536,43 @@ export async function sendChatMessage(data: {
             return {
                 success: false,
                 error: 'You do not have access to this chat'
+            }
+        }
+
+        // Handle Dropbox integration if enabled
+        let dropboxConnector = null
+        let dropboxAccessToken = null
+
+        if (data.useDropbox) {
+            dropboxConnector = await prisma.dropboxConnector.findFirst({
+                where: {
+                    userId,
+                    status: 'ACTIVE',
+                    deletedAt: null
+                }
+            })
+
+            if (!dropboxConnector) {
+                return {
+                    success: false,
+                    error: 'Dropbox not connected or token expired'
+                }
+            }
+
+            // Check if token is expired
+            if (new Date() >= dropboxConnector.tokenExpiry) {
+                try {
+                    // Refresh token
+                    dropboxAccessToken = await refreshDropboxToken(dropboxConnector.id)
+                } catch (error) {
+                    return {
+                        success: false,
+                        error: 'Failed to refresh Dropbox token'
+                    }
+                }
+            } else {
+                // Decrypt access token
+                dropboxAccessToken = decrypt(dropboxConnector.accessToken)
             }
         }
 
@@ -664,6 +704,27 @@ export async function sendChatMessage(data: {
             }
         }
 
+        // Track Dropbox usage if enabled
+        if (data.useDropbox && dropboxConnector) {
+            await prisma.dropboxChatUsage.upsert({
+                where: {
+                    dropboxConnectorId_assistantUserChatId: {
+                        dropboxConnectorId: dropboxConnector.id,
+                        assistantUserChatId: chatId
+                    }
+                },
+                create: {
+                    dropboxConnectorId: dropboxConnector.id,
+                    assistantUserChatId: chatId,
+                    usageCount: 1
+                },
+                update: {
+                    lastUsedAt: new Date(),
+                    usageCount: { increment: 1 }
+                }
+            })
+        }
+
         revalidatePath(`/assistants/${data.assistantId}/messenger`)
 
         return {
@@ -679,7 +740,8 @@ export async function sendChatMessage(data: {
                     ...message.sender,
                     id: message.sender.id.toString()
                 }
-            }
+            },
+            dropboxEnabled: data.useDropbox && !!dropboxAccessToken
         }
     } catch (error) {
         console.error('Error sending message:', error)

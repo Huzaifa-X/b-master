@@ -23,27 +23,32 @@ export async function POST(req: NextRequest) {
                     return
                 }
 
+                // Check file size (OpenAI has a 25MB limit)
+                if (audio.size > 25 * 1024 * 1024) {
+                    controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({ error: "Audio file too large. Maximum size is 25MB." })}\n\n`)
+                    )
+                    controller.close()
+                    return
+                }
+
                 // Convert Blob to File
                 const file = new File([audio], "recording.webm", { 
                     type: audio.type || "audio/webm" 
                 })
 
-                // Use gpt-4o-mini-transcribe for streaming support
-                const transcriptionStream = await openai.audio.transcriptions.create({
+                // Use whisper-1 for transcription
+                const transcription = await openai.audio.transcriptions.create({
                     file: file,
                     model: "gpt-4o-mini-transcribe",
                     language: language === "auto" ? undefined : language,
                     response_format: "text",
-                    stream: true,
                 })
 
-                // Stream the transcription events
-                for await (const event of transcriptionStream) {
-                    // Send each chunk to the client
-                    controller.enqueue(
-                        encoder.encode(`data: ${JSON.stringify(event)}\n\n`)
-                    )
-                }
+                // Send the transcription result
+                controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ text: transcription })}\n\n`)
+                )
 
                 // Send done signal
                 controller.enqueue(encoder.encode(`data: [DONE]\n\n`))

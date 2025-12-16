@@ -56,6 +56,8 @@ model User {
   notifications             Notification[]
   usageMetrics              UsageMetric[]
   artifactVersions          ArtifactVersion[]
+  dropboxConnectors         DropboxConnector[]
+  oauthStates               OAuthState[]
 
   @@index([email])
   @@index([googleId])
@@ -260,6 +262,7 @@ model Assistant {
   contacts            AssistantContact[]
   artifactPermissions ArtifactPermission[]
   usageMetrics        UsageMetric[]
+  dropboxConnectors   DropboxConnector[]
 
   @@index([userId])
   @@index([public])
@@ -457,6 +460,7 @@ model AssistantUserChat {
   user      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   assistant Assistant?                 @relation(fields: [assistantId], references: [id], onDelete: Cascade)
   messages  AssistantUserChatMessage[]
+  dropboxUsages DropboxChatUsage[]
 
   @@index([userId])
   @@index([assistantId])
@@ -783,4 +787,101 @@ model Prompt {
 
   @@index([name])
   @@map("prompts")
+}
+
+// ================================================================
+// MCP CONNECTORS - DROPBOX ONLY
+// ================================================================
+
+enum ConnectorStatus {
+  PENDING       // User started auth but hasn't completed
+  ACTIVE        // Connected and working
+  EXPIRED       // Token expired
+  REVOKED       // User revoked access
+  ERROR         // Connection error
+  DISABLED      // User disabled
+}
+
+model DropboxConnector {
+  id          Int             @id @default(autoincrement())
+  userId      BigInt
+  assistantId BigInt?         // Optional: connector can be user-level or assistant-specific
+
+  // Connector Identity
+  name        String          @db.VarChar(255)  // User-friendly name: "My Dropbox"
+  description String?         @db.Text
+
+  // Authentication
+  accessToken String          @db.Text          // Encrypted OAuth token
+  refreshToken String         @db.Text          // Encrypted refresh token
+  tokenExpiry DateTime                          // When token expires
+  accountId   String?         @db.VarChar(255)  // Dropbox account ID
+  accountEmail String?        @db.VarChar(255)  // Dropbox email
+
+  // Settings
+  status      ConnectorStatus  @default(PENDING)
+  requireApproval String       @default("never") @db.VarChar(50) // never, always, per_message
+  autoRefresh Boolean          @default(true)    // Auto-refresh expired tokens
+
+  // Metadata
+  metadata    Json?            @db.Json
+  // Example: {
+  //   "display_name": "John Doe",
+  //   "country": "US",
+  //   "locale": "en",
+  //   "scopes": ["files.content.read", "files.content.write"]
+  // }
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  deletedAt   DateTime?
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assistant   Assistant?       @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  chatUsages  DropboxChatUsage[]
+
+  @@unique([userId, assistantId]) // One Dropbox connector per user/assistant
+  @@index([userId])
+  @@index([assistantId])
+  @@index([status])
+  @@map("dropbox_connectors")
+}
+
+// Track which chats are using Dropbox
+model DropboxChatUsage {
+  id                  Int      @id @default(autoincrement())
+  dropboxConnectorId  Int
+  assistantUserChatId Int
+
+  isActive            Boolean  @default(true)  // User can enable/disable per chat
+  lastUsedAt          DateTime @default(now())
+  usageCount          Int      @default(0)     // Track how many times used
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  connector           DropboxConnector  @relation(fields: [dropboxConnectorId], references: [id], onDelete: Cascade)
+  chat                AssistantUserChat @relation(fields: [assistantUserChatId], references: [id], onDelete: Cascade)
+
+  @@unique([dropboxConnectorId, assistantUserChatId])
+  @@index([dropboxConnectorId])
+  @@index([assistantUserChatId])
+  @@map("dropbox_chat_usages")
+}
+
+// OAuth state storage for secure authentication flows
+model OAuthState {
+  id        String   @id @default(cuid())
+  state     String   @unique
+  userId    BigInt
+  provider  String   @db.VarChar(50) // 'dropbox', 'google', etc.
+  data      Json?    // Any additional data (returnUrl, etc.)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([state])
+  @@index([expiresAt])
+  @@map("oauth_states")
 }

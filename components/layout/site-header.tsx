@@ -4,7 +4,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { NotificationsDropdown } from "@/components/notifications/notifications-dropdown"
 import { ShareDialog } from "@/components/assistants/share-dialog"
 import { Button } from "@/components/ui/button"
-import { Share2, Pin, Loader2 } from "lucide-react"
+import { Share2, Pin, Loader2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { useAssistantStore } from "@/lib/stores/assistant-store"
 import { usePathname } from "next/navigation"
@@ -93,6 +93,17 @@ export function SiteHeader() {
     togglePin(assistantStore.currentAssistantId)
   }
 
+  const handleShareRegistration = async () => {
+    const registrationUrl = `${window.location.origin}/signup`
+    try {
+      await navigator.clipboard.writeText(registrationUrl)
+      toast.success("Registration link copied to clipboard!")
+    } catch (error) {
+      console.error("Failed to copy registration link:", error)
+      toast.error("Failed to copy link")
+    }
+  }
+
   return (
     <header className={`bg-background sticky top-0 z-50 flex w-full items-center ${isMessagesPage ? "border-b" : ""}`}>
       <div className="flex h-16 w-full items-center gap-2 px-4">
@@ -147,8 +158,26 @@ export function SiteHeader() {
           </div>
         ) : null}
 
-        {/* Right side actions - show share button when chat is open, otherwise notifications */}
+        {/* Right side actions */}
         <div className="flex items-center gap-2">
+          {/* Share registration page button - only on home page */}
+          {pathname === "/home" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-muted hover:text-primary"
+              title="Share registration page"
+              onClick={() => {
+                const registrationUrl = `${window.location.origin}/signup`
+                navigator.clipboard.writeText(registrationUrl)
+                toast.success("Registration page link copied to clipboard!")
+              }}
+            >
+              <Share2 className="h-4 w-4 text-primary" />
+            </Button>
+          )}
+
+          {/* Show chat share button when chat is open, otherwise notifications */}
           {isChatPage && chatId && !isAssistantAddPage ? (
             <ShareDialog
               shareableId={chatData?.shareableId || ""}

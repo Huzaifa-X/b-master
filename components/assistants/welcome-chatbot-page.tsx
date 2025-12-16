@@ -44,7 +44,7 @@ export function WelcomeChatbotPage({
   const handleSend = async (
     message: string,
     attachments?: { name: string; url: string; type: string; size: number }[],
-    options?: { webSearch?: boolean; research?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: Array<{ id: string; name: string; email: string }> }
+    options?: { webSearch?: boolean; research?: boolean; dropbox?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: Array<{ id: string; name: string; email: string }> }
   ) => {
     if (!message.trim() || isCreating) return
 
@@ -60,6 +60,7 @@ export function WelcomeChatbotPage({
         attachments: attachments,
         webSearch: options?.webSearch,
         research: options?.research,
+        dropbox: options?.dropbox,
         artifact: options?.artifact,
         mentionedUsers: options?.mentionedUsers,
         skipBackground: true // Skip background processing, streaming will be used

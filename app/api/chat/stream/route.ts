@@ -9,6 +9,8 @@ import { getSystemPrompt } from "@/utils/prompts"
 import { uploadToS3 } from "@/lib/aws-s3"
 import { OpenAPITool } from "@/lib/openapi-tool-converter"
 import { executeAPITool, loadAPITools, toOpenAIToolDefinitions } from "@/lib/api-tools-loader"
+import { decrypt } from "@/lib/encryption"
+import { generateInvoicePDF } from "@/lib/services/pdf-generator"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -54,7 +56,8 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { chatId, assistantId, chatType, webSearch, research, chatWithAPI, attachments, artifact } = body
+    const { chatId, assistantId, chatType, webSearch, research, chatWithAPI, attachments, artifact, dropbox } = body
+    console.log(body)
 
     const chatIdInt = parseInt(chatId)
     if (isNaN(chatIdInt)) {
@@ -126,6 +129,10 @@ export async function POST(req: NextRequest) {
       systemPrompt += `\n\nIMPORTANT: The user has requested web search. Please search the web for current information to answer their question.`
     } else if (chatWithAPI) {
       systemPrompt += `\n\nIMPORTANT: The user has requested chat with API. Please use the API to answer their question.`
+    }
+
+    if (dropbox) {
+      systemPrompt += `\n\nIMPORTANT: The user has enabled Dropbox integration. You can access their Dropbox files and perform file operations.`
     }
 
     // Add artifact information if provided
@@ -291,6 +298,10 @@ export async function POST(req: NextRequest) {
     if (chatType === "ASK_B") {
       tools.push({ type: "web_search" })
       tools.push({ type: "image_generation" })
+      tools.push({
+        type: "file_search",
+        vector_store_ids: [process.env.ASKB_VECTOR_STORE_ID || ""]
+      })
     } else {
       tools.push({ type: "web_search" })
       tools.push({ type: "image_generation" })
@@ -302,6 +313,36 @@ export async function POST(req: NextRequest) {
         authorization: process.env.STRIPE_SECRET_KEY,
         require_approval: "never",
       })
+
+      // Add Dropbox MCP tool if enabled
+      if (dropbox) {
+        console.log("================================================")
+        try {
+          const dropboxConnector = await prisma.dropboxConnector.findFirst({
+            where: {
+              userId: BigInt(session.user.id),
+              status: 'ACTIVE',
+              deletedAt: null
+            }
+          })
+
+          if (dropboxConnector && dropboxConnector.accessToken) {
+            const accessToken = decrypt(dropboxConnector.accessToken)
+            tools.push({
+              type: "mcp",
+              server_label: "Dropbox",
+              connector_id: `connector_dropbox`,
+              authorization: accessToken,
+              require_approval: "never",
+            })
+            console.log(`[Stream] Added Dropbox MCP tool for connector ${dropboxConnector.id}`)
+          } else {
+            console.warn("[Stream] Dropbox enabled but no active connector found")
+          }
+        } catch (error) {
+          console.error("[Stream] Failed to add Dropbox MCP tool:", error)
+        }
+      }
 
       if (apiTools.length > 0) {
         const apiToolDefs = toOpenAIToolDefinitions(apiTools)
@@ -512,9 +553,88 @@ export async function POST(req: NextRequest) {
                     if (event.item?.type === "web_search_call" && !usedTools.includes("web_search")) {
                       usedTools.push("web_search")
                     }
-                    if (event.item?.type === "mcp_call" && !usedTools.includes("stripe")) {
-                      usedTools.push("stripe")
-                      console.log("[Stream] Stripe MCP tool used:", event.item.name)
+                    if (event.item?.type === "mcp_call") {
+                      const mcpCallName = event.item.name || '';
+                      const mcpCallArgs = event.item.arguments ? JSON.parse(event.item.arguments) : {};
+
+                      if (mcpCallName.includes("dropbox") && !usedTools.includes("dropbox")) {
+                        usedTools.push("dropbox")
+                        console.log("[Stream] Dropbox MCP tool used:", mcpCallName)
+                      }
+
+                      // Handle Stripe MCP - Generate Invoice PDF
+                      if (mcpCallName.includes("stripe") || mcpCallName.includes("invoice")) {
+                        if (!usedTools.includes("stripe")) {
+                          usedTools.push("stripe")
+                        }
+                        console.log("[Stream] Stripe MCP tool used:", mcpCallName)
+                        console.log("[Stream] Stripe MCP arguments:", mcpCallArgs)
+
+                        // Check if this is an invoice creation
+                        if (
+                          event.item.status === "completed" &&
+                          event.item.result &&
+                          (mcpCallName.toLowerCase().includes('invoice') ||
+                           mcpCallName.toLowerCase().includes('create'))
+                        ) {
+                          try {
+                            console.log("[Stream] 📄 Generating invoice PDF...")
+
+                            // Parse the MCP result
+                            const stripeResult = typeof event.item.result === 'string'
+                              ? JSON.parse(event.item.result)
+                              : event.item.result
+
+                            // Extract invoice data from Stripe response
+                            const invoiceData = {
+                              invoiceNumber: stripeResult.number || stripeResult.id || `INV-${Date.now()}`,
+                              date: new Date(stripeResult.created * 1000 || Date.now()).toLocaleDateString(),
+                              dueDate: stripeResult.due_date
+                                ? new Date(stripeResult.due_date * 1000).toLocaleDateString()
+                                : undefined,
+                              from: {
+                                name: stripeResult.account_name || 'Your Company Name',
+                                email: stripeResult.account_email || process.env.BUSINESS_EMAIL,
+                                address: stripeResult.account_address
+                              },
+                              to: {
+                                name: stripeResult.customer_name || mcpCallArgs.customer_name || 'Customer',
+                                email: stripeResult.customer_email || mcpCallArgs.customer_email,
+                                address: stripeResult.customer_address
+                              },
+                              items: stripeResult.lines?.data?.map((line: any) => ({
+                                description: line.description || 'Service',
+                                quantity: line.quantity || 1,
+                                unitPrice: line.amount / 100, // Stripe uses cents
+                                amount: line.amount / 100
+                              })) || [{
+                                description: mcpCallArgs.description || 'Service',
+                                quantity: 1,
+                                unitPrice: (stripeResult.amount_due || stripeResult.total || 0) / 100,
+                                amount: (stripeResult.amount_due || stripeResult.total || 0) / 100
+                              }],
+                              subtotal: (stripeResult.subtotal || stripeResult.amount_due || 0) / 100,
+                              tax: stripeResult.tax ? stripeResult.tax / 100 : undefined,
+                              taxRate: stripeResult.tax_percent,
+                              total: (stripeResult.total || stripeResult.amount_due || 0) / 100,
+                              currency: stripeResult.currency?.toUpperCase() || 'USD',
+                              notes: stripeResult.footer || mcpCallArgs.notes
+                            }
+
+                            // Generate PDF
+                            const pdfUrl = await generateInvoicePDF(invoiceData)
+                            console.log("[Stream] ✅ Invoice PDF generated:", pdfUrl)
+
+                            // Add PDF URL to assistant response
+                            assistantResponse += `\n\n📄 **Invoice PDF Generated**\n[Download Invoice](${pdfUrl})\n\n`
+
+                          } catch (pdfError) {
+                            console.error("[Stream] ❌ PDF generation error:", pdfError)
+                            // Don't fail the whole response, just log the error
+                            assistantResponse += `\n\n⚠️ Note: Invoice was created but PDF generation failed.\n\n`
+                          }
+                        }
+                      }
                     }
 
                     if (event.item?.type === "function_call") {

@@ -75,6 +75,7 @@ export async function createChatWithMessage(data: {
   webSearch?: boolean
   research?: boolean
   chatWithAPI?: boolean
+  dropbox?: boolean
   artifact?: {
     id: string
     name: string
@@ -231,6 +232,7 @@ async function generateChatResponseInBackground(data: {
   webSearch?: boolean
   research?: boolean
   chatWithAPI?: boolean
+  dropbox?: boolean
   attachments?: {
     name: string
     url: string
@@ -291,6 +293,10 @@ async function generateChatResponseInBackground(data: {
 
     if (data.chatWithAPI) {
       systemPrompt += `\n\nIMPORTANT: The user has requested chat with API. Please use the API to answer their question.`
+    }
+
+    if (data.dropbox) {
+      systemPrompt += `\n\nIMPORTANT: The user has enabled Dropbox integration. You can access their Dropbox files and perform file operations.`
     }
 
     // Add assistant-specific instructions if available
@@ -1180,6 +1186,7 @@ export async function sendChatMessage(data: {
   webSearch?: boolean
   research?: boolean
   chatWithAPI?: boolean
+  dropbox?: boolean
   artifact?: {
     id: string
     name: string
@@ -1271,6 +1278,7 @@ export async function sendChatMessage(data: {
         webSearch: data.webSearch || false,
         research: data.research || false,
         chatWithAPI: data.chatWithAPI || false,
+        dropbox: data.dropbox || false,
         attachments: data.attachments // Pass attachments for extraction
       }).catch(err => {
         console.error("[sendChatMessage] Background response generation failed:", err)

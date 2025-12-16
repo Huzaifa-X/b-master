@@ -63,6 +63,7 @@
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.10",
     "openai": "^6.8.1",
+    "puppeteer": "^24.33.0",
     "pusher": "^5.2.0",
     "pusher-js": "^8.4.0",
     "react": "19.1.0",

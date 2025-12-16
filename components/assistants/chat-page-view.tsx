@@ -242,7 +242,7 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
     }
   }
 
-  const handleSend = async (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean }) => {
+  const handleSend = async (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; dropbox?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: { id: string; name: string; email: string }[] }) => {
     if (!message.trim() || isStreaming || isCreating) return
 
     setIsCreating(true)
@@ -257,8 +257,6 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
   const handleCancel = () => {
     cancelStreaming()
   }
-
-  
   
   // Find the last user message
   const lastUserMessage = messages.filter(m => m.role === "user").slice(-1)[0]
