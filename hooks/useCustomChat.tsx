@@ -3,7 +3,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { 
+import {
   getSpecificChat,
   getChatMessages,
   sendChatMessage,
@@ -23,33 +23,33 @@ export interface UseCustomChatOptions {
 export function useCustomChat(options: UseCustomChatOptions) {
   const { mode, assistantId, chatId } = options
   const queryClient = useQueryClient()
-  
+
   const [context, setContext] = useState<ChatContext | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingMessage, setStreamingMessage] = useState("")
   const abortControllerRef = useRef<AbortController | null>(null)
-  
+
   // 🔥 Track if initial cleanup has run (only run once per chat session)
   const hasRunInitialCleanup = useRef(false)
   // Track if auto-streaming has been started for this chat
   const hasStartedAutoStream = useRef(false)
 
   // Load specific chat
-  const { 
-    data: chatData, 
+  const {
+    data: chatData,
     isLoading: isInitializing,
-    error: initError 
+    error: initError
   } = useQuery({
     queryKey: ["chat", chatId],
     queryFn: async () => {
       console.log("[useCustomChat] Loading chat:", chatId)
       const result = await getSpecificChat(chatId)
-      
+
       if (!result.success || !result.chat) {
         throw new Error(result.error || "Failed to load chat")
       }
-      
+
       return result.chat
     },
     staleTime: 1000 * 60 * 5,
@@ -57,15 +57,15 @@ export function useCustomChat(options: UseCustomChatOptions) {
   })
 
   // Load messages for the chat
-  const { 
-    data: dbMessages = [], 
+  const {
+    data: dbMessages = [],
     isLoading: isLoadingMessages,
-    refetch: refetchMessages 
+    refetch: refetchMessages
   } = useQuery({
     queryKey: ["chat-messages", chatId],
     queryFn: async () => {
       console.log("[useCustomChat] Loading messages for chat:", chatId)
-      
+
       // 🔥 Only run cleanup on INITIAL load, not on every refetch
       // This prevents deleting messages that are still waiting for streaming to complete
       if (!hasRunInitialCleanup.current) {
@@ -81,15 +81,15 @@ export function useCustomChat(options: UseCustomChatOptions) {
         }
         hasRunInitialCleanup.current = true
       }
-      
+
       // Then load messages
       const result = await getChatMessages(chatId)
-      
+
       if (!result.success) {
         console.error("[useCustomChat] Error loading messages:", result.error)
         return []
       }
-      
+
       return result.messages
     },
     enabled: !!chatId,
@@ -97,34 +97,34 @@ export function useCustomChat(options: UseCustomChatOptions) {
     // Poll more frequently when waiting for background response
     refetchInterval: (query) => {
       if (isStreaming) return false
-      
+
       const msgs = query.state.data || []
       if (msgs.length === 0) return false
-      
+
       // Get the last user message
       const userMessages = msgs.filter((msg: Message) => msg.role === "user")
       if (userMessages.length === 0) return 30000
-      
+
       const lastUserMsg = userMessages[userMessages.length - 1]
       const lastUserMsgTime = new Date(lastUserMsg.createdAt).getTime()
-      
+
       // Check if there's an assistant response after the last user message
-      const assistantMessages = msgs.filter((msg: Message) => 
-        msg.role === "assistant" && 
-        msg.content && 
+      const assistantMessages = msgs.filter((msg: Message) =>
+        msg.role === "assistant" &&
+        msg.content &&
         msg.content.trim().length > 0
       )
-      
-      const hasResponseAfterLastUser = assistantMessages.some((msg: Message) => 
+
+      const hasResponseAfterLastUser = assistantMessages.some((msg: Message) =>
         new Date(msg.createdAt).getTime() > lastUserMsgTime
       )
-      
+
       // Poll every 2s if waiting for response, otherwise 30s
       if (!hasResponseAfterLastUser) {
         console.log("[useCustomChat] Waiting for assistant response, polling every 2s")
         return 2000
       }
-      
+
       return 30000 // Default polling interval
     },
   })
@@ -160,7 +160,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
     // Check if message has PENDING status (from DB)
     const dbMessage = dbMessages.find(m => m.id === lastMessage.id)
     console.log("[useCustomChat] Last message status:", dbMessage?.status, "Message:", lastMessage.id)
-    
+
     if (!dbMessage || dbMessage.status !== "PENDING") {
       console.log("[useCustomChat] Skipping auto-stream - status is not PENDING")
       return
@@ -174,10 +174,67 @@ export function useCustomChat(options: UseCustomChatOptions) {
     if (!hasResponse) {
       console.log("[useCustomChat] ✅ Auto-starting streaming for PENDING message:", lastMessage.id)
       hasStartedAutoStream.current = true
-      
+
       // Get attachments from the user message
       const attachments = lastMessage.attachments || []
-      
+
+      let options = {
+        webSearch: false,
+        research: false,
+        chatWithAPI: false,
+        dropbox: false,
+        artifact: null as any
+      }
+
+      const SESSION_STORAGE_KEY = "chat_mode"
+      const ARTIFACT_STORAGE_KEY = "chat_artifact_data"
+      console.log("[useCustomChat] Checking sessionStorage...")
+      console.log("[useCustomChat] sessionStorage.getItem:", sessionStorage.getItem(SESSION_STORAGE_KEY))
+      console.log("[useCustomChat] All sessionStorage keys:", Object.keys(sessionStorage))
+
+      try {
+        const savedMode = sessionStorage.getItem(SESSION_STORAGE_KEY)
+
+        console.log("[useCustomChat] Retrieved mode from sessionStorage:", savedMode)
+
+        if (savedMode === "webSearch") {
+          options.webSearch = true
+        } else if (savedMode === "research") {
+          options.research = true
+        } else if (savedMode === "chatWithAPI") {
+          options.chatWithAPI = true
+        } else if (savedMode === "dropbox") {
+          options.dropbox = true
+        } else if (savedMode === "artifact") {
+          // 🔥 Load artifact data from sessionStorage
+          const savedArtifact = sessionStorage.getItem(ARTIFACT_STORAGE_KEY)
+          if (savedArtifact) {
+            try {
+              options.artifact = JSON.parse(savedArtifact)
+              console.log("[useCustomChat] Retrieved artifact from sessionStorage:", options.artifact.name)
+            } catch (artifactParseError) {
+              console.error("[useCustomChat] Error parsing artifact from sessionStorage:", artifactParseError)
+            }
+          } else {
+            console.warn("[useCustomChat] Artifact mode detected but no artifact data found in sessionStorage")
+          }
+        }
+
+        const savedArtifact = sessionStorage.getItem(ARTIFACT_STORAGE_KEY)
+        if (savedArtifact) {
+          try {
+            options.artifact = JSON.parse(savedArtifact)
+            console.log("[useCustomChat] Retrieved artifact from sessionStorage:", options.artifact.name)
+          } catch (artifactParseError) {
+            console.error("[useCustomChat] Error parsing artifact from sessionStorage:", artifactParseError)
+          }
+        }
+
+        console.log("[useCustomChat] Auto-stream options:", options)
+      } catch (error) {
+        console.error("[useCustomChat] Error retrieving options from sessionStorage:", error)
+      }
+
       // Start streaming automatically
       const startAutoStream = async () => {
         try {
@@ -205,8 +262,11 @@ export function useCustomChat(options: UseCustomChatOptions) {
               chatId: context.chatId,
               assistantId: context.assistantId,
               chatType: context.chatType,
-              webSearch: false, // Default to false for auto-start
-              research: false,
+              webSearch: options.webSearch,      // 🔥 Use retrieved option
+              research: options.research,        // 🔥 Use retrieved option
+              chatWithAPI: options.chatWithAPI,  // 🔥 Use retrieved option
+              dropbox: options.dropbox,          // 🔥 Use retrieved option
+              artifact: options.artifact,        // 🔥 Use retrieved option
               attachments: attachments
             }),
             signal: abortControllerRef.current.signal
@@ -295,12 +355,12 @@ export function useCustomChat(options: UseCustomChatOptions) {
   }, [context, dbMessages, isStreaming, isLoadingMessages, chatData, refetchMessages])
 
   // Memoize message IDs for comparison
-  const dbMessageIds = useMemo(() => 
-    dbMessages.map(m => m.id).join(','), 
+  const dbMessageIds = useMemo(() =>
+    dbMessages.map(m => m.id).join(','),
     [dbMessages]
   )
-  const currentMessageIds = useMemo(() => 
-    messages.map(m => m.id).join(','), 
+  const currentMessageIds = useMemo(() =>
+    messages.map(m => m.id).join(','),
     [messages]
   )
 
@@ -308,35 +368,35 @@ export function useCustomChat(options: UseCustomChatOptions) {
     if (!isStreaming && dbMessageIds !== currentMessageIds) {
       console.log("[useCustomChat] Updating messages from DB:", dbMessages.length)
       setMessages(dbMessages)
-      
+
       // Check if a new assistant response was added
       const previousAssistantCount = messages.filter(m => m.role === "assistant").length
       const currentAssistantCount = dbMessages.filter(m => m.role === "assistant").length
-      
+
       // If a new assistant message was added, invalidate sidebar and header queries
       if (currentAssistantCount > previousAssistantCount && context) {
         console.log("[useCustomChat] New assistant response detected, invalidating queries")
-        
-      // Invalidate chat history (sidebar) and header when new response arrives
-      const mode = context.chatType === "ASK_B" ? "ask-b" : "assistant"
-      
-      // Invalidate and refetch sidebar (chat history)
-      queryClient.invalidateQueries({
-        queryKey: ["chat-history", mode, context.assistantId || undefined]
-      })
-      queryClient.refetchQueries({
-        queryKey: ["chat-history", mode, context.assistantId || undefined]
-      })
-      
-      // Invalidate and refetch header (chat topic and info)
-      queryClient.invalidateQueries({
-        queryKey: ["chat-header", context.chatId]
-      })
-      queryClient.refetchQueries({
-        queryKey: ["chat-header", context.chatId]
-      })
-      
-      console.log("[useCustomChat] Queries invalidated and refetched for sidebar and header")
+
+        // Invalidate chat history (sidebar) and header when new response arrives
+        const mode = context.chatType === "ASK_B" ? "ask-b" : "assistant"
+
+        // Invalidate and refetch sidebar (chat history)
+        queryClient.invalidateQueries({
+          queryKey: ["chat-history", mode, context.assistantId || undefined]
+        })
+        queryClient.refetchQueries({
+          queryKey: ["chat-history", mode, context.assistantId || undefined]
+        })
+
+        // Invalidate and refetch header (chat topic and info)
+        queryClient.invalidateQueries({
+          queryKey: ["chat-header", context.chatId]
+        })
+        queryClient.refetchQueries({
+          queryKey: ["chat-header", context.chatId]
+        })
+
+        console.log("[useCustomChat] Queries invalidated and refetched for sidebar and header")
       }
     }
   }, [dbMessageIds, currentMessageIds, isStreaming, dbMessages, messages, context, queryClient])
@@ -344,17 +404,17 @@ export function useCustomChat(options: UseCustomChatOptions) {
   // Send message with streaming
   const sendMessage = useCallback(async (content: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; dropbox?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: Array<{ id: string; name: string; email: string }> }) => {
     if (!context || !content.trim() || isStreaming) {
-      console.warn("[useCustomChat] Cannot send message:", { 
-        hasContext: !!context, 
-        hasContent: !!content.trim(), 
-        isStreaming 
+      console.warn("[useCustomChat] Cannot send message:", {
+        hasContext: !!context,
+        hasContent: !!content.trim(),
+        isStreaming
       })
       return
     }
 
-    console.log("[useCustomChat] Sending message with streaming:", { 
+    console.log("[useCustomChat] Sending message with streaming:", {
       content: content.substring(0, 50),
-      chatId: context.chatId 
+      chatId: context.chatId
     })
 
     abortControllerRef.current = new AbortController()
@@ -400,10 +460,10 @@ export function useCustomChat(options: UseCustomChatOptions) {
           prev.map(msg =>
             msg.id === userMessage.id
               ? {
-                  ...msg,
-                  id: result.message!.id,
-                  createdAt: result.message!.createdAt
-                }
+                ...msg,
+                id: result.message!.id,
+                createdAt: result.message!.createdAt
+              }
               : msg
           )
         )
@@ -411,7 +471,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
 
       // Step 2: Start streaming response
       console.log("[useCustomChat] Starting streaming response")
-      
+
       const streamResponse = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -544,7 +604,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
                   )
                 )
                 // Refetch to get the final message from DB
-      await refetchMessages()
+                await refetchMessages()
                 break
 
               case "error":
@@ -576,15 +636,15 @@ export function useCustomChat(options: UseCustomChatOptions) {
         console.log("[useCustomChat] Request cancelled")
         toast.info("Message cancelled")
         // Remove streaming message on cancel
-        setMessages(prev => prev.filter(msg => 
+        setMessages(prev => prev.filter(msg =>
           msg.id !== userMessage.id && !msg.isStreaming
         ))
       } else {
         console.error("[useCustomChat] Error sending message:", error)
         toast.error(error.message || "Failed to send message")
-        
+
         // Remove user message and any streaming messages on error
-        setMessages(prev => prev.filter(msg => 
+        setMessages(prev => prev.filter(msg =>
           msg.id !== userMessage.id && !msg.isStreaming
         ))
       }

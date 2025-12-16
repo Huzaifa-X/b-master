@@ -1,3 +1,4 @@
+// components/assistants/attachment-dropdown.tsx
 "use client"
 
 import { FileIcon, PlusIcon, X, Globe, Search, Sparkles, Code } from "lucide-react"
@@ -23,9 +24,12 @@ interface AttachmentDropdownProps {
     disabled?: boolean
     mode?: "ask-b" | "assistant"
     assistantId?: string
+    selectedArtifact?: { id: string; name: string; instructions: string; htmlContent: string } | null
+    onRemoveArtifact?: () => void
 }
 
-const SESSION_STORAGE_KEY = "chat_search_mode"
+const SESSION_STORAGE_KEY = "chat_mode"
+const ARTIFACT_STORAGE_KEY = "chat_artifact_data"
 
 export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     onFileSelect,
@@ -37,9 +41,11 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     disabled = false,
     mode = "assistant",
     assistantId,
+    selectedArtifact,
+    onRemoveArtifact,
 }) => {
     const [isOpen, setIsOpen] = useState(false)
-    const [selectedMode, setSelectedMode] = useState<"webSearch" | "research" | "chatWithAPI" | "dropbox" | null>(null)
+    const [selectedMode, setSelectedMode] = useState<"webSearch" | "research" | "chatWithAPI" | "dropbox" | "artifact" | null>(null)
     const [isCheckingDropbox, setIsCheckingDropbox] = useState(true)
     const [hasDropboxConnected, setHasDropboxConnected] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -53,6 +59,15 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     useEffect(() => {
         checkDropboxConnection()
     }, [])
+
+    // 🔥 Update selected mode when artifact prop changes
+    useEffect(() => {
+        if (selectedArtifact) {
+            setSelectedMode("artifact")
+        } else if (selectedMode === "artifact") {
+            setSelectedMode(null)
+        }
+    }, [selectedArtifact])
 
     // Load from session storage on mount
     useEffect(() => {
@@ -150,10 +165,16 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     const handleRemoveMode = () => {
         const currentMode = selectedMode
         setSelectedMode(null)
+
         // Remove from session storage
         if (typeof window !== "undefined") {
             sessionStorage.removeItem(SESSION_STORAGE_KEY)
+            // 🔥 Also remove artifact data if it was artifact mode
+            if (currentMode === "artifact") {
+                sessionStorage.removeItem("chat_artifact_data")
+            }
         }
+
         // Notify parent to disable the mode
         if (currentMode === "webSearch") {
             onWebSearch?.(false)
@@ -161,8 +182,9 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
             onResearch?.(false)
         } else if (currentMode === "dropbox") {
             onDropbox?.(false)
+        } else if (currentMode === "artifact") {
+            onRemoveArtifact?.()
         }
-        // Note: onChatWithAPI doesn't need to be called with false since it's a one-time action
     }
 
 
@@ -281,11 +303,12 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                 </DropdownMenu>
 
                 {selectedMode && (
-                    <div className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm ${
-                        selectedMode === "dropbox"
+                    <div className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm ${selectedMode === "dropbox"
                             ? "border-blue-500 bg-blue-500/10"
-                            : "border-primary bg-primary/10"
-                    }`}>
+                            : selectedMode === "artifact"
+                                ? "border-purple-500 bg-purple-500/10"
+                                : "border-primary bg-primary/10"
+                        }`}>
                         {selectedMode === "webSearch" ? (
                             <>
                                 <Globe className="size-3.5" />
@@ -306,14 +329,22 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                                 <DropboxIcon className="size-3.5 text-blue-600" />
                                 <span className="font-medium text-blue-600">Dropbox</span>
                             </>
+                        ) : selectedMode === "artifact" ? (
+                            <>
+                                <Sparkles className="size-3.5 text-purple-600" />
+                                <span className="font-medium text-purple-600 truncate max-w-[150px]">
+                                    {selectedArtifact?.name || "Artifact"}
+                                </span>
+                            </>
                         ) : null}
                         <button
                             onClick={handleRemoveMode}
-                            className={`ml-1 rounded-full disabled:opacity-50 disabled:cursor-not-allowed ${
-                                selectedMode === "dropbox"
+                            className={`ml-1 rounded-full disabled:opacity-50 disabled:cursor-not-allowed ${selectedMode === "dropbox"
                                     ? "hover:bg-blue-500/20"
-                                    : "hover:bg-primary/20"
-                            }`}
+                                    : selectedMode === "artifact"
+                                        ? "hover:bg-purple-500/20"
+                                        : "hover:bg-primary/20"
+                                }`}
                             aria-label="Remove mode"
                             disabled={disabled}
                         >
@@ -325,4 +356,3 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
         </>
     )
 }
-

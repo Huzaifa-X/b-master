@@ -181,6 +181,14 @@ export async function createChatWithMessage(data: {
         chatType: chat.chatType,
         assistantId: data.assistantId || null,
         createdAt: chat.createdAt,
+      },
+      options: {
+        webSearch: data.webSearch || false,
+        research: data.research || false,
+        chatWithAPI: data.chatWithAPI || false,
+        dropbox: data.dropbox || false,
+        artifact: data.artifact || null,
+        mentionedUsers: data.mentionedUsers || null
       }
     }
   } catch (error) {

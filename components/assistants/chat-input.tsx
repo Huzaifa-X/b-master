@@ -42,6 +42,7 @@ interface ChatInputProps {
     message: string,
     attachments?: { name: string; url: string; type: string; size: number }[],
     options?: {
+      mode?: "webSearch" | "research" | "chatWithAPI" | "dropbox" | "artifact"
       webSearch?: boolean;
       research?: boolean;
       chatWithAPI?: boolean;
@@ -92,7 +93,7 @@ export function ChatInput({
   const [selectedArtifact, setSelectedArtifact] = useState<{ id: string; name: string; instructions: string; htmlContent: string } | null>(null)
   const [isArtifactDialogOpen, setIsArtifactDialogOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  
+
   // Mention functionality
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionUsers, setMentionUsers] = useState<User[]>([])
@@ -169,7 +170,7 @@ export function ChatInput({
 
     const textarea = textareaRef.current
     const rect = textarea.getBoundingClientRect()
-    
+
     // Position dropdown below the textarea, aligned to the left
     // Similar to Material-UI Menu's default positioning
     return {
@@ -191,21 +192,21 @@ export function ChatInput({
 
       if (shouldShowMention) {
         const dropdownPos = getDropdownPosition()
-        
+
         if (dropdownPos) {
           const screenWidth = window.innerWidth
           const screenHeight = window.innerHeight
           const dropdownWidth = 256
           const dropdownMaxHeight = 240
-          
+
           let { left, top } = dropdownPos
-          
+
           // Adjust if too close to edges
           if (left + dropdownWidth > screenWidth - 20) {
             left = screenWidth - dropdownWidth - 20
           }
           left = Math.max(20, left)
-          
+
           // Show above if too close to bottom
           if (top + dropdownMaxHeight > screenHeight - 20) {
             if (textareaRef.current) {
@@ -213,7 +214,7 @@ export function ChatInput({
               top = rect.top - dropdownMaxHeight - 4
             }
           }
-          
+
           setMentionDropdownPosition({ top, left })
           setShowMentionDropdown(true)
         }
@@ -228,17 +229,17 @@ export function ChatInput({
     const beforeMention = value.substring(0, mentionStartIndex)
     const afterMention = value.substring(textareaRef.current?.selectionStart || value.length)
     const mentionText = `@${user.name} `
-    
+
     const newValue = beforeMention + mentionText + afterMention
     onValueChange(newValue)
-    
+
     // Track this user as mentioned (including email)
     setMentionedUsers(prev => {
       // Avoid duplicates
       if (prev.some(u => u.id === user.id)) return prev
       return [...prev, { id: user.id, name: user.name, email: user.email }]
     })
-    
+
     // Set cursor position after mention
     setTimeout(() => {
       if (textareaRef.current) {
@@ -247,7 +248,7 @@ export function ChatInput({
         textareaRef.current.setSelectionRange(newCursorPosition, newCursorPosition)
       }
     }, 0)
-    
+
     setShowMentionDropdown(false)
     setMentionUsers([])
     setMentionQuery("")
@@ -275,12 +276,41 @@ export function ChatInput({
     }
   }, [showMentionDropdown, mentionUsers, selectedMentionIndex, insertMention])
 
+  useEffect(() => {
+    // Load mode and artifact from sessionStorage on mount
+    if (typeof window !== "undefined") {
+      const savedMode = sessionStorage.getItem("chat_mode")
+
+      if (savedMode === "webSearch") {
+        setWebSearchEnabled(true)
+      } else if (savedMode === "research") {
+        setResearchEnabled(true)
+      } else if (savedMode === "chatWithAPI") {
+        setChatWithAPIEnabled(true)
+      } else if (savedMode === "dropbox") {
+        setDropboxEnabled(true)
+      } else if (savedMode === "artifact") {
+        // 🔥 Load artifact data from sessionStorage
+        const savedArtifact = sessionStorage.getItem("chat_artifact_data")
+        if (savedArtifact) {
+          try {
+            const artifact = JSON.parse(savedArtifact)
+            setSelectedArtifact(artifact)
+            console.log("[ChatInput] Loaded artifact from sessionStorage:", artifact.name)
+          } catch (error) {
+            console.error("[ChatInput] Error loading artifact from sessionStorage:", error)
+          }
+        }
+      }
+    }
+  }, [])
+
   const handleSend = async () => {
     // Don't send if mention dropdown is open
     if (showMentionDropdown) return
-    
+
     if ((!value.trim() && attachedFiles.length === 0) || isLoading || disabled) return
-    
+
     let attachments: { name: string; url: string; type: string; size: number }[] = []
 
     // Upload files to S3 if there are any attachments
@@ -321,7 +351,7 @@ export function ChatInput({
         mentionedUsers: mentionedUsers.length > 0 ? mentionedUsers : undefined,
       }
     )
-    
+
     // Clear input, attachments, and mentioned users
     onValueChange("")
     setAttachedFiles([])
@@ -330,6 +360,13 @@ export function ChatInput({
     setMentionedUsers([])
     setChatWithAPIEnabled(false)
     setDropboxEnabled(false)
+
+    // 🔥 Clear mode AND artifact data from sessionStorage
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("chat_mode")
+      sessionStorage.removeItem("chat_artifact_data")
+      console.log("[ChatInput] Cleared mode and artifact after send")
+    }
   }
 
   // Helper function to convert File to base64
@@ -351,7 +388,12 @@ export function ChatInput({
   const handleWebSearchChange = (enabled: boolean) => {
     setWebSearchEnabled(enabled)
     if (enabled) {
-      setResearchEnabled(false) // Disable research if web search is enabled
+      setResearchEnabled(false)
+      setSelectedArtifact(null)
+      // 🔥 Clear artifact data from sessionStorage
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("chat_artifact_data")
+      }
     }
     onWebSearch?.(enabled)
   }
@@ -359,17 +401,25 @@ export function ChatInput({
   const handleResearchChange = (enabled: boolean) => {
     setResearchEnabled(enabled)
     if (enabled) {
-      setWebSearchEnabled(false) // Disable web search if research is enabled
+      setWebSearchEnabled(false)
+      setSelectedArtifact(null)
+      // 🔥 Clear artifact data from sessionStorage
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("chat_artifact_data")
+      }
     }
     onResearch?.(enabled)
   }
 
   const handleChatWithAPIChange = () => {
     setChatWithAPIEnabled(true)
-    // Disable other modes when chat with API is enabled
     setWebSearchEnabled(false)
     setResearchEnabled(false)
     setSelectedArtifact(null)
+    // 🔥 Clear artifact data from sessionStorage
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("chat_artifact_data")
+    }
     onWebSearch?.(false)
     onResearch?.(false)
     onChatWithAPI?.()
@@ -377,6 +427,13 @@ export function ChatInput({
 
   const handleDropboxChange = (enabled: boolean) => {
     setDropboxEnabled(enabled)
+    if (enabled) {
+      setSelectedArtifact(null)
+      // 🔥 Clear artifact data from sessionStorage
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("chat_artifact_data")
+      }
+    }
     onDropbox?.(enabled)
   }
 
@@ -388,6 +445,8 @@ export function ChatInput({
     setAttachedFiles((prev) => [...prev, ...files])
     onFileSelect?.(files)
   }
+
+
 
   const handleFileUpload = (fileList: FileList) => {
     // Convert FileList to File array and handle the same way as manual file selection
@@ -404,12 +463,30 @@ export function ChatInput({
   }
 
   const handleArtifactSelect = (artifact: { id: string; name: string; instructions: string; htmlContent: string }) => {
+    console.log("[ChatInput] handleArtifactSelect called with:", artifact.name)
+
     setSelectedArtifact(artifact)
-    // Disable other modes when artifact is selected
+
+    // Disable ALL other modes
     setWebSearchEnabled(false)
     setResearchEnabled(false)
+    setChatWithAPIEnabled(false)
+    setDropboxEnabled(false)
+
+    // Notify parent components
     onWebSearch?.(false)
     onResearch?.(false)
+    onDropbox?.(false)
+
+    // 🔥 Store BOTH mode and artifact data in sessionStorage
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("chat_mode", "artifact")
+      sessionStorage.setItem("chat_artifact_data", JSON.stringify(artifact))
+
+      console.log("[ChatInput] Stored artifact mode and data in sessionStorage:", artifact.name)
+      console.log("[ChatInput] Verification - mode:", sessionStorage.getItem("chat_mode"))
+      console.log("[ChatInput] Verification - data:", sessionStorage.getItem("chat_artifact_data"))
+    }
   }
 
   const handleRemoveFile = (index: number) => {
@@ -469,19 +546,6 @@ export function ChatInput({
               </button>
             </div>
           ))}
-          {selectedArtifact && (
-            <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="truncate max-w-[200px]">{selectedArtifact.name}</span>
-              <button
-                onClick={() => setSelectedArtifact(null)}
-                className="text-muted-foreground hover:text-foreground"
-                aria-label="Remove artifact"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          )}
         </div>
       )}
 
@@ -548,63 +612,70 @@ export function ChatInput({
             onKeyDown={handleKeyDown}
             disabled={disabled || isLoading}
           />
-        
-        {/* Mention Dropdown - Portal to body */}
-        {showMentionDropdown && (
-          <MentionDropdownPortal>
-            <MentionDropdown
-              users={mentionUsers}
-              isLoading={isLoadingMentions}
-              onSelect={insertMention}
-              position={mentionDropdownPosition}
-              selectedIndex={selectedMentionIndex}
-              onSelectedIndexChange={setSelectedMentionIndex}
-            />
-          </MentionDropdownPortal>
-        )}
-        <PromptInputActions className="px-2 pb-1 justify-between">
-          <div className="flex items-center gap-2">
-            <AttachmentDropdown
-              onFileSelect={handleFileSelect}
-              onWebSearch={handleWebSearchChange}
-              onResearch={handleResearchChange}
-              onChatWithArtifact={handleChatWithArtifact}
-              onChatWithAPI={handleChatWithAPIChange}
-              onDropbox={handleDropboxChange}
-              disabled={disabled || isLoading}
-              mode={mode}
-              assistantId={assistantId}
-            />
-            {assistantId && (
-              <SelectArtifactDialog
-                open={isArtifactDialogOpen}
-                onOpenChange={setIsArtifactDialogOpen}
-                assistantId={assistantId}
-                onSelect={handleArtifactSelect}
+
+          {/* Mention Dropdown - Portal to body */}
+          {showMentionDropdown && (
+            <MentionDropdownPortal>
+              <MentionDropdown
+                users={mentionUsers}
+                isLoading={isLoadingMentions}
+                onSelect={insertMention}
+                position={mentionDropdownPosition}
+                selectedIndex={selectedMentionIndex}
+                onSelectedIndexChange={setSelectedMentionIndex}
               />
-            )}
-            <DictateButton 
-              onTranscript={handleDictateTranscript}
-              disabled={disabled || isLoading}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <PromptInputAction tooltip="Send message (Enter)">
-              <Button
-                onClick={handleSend}
-                disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled}
-                size="icon"
-                className="size-[34px] rounded-full p-1"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ArrowUp className="h-5 w-5" />
-                )}
-              </Button>
-            </PromptInputAction>
-          </div>
-        </PromptInputActions>
+            </MentionDropdownPortal>
+          )}
+          <PromptInputActions className="px-2 pb-1 justify-between">
+            <div className="flex items-center gap-2">
+              <AttachmentDropdown
+                onFileSelect={handleFileSelect}
+                onWebSearch={handleWebSearchChange}
+                onResearch={handleResearchChange}
+                onChatWithArtifact={handleChatWithArtifact}
+                onChatWithAPI={handleChatWithAPIChange}
+                onDropbox={handleDropboxChange}
+                disabled={disabled || isLoading}
+                mode={mode}
+                assistantId={assistantId}
+                selectedArtifact={selectedArtifact}  // 🔥 Pass selected artifact
+                onRemoveArtifact={() => {            // 🔥 Handle removal
+                  setSelectedArtifact(null)
+                  if (typeof window !== "undefined") {
+                    sessionStorage.removeItem("chat_selected_artifact")
+                  }
+                }}
+              />
+              {assistantId && (
+                <SelectArtifactDialog
+                  open={isArtifactDialogOpen}
+                  onOpenChange={setIsArtifactDialogOpen}
+                  assistantId={assistantId}
+                  onSelect={handleArtifactSelect}
+                />
+              )}
+              <DictateButton
+                onTranscript={handleDictateTranscript}
+                disabled={disabled || isLoading}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <PromptInputAction tooltip="Send message (Enter)">
+                <Button
+                  onClick={handleSend}
+                  disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled}
+                  size="icon"
+                  className="size-[34px] rounded-full p-1"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowUp className="h-5 w-5" />
+                  )}
+                </Button>
+              </PromptInputAction>
+            </div>
+          </PromptInputActions>
         </PromptInput>
       </div>
     </div>

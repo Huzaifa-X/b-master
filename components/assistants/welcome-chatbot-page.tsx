@@ -49,7 +49,6 @@ export function WelcomeChatbotPage({
     if (!message.trim() || isCreating) return
 
     setIsCreating(true)
-    console.log("[WelcomePage] Creating new chat with message:", message.substring(0, 50), "attachments:", attachments?.length || 0, "mentionedUsers:", options?.mentionedUsers?.length || 0)
 
     try {
       // Create chat with first message, attachments, and search options (skip background for streaming)
@@ -73,17 +72,32 @@ export function WelcomeChatbotPage({
 
       console.log("[WelcomePage] Chat created, navigating to:", result.chatId)
 
+      const SESSION_STORAGE_KEY = "chat_mode"
+      if (options?.webSearch) {
+        sessionStorage.setItem(SESSION_STORAGE_KEY, "webSearch")
+      } else if (options?.research) {
+        sessionStorage.setItem(SESSION_STORAGE_KEY, "research")
+      } else if (options?.chatWithAPI) {
+        sessionStorage.setItem(SESSION_STORAGE_KEY, "chatWithAPI")
+      } else if (options?.dropbox) {
+        sessionStorage.setItem(SESSION_STORAGE_KEY, "dropbox")
+      } else if (options?.artifact) {
+        sessionStorage.setItem(SESSION_STORAGE_KEY, "artifact")
+        sessionStorage.setItem("chat_artifact_data", JSON.stringify(options.artifact))
+        console.log("[WelcomePage] Stored artifact data:", options.artifact.name)
+      }
+
       // Navigate to chat page first
-      const url = chatType === "ask-b" 
-        ? `/ask-b/${result.chatId}` 
+      const url = chatType === "ask-b"
+        ? `/ask-b/${result.chatId}`
         : `/assistants/${assistantId}/${result.chatId}`
-      
+
       router.push(url)
 
       // Invalidate and refetch queries after navigation
       // This ensures sidebar and header update with the new chat
       const mode = chatType === "ask-b" ? "ask-b" : "assistant"
-      
+
       // Invalidate chat history - use exact match for assistant mode, pattern for ask-b
       if (chatType === "ask-b") {
         queryClient.invalidateQueries({
@@ -94,12 +108,12 @@ export function WelcomeChatbotPage({
           queryKey: ["chat-history", "assistant", assistantId]
         })
       }
-      
+
       // Invalidate chat header query
       queryClient.invalidateQueries({
         queryKey: ["chat-header", result.chatId]
       })
-      
+
       // Refetch immediately after a short delay to allow navigation
       setTimeout(() => {
         queryClient.refetchQueries({
