@@ -227,7 +227,7 @@ ${uploadedFiles && uploadedFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:
 
           let generatedCode = ""
           let buffer = ""
-          const model = 'gpt-5.1-Codex-Max'
+          const model = 'gpt-5.2'
           const CHUNK_SIZE = 1024 // Send chunks of ~1KB
 
           // Create AI response with streaming
