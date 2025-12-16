@@ -11,6 +11,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { motion } from "motion/react"
+import { toast } from "sonner"
 
 interface AttachmentDropdownProps {
     onFileSelect?: (files: File[]) => void
@@ -18,6 +19,7 @@ interface AttachmentDropdownProps {
     onResearch?: (enabled: boolean) => void
     onChatWithArtifact?: () => void
     onChatWithAPI?: () => void
+    onDropbox?: (enabled: boolean) => void
     disabled?: boolean
     mode?: "ask-b" | "assistant"
     assistantId?: string
@@ -31,19 +33,32 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     onResearch,
     onChatWithArtifact,
     onChatWithAPI,
+    onDropbox,
     disabled = false,
     mode = "assistant",
     assistantId,
 }) => {
     const [isOpen, setIsOpen] = useState(false)
-    const [selectedMode, setSelectedMode] = useState<"webSearch" | "research" | "chatWithAPI" | null>(null)
+    const [selectedMode, setSelectedMode] = useState<"webSearch" | "research" | "chatWithAPI" | "dropbox" | null>(null)
+    const [isCheckingDropbox, setIsCheckingDropbox] = useState(true)
+    const [hasDropboxConnected, setHasDropboxConnected] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
+
+    const DropboxIcon = ({ className }: { className?: string }) => (
+        <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+            <path d="M6 1.807L0 5.629l6 3.822 6.001-3.822L6 1.807zM18 1.807l-6 3.822 6 3.822 6-3.822-6-3.822zM0 13.274l6 3.822 6.001-3.822L6 9.452 0 13.274zM18 9.452l-6 3.822 6 3.822 6-3.822-6-3.822zM6 18.371l6.001 3.822 6-3.822-6-3.822L6 18.371z" />
+        </svg>
+    )
+
+    useEffect(() => {
+        checkDropboxConnection()
+    }, [])
 
     // Load from session storage on mount
     useEffect(() => {
         if (typeof window !== "undefined") {
             const savedMode = sessionStorage.getItem(SESSION_STORAGE_KEY)
-            if (savedMode === "webSearch" || savedMode === "research" || savedMode === "chatWithAPI") {
+            if (savedMode === "webSearch" || savedMode === "research" || savedMode === "chatWithAPI" || savedMode === "dropbox") {
                 setSelectedMode(savedMode)
                 // Notify parent of the saved mode
                 if (savedMode === "webSearch") {
@@ -52,10 +67,60 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                     onResearch?.(true)
                 } else if (savedMode === "chatWithAPI") {
                     onChatWithAPI?.()
+                } else if (savedMode === "dropbox") {
+                    onDropbox?.(true)
                 }
             }
         }
-    }, [onWebSearch, onResearch, onChatWithAPI])
+    }, [onWebSearch, onResearch, onChatWithAPI, onDropbox])
+
+    const checkDropboxConnection = async () => {
+        setIsCheckingDropbox(true)
+        try {
+            const res = await fetch('/api/dropbox')
+            const data = await res.json()
+            const hasConnection = !!data.connector && data.connector.status === 'ACTIVE'
+            setHasDropboxConnected(hasConnection)
+        } catch (error) {
+            console.error('Failed to check Dropbox connection:', error)
+            setHasDropboxConnected(false)
+        } finally {
+            setIsCheckingDropbox(false)
+        }
+    }
+
+    // Handle Dropbox click
+    const handleDropboxClick = async () => {
+        setIsOpen(false)
+
+        // If not connected, redirect to OAuth
+        if (!hasDropboxConnected) {
+            toast.info('Connecting to Dropbox...')
+            const currentUrl = encodeURIComponent(window.location.href)
+            window.location.href = `/api/dropbox/connect?returnUrl=${currentUrl}`
+            return
+        }
+
+        // Toggle Dropbox
+        const newState = selectedMode !== "dropbox"
+        if (newState) {
+            setSelectedMode("dropbox")
+            // Save to session storage
+            if (typeof window !== "undefined") {
+                sessionStorage.setItem(SESSION_STORAGE_KEY, "dropbox")
+            }
+            onDropbox?.(true)
+            toast.success('Dropbox enabled for this chat')
+        } else {
+            setSelectedMode(null)
+            // Remove from session storage
+            if (typeof window !== "undefined") {
+                sessionStorage.removeItem(SESSION_STORAGE_KEY)
+            }
+            onDropbox?.(false)
+            toast.info('Dropbox disabled')
+        }
+    }
 
     const handleAttachFile = () => {
         fileInputRef.current?.click()
@@ -83,15 +148,23 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     }
 
     const handleRemoveMode = () => {
+        const currentMode = selectedMode
         setSelectedMode(null)
         // Remove from session storage
         if (typeof window !== "undefined") {
             sessionStorage.removeItem(SESSION_STORAGE_KEY)
         }
-        onWebSearch?.(false)
-        onResearch?.(false)
+        // Notify parent to disable the mode
+        if (currentMode === "webSearch") {
+            onWebSearch?.(false)
+        } else if (currentMode === "research") {
+            onResearch?.(false)
+        } else if (currentMode === "dropbox") {
+            onDropbox?.(false)
+        }
         // Note: onChatWithAPI doesn't need to be called with false since it's a one-time action
     }
+
 
     const handleChatWithArtifact = () => {
         setIsOpen(false)
@@ -166,34 +239,53 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                         </DropdownMenuItem>
                         {mode === "assistant" && (
                             <>
-                        <DropdownMenuItem
-                            onClick={handleResearch}
-                            className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
-                        >
-                            <Search className="mr-2 size-4" />
-                            <span>Research</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            onClick={handleChatWithArtifact}
-                            className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
-                        >
-                            <Sparkles className="mr-2 size-4" />
-                            <span>Chat with Artifact</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            onClick={handleChatWithAPI}
-                            className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
-                        >
-                            <Code className="mr-2 size-4" />
-                            <span>Chat with API</span>
-                        </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={handleResearch}
+                                    className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
+                                >
+                                    <Search className="mr-2 size-4" />
+                                    <span>Research</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={handleChatWithArtifact}
+                                    className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
+                                >
+                                    <Sparkles className="mr-2 size-4" />
+                                    <span>Chat with Artifact</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={handleChatWithAPI}
+                                    className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
+                                >
+                                    <Code className="mr-2 size-4" />
+                                    <span>Chat with API</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={handleDropboxClick}
+                                    disabled={isCheckingDropbox}
+                                    className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
+                                >
+                                    <DropboxIcon className="mr-2 size-4" />
+                                    <span>
+                                        {isCheckingDropbox
+                                            ? "Checking..."
+                                            : hasDropboxConnected
+                                                ? (selectedMode === "dropbox" ? "Disable Dropbox" : "Enable Dropbox")
+                                                : "Connect Dropbox"
+                                        }
+                                    </span>
+                                </DropdownMenuItem>
                             </>
                         )}
                     </DropdownMenuContent>
                 </DropdownMenu>
 
                 {selectedMode && (
-                    <div className="flex items-center gap-1.5 rounded-full border border-primary bg-primary/10 px-3 py-1.5 text-sm">
+                    <div className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm ${
+                        selectedMode === "dropbox"
+                            ? "border-blue-500 bg-blue-500/10"
+                            : "border-primary bg-primary/10"
+                    }`}>
                         {selectedMode === "webSearch" ? (
                             <>
                                 <Globe className="size-3.5" />
@@ -209,10 +301,19 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                                 <Code className="size-3.5" />
                                 <span className="font-medium">Chat with API</span>
                             </>
+                        ) : selectedMode === "dropbox" ? (
+                            <>
+                                <DropboxIcon className="size-3.5 text-blue-600" />
+                                <span className="font-medium text-blue-600">Dropbox</span>
+                            </>
                         ) : null}
                         <button
                             onClick={handleRemoveMode}
-                            className="ml-1 rounded-full hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className={`ml-1 rounded-full disabled:opacity-50 disabled:cursor-not-allowed ${
+                                selectedMode === "dropbox"
+                                    ? "hover:bg-blue-500/20"
+                                    : "hover:bg-primary/20"
+                            }`}
                             aria-label="Remove mode"
                             disabled={disabled}
                         >

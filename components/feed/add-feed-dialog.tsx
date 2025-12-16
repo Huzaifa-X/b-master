@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { X, Upload, ImageIcon, Globe, Lock, Loader2, Users } from "lucide-react"
 import {
     Dialog,
@@ -44,14 +44,18 @@ interface AddFeedDialogProps {
         allowedUserIds?: string[]
     }) => void
     isLoading?: boolean
+    initialTitle?: string
+    initialContent?: string
 }
 
-export function AddFeedDialog({ 
-    open, 
-    onOpenChange, 
-    assistantId, 
-    onSubmit, 
-    isLoading = false 
+export function AddFeedDialog({
+    open,
+    onOpenChange,
+    assistantId,
+    onSubmit,
+    isLoading = false,
+    initialTitle = "",
+    initialContent = ""
 }: AddFeedDialogProps) {
     const { data: session } = useSession()
     const [title, setTitle] = useState("")
@@ -61,6 +65,14 @@ export function AddFeedDialog({
     const [privacy, setPrivacy] = useState<"public" | "private">("public")
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
     const fileInputRef = useRef<HTMLInputElement>(null)
+
+    // Set initial values when dialog opens
+    useEffect(() => {
+        if (open) {
+            setTitle(initialTitle)
+            setContent(initialContent)
+        }
+    }, [open, initialTitle, initialContent])
 
     // Fetch contacts who have newsfeed permission
     const { contacts, isLoading: contactsLoading } = useAssistantContacts(assistantId, {

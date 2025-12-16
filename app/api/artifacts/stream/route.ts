@@ -165,7 +165,7 @@ CRITICAL: Output ONLY the complete HTML code starting with <!DOCTYPE html> and e
 
           let generatedCode = ""
           let buffer = ""
-          const model = 'gpt-5.2' // Use a stable model instead of gpt-5.2
+          const model = 'gpt-5.1-Codex-Max' // Use a stable model instead of gpt-5.1-Codex-Max
           const CHUNK_SIZE = 1024 // Send chunks of ~1KB instead of character-by-character
 
           // Create AI response with streaming

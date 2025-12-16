@@ -45,6 +45,7 @@ interface ChatInputProps {
       webSearch?: boolean;
       research?: boolean;
       chatWithAPI?: boolean;
+      dropbox?: boolean;
       artifact?: { id: string; name: string; instructions: string; htmlContent: string }
       mentionedUsers?: MentionedUser[]
     }
@@ -57,6 +58,7 @@ interface ChatInputProps {
   onResearch?: (enabled: boolean) => void
   onChatWithArtifact?: () => void
   onChatWithAPI?: () => void
+  onDropbox?: (enabled: boolean) => void
   className?: string
   mode?: "ask-b" | "assistant"
   assistantId?: string
@@ -74,6 +76,7 @@ export function ChatInput({
   onResearch,
   onChatWithArtifact,
   onChatWithAPI,
+  onDropbox,
   className,
   mode = "assistant",
   assistantId
@@ -85,6 +88,7 @@ export function ChatInput({
   const [webSearchEnabled, setWebSearchEnabled] = useState(false)
   const [researchEnabled, setResearchEnabled] = useState(false)
   const [chatWithAPIEnabled, setChatWithAPIEnabled] = useState(false)
+  const [dropboxEnabled, setDropboxEnabled] = useState(false)
   const [selectedArtifact, setSelectedArtifact] = useState<{ id: string; name: string; instructions: string; htmlContent: string } | null>(null)
   const [isArtifactDialogOpen, setIsArtifactDialogOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -312,6 +316,7 @@ export function ChatInput({
         webSearch: webSearchEnabled,
         research: researchEnabled,
         chatWithAPI: chatWithAPIEnabled,
+        dropbox: dropboxEnabled,
         artifact: selectedArtifact || undefined,
         mentionedUsers: mentionedUsers.length > 0 ? mentionedUsers : undefined,
       }
@@ -324,6 +329,7 @@ export function ChatInput({
     setSelectedArtifact(null)
     setMentionedUsers([])
     setChatWithAPIEnabled(false)
+    setDropboxEnabled(false)
   }
 
   // Helper function to convert File to base64
@@ -367,6 +373,11 @@ export function ChatInput({
     onWebSearch?.(false)
     onResearch?.(false)
     onChatWithAPI?.()
+  }
+
+  const handleDropboxChange = (enabled: boolean) => {
+    setDropboxEnabled(enabled)
+    onDropbox?.(enabled)
   }
 
   const handleDictateTranscript = (text: string) => {
@@ -559,6 +570,7 @@ export function ChatInput({
               onResearch={handleResearchChange}
               onChatWithArtifact={handleChatWithArtifact}
               onChatWithAPI={handleChatWithAPIChange}
+              onDropbox={handleDropboxChange}
               disabled={disabled || isLoading}
               mode={mode}
               assistantId={assistantId}

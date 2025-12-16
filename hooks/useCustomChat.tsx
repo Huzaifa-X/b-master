@@ -342,7 +342,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
   }, [dbMessageIds, currentMessageIds, isStreaming, dbMessages, messages, context, queryClient])
 
   // Send message with streaming
-  const sendMessage = useCallback(async (content: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: Array<{ id: string; name: string; email: string }> }) => {
+  const sendMessage = useCallback(async (content: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; dropbox?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: Array<{ id: string; name: string; email: string }> }) => {
     if (!context || !content.trim() || isStreaming) {
       console.warn("[useCustomChat] Cannot send message:", { 
         hasContext: !!context, 
@@ -384,6 +384,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
         webSearch: options?.webSearch,
         research: options?.research,
         chatWithAPI: options?.chatWithAPI,
+        dropbox: options?.dropbox,
         artifact: options?.artifact,
         mentionedUsers: options?.mentionedUsers,
         skipBackground: true // Skip background processing, we'll use streaming instead
@@ -421,6 +422,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
           webSearch: options?.webSearch,
           research: options?.research,
           chatWithAPI: options?.chatWithAPI,
+          dropbox: options?.dropbox,
           artifact: options?.artifact,
           attachments: attachments
         }),

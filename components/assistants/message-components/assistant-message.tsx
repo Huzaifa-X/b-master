@@ -4,25 +4,22 @@
 import type { FC, ReactNode } from "react"
 import { useState } from "react"
 import Image from "next/image"
-import { Copy, Share2, Download, Eye, X, Loader2, Globe, Lock } from "lucide-react"
+import { Copy, Share2, Download, Eye, X, Loader2, MessageSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { AddFeedDialog } from "@/components/feed/add-feed-dialog"
+import { SelectContactDialog } from "@/components/assistants/select-contact-dialog"
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogDescription,
-    DialogFooter,
 } from "@/components/ui/dialog"
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
@@ -30,6 +27,7 @@ import remarkGfm from "remark-gfm"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
 import { useCreatePost } from "@/hooks/use-newFeed"
+import { useInitiateChat, useSendMessage } from "@/hooks/use-assistant-chat"
 import { useRouter, useParams } from "next/navigation"
 
 interface AssistantMessageProps {
@@ -47,14 +45,15 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
 }) => {
     const [previewImage, setPreviewImage] = useState<string | null>(null)
     const [shareDialogOpen, setShareDialogOpen] = useState(false)
-    const [shareTitle, setShareTitle] = useState("AI Assistant Response")
-    const [sharePrivacy, setSharePrivacy] = useState<"public" | "private">("public")
+    const [contactDialogOpen, setContactDialogOpen] = useState(false)
 
     const router = useRouter()
     const params = useParams()
     const assistantId = params.id as string
 
     const createPostMutation = useCreatePost()
+    const initiateChatMutation = useInitiateChat()
+    const sendMessageMutation = useSendMessage()
 
     const handleCopy = () => {
         navigator.clipboard.writeText(content)
@@ -65,14 +64,51 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
         setShareDialogOpen(true)
     }
 
-    const handleShareToFeed = () => {
+    const handleShareToFeed = (feed: {
+        title: string
+        content: string
+        image?: string
+        privacy: "public" | "private"
+        allowedUserIds?: string[]
+    }) => {
         createPostMutation.mutate({
             assistantId,
-            title: shareTitle,
-            content: `**${shareTitle}**\n\n${content}`,
-            isPublic: sharePrivacy === "public",
+            title: feed.title,
+            content: feed.content,
+            image: feed.image,
+            isPublic: feed.privacy === "public",
+            allowedUserIds: feed.allowedUserIds,
         })
         setShareDialogOpen(false)
+    }
+
+    const handleShareToContact = async (contactId: string, contactName: string) => {
+        try {
+            // First initiate chat with the contact
+            const chatResult = await initiateChatMutation.mutateAsync({
+                assistantId,
+                participantId: contactId,
+            })
+
+            if (chatResult.success && chatResult.chat) {
+                // Then send the AI response as a message
+                await sendMessageMutation.mutateAsync({
+                    assistantId,
+                    chatId: chatResult.chat.id,
+                    message: content,
+                    messageType: 'text',
+                })
+
+                toast.success(`Shared with ${contactName}`)
+                router.push(`/assistants/${assistantId}/chat/${chatResult.chat.id}`)
+            } else {
+                toast.error(chatResult.error || 'Failed to create chat')
+            }
+        } catch (error) {
+            console.error('Error sharing to contact:', error)
+            toast.error('Failed to share message')
+        }
+        setContactDialogOpen(false)
     }
 
     const handleDownloadImage = async (src: string, alt: string) => {
@@ -81,7 +117,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                 const base64Data = src.split(',')[1]
                 const mimeMatch = src.match(/data:image\/(\w+);base64/)
                 const mimeType = mimeMatch?.[1] || 'png'
-                
+
                 const byteCharacters = atob(base64Data)
                 const byteNumbers = new Array(byteCharacters.length)
                 for (let i = 0; i < byteCharacters.length; i++) {
@@ -89,7 +125,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                 }
                 const byteArray = new Uint8Array(byteNumbers)
                 const blob = new Blob([byteArray], { type: `image/${mimeType}` })
-                
+
                 const url = window.URL.createObjectURL(blob)
                 const link = document.createElement('a')
                 link.href = url
@@ -101,21 +137,21 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                 toast.success("Image downloaded")
                 return
             }
-            
+
             try {
                 const response = await fetch(src, {
                     mode: 'cors',
                     credentials: 'omit',
                     cache: 'no-cache'
                 })
-                
+
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-                
+
                 const blob = await response.blob()
                 const url = window.URL.createObjectURL(blob)
                 const link = document.createElement('a')
                 link.href = url
-                
+
                 try {
                     const urlObj = new URL(src)
                     const extension = urlObj.pathname.match(/\.(\w+)$/)?.[1] || 'png'
@@ -123,7 +159,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                 } catch {
                     link.download = alt || 'generated-image.png'
                 }
-                
+
                 document.body.appendChild(link)
                 link.click()
                 document.body.removeChild(link)
@@ -185,22 +221,22 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                                 remarkPlugins={[remarkGfm]}
                                 components={{
                                     p: ({ children, node }) => {
-                                        const hasOnlyImage = node?.children?.length === 1 && 
-                                            node.children[0]?.type === 'element' && 
+                                        const hasOnlyImage = node?.children?.length === 1 &&
+                                            node.children[0]?.type === 'element' &&
                                             node.children[0]?.tagName === 'img'
-                                        
+
                                         // Check if paragraph is inside a blockquote for Discord-style spacing
                                         const isInBlockquote = (node as any)?.parent?.type === 'blockquote'
-                                        
+
                                         if (hasOnlyImage) {
                                             return <>{children}</>
                                         }
-                                        
+
                                         // In blockquotes, paragraphs should have minimal margin for Discord-style compact spacing
                                         if (isInBlockquote) {
                                             return <p className="mb-1 last:mb-0">{children}</p>
                                         }
-                                        
+
                                         return <p className="mb-2 last:mb-0">{children}</p>
                                     },
 
@@ -223,12 +259,12 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                                             </span>
                                         )
                                     },
-                                    
+
                                     code(props) {
                                         const { children, className } = props
                                         const match = /language-(\w+)/.exec(className || "")
                                         const rawCode = String(children).replace(/\n$/, "")
-                                        
+
                                         if (match) {
                                             const language = match[1]
                                             return (
@@ -247,12 +283,12 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                                                         >
                                                             Preview
                                                         </button>
-                                    
+
                                                         {/* Scrollable container */}
                                                         <div className="w-full overflow-x-auto rounded-lg border border-border bg-[rgb(30,30,30)]">
-                                            <SyntaxHighlighter
+                                                            <SyntaxHighlighter
                                                                 language={language}
-                                                style={vscDarkPlus}
+                                                                style={vscDarkPlus}
                                                                 PreTag="pre"
                                                                 customStyle={{
                                                                     margin: 0,
@@ -264,13 +300,13 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                                                                 }}
                                                             >
                                                                 {rawCode}
-                                            </SyntaxHighlighter>
+                                                            </SyntaxHighlighter>
                                                         </div>
                                                     </div>
                                                 </div>
                                             )
                                         }
-                                    
+
                                         // inline code
                                         return (
                                             <code className="rounded bg-muted px-1.5 py-0.5 text-sm font-mono">
@@ -289,13 +325,13 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                                         // Discord-style blockquote with colored left border
                                         // Check if nested by looking at parent in the AST
                                         const isNested = (node as any)?.parent?.type === 'blockquote'
-                                        
-                                        const borderColor = isNested 
+
+                                        const borderColor = isNested
                                             ? 'border-l-[#FEE75C]' // Discord yellow for nested quote
                                             : 'border-l-[#5865F2]' // Discord blurple for single quote
-                                        
+
                                         return (
-                                            <blockquote 
+                                            <blockquote
                                                 className={`${borderColor} border-l-4 pl-4 my-2 bg-muted/30 dark:bg-muted/20 py-2 rounded-r`}
                                             >
                                                 <div className="text-foreground whitespace-pre-wrap leading-relaxed">
@@ -324,14 +360,28 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                             <Copy className="h-3.5 w-3.5" />
                         </Button>
                         {!shared && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleShare} title="Share">
-                                <Share2 className="h-3.5 w-3.5" />
-                            </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" title="Share">
+                                        <Share2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" className="w-48">
+                                    <DropdownMenuItem onClick={() => setContactDialogOpen(true)}>
+                                        <MessageSquare className="h-4 w-4 mr-2 hover:text-white" />
+                                        Share to Contact
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setShareDialogOpen(true)}>
+                                        <Eye className="h-4 w-4 mr-2 hover:text-white" />
+                                        Post to News Feed
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         )}
                     </div>
                 </div>
             </div>
-                {/* Image Preview */}
+            {/* Image Preview */}
             <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
                 <DialogContent className="max-w-4xl w-full p-0" showCloseButton={false}>
                     <DialogHeader className="px-6 pt-6 pb-4">
@@ -345,106 +395,29 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                     {previewImage && (
                         <div className="relative w-full overflow-hidden border-t border-border bg-muted flex items-center justify-center">
                             <Image src={previewImage} alt="Preview" width={1200} height={1200} className="w-full h-auto max-h-[80vh] object-contain" unoptimized />
-                            </div>
+                        </div>
                     )}
                 </DialogContent>
             </Dialog>
 
             {/* Share to News Feed Dialog */}
-            <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-                <DialogContent className="sm:max-w-[600px]">
-                    <DialogHeader>
-                        <DialogTitle>Share AI Response to News Feed</DialogTitle>
-                        <DialogDescription>
-                            Share this AI response with your team members.
-                        </DialogDescription>
-                    </DialogHeader>
+            <AddFeedDialog
+                open={shareDialogOpen}
+                onOpenChange={setShareDialogOpen}
+                assistantId={assistantId}
+                onSubmit={handleShareToFeed}
+                isLoading={createPostMutation.isPending}
+                initialTitle="AI Assistant Response"
+                initialContent={content}
+            />
 
-                    <div className="space-y-4 py-4">
-                        {/* Privacy Selector */}
-                        <div className="space-y-2 w-full">
-                            <Label htmlFor="share-privacy">
-                                Privacy <span className="text-destructive">*</span>
-                            </Label>
-                            <Select value={sharePrivacy} onValueChange={(value) => setSharePrivacy(value as "public" | "private")}>
-                                <SelectTrigger id="share-privacy" className="w-full">
-                                    <SelectValue placeholder="Select privacy" />
-                                </SelectTrigger>
-                                <SelectContent className="w-full">
-                                    <SelectItem value="public" className="focus:bg-muted focus:text-foreground">
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                                                <Globe className="h-3 w-3 text-green-700 dark:text-green-400" />
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className="font-medium">Public</span>
-                                            </div>
-                                        </div>
-                                    </SelectItem>
-                                    <SelectItem value="private" className="focus:bg-muted focus:text-foreground">
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30">
-                                                <Lock className="h-3 w-3 text-orange-700 dark:text-orange-400" />
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className="font-medium">Private</span>
-                                            </div>
-                                        </div>
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Title Input */}
-                        <div className="space-y-2">
-                            <Label htmlFor="share-title">
-                                Title <span className="text-destructive">*</span>
-                            </Label>
-                            <Input
-                                id="share-title"
-                                placeholder="Enter a catchy title..."
-                                value={shareTitle}
-                                onChange={(e) => setShareTitle(e.target.value)}
-                                maxLength={100}
-                            />
-                            <p className="text-xs text-muted-foreground text-right">{shareTitle.length}/100</p>
-                        </div>
-
-                        {/* Content Preview */}
-                        <div className="space-y-2">
-                            <Label>Preview</Label>
-                            <div className="max-h-48 overflow-y-auto border rounded-md p-3 bg-muted text-sm">
-                                <div className="font-semibold mb-2">{shareTitle || "Untitled"}</div>
-                                <div className="whitespace-pre-wrap text-xs opacity-75">
-                                    {content.length > 300 ? content.substring(0, 300) + "..." : content}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShareDialogOpen(false)} className="hover:cursor-pointer hover:bg-transparent hover:text-primary">
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleShareToFeed}
-                            disabled={!shareTitle.trim() || createPostMutation.isPending}
-                        >
-                            {createPostMutation.isPending ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Sharing...
-                                </>
-                            ) : (
-                                <>
-                                    <Share2 className="h-4 w-4 mr-2" />
-                                    Share to News Feed
-                                </>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            {/* Share to Contact Dialog */}
+            <SelectContactDialog
+                open={contactDialogOpen}
+                onOpenChange={setContactDialogOpen}
+                onSelectContact={handleShareToContact}
+                assistantId={assistantId}
+            />
         </div>
     )
 }
