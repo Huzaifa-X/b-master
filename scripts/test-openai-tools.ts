@@ -105,14 +105,14 @@ async function testOpenAPITools() {
   console.log(`✅ Converted to ${tools.length} OpenAI function tools:\n`)
   
   tools.forEach((tool, idx) => {
-    console.log(`   Tool ${idx + 1}: ${tool.tool.function.name}`)
-    console.log(`     Description: ${tool.tool.function.description}`)
+    console.log(`   Tool ${idx + 1}: ${tool.openaiTool.name}`)
+    console.log(`     Description: ${tool.openaiTool.description}`)
     console.log(`     Metadata:`)
     console.log(`       Method: ${tool.metadata.method}`)
     console.log(`       Path: ${tool.metadata.path}`)
     console.log(`       Base URL: ${tool.metadata.baseUrl}`)
     
-    const params = tool.tool.function.parameters
+    const params = tool.openaiTool.parameters
     console.log(`     Parameters:`)
     console.log(`       Required: ${params.required.join(', ') || 'none'}`)
     console.log(`       Properties: ${Object.keys(params.properties).join(', ') || 'none'}`)
