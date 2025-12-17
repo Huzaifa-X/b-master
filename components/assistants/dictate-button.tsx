@@ -94,13 +94,28 @@ export const DictateButton: FC<DictateButtonProps> = ({
             formData.append("audio", audioBlob, "recording.webm")
             formData.append("language", language)
 
+            console.log("[Dictate] Sending transcription request...", {
+                size: audioBlob.size,
+                type: audioBlob.type,
+                language
+            })
+
             const response = await fetch("/api/transcribe", {
                 method: "POST",
                 body: formData,
             })
 
             if (!response.ok) {
-                throw new Error(`Transcription failed: ${response.statusText}`)
+                const errorText = await response.text().catch(() => response.statusText)
+                console.error("[Dictate] Response error:", response.status, errorText)
+                
+                if (response.status === 401) {
+                    throw new Error("Authentication required. Please sign in again.")
+                } else if (response.status === 500) {
+                    throw new Error("Server error. Please try again later.")
+                } else {
+                    throw new Error(`Transcription failed: ${errorText || response.statusText}`)
+                }
             }
 
             const reader = response.body?.getReader()
@@ -111,6 +126,7 @@ export const DictateButton: FC<DictateButtonProps> = ({
             }
 
             let accumulatedText = ""
+            let hasError = false
 
             // Read the stream
             while (true) {
@@ -118,7 +134,7 @@ export const DictateButton: FC<DictateButtonProps> = ({
                 
                 if (done) break
 
-                const chunk = decoder.decode(value)
+                const chunk = decoder.decode(value, { stream: true })
                 const lines = chunk.split('\n')
 
                 for (const line of lines) {
@@ -127,7 +143,8 @@ export const DictateButton: FC<DictateButtonProps> = ({
                         
                         if (data === '[DONE]') {
                             // Final transcript
-                            if (onTranscript && accumulatedText) {
+                            if (!hasError && onTranscript && accumulatedText) {
+                                console.log("[Dictate] Transcription complete:", accumulatedText.length, "characters")
                                 onTranscript(accumulatedText)
                             }
                             continue
@@ -135,6 +152,12 @@ export const DictateButton: FC<DictateButtonProps> = ({
 
                         try {
                             const parsed = JSON.parse(data)
+                            
+                            if (parsed.error) {
+                                hasError = true
+                                console.error("[Dictate] Transcription error:", parsed.error)
+                                throw new Error(parsed.error)
+                            }
                             
                             if (parsed.text) {
                                 accumulatedText = parsed.text
@@ -144,14 +167,26 @@ export const DictateButton: FC<DictateButtonProps> = ({
                                 }
                             }
                         } catch (e) {
-                            // Skip invalid JSON
+                            // If it's our thrown error, re-throw it
+                            if (e instanceof Error && (
+                                e.message.includes("Transcription") || 
+                                e.message.includes("Authentication") || 
+                                e.message.includes("Server")
+                            )) {
+                                throw e
+                            }
+                            // Otherwise, skip invalid JSON
+                            console.warn("[Dictate] Failed to parse JSON:", e)
                         }
                     }
                 }
             }
         } catch (error) {
-            console.error("Error transcribing audio:", error)
-            alert("Transcription failed. Please try again.")
+            console.error("[Dictate] Error transcribing audio:", error)
+            const errorMessage = error instanceof Error 
+                ? error.message 
+                : "Transcription failed. Please try again."
+            alert(errorMessage)
         } finally {
             setIsProcessing(false)
         }
