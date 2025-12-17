@@ -12,6 +12,7 @@ import {
     createVectorStore,
     addNoteToVectorStore,
     uploadAndAddToVectorStore,
+    deleteVectorStore,
     deleteFileFromVectorStore,
 } from '@/lib/vector-store'
 import { triggerWebScraping } from '@/lib/web-scraper'
@@ -1929,7 +1930,6 @@ export async function getUserAssistantPermissions(assistantId: string) {
                 permissions: null,
             }
         }
-
         const userId = BigInt(session.user.id)
         const assistantIdBigInt = BigInt(assistantId)
 
@@ -1957,4 +1957,188 @@ export async function getUserAssistantPermissions(assistantId: string) {
             permissions: null,
         }
     }
+}
+
+// ================================================================
+// ASSISTANT DELETION
+// ================================================================
+
+interface DeleteAssistantResponse {
+  success: boolean
+  error?: string
+}
+
+/**
+ * Hard delete an assistant and all related data
+ * Only the owner can delete their assistant
+ */
+export async function hardDeleteAssistant(
+  assistantId: string
+): Promise<DeleteAssistantResponse> {
+  try {
+    // 🔐 Auth check
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return { success: false, error: "Authentication required" }
+    }
+
+    const userId = BigInt(session.user.id)
+    const assistantBigInt = BigInt(assistantId)
+
+    // 🔎 Fetch assistant + ownership check
+    const assistant = await prisma.assistant.findUnique({
+      where: { id: assistantBigInt },
+      include: {
+        knowledgebases: {
+          select: { vectorFileId: true },
+        },
+      },
+    })
+
+    if (!assistant) {
+      return { success: false, error: "Assistant not found" }
+    }
+
+    if (assistant.userId !== userId) {
+      return {
+        success: false,
+        error: "You do not have permission to delete this assistant",
+      }
+    }
+
+    // 🧠 OpenAI Vector Store Cleanup (outside transaction)
+    if (assistant.vectorStoreId) {
+      for (const kb of assistant.knowledgebases) {
+        if (kb.vectorFileId) {
+          try {
+            await deleteFileFromVectorStore(
+              assistant.vectorStoreId,
+              kb.vectorFileId
+            )
+          } catch (err) {
+            console.error(
+              `Failed to delete vector file ${kb.vectorFileId}`,
+              err
+            )
+          }
+        }
+      }
+
+      try {
+        await deleteVectorStore(assistant.vectorStoreId)
+      } catch (err) {
+        console.error(
+          `Failed to delete vector store ${assistant.vectorStoreId}`,
+          err
+        )
+      }
+    }
+
+    // 🧨 DATABASE HARD DELETE (ORDER MATTERS)
+    await prisma.$transaction([
+      // Chat systems
+      prisma.assistantUserChatMessage.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+      prisma.assistantUserChat.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+      prisma.assistantChatMessage.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+      prisma.assistantChat.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+
+      // Knowledge base
+      prisma.assistantKnowledgebase.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+
+      // Artifacts
+      prisma.artifactPermission.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+      prisma.artifactVersion.deleteMany({
+        where: {
+          artifact: { assistantId: assistantBigInt },
+        },
+      }),
+      prisma.assistantArtifact.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+
+      // Social
+      prisma.assistantNewsFeedLike.deleteMany({
+        where: {
+          newsFeed: { assistantId: assistantBigInt },
+        },
+      }),
+      prisma.assistantNewsFeedComment.deleteMany({
+        where: {
+          newsFeed: { assistantId: assistantBigInt },
+        },
+      }),
+      prisma.newsFeedPermission.deleteMany({
+        where: {
+          newsFeed: { assistantId: assistantBigInt },
+        },
+      }),
+      prisma.assistantNewsFeed.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+
+      // Marketplace & usage
+      prisma.assistantPurchase.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+      prisma.assistantTransaction.deleteMany({
+        where: { purchases: { some: { assistantId: assistantBigInt } } },
+      }),
+      prisma.usageMetric.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+
+      // Permissions & pins
+      prisma.assistantContact.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+      prisma.assistantPin.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+
+      // API Config
+      prisma.assistantApiConfiguration.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+
+      // Dropbox integrations
+      prisma.dropboxChatUsage.deleteMany({
+        where: {
+          chat: { assistantId: assistantBigInt },
+        },
+      }),
+      prisma.dropboxConnector.deleteMany({
+        where: { assistantId: assistantBigInt },
+      }),
+
+      // 🔥 Finally delete assistant
+      prisma.assistant.delete({
+        where: { id: assistantBigInt },
+      }),
+    ])
+
+    // 🔄 Revalidate UI
+    revalidatePath("/assistants")
+    revalidatePath("/dashboard")
+    revalidatePath("/store")
+
+    return { success: true }
+  } catch (error) {
+    console.error("Hard delete assistant failed:", error)
+    return {
+      success: false,
+      error: "Failed to permanently delete assistant",
+    }
+  }
 }
