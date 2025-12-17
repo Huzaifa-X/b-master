@@ -61,16 +61,22 @@ export async function POST(req: NextRequest) {
                     return
                 }
 
-                // Convert Blob to File
-                const file = new File([audio], "recording.webm", { 
-                    type: audio.type || "audio/webm" 
-                })
-
                 console.log("[Transcribe API] Calling OpenAI Whisper API...")
+
+                // Create a proper File object for OpenAI SDK
+                // The OpenAI SDK expects a file-like object with name, type, and arrayBuffer() method
+                const audioBuffer = await audio.arrayBuffer()
+                const audioFile = new Blob([audioBuffer], { type: audio.type || "audio/webm" })
+                
+                // Add name property to the Blob to make it File-like
+                Object.defineProperty(audioFile, 'name', {
+                    value: 'recording.webm',
+                    writable: false
+                })
 
                 // Use whisper-1 for transcription
                 const transcription = await openai.audio.transcriptions.create({
-                    file: file,
+                    file: audioFile as any, // Cast to any since we're adding the name property
                     model: "whisper-1",
                     language: language === "auto" ? undefined : language,
                     response_format: "text",
