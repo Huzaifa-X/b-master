@@ -502,8 +502,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
         chatWithAPI: options?.chatWithAPI,
         dropbox: options?.dropbox,
         artifact: options?.artifact,
-        mentionedUsers: options?.mentionedUsers,
-        skipBackground: true // Skip background processing, we'll use streaming instead
+        mentionedUsers: options?.mentionedUsers
       })
 
       if (!result.success) {

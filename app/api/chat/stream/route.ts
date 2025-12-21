@@ -23,23 +23,18 @@ async function saveImageToS3(
   chatId: number,
   imageIndex: number
 ): Promise<string> {
-  try {
-    const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "")
-    const imageBuffer = Buffer.from(base64Data, "base64")
-    const timestamp = Date.now()
-    const fileName = `image-${timestamp}-${imageIndex}.png`
-    const publicUrl = await uploadToS3(
-      imageBuffer,
-      fileName,
-      "image/png",
-      `chat-images/chat-${chatId}`
-    )
-    console.log(`[Stream] ✅ Saved image ${imageIndex + 1} to S3: ${publicUrl}`)
-    return publicUrl
-  } catch (error) {
-    console.error("[Stream] ❌ S3 upload failed:", error)
-    throw new Error(`S3 upload failed: ${error instanceof Error ? error.message : "Unknown error"}`)
-  }
+  const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "")
+  const imageBuffer = Buffer.from(base64Data, "base64")
+  const timestamp = Date.now()
+  const fileName = `image-${timestamp}-${imageIndex}.png`
+  const publicUrl = await uploadToS3(
+    imageBuffer,
+    fileName,
+    "image/png",
+    `chat-images/chat-${chatId}`
+  )
+  console.log(`[Stream] ✅ Saved image ${imageIndex + 1} to S3: ${publicUrl}`)
+  return publicUrl
 }
 
 /**
@@ -57,14 +52,13 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const { chatId, assistantId, chatType, webSearch, research, chatWithAPI, attachments, artifact, dropbox } = body
-    console.log(body)
 
     const chatIdInt = parseInt(chatId)
     if (isNaN(chatIdInt)) {
       return new Response(JSON.stringify({ error: "Invalid chatId" }), { status: 400 })
     }
 
-    // Get chat with full context including the last user message with mentioned users
+    // Get chat with full context
     const chat = await prisma.assistantUserChat.findFirst({
       where: { id: chatIdInt },
       include: {
@@ -120,7 +114,7 @@ export async function POST(req: NextRequest) {
     // Build system prompt
     let systemPrompt = await getSystemPrompt()
 
-    // Add important note about mentioned users
+    // Add mentioned users context
     systemPrompt += `\n\n## Mentioned Users\nWhen you see "[This message mentions: Name <email>]" at the start of a user message, those are people the user has specifically mentioned using @ mentions. You have their full contact information (name and email). Use this information when relevant - for example, if the user asks you to create an invoice for someone, send an email, or perform any action involving the mentioned person, you already have their email address and don't need to ask for it.`
 
     if (research) {
@@ -158,25 +152,21 @@ export async function POST(req: NextRequest) {
       systemPrompt += `\n\n## Assistant-Specific Instructions\n${chat.assistant.instructions}`
     }
 
-    // Prepare conversation history and extract mentioned users
+    // Prepare conversation history
     const conversationMessages = chat.messages
       .filter(msg => msg.message)
       .map((msg) => {
         let content = msg.message || ""
 
-        // Check all user messages for mentioned users
+        // Add mentioned users to message context
         if (msg.role === "user" && msg.documents) {
           try {
             const documentsData = JSON.parse(msg.documents)
-            console.log("[Stream] Mentioned users in message:", documentsData.mentionedUsers)
-            console.log("[Stream] Data:", documentsData)
             if (documentsData.mentionedUsers && Array.isArray(documentsData.mentionedUsers) && documentsData.mentionedUsers.length > 0) {
-              // Prepend mentioned users info to make it more visible to AI
               const mentionsList = documentsData.mentionedUsers
                 .map((u: { name: string; email: string }) => `${u.name} <${u.email}>`)
                 .join(', ')
               content = `[This message mentions: ${mentionsList}]\n\n${content}`
-              console.log("[Stream] Added mentioned users to message context:", documentsData.mentionedUsers)
             }
           } catch (e) {
             // Ignore parse errors
@@ -262,7 +252,7 @@ export async function POST(req: NextRequest) {
       ? `${conversationContext}\n\nUser: ${enhancedUserMessage}`
       : `User: ${enhancedUserMessage}`
 
-
+    // Load API tools if needed
     let apiTools: OpenAPITool[] = []
 
     if (chatWithAPI && assistantId) {
@@ -285,7 +275,6 @@ export async function POST(req: NextRequest) {
         systemPrompt += `- **Method**: ${tool.metadata.method}\n`
         systemPrompt += `- **Endpoint**: ${tool.metadata.baseUrl}${tool.metadata.path}\n`
 
-        // List parameters
         const params = tool.openaiTool.parameters
         if (params.properties && Object.keys(params.properties).length > 0) {
           systemPrompt += `- **Parameters**:\n`
@@ -313,7 +302,8 @@ export async function POST(req: NextRequest) {
     } else {
       tools.push({ type: "web_search" })
       tools.push({ type: "image_generation" })
-      // Add Stripe MCP tool for invoice creation
+      
+      // Add Stripe MCP tool
       tools.push({
         type: "mcp",
         server_label: "stripe",
@@ -324,7 +314,6 @@ export async function POST(req: NextRequest) {
 
       // Add Dropbox MCP tool if enabled
       if (dropbox) {
-        console.log("================================================")
         try {
           const dropboxConnector = await prisma.dropboxConnector.findFirst({
             where: {
@@ -343,32 +332,29 @@ export async function POST(req: NextRequest) {
               authorization: accessToken,
               require_approval: "never",
             })
-            console.log(`[Stream] Added Dropbox MCP tool for connector ${dropboxConnector.id}`)
-          } else {
-            console.warn("[Stream] Dropbox enabled but no active connector found")
+            console.log(`[Stream] Added Dropbox MCP tool`)
           }
         } catch (error) {
           console.error("[Stream] Failed to add Dropbox MCP tool:", error)
         }
       }
 
+      // Add API tools
       if (apiTools.length > 0) {
         const apiToolDefs = toOpenAIToolDefinitions(apiTools)
         apiToolDefs.forEach((tool, i) => {
           if (tool.type === "function") {
             if (!tool.name || !tool.parameters) {
-              console.error(
-                `[Stream] ❌ Invalid API tool at index ${i}:`,
-                JSON.stringify(tool, null, 2)
-              )
-              throw new Error("Invalid function tool shape (Responses API)")
+              console.error(`[Stream] ❌ Invalid API tool at index ${i}`)
+              throw new Error("Invalid function tool shape")
             }
           }
         })
         tools.push(...apiToolDefs)
-        console.log(`[Stream] Added ${apiToolDefs.length} API tool definitions to OpenAI request`)
+        console.log(`[Stream] Added ${apiToolDefs.length} API tool definitions`)
       }
 
+      // Add file search if assistant has vector store
       if (assistantId && chat.assistant?.vectorStoreId) {
         tools.push({
           type: "file_search",
@@ -376,6 +362,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
+      // Add artifact update tool
       if (artifact) {
         tools.push({
           type: "function",
@@ -400,10 +387,8 @@ export async function POST(req: NextRequest) {
             required: ["updatedCode", "changeDescription", "changeSummary"]
           }
         })
-
         console.log(`[Stream] ✅ Added artifact update tool`)
       }
-
     }
 
     // Prepare input content with images if any
@@ -430,7 +415,7 @@ export async function POST(req: NextRequest) {
       instructions: systemPrompt,
       tools: tools.length > 0 ? tools : undefined,
       tool_choice: "auto",
-      stream: true // Enable streaming
+      stream: true
     }
 
     if (shouldUseIterativeEditing && previousResponseId) {
@@ -453,447 +438,392 @@ export async function POST(req: NextRequest) {
           const generatedImageUrls: string[] = []
           const usedTools: string[] = []
 
-          // Create streaming response - try streaming first, fallback if not supported
+          // Create streaming response
           console.log("[Stream] Starting OpenAI stream...")
+          const responseStream = await openai.responses.create(apiParams) as any
 
-          try {
-            // Try to get streaming response - don't await yet, check if it's a promise
-            const responsePromise = openai.responses.create(apiParams) as any
+          // Stream events from OpenAI
+          for await (const event of responseStream) {
+            console.log("[Stream] Event type:", event.type)
 
-            // Check if it's a promise or already iterable
-            let responseStream: any
-            if (responsePromise instanceof Promise) {
-              responseStream = await responsePromise
-            } else if (typeof responsePromise[Symbol.asyncIterator] === 'function') {
-              responseStream = responsePromise
-            } else {
-              throw new Error("Response is neither a promise nor async iterable")
-            }
-
-            // Check if response is iterable after awaiting
-            if (!responseStream || typeof responseStream[Symbol.asyncIterator] !== 'function') {
-              console.warn("[Stream] Response is not async iterable, falling back to non-streaming mode")
-              console.log("[Stream] Response type:", typeof responseStream)
-              console.log("[Stream] Response structure:", JSON.stringify(Object.keys(responseStream || {}), null, 2))
-
-              // Fallback: treat as complete response and simulate streaming
-              const fullResponse = responseStream as any
-              if (fullResponse?.id) {
-                currentResponseId = fullResponse.id
-                const responseIdMsg = `data: ${JSON.stringify({ type: "response_id", id: currentResponseId })}\n\n`
-                console.log("[Stream] Sending response_id:", responseIdMsg)
-                controller.enqueue(encoder.encode(responseIdMsg))
-              }
-
-              // Process complete response and simulate streaming
-              if (fullResponse?.output && Array.isArray(fullResponse.output)) {
-                for (const item of fullResponse.output) {
-                  if (item.type === "message" && 'content' in item && Array.isArray(item.content)) {
-                    for (const contentItem of item.content) {
-                      if (contentItem.type === "output_text" && 'text' in contentItem) {
-                        const text = contentItem.text || ""
-                        if (text) {
-                          assistantResponse += text
-                          // Simulate streaming by sending word by word
-                          const words = text.split(' ')
-                          for (const word of words) {
-                            controller.enqueue(
-                              encoder.encode(`data: ${JSON.stringify({ type: "text", content: word + ' ' })}\n\n`)
-                            )
-                            await new Promise(resolve => setTimeout(resolve, 10))
-                          }
-                        }
-                      }
-                    }
-                  }
-
-                  if (item.type === "image_generation_call" && item.status === "completed" && item.result) {
-                    try {
-                      const imageUrl = await saveImageToS3(
-                        item.result as string,
-                        chatIdInt,
-                        generatedImageUrls.length
-                      )
-                      generatedImageUrls.push(imageUrl)
-                      controller.enqueue(
-                        encoder.encode(`data: ${JSON.stringify({ type: "image", url: imageUrl })}\n\n`)
-                      )
-                    } catch (s3Error) {
-                      console.error("[Stream] S3 upload failed:", s3Error)
-                      const base64Url = `data:image/png;base64,${item.result as string}`
-                      generatedImageUrls.push(base64Url)
-                      controller.enqueue(
-                        encoder.encode(`data: ${JSON.stringify({ type: "image", url: base64Url })}\n\n`)
-                      )
-                    }
-                  }
+            switch (event.type) {
+              case "response.created":
+                // Response started
+                if (event.response?.id) {
+                  currentResponseId = event.response.id
+                  console.log("[Stream] Response ID:", currentResponseId)
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ type: "response_id", id: currentResponseId })}\n\n`)
+                  )
                 }
-              }
+                break
 
-              // Skip to end of streaming logic
-              console.log("[Stream] Finished fallback streaming")
-            } else {
-              // Response is iterable - use real streaming
-              console.log("[Stream] Response is async iterable, starting real streaming...")
-              for await (const event of responseStream) {
-                console.log("[Stream] Event type:", event.type)
-
-                // Handle different event types according to OpenAI's streaming events
-                switch (event.type) {
-                  case "response.created":
-                    // Response started
-                    if (event.response?.id) {
-                      currentResponseId = event.response.id
-                      console.log("[Stream] Response ID:", currentResponseId)
-                      controller.enqueue(
-                        encoder.encode(`data: ${JSON.stringify({ type: "response_id", id: currentResponseId })}\n\n`)
-                      )
-                    }
-                    break
-
-                  case "response.output_text.delta":
-                    // Text chunk received
-                    if (event.delta) {
-                      assistantResponse += event.delta
-                      // console.log("[Stream] Text delta:", event.delta.substring(0, 50))
-                      controller.enqueue(
-                        encoder.encode(`data: ${JSON.stringify({ type: "text", content: event.delta })}\n\n`)
-                      )
-                    }
-                    break
-
-                  case "response.output_item.done":
-                    // Output item completed (could be text, image, etc.)
-                    if (event.item?.type === "image_generation_call") {
-                      if (!usedTools.includes("image_generation")) {
-                        usedTools.push("image_generation")
-                      }
-
-                      if (event.item.status === "completed" && event.item.result) {
-                        console.log("[Stream] Image generation completed")
-                        try {
-                          const imageUrl = await saveImageToS3(
-                            event.item.result as string,
-                            chatIdInt,
-                            generatedImageUrls.length
-                          )
-                          generatedImageUrls.push(imageUrl)
-
-                          controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify({ type: "image", url: imageUrl })}\n\n`)
-                          )
-                        } catch (s3Error) {
-                          console.error("[Stream] S3 upload failed:", s3Error)
-                          const base64Url = `data:image/png;base64,${event.item.result as string}`
-                          generatedImageUrls.push(base64Url)
-
-                          controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify({ type: "image", url: base64Url })}\n\n`)
-                          )
-                        }
-                      }
-                    }
-
-                    // Track tool usage
-                    if (event.item?.type === "file_search_call" && !usedTools.includes("file_search")) {
-                      usedTools.push("file_search")
-                    }
-                    if (event.item?.type === "web_search_call" && !usedTools.includes("web_search")) {
-                      usedTools.push("web_search")
-                    }
-                    if (event.item?.type === "mcp_call") {
-                      const mcpCallName = event.item.name || '';
-                      const mcpCallArgs = event.item.arguments ? JSON.parse(event.item.arguments) : {};
-
-                      if (mcpCallName.includes("dropbox") && !usedTools.includes("dropbox")) {
-                        usedTools.push("dropbox")
-                        console.log("[Stream] Dropbox MCP tool used:", mcpCallName)
-                      }
-
-                      // Handle Stripe MCP - Generate Invoice PDF
-                      if (mcpCallName.includes("stripe") || mcpCallName.includes("invoice")) {
-                        if (!usedTools.includes("stripe")) {
-                          usedTools.push("stripe")
-                        }
-                        console.log("[Stream] Stripe MCP tool used:", mcpCallName)
-                        console.log("[Stream] Stripe MCP arguments:", mcpCallArgs)
-
-                        // Check if this is an invoice creation
-                        if (
-                          event.item.status === "completed" &&
-                          event.item.result &&
-                          (mcpCallName.toLowerCase().includes('invoice') ||
-                            mcpCallName.toLowerCase().includes('create'))
-                        ) {
-                          try {
-                            console.log("[Stream] 📄 Generating invoice PDF...")
-
-                            // Parse the MCP result
-                            const stripeResult = typeof event.item.result === 'string'
-                              ? JSON.parse(event.item.result)
-                              : event.item.result
-
-                            // Extract invoice data from Stripe response
-                            const invoiceData = {
-                              invoiceNumber: stripeResult.number || stripeResult.id || `INV-${Date.now()}`,
-                              date: new Date(stripeResult.created * 1000 || Date.now()).toLocaleDateString(),
-                              dueDate: stripeResult.due_date
-                                ? new Date(stripeResult.due_date * 1000).toLocaleDateString()
-                                : undefined,
-                              from: {
-                                name: stripeResult.account_name || 'Your Company Name',
-                                email: stripeResult.account_email || process.env.BUSINESS_EMAIL,
-                                address: stripeResult.account_address
-                              },
-                              to: {
-                                name: stripeResult.customer_name || mcpCallArgs.customer_name || 'Customer',
-                                email: stripeResult.customer_email || mcpCallArgs.customer_email,
-                                address: stripeResult.customer_address
-                              },
-                              items: stripeResult.lines?.data?.map((line: any) => ({
-                                description: line.description || 'Service',
-                                quantity: line.quantity || 1,
-                                unitPrice: line.amount / 100, // Stripe uses cents
-                                amount: line.amount / 100
-                              })) || [{
-                                description: mcpCallArgs.description || 'Service',
-                                quantity: 1,
-                                unitPrice: (stripeResult.amount_due || stripeResult.total || 0) / 100,
-                                amount: (stripeResult.amount_due || stripeResult.total || 0) / 100
-                              }],
-                              subtotal: (stripeResult.subtotal || stripeResult.amount_due || 0) / 100,
-                              tax: stripeResult.tax ? stripeResult.tax / 100 : undefined,
-                              taxRate: stripeResult.tax_percent,
-                              total: (stripeResult.total || stripeResult.amount_due || 0) / 100,
-                              currency: stripeResult.currency?.toUpperCase() || 'USD',
-                              notes: stripeResult.footer || mcpCallArgs.notes
-                            }
-
-                            // Generate PDF
-                            const pdfUrl = await generateInvoicePDF(invoiceData)
-                            console.log("[Stream] ✅ Invoice PDF generated:", pdfUrl)
-
-                            // Add PDF URL to assistant response
-                            assistantResponse += `\n\n📄 **Invoice PDF Generated**\n[Download Invoice](${pdfUrl})\n\n`
-
-                          } catch (pdfError) {
-                            console.error("[Stream] ❌ PDF generation error:", pdfError)
-                            // Don't fail the whole response, just log the error
-                            assistantResponse += `\n\n⚠️ Note: Invoice was created but PDF generation failed.\n\n`
-                          }
-                        }
-                      }
-                    }
-
-                    if (event.item?.type === "function_call") {
-                      const functionName = event.item.name
-                      const functionArgs = event.item.arguments
-                        ? JSON.parse(event.item.arguments)
-                        : {}
-
-                      console.log(`[Stream] Function call detected: ${functionName}`)
-
-                      if (functionName === "update_artifact" && artifact) {
-                        console.log(`[Stream] 🎨 Updating artifact: ${artifact.name}`)
-
-                        try {
-                          const { updatedCode, changeDescription, changeSummary } = functionArgs
-
-                          if (!updatedCode || !changeDescription) {
-                            throw new Error("Missing required parameters for artifact update")
-                          }
-
-                          // Create new version using the artifact action
-                          const { createArtifactVersion } = await import("@/app/actions/update-artifact.action")
-
-                          const versionResult = await createArtifactVersion({
-                            artifactId: parseInt(artifact.id),
-                            userId: BigInt(session.user.id),
-                            code: updatedCode,
-                            description: changeDescription,
-                            changeType: 'ai', // Mark as AI-generated update
-                            setAsActive: true // Set as the new active version
-                          })
-
-                          if (!versionResult.success) {
-                            throw new Error(versionResult.error || "Failed to create artifact version")
-                          }
-
-                          console.log(`[Stream] ✅ Artifact updated successfully. New version: ${versionResult.version?.versionNumber}`)
-
-                          // Track that artifact was updated
-                          if (!usedTools.includes("artifact_update")) {
-                            usedTools.push("artifact_update")
-                          }
-
-                          // Add success message to assistant response
-                          const successMessage = `\n\n✅ **Artifact Updated Successfully**\n\n` +
-                            `**Version:** ${versionResult.version?.versionNumber}\n` +
-                            `**Change:** ${changeSummary}\n\n` +
-                            `The artifact "${artifact.name}" has been updated with your requested changes.\n\n`
-
-                          assistantResponse += successMessage
-
-                          // Stream the update notification to the client
-                          controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify({
-                              type: "artifact_updated",
-                              artifactId: artifact.id,
-                              artifactName: artifact.name,
-                              versionNumber: versionResult.version?.versionNumber,
-                              changeSummary: changeSummary
-                            })}\n\n`)
-                          )
-
-                          // Stream the text
-                          controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify({
-                              type: "text",
-                              content: successMessage
-                            })}\n\n`)
-                          )
-
-                        } catch (updateError: any) {
-                          console.error(`[Stream] ❌ Artifact update error:`, updateError)
-
-                          const errorMessage = `\n\n⚠️ **Failed to Update Artifact**\n\n` +
-                            `Error: ${updateError.message}\n\n` +
-                            `The artifact could not be updated. Please try again or check your permissions.\n\n`
-
-                          assistantResponse += errorMessage
-
-                          controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify({
-                              type: "artifact_update_error",
-                              error: updateError.message
-                            })}\n\n`)
-                          )
-
-                          controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify({
-                              type: "text",
-                              content: errorMessage
-                            })}\n\n`)
-                          )
-                        }
-                      }
-
-                      // Check if this is one of our API tools
-                      const isAPITool = apiTools.some(t => t.openaiTool.name === functionName)
-
-                      if (isAPITool) {
-                        console.log(`[Stream] Executing API tool: ${functionName}`)
-
-                        try {
-                          // Execute the API call
-                          const result = await executeAPITool(apiTools, functionName, functionArgs)
-
-                          // Track tool usage
-                          if (!usedTools.includes(functionName)) {
-                            usedTools.push(functionName)
-                          }
-
-                          // Format result for display
-                          const resultText = typeof result === 'string'
-                            ? result
-                            : JSON.stringify(result, null, 2)
-
-                          // Add to assistant response
-                          assistantResponse += `\n\n**API Call Result (${functionName}):**\n\`\`\`json\n${resultText}\n\`\`\`\n\n`
-
-                          // Stream the result to the client
-                          controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify({
-                              type: "tool_result",
-                              tool: functionName,
-                              result: result
-                            })}\n\n`)
-                          )
-                        } catch (apiError: any) {
-                          console.error(`[Stream] ❌ API tool error:`, apiError)
-                          const errorText = `API call failed: ${apiError.message}`
-                          assistantResponse += `\n\n**Error calling ${functionName}:** ${errorText}\n\n`
-                          controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify({
-                              type: "tool_error",
-                              tool: functionName,
-                              error: errorText
-                            })}\n\n`)
-                          )
-                        }
-                      }
-                    }
-                    break
-
-                  case "response.completed":
-                    // Response fully completed
-                    console.log("[Stream] Response completed")
-                    break
-
-                  case "error":
-                    // Error occurred
-                    console.error("[Stream] Error event:", event)
-                    throw new Error(event.error?.message || "Stream error")
+              case "response.output_text.delta":
+                // Text chunk received - stream immediately
+                if (event.delta) {
+                  assistantResponse += event.delta
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ type: "text", content: event.delta })}\n\n`)
+                  )
                 }
-              }
-              console.log("[Stream] Finished real streaming")
-            }
-          } catch (streamError: any) {
-            console.error("[Stream] Error during streaming attempt:", streamError)
-            // If streaming fails, try non-streaming as final fallback
-            console.log("[Stream] Attempting non-streaming fallback...")
-            const fallbackParams = { ...apiParams, stream: false }
-            const fullResponse = await openai.responses.create(fallbackParams) as any
+                break
 
-            if (fullResponse?.id) {
-              currentResponseId = fullResponse.id
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ type: "response_id", id: currentResponseId })}\n\n`)
-              )
-            }
-
-            // Process and simulate streaming
-            if (fullResponse?.output && Array.isArray(fullResponse.output)) {
-              for (const item of fullResponse.output) {
-                if (item.type === "message" && 'content' in item && Array.isArray(item.content)) {
-                  for (const contentItem of item.content) {
-                    if (contentItem.type === "output_text" && 'text' in contentItem) {
-                      const text = contentItem.text || ""
-                      if (text) {
-                        assistantResponse += text
-                        const words = text.split(' ')
-                        for (const word of words) {
-                          const textMsg = `data: ${JSON.stringify({ type: "text", content: word + ' ' })}\n\n`
-                          console.log("[Stream] Sending text chunk:", word.substring(0, 20))
-                          controller.enqueue(encoder.encode(textMsg))
-                          await new Promise(resolve => setTimeout(resolve, 10))
-                        }
-                      }
-                    }
-                  }
+              // ==================== IMAGE GENERATION EVENTS ====================
+              
+              case "response.image_generation_call.generating":
+                // Image generation started
+                if (!usedTools.includes("image_generation")) {
+                  usedTools.push("image_generation")
                 }
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ 
+                    type: "image_generating_start",
+                    itemId: event.item_id 
+                  })}\n\n`)
+                )
+                console.log("[Stream] 🎨 Image generation started")
+                break
 
-                if (item.type === "image_generation_call" && item.status === "completed" && item.result) {
-                  try {
+              case "response.image_generation_call.in_progress":
+                // Image still generating
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ 
+                    type: "image_generating_progress",
+                    itemId: event.item_id 
+                  })}\n\n`)
+                )
+                break
+
+              case "response.image_generation_call.partial_image":
+                // Partial preview AND final image (last partial is the final image!)
+                if (event.partial_image_b64) {
+                  console.log(`[Stream] 🖼️ Partial/Final image received (index: ${event.partial_image_index})`)
+                  
+                  // Upload to S3 immediately
+                  const imageUrl = await saveImageToS3(
+                    event.partial_image_b64,
+                    chatIdInt,
+                    generatedImageUrls.length
+                  )
+                  
+                  generatedImageUrls.push(imageUrl)
+                  console.log(`[Stream] ✅ Image ${event.partial_image_index} uploaded: ${imageUrl}`)
+
+                  // Send to frontend with partial flag
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ 
+                      type: event.partial_image_index === 0 ? "image_partial" : "image_complete",
+                      url: imageUrl,
+                      itemId: event.item_id,
+                      index: event.partial_image_index,
+                      isPartial: event.partial_image_index === 0
+                    })}\n\n`)
+                  )
+                }
+                break
+
+              case "response.image_generation_call.completed":
+                // This event rarely fires in Responses API, handled by partial_image instead
+                console.log("[Stream] 🎨 Image generation completed event (rare)")
+                if (event.b64_json && !generatedImageUrls.some(url => url.includes(event.item_id))) {
+                  const imageUrl = await saveImageToS3(
+                    event.b64_json,
+                    chatIdInt,
+                    generatedImageUrls.length
+                  )
+                  generatedImageUrls.push(imageUrl)
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ 
+                      type: "image_complete",
+                      url: imageUrl,
+                      itemId: event.item_id
+                    })}\n\n`)
+                  )
+                }
+                break
+
+              case "response.output_item.done":
+                // Output item completed
+                console.log("[Stream] 📦 Output item done event received")
+                console.log("[Stream] Item type:", event.item?.type)
+                console.log("[Stream] Item status:", event.item?.status)
+                console.log("[Stream] Has result?:", !!event.item?.result)
+                console.log("[Stream] Has b64_json?:", !!(event.item as any)?.b64_json)
+                console.log("[Stream] All item keys:", event.item ? Object.keys(event.item) : 'no item')
+                
+                // 1. IMAGE GENERATION COMPLETED (fallback if not caught by completed event)
+                if (event.item?.type === "image_generation_call") {
+                  console.log("[Stream] 🎨 Processing image_generation_call in output_item.done")
+                  
+                  // Try multiple possible fields where the image might be
+                  const imageData = event.item.result || 
+                                   (event.item as any).b64_json ||
+                                   (event.item as any).image ||
+                                   (event.item as any).output
+                  
+                  if (event.item.status === "completed" && imageData) {
+                    console.log("[Stream] 🎨 Found image data, uploading to S3...")
+                    console.log("[Stream] Image data length:", imageData?.length || 0)
+                    
+                    // Upload to S3 - no try-catch, let errors bubble up
                     const imageUrl = await saveImageToS3(
-                      item.result as string,
+                      imageData as string,
                       chatIdInt,
                       generatedImageUrls.length
                     )
+                    
                     generatedImageUrls.push(imageUrl)
+                    console.log(`[Stream] ✅ Image uploaded: ${imageUrl}`)
+
+                    // Send final image to frontend
                     controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({ type: "image", url: imageUrl })}\n\n`)
+                      encoder.encode(`data: ${JSON.stringify({ 
+                        type: "image_complete",
+                        url: imageUrl,
+                        itemId: event.item.id
+                      })}\n\n`)
                     )
-                  } catch (s3Error) {
-                    console.error("[Stream] S3 upload failed:", s3Error)
-                    const base64Url = `data:image/png;base64,${item.result as string}`
-                    generatedImageUrls.push(base64Url)
+                  } else if (event.item.status === "failed") {
+                    console.error("[Stream] ❌ Image generation failed:", event.item.error)
                     controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({ type: "image", url: base64Url })}\n\n`)
+                      encoder.encode(`data: ${JSON.stringify({ 
+                        type: "image_failed",
+                        error: event.item.error?.message || "Image generation failed"
+                      })}\n\n`)
                     )
+                  } else {
+                    console.log("[Stream] ⚠️ Image item done but no image data found")
+                    console.log("[Stream] Item status:", event.item.status)
+                    console.log("[Stream] Full item structure:", JSON.stringify(event.item, null, 2))
                   }
                 }
-              }
+
+                // 2. TRACK TOOL USAGE
+                if (event.item?.type === "file_search_call" && !usedTools.includes("file_search")) {
+                  usedTools.push("file_search")
+                }
+                if (event.item?.type === "web_search_call" && !usedTools.includes("web_search")) {
+                  usedTools.push("web_search")
+                }
+                
+                // 3. HANDLE MCP CALLS
+                if (event.item?.type === "mcp_call") {
+                  const mcpCallName = event.item.name || '';
+                  const mcpCallArgs = event.item.arguments ? JSON.parse(event.item.arguments) : {};
+
+                  // Dropbox MCP
+                  if (mcpCallName.includes("dropbox") && !usedTools.includes("dropbox")) {
+                    usedTools.push("dropbox")
+                    console.log("[Stream] Dropbox MCP tool used:", mcpCallName)
+                  }
+
+                  // Stripe MCP - Generate Invoice PDF
+                  if (mcpCallName.includes("stripe") || mcpCallName.includes("invoice")) {
+                    if (!usedTools.includes("stripe")) {
+                      usedTools.push("stripe")
+                    }
+                    console.log("[Stream] Stripe MCP tool used:", mcpCallName)
+
+                    if (
+                      event.item.status === "completed" &&
+                      event.item.result &&
+                      (mcpCallName.toLowerCase().includes('invoice') ||
+                        mcpCallName.toLowerCase().includes('create'))
+                    ) {
+                      try {
+                        console.log("[Stream] 📄 Generating invoice PDF...")
+
+                        const stripeResult = typeof event.item.result === 'string'
+                          ? JSON.parse(event.item.result)
+                          : event.item.result
+
+                        const invoiceData = {
+                          invoiceNumber: stripeResult.number || stripeResult.id || `INV-${Date.now()}`,
+                          date: new Date(stripeResult.created * 1000 || Date.now()).toLocaleDateString(),
+                          dueDate: stripeResult.due_date
+                            ? new Date(stripeResult.due_date * 1000).toLocaleDateString()
+                            : undefined,
+                          from: {
+                            name: stripeResult.account_name || 'Your Company Name',
+                            email: stripeResult.account_email || process.env.BUSINESS_EMAIL,
+                            address: stripeResult.account_address
+                          },
+                          to: {
+                            name: stripeResult.customer_name || mcpCallArgs.customer_name || 'Customer',
+                            email: stripeResult.customer_email || mcpCallArgs.customer_email,
+                            address: stripeResult.customer_address
+                          },
+                          items: stripeResult.lines?.data?.map((line: any) => ({
+                            description: line.description || 'Service',
+                            quantity: line.quantity || 1,
+                            unitPrice: line.amount / 100,
+                            amount: line.amount / 100
+                          })) || [{
+                            description: mcpCallArgs.description || 'Service',
+                            quantity: 1,
+                            unitPrice: (stripeResult.amount_due || stripeResult.total || 0) / 100,
+                            amount: (stripeResult.amount_due || stripeResult.total || 0) / 100
+                          }],
+                          subtotal: (stripeResult.subtotal || stripeResult.amount_due || 0) / 100,
+                          tax: stripeResult.tax ? stripeResult.tax / 100 : undefined,
+                          taxRate: stripeResult.tax_percent,
+                          total: (stripeResult.total || stripeResult.amount_due || 0) / 100,
+                          currency: stripeResult.currency?.toUpperCase() || 'USD',
+                          notes: stripeResult.footer || mcpCallArgs.notes
+                        }
+
+                        const pdfUrl = await generateInvoicePDF(invoiceData)
+                        console.log("[Stream] ✅ Invoice PDF generated:", pdfUrl)
+
+                        assistantResponse += `\n\n📄 **Invoice PDF Generated**\n[Download Invoice](${pdfUrl})\n\n`
+
+                      } catch (pdfError) {
+                        console.error("[Stream] ❌ PDF generation error:", pdfError)
+                        assistantResponse += `\n\n⚠️ Note: Invoice was created but PDF generation failed.\n\n`
+                      }
+                    }
+                  }
+                }
+
+                // 4. HANDLE FUNCTION CALLS
+                if (event.item?.type === "function_call") {
+                  const functionName = event.item.name
+                  const functionArgs = event.item.arguments
+                    ? JSON.parse(event.item.arguments)
+                    : {}
+
+                  console.log(`[Stream] Function call detected: ${functionName}`)
+
+                  // Artifact Update
+                  if (functionName === "update_artifact" && artifact) {
+                    console.log(`[Stream] 🎨 Updating artifact: ${artifact.name}`)
+
+                    try {
+                      const { updatedCode, changeDescription, changeSummary } = functionArgs
+
+                      if (!updatedCode || !changeDescription) {
+                        throw new Error("Missing required parameters for artifact update")
+                      }
+
+                      const { createArtifactVersion } = await import("@/app/actions/update-artifact.action")
+
+                      const versionResult = await createArtifactVersion({
+                        artifactId: parseInt(artifact.id),
+                        userId: BigInt(session.user.id),
+                        code: updatedCode,
+                        description: changeDescription,
+                        changeType: 'ai',
+                        setAsActive: true
+                      })
+
+                      if (!versionResult.success) {
+                        throw new Error(versionResult.error || "Failed to create artifact version")
+                      }
+
+                      console.log(`[Stream] ✅ Artifact updated successfully. New version: ${versionResult.version?.versionNumber}`)
+
+                      if (!usedTools.includes("artifact_update")) {
+                        usedTools.push("artifact_update")
+                      }
+
+                      const successMessage = `\n\n✅ **Artifact Updated Successfully**\n\n` +
+                        `**Version:** ${versionResult.version?.versionNumber}\n` +
+                        `**Change:** ${changeSummary}\n\n` +
+                        `The artifact "${artifact.name}" has been updated with your requested changes.\n\n`
+
+                      assistantResponse += successMessage
+
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "artifact_updated",
+                          artifactId: artifact.id,
+                          artifactName: artifact.name,
+                          versionNumber: versionResult.version?.versionNumber,
+                          changeSummary: changeSummary
+                        })}\n\n`)
+                      )
+
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "text",
+                          content: successMessage
+                        })}\n\n`)
+                      )
+
+                    } catch (updateError: any) {
+                      console.error(`[Stream] ❌ Artifact update error:`, updateError)
+
+                      const errorMessage = `\n\n⚠️ **Failed to Update Artifact**\n\n` +
+                        `Error: ${updateError.message}\n\n` +
+                        `The artifact could not be updated. Please try again or check your permissions.\n\n`
+
+                      assistantResponse += errorMessage
+
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "artifact_update_error",
+                          error: updateError.message
+                        })}\n\n`)
+                      )
+
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "text",
+                          content: errorMessage
+                        })}\n\n`)
+                      )
+                    }
+                  }
+
+                  // API Tools
+                  const isAPITool = apiTools.some(t => t.openaiTool.name === functionName)
+
+                  if (isAPITool) {
+                    console.log(`[Stream] Executing API tool: ${functionName}`)
+
+                    try {
+                      const result = await executeAPITool(apiTools, functionName, functionArgs)
+
+                      if (!usedTools.includes(functionName)) {
+                        usedTools.push(functionName)
+                      }
+
+                      const resultText = typeof result === 'string'
+                        ? result
+                        : JSON.stringify(result, null, 2)
+
+                      assistantResponse += `\n\n**API Call Result (${functionName}):**\n\`\`\`json\n${resultText}\n\`\`\`\n\n`
+
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "tool_result",
+                          tool: functionName,
+                          result: result
+                        })}\n\n`)
+                      )
+                    } catch (apiError: any) {
+                      console.error(`[Stream] ❌ API tool error:`, apiError)
+                      const errorText = `API call failed: ${apiError.message}`
+                      assistantResponse += `\n\n**Error calling ${functionName}:** ${errorText}\n\n`
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "tool_error",
+                          tool: functionName,
+                          error: errorText
+                        })}\n\n`)
+                      )
+                    }
+                  }
+                }
+                break
+
+              case "response.completed":
+                console.log("[Stream] ✅ Response completed")
+                break
+
+              case "error":
+                console.error("[Stream] ❌ Error event:", event)
+                throw new Error(event.error?.message || "Stream error")
             }
           }
 
@@ -927,6 +857,15 @@ export async function POST(req: NextRequest) {
           })
 
           if (!existingResponse) {
+            // Prepare documents field with image URLs for easy loading
+            const documentsData = hasImages ? {
+              generatedImages: generatedImageUrls.map((url, idx) => ({
+                url,
+                index: idx,
+                timestamp: Date.now()
+              }))
+            } : null
+
             await prisma.assistantUserChatMessage.create({
               data: {
                 assistantUserChatId: chatIdInt,
@@ -936,9 +875,10 @@ export async function POST(req: NextRequest) {
                 assistantId: assistantId ? BigInt(assistantId) : null,
                 openaiResponseId: currentResponseId,
                 hasImages,
+                documents: documentsData ? JSON.stringify(documentsData) : null,
               }
             })
-            console.log("[Stream] Assistant response saved to database")
+            console.log("[Stream] ✅ Assistant response saved to database with", generatedImageUrls.length, "image URLs")
           }
 
           // Update user message status to COMPLETED
@@ -980,13 +920,14 @@ export async function POST(req: NextRequest) {
           }
 
           // Send done signal
-          const doneMsg = `data: ${JSON.stringify({ type: "done" })}\n\n`
-          console.log("[Stream] Sending done signal")
-          controller.enqueue(encoder.encode(doneMsg))
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
+          )
+          console.log("[Stream] ✅ Stream complete")
           controller.close()
 
         } catch (error) {
-          console.error("[Stream] Streaming error:", error)
+          console.error("[Stream] ❌ Streaming error:", error)
 
           // Update status to FAILED
           if (lastUserMessageRecord) {
@@ -998,7 +939,10 @@ export async function POST(req: NextRequest) {
           }
 
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: "error", error: error instanceof Error ? error.message : "Unknown error" })}\n\n`)
+            encoder.encode(`data: ${JSON.stringify({ 
+              type: "error", 
+              error: error instanceof Error ? error.message : "Unknown error" 
+            })}\n\n`)
           )
           controller.close()
         }

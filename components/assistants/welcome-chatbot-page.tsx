@@ -62,8 +62,7 @@ export function WelcomeChatbotPage({
         chatWithAPI: options?.chatWithAPI,
         dropbox: options?.dropbox,
         artifact: options?.artifact,
-        mentionedUsers: options?.mentionedUsers,
-        skipBackground: true // Skip background processing, streaming will be used
+        mentionedUsers: options?.mentionedUsers
       })
 
       if (!result.success || !result.chatId) {
