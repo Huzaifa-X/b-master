@@ -29,7 +29,7 @@ export default function EditAssistantPage() {
 
         if (!result.success || !result.assistant) {
           setError(result.error || "Failed to load assistant data")
-          toast.error(result.error || "Failed to load assistant data")
+          console.log(result.error || "Failed to load assistant data")
           setIsLoading(false)
           return
         }
@@ -83,7 +83,7 @@ export default function EditAssistantPage() {
                 return file
               } catch (error) {
                 console.error(`Error converting file ${fileInfo.url}:`, error)
-                toast.error(`Failed to load file: ${fileInfo.name}`)
+                console.log(`Failed to load file: ${fileInfo.name}`)
                 return null
               }
             })
@@ -95,13 +95,13 @@ export default function EditAssistantPage() {
             
             if (validFiles.length > 0) {
               fileObjects.push(...validFiles)
-              toast.success(`Loaded ${validFiles.length} file${validFiles.length > 1 ? 's' : ''}`)
+              console.log(`Loaded ${validFiles.length} file${validFiles.length > 1 ? 's' : ''}`)
             } else if (assistant.files.length > 0) {
-              toast.warning('Some files could not be loaded')
+              console.log('Some files could not be loaded')
             }
           } catch (error) {
             console.error('Error pre-loading files:', error)
-            toast.error('Failed to load files')
+            console.log('Failed to load files')
             // Continue without files if there's an error
           }
         }
@@ -112,7 +112,7 @@ export default function EditAssistantPage() {
           price: assistant.price,
           category: assistant.category as any,
           description: assistant.description,
-          image: null, // Will be loaded from imageURL if needed
+          image: assistant.imageURL,
           imageURL: assistant.imageURL,
           notes: assistant.notes || [],
           urls: assistant.urls || [],

@@ -1434,7 +1434,7 @@ export async function getAssistantForEdit(assistantId: string) {
 }
 
 /**
- * Update complete assistant (similar to create but updates existing)
+ * Update complete assistant (optimized version)
  */
 export async function updateCompleteAssistant(
     assistantId: string,
@@ -1443,44 +1443,35 @@ export async function updateCompleteAssistant(
     try {
         const session = await getServerSession(authOptions)
         if (!session?.user?.id) {
-            return {
-                success: false,
-                error: 'Authentication required'
-            }
+            return { success: false, error: 'Authentication required' }
         }
 
         const userId = BigInt(session.user.id)
         const assistantBigInt = BigInt(assistantId)
 
-        // Check if assistant exists and user owns it
+        // Check ownership
         const existingAssistant = await prisma.assistant.findUnique({
-            where: { id: assistantBigInt }
+            where: { id: assistantBigInt },
+            include: {
+                knowledgebases: true // Fetch existing knowledgebase items
+            }
         })
 
         if (!existingAssistant) {
-            return {
-                success: false,
-                error: 'Assistant not found'
-            }
+            return { success: false, error: 'Assistant not found' }
         }
 
         if (existingAssistant.userId !== userId) {
-            return {
-                success: false,
-                error: 'You do not have permission to edit this assistant'
-            }
+            return { success: false, error: 'You do not have permission to edit this assistant' }
         }
 
-        // Parse and validate price
+        // Validate price
         const parsedPrice = parseFloat(params.price)
         if (isNaN(parsedPrice) || parsedPrice < 0) {
-            return {
-                success: false,
-                error: 'Invalid price format'
-            }
+            return { success: false, error: 'Invalid price format' }
         }
 
-        // Map category string to enum
+        // Map category
         const categoryEnumMap: Record<AssistantCategory, any> = {
             "Education": "EDUCATION",
             "Travelling": "TRAVEL",
@@ -1494,10 +1485,8 @@ export async function updateCompleteAssistant(
         const mappedCategory = categoryEnumMap[params.category] || "OTHER"
         const isPublic = params.permissionLevel === 'public'
 
-        // Convert buyer permissions to JSON string array
-        // Only process buyer permissions if assistant is public and buyerPermissions exists
+        // Handle buyer permissions
         const buyerPermissionArray: string[] = []
-        console.log(params.buyerPermissions)
         if (isPublic && params.buyerPermissions) {
             if (params.buyerPermissions.chat) buyerPermissionArray.push('chat')
             if (params.buyerPermissions.contact) buyerPermissionArray.push('contacts')
@@ -1543,34 +1532,13 @@ export async function updateCompleteAssistant(
             }
         }
 
-        // Update knowledge base - delete existing and recreate
-        // First, fetch existing knowledgebase records to get file IDs
-        const existingKnowledgebase = await prisma.assistantKnowledgebase.findMany({
-            where: { assistantId: assistantBigInt },
-            select: { vectorFileId: true }
-        })
-
-        // Delete files from vector store before deleting from database
+        // ========================================
+        // OPTIMIZED KNOWLEDGEBASE UPDATE
+        // ========================================
+        
         let vectorStoreId = existingAssistant.vectorStoreId
-        if (vectorStoreId) {
-            for (const kb of existingKnowledgebase) {
-                if (kb.vectorFileId) {
-                    try {
-                        await deleteFileFromVectorStore(vectorStoreId, kb.vectorFileId)
-                    } catch (deleteError) {
-                        console.error(`Error deleting file ${kb.vectorFileId} from vector store:`, deleteError)
-                        // Continue with other files even if one fails
-                    }
-                }
-            }
-        }
 
-        // Now delete from database
-        await prisma.assistantKnowledgebase.deleteMany({
-            where: { assistantId: assistantBigInt }
-        })
-
-        // Create vector store if needed and doesn't exist
+        // Create vector store if needed
         if ((params.notes.length > 0 || params.urls.length > 0 || params.files.length > 0) && !vectorStoreId) {
             try {
                 const vectorStoreName = `${params.name}_${randomUUID()}`
@@ -1585,67 +1553,152 @@ export async function updateCompleteAssistant(
             }
         }
 
-        // Add new knowledge base items
+        // Separate existing items by type
+        const existingNotes = existingAssistant.knowledgebases.filter((kb: any) => kb.type === 'text')
+        const existingUrls = existingAssistant.knowledgebases.filter((kb: any) => kb.type === 'url')
+        const existingFiles = existingAssistant.knowledgebases.filter((kb: any) => kb.type === 'file')
+
+        // ========================================
+        // NOTES: Differential Update
+        // ========================================
+        const newNoteSet = new Set(params.notes.map(n => n.trim()).filter(Boolean))
+        const existingNoteSet = new Set(existingNotes.map(n => n.note || ''))
+
+        // Delete removed notes
+        const notesToDelete = existingNotes.filter(n => !newNoteSet.has(n.note || ''))
+        for (const note of notesToDelete) {
+            if (note.vectorFileId && vectorStoreId) {
+                try {
+                    await deleteFileFromVectorStore(vectorStoreId, note.vectorFileId)
+                } catch (err) {
+                    console.error('Error deleting note from vector store:', err)
+                }
+            }
+            await prisma.assistantKnowledgebase.delete({ where: { id: note.id } })
+        }
+
+        // Add new notes
+        const notesToAdd = Array.from(newNoteSet).filter(n => !existingNoteSet.has(n))
         if (vectorStoreId) {
-            for (const note of params.notes) {
-                if (note.trim()) {
-                    try {
-                        const noteIndex = params.notes.indexOf(note)
-                        const noteName = `note_${noteIndex + 1}_${Date.now()}`
-                        
-                        const vectorFileId = await addNoteToVectorStore(
-                            vectorStoreId!,
-                            note.trim(),
-                            noteName
-                        )
-                        
-                        await prisma.assistantKnowledgebase.create({
-                            data: {
-                                assistantId: assistantBigInt,
-                                note: note.trim(),
-                                vectorFileId: vectorFileId,
-                                type: 'text',
-                            }
-                        })
-                    } catch (noteError) {
-                        console.error(`Error processing note:`, noteError)
-                    }
+            for (const note of notesToAdd) {
+                try {
+                    const noteIndex = params.notes.indexOf(note)
+                    const noteName = `note_${noteIndex + 1}_${Date.now()}`
+                    
+                    const vectorFileId = await addNoteToVectorStore(
+                        vectorStoreId,
+                        note,
+                        noteName
+                    )
+                    
+                    await prisma.assistantKnowledgebase.create({
+                        data: {
+                            assistantId: assistantBigInt,
+                            note: note,
+                            vectorFileId: vectorFileId,
+                            type: 'text',
+                        }
+                    })
+                } catch (err) {
+                    console.error('Error adding note:', err)
                 }
             }
+        }
 
-            for (const url of params.urls) {
-                if (url.trim()) {
-                    try {
-                        await prisma.assistantKnowledgebase.create({
-                            data: {
-                                assistantId: assistantBigInt,
-                                url: url.trim(),
-                                isCrawled: false,
-                                type: 'url',
-                            }
-                        })
-                        
-                        triggerWebScraping({
-                            url: url.trim(),
-                            vectorStoreId: vectorStoreId!,
-                            maxPages: 20,
-                        }).catch((err) => {
-                            console.error(`Error triggering scraping for ${url}:`, err)
-                        })
-                    } catch (urlError) {
-                        console.error(`Error processing URL ${url}:`, urlError)
-                    }
+        // ========================================
+        // URLS: Differential Update (with scraping)
+        // ========================================
+        const newUrlSet = new Set(params.urls.map(u => u.trim()).filter(Boolean))
+        const existingUrlSet = new Set(existingUrls.map(u => u.url || ''))
+
+        // Delete removed URLs
+        const urlsToDelete = existingUrls.filter(u => !newUrlSet.has(u.url || ''))
+        for (const urlItem of urlsToDelete) {
+            // Only delete from vector store if it was successfully crawled
+            if (urlItem.vectorFileId && vectorStoreId) {
+                try {
+                    await deleteFileFromVectorStore(vectorStoreId, urlItem.vectorFileId)
+                } catch (err) {
+                    console.error('Error deleting URL from vector store:', err)
                 }
             }
+            await prisma.assistantKnowledgebase.delete({ where: { id: urlItem.id } })
+        }
 
+        // Add new URLs and trigger scraping
+        const urlsToAdd = Array.from(newUrlSet).filter(u => !existingUrlSet.has(u))
+        if (vectorStoreId) {
+            for (const url of urlsToAdd) {
+                try {
+                    // First create the knowledgebase entry with isCrawled: false
+                    const kbEntry = await prisma.assistantKnowledgebase.create({
+                        data: {
+                            assistantId: assistantBigInt,
+                            url: url,
+                            isCrawled: false,
+                            type: 'url',
+                        }
+                    })
+                    
+                    // Trigger web scraping asynchronously
+                    // The scraper will update vectorFileId and isCrawled when done
+                    triggerWebScraping({
+                        url: url,
+                        vectorStoreId: vectorStoreId,
+                        maxPages: 20,
+                    })
+                    .then(async (result) => {
+                        if (result.success && result.vectorFileId) {
+                            // Update the entry with vectorFileId once scraping completes
+                            await prisma.assistantKnowledgebase.update({
+                                where: { id: kbEntry.id },
+                                data: {
+                                    vectorFileId: result.vectorFileId,
+                                    isCrawled: true,
+                                    updatedAt: new Date()
+                                }
+                            })
+                            console.log(`✅ Successfully scraped and stored: ${url}`)
+                        }
+                    })
+                    .catch((err) => {
+                        console.error(`❌ Error triggering scraping for ${url}:`, err)
+                    })
+                } catch (err) {
+                    console.error('Error adding URL:', err)
+                }
+            }
+        }
+
+        // ========================================
+        // FILES: Differential Update
+        // ========================================
+        // For files, we compare by filename since File objects don't have IDs
+        const existingFileNames = new Set(
+            existingFiles
+                .map(f => f.file?.split('/').pop()?.split('.')[0]) // Extract filename without extension
+                .filter(Boolean)
+        )
+
+        if (params.files.length > 0 && vectorStoreId) {
             for (const file of params.files) {
                 try {
+                    // Check if file with same name already exists
+                    const existingFile = existingFiles.find(f => 
+                        f.file?.includes(file.name.split('.')[0]) // Match base filename
+                    )
+                    
+                    if (existingFile) {
+                        console.log(`File ${file.name} already exists, skipping`)
+                        continue
+                    }
+
                     const buffer = Buffer.from(await file.arrayBuffer())
                     const fileFileName = `${file.name}.${file.type}`
                     const fileUrl = await uploadToS3(buffer, fileFileName, file.type, 'knowledge-base')
                     
                     const vectorFileId = await uploadAndAddToVectorStore(
-                        vectorStoreId!,
+                        vectorStoreId,
                         buffer,
                         file.name
                     )
@@ -1658,13 +1711,19 @@ export async function updateCompleteAssistant(
                             type: 'file',
                         }
                     })
-                } catch (fileError) {
-                    console.error(`Error processing file ${file.name}:`, fileError)
+                } catch (err) {
+                    console.error(`Error processing file ${file.name}:`, err)
                 }
             }
         }
 
-        // Update API configuration
+        // Note: If you want to support file deletion, you'll need to pass
+        // information about which files to keep/delete from the frontend
+
+        // ========================================
+        // API Configuration Update
+        // ========================================
+        
         try {
             const existingApiConfig = await prisma.assistantApiConfiguration.findUnique({
                 where: { assistantId: assistantBigInt }
@@ -1702,42 +1761,64 @@ export async function updateCompleteAssistant(
             console.error('Error updating API configuration:', apiConfigError)
         }
 
-        // Update sharing permissions - delete existing shared users (except owner) and recreate
-        await prisma.assistantContact.deleteMany({
+        // ========================================
+        // OPTIMIZED SHARED USERS UPDATE
+        // ========================================
+        
+        const existingSharedUsers = await prisma.assistantContact.findMany({
             where: {
                 assistantId: assistantBigInt,
-                userId: {
-                    not: userId // Keep owner
-                }
+                userId: { not: userId }
             }
         })
 
-        // Add shared users
-        if (params.sharedUsers.length > 0) {
-            try {
-                for (const sharedUser of params.sharedUsers) {
-                    const sharedUserId = BigInt(sharedUser.id)
-                    
-                    if (sharedUserId === userId) continue
-                    
-                    const permissionArray: string[] = []
-                    if (sharedUser.permissions.chat) permissionArray.push('chat')
-                    if (sharedUser.permissions.contact) permissionArray.push('contacts')
-                    if (sharedUser.permissions.messenger) permissionArray.push('messenger')
-                    if (sharedUser.permissions.newsFeed) permissionArray.push('newsfeed')
-                    if (sharedUser.permissions.artifact) permissionArray.push('artifacts')
-                    
-                    await prisma.assistantContact.create({
+        const existingUserIds = new Set(existingSharedUsers.map(u => u.userId.toString()))
+        const newUserIds = new Set(params.sharedUsers.map(u => u.id))
+
+        // Delete removed users
+        const usersToDelete = existingSharedUsers.filter(u => !newUserIds.has(u.userId.toString()))
+        for (const user of usersToDelete) {
+            await prisma.assistantContact.delete({ where: { id: user.id } })
+        }
+
+        // Add or update shared users
+        for (const sharedUser of params.sharedUsers) {
+            const sharedUserId = BigInt(sharedUser.id)
+            
+            if (sharedUserId === userId) continue
+            
+            const permissionArray: string[] = []
+            if (sharedUser.permissions.chat) permissionArray.push('chat')
+            if (sharedUser.permissions.contact) permissionArray.push('contacts')
+            if (sharedUser.permissions.messenger) permissionArray.push('messenger')
+            if (sharedUser.permissions.newsFeed) permissionArray.push('newsfeed')
+            if (sharedUser.permissions.artifact) permissionArray.push('artifacts')
+            
+            const existingUser = existingSharedUsers.find(u => u.userId === sharedUserId)
+            
+            if (existingUser) {
+                // Update existing - check if permissions actually changed
+                const oldPermissions = existingUser.permissions as string
+                const newPermissions = JSON.stringify(permissionArray)
+                
+                if (oldPermissions !== newPermissions) {
+                    await prisma.assistantContact.update({
+                        where: { id: existingUser.id },
                         data: {
-                            assistantId: assistantBigInt,
-                            userId: sharedUserId,
-                            access: 'user',
-                            permissions: JSON.stringify(permissionArray),
+                            permissions: newPermissions,
                         }
                     })
                 }
-            } catch (permissionsError) {
-                console.error('Error updating permissions:', permissionsError)
+            } else {
+                // Create new
+                await prisma.assistantContact.create({
+                    data: {
+                        assistantId: assistantBigInt,
+                        userId: sharedUserId,
+                        access: 'user',
+                        permissions: JSON.stringify(permissionArray),
+                    }
+                })
             }
         }
 
