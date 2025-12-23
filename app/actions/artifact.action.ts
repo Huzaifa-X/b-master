@@ -219,6 +219,7 @@ export async function createArtifact(data: {
         uploadedAt: string
     }>
     videoDuration?: "4" | "8" | "12"
+    selectedChatId?: string | null
 }) {
     try {
         const session = await getServerSession(authOptions)
@@ -368,6 +369,9 @@ export async function createArtifact(data: {
             }, {} as Record<string, string>)
             : null
 
+        // Store selectedChatId in tools JSON field as metadata (temporary solution)
+        const toolsJson = data.selectedChatId ? { selectedChatId: data.selectedChatId } : undefined
+
         // Determine if artifact is public
         const isPublic = data.permissions === 'public'
 
@@ -381,7 +385,7 @@ export async function createArtifact(data: {
                     name: data.name,
                     instructions: enhancedInstructions,
                     category: data.category,
-                    tools: undefined,
+                    tools: toolsJson ? (toolsJson as any) : undefined,
                     apiKeys: apiKeysJson || undefined,
                     files: data.uploadedFiles ? (data.uploadedFiles as any) : undefined,
                     images: data.uploadedImages ? (data.uploadedImages as any) : undefined,

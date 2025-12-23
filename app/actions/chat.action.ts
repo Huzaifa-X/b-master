@@ -392,7 +392,7 @@ export async function getAssistantChats(assistantId: string) {
 /**
  * Get messages for a specific chat
  */
-export async function getChatMessages(chatId: string) {
+export async function getChatMessages(chatId: string, limit?: number) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
@@ -422,6 +422,7 @@ export async function getChatMessages(chatId: string) {
       orderBy: {
         createdAt: 'asc'
       },
+      take: limit || 1000, // Default to 1000 messages
       select: {
         id: true,
         role: true,

@@ -11,43 +11,43 @@ import { useSetAssistantMode } from "@/hooks/useAssistant"
 import { useAssistantPermissions } from "@/hooks/usePermissions"
 
 // Lazy load the CreateArtifactDialog to reduce initial bundle size
-const CreateArtifactDialog = lazy(() => 
-  import("@/components/artifacts/create-artifact-dialog").then(module => ({
-    default: module.CreateArtifactDialog
-  }))
+const CreateArtifactDialog = lazy(() =>
+    import("@/components/artifacts/create-artifact-dialog").then(module => ({
+        default: module.CreateArtifactDialog
+    }))
 )
 
 // Lazy load the ViewArtifactDialog for video artifacts
-const ViewArtifactDialog = lazy(() => 
-  import("@/components/artifacts/view-artifact-dialog").then(module => ({
-    default: module.ViewArtifactDialog
-  }))
+const ViewArtifactDialog = lazy(() =>
+    import("@/components/artifacts/view-artifact-dialog").then(module => ({
+        default: module.ViewArtifactDialog
+    }))
 )
 
 export default function ArtifactsPage({ params }: { params: Promise<{ id: string }> }) {
     // Unwrap params promise for Next.js 15
     const { id: assistantId } = use(params)
     const router = useRouter()
-    
+
     // Set assistant mode in header (automatically handles fetching and cleanup)
     useSetAssistantMode(assistantId)
-    
+
     // Fetch permissions
     const { permissions } = useAssistantPermissions(assistantId)
-    
+
     const [searchQuery, setSearchQuery] = useState("")
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
     const [viewArtifactId, setViewArtifactId] = useState<string | null>(null)
-    
+
     // Use React Query hook to fetch artifacts
     const { artifacts, isLoading, isError } = useArtifacts(assistantId)
     const { invalidateArtifacts } = useInvalidateArtifacts()
-    
+
     // Fetch full artifact data for viewing in modal (only when viewArtifactId is set)
     const { artifact: viewArtifact } = useArtifactById(viewArtifactId || "", {
         enabled: !!viewArtifactId
     })
-    
+
     // Check if user can create artifacts (only owners can create)
     const canCreateArtifacts = permissions?.isOwner || permissions?.permissions?.includes('artifacts') || false
 
@@ -131,11 +131,13 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                 ) : filteredArtifacts.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredArtifacts.map((artifact) => (
-                            <ArtifactCard
-                                key={artifact.id}
-                                artifact={artifact}
-                                onClick={() => handleCardClick(artifact)}
-                            />
+                            artifact.htmlContent.trim() !== '' && (
+                                <ArtifactCard
+                                    key={artifact.id}
+                                    artifact={artifact}
+                                    onClick={() => handleCardClick(artifact)}
+                                />
+                            )
                         ))}
                     </div>
                 ) : (
@@ -162,8 +164,8 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
             {/* Create Artifact Dialog - Lazy loaded */}
             {createDialogOpen && (
                 <Suspense fallback={null}>
-                    <CreateArtifactDialog 
-                        open={createDialogOpen} 
+                    <CreateArtifactDialog
+                        open={createDialogOpen}
                         onOpenChange={(open) => {
                             setCreateDialogOpen(open)
                             if (!open) {

@@ -50,6 +50,7 @@ export interface ArtifactFormData {
   uploadedFiles?: UploadedFile[];
   uploadedImages?: UploadedImage[];
   videoDuration?: "4" | "8" | "12";
+  selectedChatId?: string | null;
 }
 
 // types/artifacts.ts

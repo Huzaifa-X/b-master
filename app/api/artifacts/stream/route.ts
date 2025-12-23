@@ -7,6 +7,7 @@ import { openai } from "@/lib/openai"
 import upstageService from "@/lib/services/upstageService"
 import { getArtifactCodingPrompt } from "@/utils/prompts"
 import { createArtifactVersion } from "@/app/actions/update-artifact.action"
+import { getChatMessages } from "@/app/actions/chat.action"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -140,13 +141,40 @@ export async function POST(req: NextRequest) {
       enhancedInstructions += "=== END IMAGES ===\n"
     }
 
+    // Check if there's a selected chat for context
+    let chatContext = ""
+    if (artifact.tools && typeof artifact.tools === 'object') {
+      const toolsData = artifact.tools as any
+      if (toolsData.selectedChatId) {
+        console.log("[Artifact Stream] Found selectedChatId, fetching chat messages:", toolsData.selectedChatId)
+        try {
+          const chatMessagesResult = await getChatMessages(toolsData.selectedChatId, 20)
+          if (chatMessagesResult.success && chatMessagesResult.messages && chatMessagesResult.messages.length > 0) {
+            chatContext = "\n\n=== CHAT CONTEXT (for reference) ===\n"
+            chatMessagesResult.messages.forEach((msg: any) => {
+              const role = msg.role === 'user' ? 'User' : 'Assistant'
+              const content = msg.message || msg.content || ''
+              chatContext += `${role}: ${content}\n\n`
+            })
+            chatContext += "=== END CHAT CONTEXT ===\n"
+            console.log("[Artifact Stream] Chat context added, messages count:", chatMessagesResult.messages.length)
+          } else {
+            console.log("[Artifact Stream] No chat messages found or failed to fetch")
+          }
+        } catch (chatError) {
+          console.error("[Artifact Stream] Error fetching chat messages:", chatError)
+          // Continue without chat context if there's an error
+        }
+      }
+    }
+
     // Prepare input for AI generation
     const input = `Create a complete HTML artifact.
 
 Name: ${artifact.name}
 Category: ${artifact.category}
 
-${enhancedInstructions}
+${enhancedInstructions}${chatContext}
 
 CRITICAL: Output ONLY the complete HTML code starting with <!DOCTYPE html> and ending with </html>. Do not include any explanations, descriptions, or additional text. Do not use markdown formatting.`
 
@@ -259,7 +287,6 @@ CRITICAL: Output ONLY the complete HTML code starting with <!DOCTYPE html> and e
               // Fallback to non-streaming
               const fallbackResponse = await openai.responses.create({
                 model: model,
-                reasoning: { effort: "medium" },
                 instructions: ARTIFACT_GENERATION_PROMPT + "\n\nCRITICAL REMINDER: Your response must be ONLY HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.",
                 input: input,
                 stream: false,

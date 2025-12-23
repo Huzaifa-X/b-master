@@ -51,8 +51,9 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { chatId, assistantId, chatType, webSearch, research, chatWithAPI, attachments, artifact, dropbox } = body
+    const { chatId, assistantId, chatType, webSearch, research, chatWithAPI, attachments, artifact, dropbox, mentionedUsers } = body
 
+    console.log("[Stream] mentionedUsers:", mentionedUsers)
     const chatIdInt = parseInt(chatId)
     if (isNaN(chatIdInt)) {
       return new Response(JSON.stringify({ error: "Invalid chatId" }), { status: 400 })
@@ -115,7 +116,10 @@ export async function POST(req: NextRequest) {
     let systemPrompt = await getSystemPrompt()
 
     // Add mentioned users context
-    systemPrompt += `\n\n## Mentioned Users\nWhen you see "[This message mentions: Name <email>]" at the start of a user message, those are people the user has specifically mentioned using @ mentions. You have their full contact information (name and email). Use this information when relevant - for example, if the user asks you to create an invoice for someone, send an email, or perform any action involving the mentioned person, you already have their email address and don't need to ask for it.`
+    if (mentionedUsers && mentionedUsers.length > 0) {
+      systemPrompt += `\n\n## Mentioned Users\nWhen you see "[This message mentions: Name <email>]" at the start of a user message, those are people the user has specifically mentioned using @ mentions. You have their full contact information (name and email). Use this information when relevant - for example, if the user asks you to create an invoice for someone, send an email, or perform any action involving the mentioned person, you already have their email address and don't need to ask for it.`
+      systemPrompt += `\n\n## Mentioned Users\n${mentionedUsers.map((user: { name: string; email: string }) => `- ${user.name} <${user.email}>`).join("\n")}`
+    }
 
     if (research) {
       systemPrompt += `\n\nIMPORTANT: The user has requested research mode. Please conduct thorough research using both web search and file search to provide a comprehensive answer.`

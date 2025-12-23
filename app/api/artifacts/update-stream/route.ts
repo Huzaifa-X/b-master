@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma"
 import { openai } from "@/lib/openai"
 import { getArtifactCodingPrompt } from "@/utils/prompts"
 import { createArtifactVersion } from "@/app/actions/update-artifact.action"
+import { getChatMessages } from "@/app/actions/chat.action"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -153,8 +154,35 @@ export async function POST(req: NextRequest) {
     console.log("[Artifact Update Stream API] Artifact found:", artifact.name)
     console.log("[Artifact Update Stream API] Using active version code - length:", currentHtmlCode.length, "characters")
 
-    // Build conversation context
-    const conversationContext = buildConversationContext(chatHistory || [])
+    // Build conversation context from request chatHistory
+    let conversationContext = buildConversationContext(chatHistory || [])
+
+    // Check if there's a selected chat stored in the artifact for additional context
+    let artifactChatContext = ""
+    if (artifact.tools && typeof artifact.tools === 'object') {
+      const toolsData = artifact.tools as any
+      if (toolsData.selectedChatId) {
+        console.log("[Artifact Update Stream] Found selectedChatId, fetching chat messages:", toolsData.selectedChatId)
+        try {
+          const chatMessagesResult = await getChatMessages(toolsData.selectedChatId, 20)
+          if (chatMessagesResult.success && chatMessagesResult.messages && chatMessagesResult.messages.length > 0) {
+            artifactChatContext = "\n\n=== ARTIFACT CHAT CONTEXT (from selected chat) ===\n"
+            chatMessagesResult.messages.forEach((msg: any) => {
+              const role = msg.role === 'user' ? 'User' : 'Assistant'
+              const content = msg.message || msg.content || ''
+              artifactChatContext += `${role}: ${content}\n\n`
+            })
+            artifactChatContext += "=== END ARTIFACT CHAT CONTEXT ===\n"
+            console.log("[Artifact Update Stream] Artifact chat context added, messages count:", chatMessagesResult.messages.length)
+          } else {
+            console.log("[Artifact Update Stream] No chat messages found or failed to fetch for artifact")
+          }
+        } catch (chatError) {
+          console.error("[Artifact Update Stream] Error fetching artifact chat messages:", chatError)
+          // Continue without artifact chat context if there's an error
+        }
+      }
+    }
 
     // Build file context if files are uploaded
     let fileContext = ""
@@ -198,7 +226,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Prepare input for AI
-    const aiInput = `${conversationContext}
+    const aiInput = `${conversationContext}${artifactChatContext}
 
 === CURRENT ARTIFACT CODE ===
 ${currentHtmlCode}
@@ -208,7 +236,7 @@ ${fileContext}
 ${userPrompt || "Update the artifact using the uploaded files."}
 === END USER REQUEST ===
 
-Please update the artifact code based on the user's request while considering the entire conversation history${uploadedFiles && uploadedFiles.length > 0 ? ' and the uploaded files' : ''}. 
+Please update the artifact code based on the user's request while considering the entire conversation history${artifactChatContext ? ', the artifact chat context' : ''}${uploadedFiles && uploadedFiles.length > 0 ? ', and the uploaded files' : ''}. 
 
 ${uploadedFiles && uploadedFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are provided, embed them in the HTML using <img> tags with the provided URLs.\n- If documents are provided, use the extracted text/html content to enhance the artifact.\n- Make sure all image URLs are properly used in src attributes.\n\n' : ''}Generate the complete updated HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.`
 
@@ -317,7 +345,6 @@ ${uploadedFiles && uploadedFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:
               // Fallback to non-streaming
               const fallbackResponse = await openai.responses.create({
                 model: model,
-                reasoning: { effort: "medium" },
                 instructions: ARTIFACT_UPDATE_PROMPT + "\n\nCRITICAL REMINDER: Your response must be ONLY HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.",
                 input: aiInput,
                 stream: false,

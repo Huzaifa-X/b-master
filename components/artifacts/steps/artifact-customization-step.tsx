@@ -38,6 +38,8 @@ import { ICON_MAP } from "./constants"
 import type { Template, ArtifactFormData, ApiConfig, Contact, UploadedFile, UploadedImage } from "@/types/artifacts"
 import { ArtifactAIInstructionDialog } from "./artifact-ai-instruction-dialog"
 import { deleteArtifactFile } from "@/app/actions/artifact.action"
+import { ChatHistoryItem } from "@/types/chat"
+import { ArtifactChatSelector } from "./artifact-chat-selector"
 
 interface ArtifactCustomizationStepProps {
   selectedTemplate: Template
@@ -49,6 +51,9 @@ interface ArtifactCustomizationStepProps {
   contacts: Contact[]
   loadingContacts: boolean
   isEditMode?: boolean // NEW: Flag to indicate edit mode
+  chats: ChatHistoryItem[]
+  loadingChats: boolean
+  chatError: Error | null
 }
 
 export function ArtifactCustomizationStep({
@@ -61,6 +66,9 @@ export function ArtifactCustomizationStep({
   contacts,
   loadingContacts,
   isEditMode = false, // Default to false
+  chats,
+  loadingChats,
+  chatError,
 }: ArtifactCustomizationStepProps) {
   const [apiSectionOpen, setApiSectionOpen] = useState(false)
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
@@ -529,6 +537,17 @@ export function ArtifactCustomizationStep({
           )}
           </div>
         )}
+
+        {/* Chat Selection */}
+        <ArtifactChatSelector
+          chats={chats}
+          loadingChats={loadingChats}
+          chatError={chatError}
+          selectedChatId={formData.selectedChatId || null}
+          onChatSelect={(chatId) => {
+            setFormData({ ...formData, selectedChatId: chatId })
+          }}
+        />
 
         {/* Sharing & Permissions */}
         <div>

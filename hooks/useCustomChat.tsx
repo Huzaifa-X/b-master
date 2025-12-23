@@ -193,7 +193,8 @@ export function useCustomChat(options: UseCustomChatOptions) {
         research: false,
         chatWithAPI: false,
         dropbox: false,
-        artifact: null as any
+        artifact: null as any,
+        mentionedUsers: [] as Array<{ id: string; name: string; email: string }>
       }
 
       const SESSION_STORAGE_KEY = "chat_mode"
@@ -227,6 +228,13 @@ export function useCustomChat(options: UseCustomChatOptions) {
             }
           } else {
             console.warn("[useCustomChat] Artifact mode detected but no artifact data found in sessionStorage")
+          }
+        } else if (savedMode === "mentionedUsers") {
+          // 🔥 Load mentioned users from sessionStorage
+          const savedMentionedUsers = sessionStorage.getItem("chat_mentioned_users")
+          if (savedMentionedUsers) {
+            options.mentionedUsers = JSON.parse(savedMentionedUsers)
+            console.log("[useCustomChat] Retrieved mentioned users from sessionStorage:", options.mentionedUsers)
           }
         }
 
@@ -282,7 +290,8 @@ export function useCustomChat(options: UseCustomChatOptions) {
               chatWithAPI: options.chatWithAPI,  // 🔥 Use retrieved option
               dropbox: options.dropbox,          // 🔥 Use retrieved option
               artifact: options.artifact,        // 🔥 Use retrieved option
-              attachments: attachments
+              attachments: attachments,
+              mentionedUsers: options?.mentionedUsers
             }),
             signal: abortControllerRef.current.signal
           })
@@ -354,6 +363,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
                           : msg
                       )
                     )
+                    sessionStorage.removeItem('chat_mentioned_users')
                     await refetchMessages()
                     break
                   case "artifact_updated":
@@ -539,7 +549,8 @@ export function useCustomChat(options: UseCustomChatOptions) {
           chatWithAPI: options?.chatWithAPI,
           dropbox: options?.dropbox,
           artifact: options?.artifact,
-          attachments: attachments
+          attachments: attachments,
+          mentionedUsers: options?.mentionedUsers
         }),
         signal: abortControllerRef.current.signal
       })
