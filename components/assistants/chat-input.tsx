@@ -5,18 +5,29 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { Loader2, ArrowUp, X, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
-  PromptInput,
-  PromptInputTextarea,
   PromptInputActions,
-  PromptInputAction,
 } from "@/components/ui/prompt-input"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { AttachmentDropdown } from "@/components/assistants/attachment-dropdown"
 import { DictateButton } from "@/components/assistants/dictate-button"
 import { SelectArtifactDialog } from "@/components/assistants/select-artifact-dialog"
-import { MentionDropdown } from "@/components/assistants/mention-dropdown"
-import { MentionDropdownPortal } from "@/components/assistants/mention-dropdown-portal"
+import { 
+  Mention, 
+  MentionInput, 
+  MentionContent, 
+  MentionItem,
+  MentionPortal 
+} from "@/components/ui/mention"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { searchUsersForMention } from "@/app/actions/user.action"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 import ReactMarkdown from "react-markdown"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
@@ -94,17 +105,15 @@ export function ChatInput({
   const [dropboxEnabled, setDropboxEnabled] = useState(false)
   const [selectedArtifact, setSelectedArtifact] = useState<{ id: string; name: string; instructions: string; htmlContent: string } | null>(null)
   const [isArtifactDialogOpen, setIsArtifactDialogOpen] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   // Mention functionality
-  const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionUsers, setMentionUsers] = useState<User[]>([])
-  const [mentionQuery, setMentionQuery] = useState("")
-  const [mentionStartIndex, setMentionStartIndex] = useState(0)
-  const [mentionDropdownPosition, setMentionDropdownPosition] = useState<{ top?: number; bottom?: number; left: number; placement: "above" | "below" }>({ left: 0, placement: "below" })
-  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0)
   const [isLoadingMentions, setIsLoadingMentions] = useState(false)
   const [mentionedUsers, setMentionedUsers] = useState<MentionedUser[]>([]) // Track mentioned users
+  const [isMentionOpen, setIsMentionOpen] = useState(false) // Track if mention dropdown is open
 
   // Use external value if provided, otherwise use internal state
   const value = externalValue !== undefined ? externalValue : internalValue
@@ -121,40 +130,83 @@ export function ChatInput({
     setShowPreview(hasMarkdown && value.length > 0)
   }, [value])
 
-  // Detect @ mention trigger
-  const detectMentionTrigger = useCallback((text: string, cursorPosition: number) => {
-    if (mode !== "assistant") return false
-
-    // Find the last @ before cursor
-    const textBeforeCursor = text.substring(0, cursorPosition)
-    const lastAtIndex = textBeforeCursor.lastIndexOf("@")
-    if (lastAtIndex === -1) return false
-
-    // Check if @ is at start or preceded by whitespace
-    const charBeforeAt = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : " "
-    if (charBeforeAt !== " " && charBeforeAt !== "\n") return false
-
-    // Get text after @ up to cursor
-    const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1)
-
-    // Check if there's a space after @ (which would end the mention)
-    if (textAfterAt.includes(" ") || textAfterAt.includes("\n")) return false
-
-    setMentionStartIndex(lastAtIndex)
-    setMentionQuery(textAfterAt)
-    return true
-  }, [mode])
-
-  // Load users when mention is triggered
+  // Autosize textarea
   useEffect(() => {
-    const loadMentionUsers = async () => {
-      if (!showMentionDropdown || !assistantId) return
+    if (!textareaRef.current) return
+    const textarea = textareaRef.current
+    textarea.style.height = "auto"
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`
+  }, [value])
 
+  // Drag and drop handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.dataTransfer.types.includes("Files") && !disabled) {
+      setIsDragging(true)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+      setIsDragging(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    if (disabled) return
+
+    const files = e.dataTransfer.files
+    if (files && files.length > 0) {
+      handleFileUpload(files)
+    }
+  }
+
+  // Handle Enter key for submit
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      // Don't submit if mention dropdown is open - let the mention component handle it
+      if (isMentionOpen) {
+        return
+      }
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  // Filter users for mention (exclude already mentioned)
+  const getFilteredMentionUsers = useCallback(() => {
+    return mentionUsers.filter(user => 
+      !mentionedUsers.some(mentioned => mentioned.id === user.id)
+    )
+  }, [mentionUsers, mentionedUsers])
+
+  // State to track current mention search term
+  const [mentionSearchTerm, setMentionSearchTerm] = useState("")
+
+  // Load users when mention search term changes
+  useEffect(() => {
+    if (mode !== "assistant" || !assistantId) {
+      setMentionUsers([])
+      return
+    }
+
+    const loadUsers = async () => {
       setIsLoadingMentions(true)
       try {
-        const users = await searchUsersForMention(assistantId, mentionQuery)
+        const users = await searchUsersForMention(assistantId, mentionSearchTerm)
         setMentionUsers(users)
-        setSelectedMentionIndex(0)
       } catch (error) {
         console.error("Error loading mention users:", error)
         setMentionUsers([])
@@ -163,203 +215,31 @@ export function ChatInput({
       }
     }
 
-    loadMentionUsers()
-  }, [showMentionDropdown, mentionQuery, assistantId])
+    // Debounce the search
+    const timeoutId = setTimeout(() => {
+      loadUsers()
+    }, 300)
 
-  // Reset selected index when filtered users change (after filtering out mentioned users)
-  useEffect(() => {
-    const filteredUsers = mentionUsers.filter(user => 
-      !mentionedUsers.some(mentioned => mentioned.id === user.id)
+    return () => clearTimeout(timeoutId)
+  }, [mode, assistantId, mentionSearchTerm])
+
+  // Handle mention filter (client-side filtering + update search term)
+  const handleMentionFilter = useCallback((options: string[], term: string) => {
+    // Update search term for async loading
+    setMentionSearchTerm(term)
+    
+    // Also do client-side filtering on current options
+    if (!term) return options
+    const lowerTerm = term.toLowerCase()
+    return options.filter(option => 
+      option.toLowerCase().includes(lowerTerm)
     )
-    if (filteredUsers.length > 0 && selectedMentionIndex >= filteredUsers.length) {
-      setSelectedMentionIndex(0)
-    } else if (filteredUsers.length === 0 && selectedMentionIndex > 0) {
-      setSelectedMentionIndex(0)
-    }
-  }, [mentionUsers, mentionedUsers, selectedMentionIndex])
-
-  // Calculate dropdown position and placement relative to textarea element
-  const getDropdownPosition = useCallback(() => {
-    if (!textareaRef.current) return null
-
-    const textarea = textareaRef.current
-    const rect = textarea.getBoundingClientRect()
-    const screenHeight = window.innerHeight
-    const dropdownMaxHeight = 240
-    const gap = 4
-
-    // Use isAtBottom prop to determine placement preference
-    const spaceBelow = screenHeight - rect.bottom
-    const spaceAbove = rect.top
-
-    // If input is at bottom, always show above
-    // Otherwise, show below if there's space, above if not
-    const shouldShowAbove = isAtBottom
-      ? true
-      : spaceBelow < dropdownMaxHeight + gap && spaceAbove > dropdownMaxHeight + gap
-
-    // When showing above and at bottom, use bottom positioning so it grows upward
-    // When showing above in middle, use top positioning
-    // When showing below, use top positioning
-    if (shouldShowAbove && isAtBottom) {
-      // Position using bottom so it grows upward from the input
-      const bottom = screenHeight - rect.top + gap
-      return {
-        top: undefined,
-        bottom,
-        left: rect.left,
-        placement: "above" as const
-      }
-    } else if (shouldShowAbove) {
-      // Position using top (middle of page scenario)
-      const top = rect.top - dropdownMaxHeight - gap
-      return {
-        top,
-        bottom: undefined,
-        left: rect.left,
-        placement: "above" as const
-      }
-    } else {
-      // Position below using top
-      const top = rect.bottom + gap
-      return {
-        top,
-        bottom: undefined,
-        left: rect.left,
-        placement: "below" as const
-      }
-    }
-  }, [isAtBottom])
-
-  // Extract all mentions from text
-  const extractMentionsFromText = useCallback((text: string): string[] => {
-    // Match @username patterns - can include spaces in names
-    // Pattern: @ followed by name (can have spaces) followed by space, newline, or end of string
-    const mentionRegex = /@([^\s@]+(?:\s+[^\s@]+)*)(?:\s|$|\n)/g
-    const mentions: string[] = []
-    let match
-    
-    while ((match = mentionRegex.exec(text)) !== null) {
-      const username = match[1].trim()
-      if (username && !mentions.includes(username)) {
-        mentions.push(username)
-      }
-    }
-    
-    return mentions
   }, [])
 
-  // Update mentionedUsers based on current text
-  const updateMentionedUsers = useCallback((text: string) => {
-    const currentMentions = extractMentionsFromText(text)
-    
-    setMentionedUsers(prev => {
-      // Keep only users whose names are still in the text
-      return prev.filter(user => 
-        currentMentions.includes(user.name)
-      )
-    })
-  }, [extractMentionsFromText])
-
-  // Handle text changes and detect mentions
+  // Handle text changes
   const handleValueChange = useCallback((newValue: string) => {
     onValueChange(newValue)
-
-    // Update mentionedUsers to remove any that are no longer in the text
-    updateMentionedUsers(newValue)
-
-    // Use setTimeout to ensure the cursor position is updated
-    setTimeout(() => {
-      if (!textareaRef.current) return
-
-      const cursorPosition = textareaRef.current.selectionStart
-      const shouldShowMention = detectMentionTrigger(newValue, cursorPosition)
-
-      if (shouldShowMention) {
-        const dropdownPos = getDropdownPosition()
-
-        if (dropdownPos) {
-          const screenWidth = window.innerWidth
-          const dropdownWidth = 256
-
-          let { left } = dropdownPos
-
-          // Adjust horizontal position if too close to edges
-          if (left + dropdownWidth > screenWidth - 20) {
-            left = screenWidth - dropdownWidth - 20
-          }
-          left = Math.max(20, left)
-
-          setMentionDropdownPosition({ 
-            top: dropdownPos.top, 
-            bottom: dropdownPos.bottom, 
-            left, 
-            placement: dropdownPos.placement 
-          })
-          setShowMentionDropdown(true)
-        }
-      } else {
-        setShowMentionDropdown(false)
-      }
-    }, 0)
-  }, [onValueChange, detectMentionTrigger, mode, getDropdownPosition, updateMentionedUsers])
-
-  // Insert mention into text
-  const insertMention = useCallback((user: User) => {
-    const beforeMention = value.substring(0, mentionStartIndex)
-    const afterMention = value.substring(textareaRef.current?.selectionStart || value.length)
-    const mentionText = `@${user.name} `
-
-    const newValue = beforeMention + mentionText + afterMention
-    onValueChange(newValue)
-
-    // Track this user as mentioned (including email)
-    setMentionedUsers(prev => {
-      // Avoid duplicates
-      if (prev.some(u => u.id === user.id)) return prev
-      return [...prev, { id: user.id, name: user.name, email: user.email }]
-    })
-
-    // Set cursor position after mention
-    setTimeout(() => {
-      if (textareaRef.current) {
-        const newCursorPosition = beforeMention.length + mentionText.length
-        textareaRef.current.focus()
-        textareaRef.current.setSelectionRange(newCursorPosition, newCursorPosition)
-      }
-    }, 0)
-
-    setShowMentionDropdown(false)
-    setMentionUsers([])
-    setMentionQuery("")
-  }, [value, mentionStartIndex, onValueChange])
-
-  // Handle keyboard navigation in mention dropdown
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // If mention dropdown is open, handle navigation and prevent other actions
-    // Filter out already mentioned users for navigation
-    const filteredUsers = mentionUsers.filter(user => 
-      !mentionedUsers.some(mentioned => mentioned.id === user.id)
-    )
-    
-    if (showMentionDropdown && filteredUsers.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault()
-        setSelectedMentionIndex((prev) => (prev + 1) % filteredUsers.length)
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault()
-        setSelectedMentionIndex((prev) => (prev - 1 + filteredUsers.length) % filteredUsers.length)
-      } else if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault()
-        if (filteredUsers[selectedMentionIndex]) {
-          insertMention(filteredUsers[selectedMentionIndex])
-        }
-      } else if (e.key === "Escape") {
-        e.preventDefault()
-        setShowMentionDropdown(false)
-      }
-    }
-  }, [showMentionDropdown, mentionUsers, mentionedUsers, selectedMentionIndex, insertMention])
+  }, [onValueChange])
 
   useEffect(() => {
     // Load mode and artifact from sessionStorage on mount
@@ -391,9 +271,6 @@ export function ChatInput({
   }, [])
 
   const handleSend = async () => {
-    // Don't send if mention dropdown is open
-    if (showMentionDropdown) return
-
     if ((!value.trim() && attachedFiles.length === 0) || isLoading || disabled) return
 
     let attachments: { name: string; url: string; type: string; size: number }[] = []
@@ -684,93 +561,264 @@ export function ChatInput({
       )}
 
       <div className="relative">
-        <PromptInput
-          value={value}
-          onValueChange={handleValueChange}
-          onSubmit={handleSend}
-          isLoading={isLoading}
-          disabled={disabled || isLoading}
-          maxHeight={120}
-          onFileUpload={handleFileUpload}
-          className={className}
-        >
-          <PromptInputTextarea
-            ref={textareaRef}
-            placeholder={placeholder}
-            className="text-foreground placeholder:text-muted-foreground"
-            onPaste={handlePaste}
-            onKeyDown={handleKeyDown}
-            disabled={disabled || isLoading}
-          />
+        {mode === "assistant" && assistantId ? (
+          <TooltipProvider>
+            <Mention
+              trigger="@"
+              value={mentionedUsers.map(u => u.name)}
+              onValueChange={(newMentions) => {
+                // Update mentionedUsers based on the new mentions array
+                setMentionedUsers(prev => {
+                  // Find users that are in the new mentions
+                  const updated = newMentions.map(name => {
+                    // Check if we already have this user
+                    const existing = prev.find(u => u.name === name)
+                    if (existing) return existing
 
-          {/* Mention Dropdown - Portal to body */}
-          {showMentionDropdown && (
-            <MentionDropdownPortal>
-              <MentionDropdown
-                users={mentionUsers.filter(user => 
-                  !mentionedUsers.some(mentioned => mentioned.id === user.id)
-                )}
-                isLoading={isLoadingMentions}
-                onSelect={insertMention}
-                position={mentionDropdownPosition}
-                placement={mentionDropdownPosition.placement}
-                selectedIndex={selectedMentionIndex}
-                onSelectedIndexChange={setSelectedMentionIndex}
-              />
-            </MentionDropdownPortal>
-          )}
-          <PromptInputActions className="px-2 pb-1 justify-between">
-            <div className="flex items-center gap-2">
-              <AttachmentDropdown
-                onFileSelect={handleFileSelect}
-                onWebSearch={handleWebSearchChange}
-                onResearch={handleResearchChange}
-                onChatWithArtifact={handleChatWithArtifact}
-                onChatWithAPI={handleChatWithAPIChange}
-                onDropbox={handleDropboxChange}
-                disabled={disabled || isLoading}
-                mode={mode}
-                assistantId={assistantId}
-                selectedArtifact={selectedArtifact}  // 🔥 Pass selected artifact
-                onRemoveArtifact={() => {            // 🔥 Handle removal
-                  setSelectedArtifact(null)
-                  if (typeof window !== "undefined") {
-                    sessionStorage.removeItem("chat_selected_artifact")
-                    sessionStorage.removeItem('chat_mentioned_users')
-                  }
-                }}
-              />
-              {assistantId && (
-                <SelectArtifactDialog
-                  open={isArtifactDialogOpen}
-                  onOpenChange={setIsArtifactDialogOpen}
-                  assistantId={assistantId}
-                  onSelect={handleArtifactSelect}
-                />
+                    // Find in the full user list
+                    const user = mentionUsers.find(u => u.name === name)
+                    if (user) {
+                      return { id: user.id, name: user.name, email: user.email }
+                    }
+                    return null
+                  }).filter((u): u is MentionedUser => u !== null)
+
+                  return updated
+                })
+              }}
+              inputValue={value}
+              onInputValueChange={handleValueChange}
+              onFilter={handleMentionFilter}
+              onOpenChange={setIsMentionOpen}
+              disabled={disabled || isLoading}
+              className={cn(
+                "border-input bg-background rounded-3xl border p-2 shadow-xs relative transition-all",
+                isDragging && "ring-2 ring-primary ring-offset-2 bg-primary/5 dark:bg-primary/10 border-primary",
+                className
               )}
-              <DictateButton
-                onTranscript={handleDictateTranscript}
-                disabled={disabled || isLoading}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <PromptInputAction tooltip="Send message (Enter)">
-                <Button
-                  onClick={handleSend}
-                  disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled}
-                  size="icon"
-                  className="size-[34px] rounded-full p-1"
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              ref={containerRef}
+            >
+              <MentionInput asChild>
+                <Textarea
+                  ref={textareaRef}
+                  onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
+                  placeholder={placeholder}
+                  disabled={disabled || isLoading}
+                  rows={1}
+                  className="text-foreground placeholder:text-muted-foreground min-h-[44px] w-full resize-none border-none bg-transparent shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+              </MentionInput>
+
+              <MentionPortal>
+                <MentionContent
+                  side={isAtBottom ? "top" : "bottom"}
+                  align="start"
+                  className="bg-background"
                 >
-                  {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                  {isLoadingMentions ? (
+                    <div className="flex items-center justify-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Loading users...</span>
+                    </div>
+                  ) : getFilteredMentionUsers().length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground text-center">
+                      No users found
+                    </div>
                   ) : (
-                    <ArrowUp className="h-5 w-5" />
+                    getFilteredMentionUsers().map((user) => (
+                      <MentionItem
+                        key={user.id}
+                        value={user.name}
+                      >
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={user.image || undefined} alt={user.name} />
+                          <AvatarFallback className="text-xs">
+                            {user.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")
+                              .toUpperCase()
+                              .slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{user.name}</div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {user.email}
+                          </div>
+                        </div>
+                      </MentionItem>
+                    ))
                   )}
-                </Button>
-              </PromptInputAction>
-            </div>
-          </PromptInputActions>
-        </PromptInput>
+                </MentionContent>
+              </MentionPortal>
+
+              {/* Drag and drop overlay */}
+              {isDragging && (
+                <div className="absolute inset-0 rounded-3xl bg-primary/10 dark:bg-primary/20 border-2 border-dashed border-primary flex items-center justify-center pointer-events-none z-10">
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-primary">Drop files here to upload</p>
+                  </div>
+                </div>
+              )}
+
+              <PromptInputActions className="px-2 pb-1 justify-between">
+                <div className="flex items-center gap-2">
+                  <AttachmentDropdown
+                    onFileSelect={handleFileSelect}
+                    onWebSearch={handleWebSearchChange}
+                    onResearch={handleResearchChange}
+                    onChatWithArtifact={handleChatWithArtifact}
+                    onChatWithAPI={handleChatWithAPIChange}
+                    onDropbox={handleDropboxChange}
+                    disabled={disabled || isLoading}
+                    mode={mode}
+                    assistantId={assistantId}
+                    selectedArtifact={selectedArtifact}  // 🔥 Pass selected artifact
+                    onRemoveArtifact={() => {            // 🔥 Handle removal
+                      setSelectedArtifact(null)
+                      if (typeof window !== "undefined") {
+                        sessionStorage.removeItem("chat_selected_artifact")
+                        sessionStorage.removeItem('chat_mentioned_users')
+                      }
+                    }}
+                  />
+                  {assistantId && (
+                    <SelectArtifactDialog
+                      open={isArtifactDialogOpen}
+                      onOpenChange={setIsArtifactDialogOpen}
+                      assistantId={assistantId}
+                      onSelect={handleArtifactSelect}
+                    />
+                  )}
+                  <DictateButton
+                    onTranscript={handleDictateTranscript}
+                    disabled={disabled || isLoading}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild disabled={disabled || isLoading}>
+                      <Button
+                        onClick={handleSend}
+                        disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled}
+                        size="icon"
+                        className="size-[34px] rounded-full p-1"
+                      >
+                        {isLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ArrowUp className="h-5 w-5" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      Send message (Enter)
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </PromptInputActions>
+            </Mention>
+          </TooltipProvider>
+        ) : (
+          <TooltipProvider>
+            <div
+              ref={containerRef}
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={cn(
+                "border-input bg-background rounded-3xl border p-2 shadow-xs relative transition-all",
+                isDragging && "ring-2 ring-primary ring-offset-2 bg-primary/5 dark:bg-primary/10 border-primary",
+                className
+              )}
+            >
+              <Textarea
+                ref={textareaRef}
+                value={value}
+                onChange={(e) => handleValueChange(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                placeholder={placeholder}
+                disabled={disabled || isLoading}
+                rows={1}
+                className="text-primary min-h-[44px] w-full resize-none border-none bg-transparent shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-foreground placeholder:text-muted-foreground"
+              />
+
+              {/* Drag and drop overlay */}
+              {isDragging && (
+                <div className="absolute inset-0 rounded-3xl bg-primary/10 dark:bg-primary/20 border-2 border-dashed border-primary flex items-center justify-center pointer-events-none z-10">
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-primary">Drop files here to upload</p>
+                  </div>
+                </div>
+              )}
+
+            <PromptInputActions className="px-2 pb-1 justify-between">
+              <div className="flex items-center gap-2">
+                <AttachmentDropdown
+                  onFileSelect={handleFileSelect}
+                  onWebSearch={handleWebSearchChange}
+                  onResearch={handleResearchChange}
+                  onChatWithArtifact={handleChatWithArtifact}
+                  onChatWithAPI={handleChatWithAPIChange}
+                  onDropbox={handleDropboxChange}
+                  disabled={disabled || isLoading}
+                  mode={mode}
+                  assistantId={assistantId}
+                  selectedArtifact={selectedArtifact}
+                  onRemoveArtifact={() => {
+                    setSelectedArtifact(null)
+                    if (typeof window !== "undefined") {
+                      sessionStorage.removeItem("chat_selected_artifact")
+                      sessionStorage.removeItem('chat_mentioned_users')
+                    }
+                  }}
+                />
+                {assistantId && (
+                  <SelectArtifactDialog
+                    open={isArtifactDialogOpen}
+                    onOpenChange={setIsArtifactDialogOpen}
+                    assistantId={assistantId}
+                    onSelect={handleArtifactSelect}
+                  />
+                )}
+                <DictateButton
+                  onTranscript={handleDictateTranscript}
+                  disabled={disabled || isLoading}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild disabled={disabled || isLoading}>
+                    <Button
+                      onClick={handleSend}
+                      disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled}
+                      size="icon"
+                      className="size-[34px] rounded-full p-1"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ArrowUp className="h-5 w-5" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    Send message (Enter)
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </PromptInputActions>
+          </div>
+          </TooltipProvider>
+        )}
       </div>
     </div>
   )
