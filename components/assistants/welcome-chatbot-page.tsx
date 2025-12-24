@@ -62,8 +62,7 @@ export function WelcomeChatbotPage({
         chatWithAPI: options?.chatWithAPI,
         dropbox: options?.dropbox,
         artifact: options?.artifact,
-        mentionedUsers: options?.mentionedUsers,
-        skipBackground: true // Skip background processing, streaming will be used
+        mentionedUsers: options?.mentionedUsers
       })
 
       if (!result.success || !result.chatId) {
@@ -85,6 +84,10 @@ export function WelcomeChatbotPage({
         sessionStorage.setItem(SESSION_STORAGE_KEY, "artifact")
         sessionStorage.setItem("chat_artifact_data", JSON.stringify(options.artifact))
         console.log("[WelcomePage] Stored artifact data:", options.artifact.name)
+      } else if (options?.mentionedUsers) {
+        sessionStorage.setItem(SESSION_STORAGE_KEY, "mentionedUsers")
+        sessionStorage.setItem("chat_mentioned_users", JSON.stringify(options.mentionedUsers))
+        console.log("[WelcomePage] Stored mentioned users:", options.mentionedUsers)
       }
 
       // Navigate to chat page first
@@ -173,6 +176,7 @@ export function WelcomeChatbotPage({
             }
             mode={chatType}
             assistantId={assistantId}
+            isAtBottom={false}
             className="border-primary/50 shadow-[0_0_100px_0px_hsl(var(--primary)),0_0_60px_0px_hsl(var(--primary)),0_0_30px_0px_hsl(var(--primary)),0_0_15px_0px_hsl(var(--primary))] dark:border-primary/60 dark:shadow-[0_0_120px_0px_hsl(var(--primary)),0_0_80px_0px_hsl(var(--primary)),0_0_40px_0px_hsl(var(--primary)),0_0_20px_0px_hsl(var(--primary))]"
           />
         </div>

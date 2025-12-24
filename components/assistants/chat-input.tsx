@@ -63,6 +63,7 @@ interface ChatInputProps {
   className?: string
   mode?: "ask-b" | "assistant"
   assistantId?: string
+  isAtBottom?: boolean // Indicates if chat input is at the bottom of the viewport
 }
 
 export function ChatInput({
@@ -80,7 +81,8 @@ export function ChatInput({
   onDropbox,
   className,
   mode = "assistant",
-  assistantId
+  assistantId,
+  isAtBottom = false
 }: ChatInputProps) {
   // Internal state for controlled input
   const [internalValue, setInternalValue] = useState("")
@@ -99,7 +101,7 @@ export function ChatInput({
   const [mentionUsers, setMentionUsers] = useState<User[]>([])
   const [mentionQuery, setMentionQuery] = useState("")
   const [mentionStartIndex, setMentionStartIndex] = useState(0)
-  const [mentionDropdownPosition, setMentionDropdownPosition] = useState({ top: 0, left: 0 })
+  const [mentionDropdownPosition, setMentionDropdownPosition] = useState<{ top?: number; bottom?: number; left: number; placement: "above" | "below" }>({ left: 0, placement: "below" })
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0)
   const [isLoadingMentions, setIsLoadingMentions] = useState(false)
   const [mentionedUsers, setMentionedUsers] = useState<MentionedUser[]>([]) // Track mentioned users
@@ -164,24 +166,107 @@ export function ChatInput({
     loadMentionUsers()
   }, [showMentionDropdown, mentionQuery, assistantId])
 
-  // Calculate dropdown position relative to textarea element
+  // Reset selected index when filtered users change (after filtering out mentioned users)
+  useEffect(() => {
+    const filteredUsers = mentionUsers.filter(user => 
+      !mentionedUsers.some(mentioned => mentioned.id === user.id)
+    )
+    if (filteredUsers.length > 0 && selectedMentionIndex >= filteredUsers.length) {
+      setSelectedMentionIndex(0)
+    } else if (filteredUsers.length === 0 && selectedMentionIndex > 0) {
+      setSelectedMentionIndex(0)
+    }
+  }, [mentionUsers, mentionedUsers, selectedMentionIndex])
+
+  // Calculate dropdown position and placement relative to textarea element
   const getDropdownPosition = useCallback(() => {
     if (!textareaRef.current) return null
 
     const textarea = textareaRef.current
     const rect = textarea.getBoundingClientRect()
+    const screenHeight = window.innerHeight
+    const dropdownMaxHeight = 240
+    const gap = 4
 
-    // Position dropdown below the textarea, aligned to the left
-    // Similar to Material-UI Menu's default positioning
-    return {
-      top: rect.bottom + 4, // 4px gap below textarea
-      left: rect.left
+    // Use isAtBottom prop to determine placement preference
+    const spaceBelow = screenHeight - rect.bottom
+    const spaceAbove = rect.top
+
+    // If input is at bottom, always show above
+    // Otherwise, show below if there's space, above if not
+    const shouldShowAbove = isAtBottom
+      ? true
+      : spaceBelow < dropdownMaxHeight + gap && spaceAbove > dropdownMaxHeight + gap
+
+    // When showing above and at bottom, use bottom positioning so it grows upward
+    // When showing above in middle, use top positioning
+    // When showing below, use top positioning
+    if (shouldShowAbove && isAtBottom) {
+      // Position using bottom so it grows upward from the input
+      const bottom = screenHeight - rect.top + gap
+      return {
+        top: undefined,
+        bottom,
+        left: rect.left,
+        placement: "above" as const
+      }
+    } else if (shouldShowAbove) {
+      // Position using top (middle of page scenario)
+      const top = rect.top - dropdownMaxHeight - gap
+      return {
+        top,
+        bottom: undefined,
+        left: rect.left,
+        placement: "above" as const
+      }
+    } else {
+      // Position below using top
+      const top = rect.bottom + gap
+      return {
+        top,
+        bottom: undefined,
+        left: rect.left,
+        placement: "below" as const
+      }
     }
+  }, [isAtBottom])
+
+  // Extract all mentions from text
+  const extractMentionsFromText = useCallback((text: string): string[] => {
+    // Match @username patterns - can include spaces in names
+    // Pattern: @ followed by name (can have spaces) followed by space, newline, or end of string
+    const mentionRegex = /@([^\s@]+(?:\s+[^\s@]+)*)(?:\s|$|\n)/g
+    const mentions: string[] = []
+    let match
+    
+    while ((match = mentionRegex.exec(text)) !== null) {
+      const username = match[1].trim()
+      if (username && !mentions.includes(username)) {
+        mentions.push(username)
+      }
+    }
+    
+    return mentions
   }, [])
+
+  // Update mentionedUsers based on current text
+  const updateMentionedUsers = useCallback((text: string) => {
+    const currentMentions = extractMentionsFromText(text)
+    
+    setMentionedUsers(prev => {
+      // Keep only users whose names are still in the text
+      return prev.filter(user => 
+        currentMentions.includes(user.name)
+      )
+    })
+  }, [extractMentionsFromText])
 
   // Handle text changes and detect mentions
   const handleValueChange = useCallback((newValue: string) => {
     onValueChange(newValue)
+
+    // Update mentionedUsers to remove any that are no longer in the text
+    updateMentionedUsers(newValue)
 
     // Use setTimeout to ensure the cursor position is updated
     setTimeout(() => {
@@ -195,34 +280,29 @@ export function ChatInput({
 
         if (dropdownPos) {
           const screenWidth = window.innerWidth
-          const screenHeight = window.innerHeight
           const dropdownWidth = 256
-          const dropdownMaxHeight = 240
 
-          let { left, top } = dropdownPos
+          let { left } = dropdownPos
 
-          // Adjust if too close to edges
+          // Adjust horizontal position if too close to edges
           if (left + dropdownWidth > screenWidth - 20) {
             left = screenWidth - dropdownWidth - 20
           }
           left = Math.max(20, left)
 
-          // Show above if too close to bottom
-          if (top + dropdownMaxHeight > screenHeight - 20) {
-            if (textareaRef.current) {
-              const rect = textareaRef.current.getBoundingClientRect()
-              top = rect.top - dropdownMaxHeight - 4
-            }
-          }
-
-          setMentionDropdownPosition({ top, left })
+          setMentionDropdownPosition({ 
+            top: dropdownPos.top, 
+            bottom: dropdownPos.bottom, 
+            left, 
+            placement: dropdownPos.placement 
+          })
           setShowMentionDropdown(true)
         }
       } else {
         setShowMentionDropdown(false)
       }
     }, 0)
-  }, [onValueChange, detectMentionTrigger, mode, getDropdownPosition])
+  }, [onValueChange, detectMentionTrigger, mode, getDropdownPosition, updateMentionedUsers])
 
   // Insert mention into text
   const insertMention = useCallback((user: User) => {
@@ -257,24 +337,29 @@ export function ChatInput({
   // Handle keyboard navigation in mention dropdown
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // If mention dropdown is open, handle navigation and prevent other actions
-    if (showMentionDropdown && mentionUsers.length > 0) {
+    // Filter out already mentioned users for navigation
+    const filteredUsers = mentionUsers.filter(user => 
+      !mentionedUsers.some(mentioned => mentioned.id === user.id)
+    )
+    
+    if (showMentionDropdown && filteredUsers.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault()
-        setSelectedMentionIndex((prev) => (prev + 1) % mentionUsers.length)
+        setSelectedMentionIndex((prev) => (prev + 1) % filteredUsers.length)
       } else if (e.key === "ArrowUp") {
         e.preventDefault()
-        setSelectedMentionIndex((prev) => (prev - 1 + mentionUsers.length) % mentionUsers.length)
+        setSelectedMentionIndex((prev) => (prev - 1 + filteredUsers.length) % filteredUsers.length)
       } else if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault()
-        if (mentionUsers[selectedMentionIndex]) {
-          insertMention(mentionUsers[selectedMentionIndex])
+        if (filteredUsers[selectedMentionIndex]) {
+          insertMention(filteredUsers[selectedMentionIndex])
         }
       } else if (e.key === "Escape") {
         e.preventDefault()
         setShowMentionDropdown(false)
       }
     }
-  }, [showMentionDropdown, mentionUsers, selectedMentionIndex, insertMention])
+  }, [showMentionDropdown, mentionUsers, mentionedUsers, selectedMentionIndex, insertMention])
 
   useEffect(() => {
     // Load mode and artifact from sessionStorage on mount
@@ -365,6 +450,7 @@ export function ChatInput({
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("chat_mode")
       sessionStorage.removeItem("chat_artifact_data")
+      sessionStorage.removeItem('chat_mentioned_users')
       console.log("[ChatInput] Cleared mode and artifact after send")
     }
   }
@@ -393,6 +479,7 @@ export function ChatInput({
       // 🔥 Clear artifact data from sessionStorage
       if (typeof window !== "undefined") {
         sessionStorage.removeItem("chat_artifact_data")
+        sessionStorage.removeItem('chat_mentioned_users')
       }
     }
     onWebSearch?.(enabled)
@@ -406,6 +493,7 @@ export function ChatInput({
       // 🔥 Clear artifact data from sessionStorage
       if (typeof window !== "undefined") {
         sessionStorage.removeItem("chat_artifact_data")
+        sessionStorage.removeItem('chat_mentioned_users')
       }
     }
     onResearch?.(enabled)
@@ -419,6 +507,7 @@ export function ChatInput({
     // 🔥 Clear artifact data from sessionStorage
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("chat_artifact_data")
+      sessionStorage.removeItem('chat_mentioned_users')
     }
     onWebSearch?.(false)
     onResearch?.(false)
@@ -432,6 +521,7 @@ export function ChatInput({
       // 🔥 Clear artifact data from sessionStorage
       if (typeof window !== "undefined") {
         sessionStorage.removeItem("chat_artifact_data")
+        sessionStorage.removeItem('chat_mentioned_users')
       }
     }
     onDropbox?.(enabled)
@@ -617,10 +707,13 @@ export function ChatInput({
           {showMentionDropdown && (
             <MentionDropdownPortal>
               <MentionDropdown
-                users={mentionUsers}
+                users={mentionUsers.filter(user => 
+                  !mentionedUsers.some(mentioned => mentioned.id === user.id)
+                )}
                 isLoading={isLoadingMentions}
                 onSelect={insertMention}
                 position={mentionDropdownPosition}
+                placement={mentionDropdownPosition.placement}
                 selectedIndex={selectedMentionIndex}
                 onSelectedIndexChange={setSelectedMentionIndex}
               />
@@ -643,6 +736,7 @@ export function ChatInput({
                   setSelectedArtifact(null)
                   if (typeof window !== "undefined") {
                     sessionStorage.removeItem("chat_selected_artifact")
+                    sessionStorage.removeItem('chat_mentioned_users')
                   }
                 }}
               />

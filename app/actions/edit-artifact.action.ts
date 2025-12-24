@@ -12,6 +12,7 @@ export interface EditArtifactParams {
   instructions: string
   selectedUsers: Array<{ id: string; name: string; email: string }>
   apiConfigs: Array<{ key: string; value: string }>
+  selectedChatId?: string | null
 }
 
 export interface EditArtifactResult {
@@ -34,6 +35,7 @@ export interface GetArtifactEditDataResult {
     permissions: 'private' | 'team' | 'public'
     selectedUsers: Array<{ id: string; name: string; email: string; image: string | null }>
     apiConfigs: Array<{ key: string; value: string }>
+    selectedChatId?: string | null
   }
 }
 
@@ -120,6 +122,15 @@ export async function getArtifactEditData(artifactId: string): Promise<GetArtifa
       })
     }
 
+    // Extract selectedChatId from tools field
+    let selectedChatId: string | null = null
+    if (artifact.tools && typeof artifact.tools === 'object') {
+      const toolsData = artifact.tools as any
+      if (toolsData.selectedChatId) {
+        selectedChatId = toolsData.selectedChatId
+      }
+    }
+
     return {
       success: true,
       data: {
@@ -129,7 +140,8 @@ export async function getArtifactEditData(artifactId: string): Promise<GetArtifa
         instructions: artifact.instructions || '',
         permissions: permissionsType,
         selectedUsers,
-        apiConfigs
+        apiConfigs,
+        selectedChatId
       }
     }
 
@@ -149,7 +161,8 @@ export async function updateArtifact({
   artifactId,
   instructions,
   selectedUsers,
-  apiConfigs
+  apiConfigs,
+  selectedChatId
 }: EditArtifactParams): Promise<EditArtifactResult> {
   try {
     const session = await getServerSession(authOptions)
@@ -204,6 +217,9 @@ export async function updateArtifact({
       }, {} as Record<string, string>)
       : null
 
+    // Prepare tools JSON with selectedChatId
+    const toolsJson = selectedChatId ? { selectedChatId: selectedChatId } : undefined
+
     // Update artifact in a transaction
     await prisma.$transaction(async (tx) => {
       // Update artifact
@@ -212,6 +228,7 @@ export async function updateArtifact({
         data: {
           instructions,
           apiKeys: apiKeysJson || undefined,
+          tools: toolsJson ? (toolsJson as any) : undefined,
           updatedAt: new Date()
         }
       })

@@ -18,6 +18,7 @@ import { ArtifactCustomizationStep } from "./steps/artifact-customization-step"
 import type { ArtifactFormData, Template, Contact } from "@/types/artifacts"
 import { getAssistantContacts, createArtifact } from "@/app/actions/artifact.action"
 import { useArtifactEditData, useUpdateArtifactMutation } from "@/hooks/useArtifact"
+import { useChatHistory } from "@/hooks/useChatHistory"
 
 interface CreateArtifactDialogProps {
   open: boolean
@@ -34,6 +35,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loadingContacts, setLoadingContacts] = useState(false)
+  const { chats, isLoading: isLoadingChatwithAssistant, error: chatError } = useChatHistory({ mode: "assistant", assistantId: assistantId })
 
   const [formData, setFormData] = useState<ArtifactFormData>({
     templateId: "",
@@ -45,6 +47,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
     uploadedFiles: [],
     uploadedImages: [],
     videoDuration: "8",
+    selectedChatId: null,
   })
 
   const [errors, setErrors] = useState<Partial<Record<keyof ArtifactFormData, string>>>({})
@@ -86,6 +89,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
           ...config,
           id: `${config.key}-${Date.now()}`
         })),
+        selectedChatId: editData.selectedChatId || null,
       }))
       
       // Create a dummy template for edit mode
@@ -145,6 +149,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
             uploadedFiles: [],
             uploadedImages: [],
             videoDuration: "8",
+            selectedChatId: null,
           })
         }
         setErrors({})
@@ -235,7 +240,8 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
           apiConfigs: formData.apiConfigs.map(config => ({
             key: config.key,
             value: config.value
-          }))
+          })),
+          selectedChatId: formData.selectedChatId || null,
         })
       } else {
         // Create mode - create new artifact
@@ -255,6 +261,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
           uploadedFiles: formData.uploadedFiles,
           uploadedImages: formData.uploadedImages,
           videoDuration: selectedTemplate?.category === "video_generation" ? formData.videoDuration : undefined,
+          selectedChatId: formData.selectedChatId || null,
         })
 
         toast.dismiss("artifact-creation")
@@ -325,6 +332,9 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
                   setErrors={setErrors}
                   onBack={handleBackStep}
                   contacts={contacts}
+                  chats={chats}
+                  loadingChats={isLoadingChatwithAssistant}
+                  chatError={chatError}
                   loadingContacts={loadingContacts}
                   isEditMode={isEditMode} // Pass edit mode flag
                 />

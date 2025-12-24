@@ -16,7 +16,8 @@ interface MentionDropdownProps {
   users: User[]
   isLoading: boolean
   onSelect: (user: User) => void
-  position: { top: number; left: number }
+  position: { top?: number; bottom?: number; left: number }
+  placement?: "above" | "below"
   selectedIndex: number
   onSelectedIndexChange: (index: number) => void
 }
@@ -26,6 +27,7 @@ export function MentionDropdown({
   isLoading,
   onSelect,
   position,
+  placement = "below",
   selectedIndex,
   onSelectedIndexChange,
 }: MentionDropdownProps) {
@@ -44,14 +46,19 @@ export function MentionDropdown({
     }
   }, [selectedIndex])
 
+  const containerStyle: React.CSSProperties = {
+    ...(position.top !== undefined && { top: `${position.top}px` }),
+    ...(position.bottom !== undefined && { bottom: `${position.bottom}px` }),
+    left: `${position.left}px`,
+    maxHeight: "240px",
+    overflowY: "auto",
+  }
+
   if (isLoading) {
     return (
       <div
         className="fixed z-[9999] w-64 rounded-lg border border-border bg-background shadow-xl p-4"
-        style={{
-          top: `${position.top}px`,
-          left: `${position.left}px`,
-        }}
+        style={containerStyle}
       >
         <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -65,10 +72,7 @@ export function MentionDropdown({
     return (
       <div
         className="fixed z-[9999] w-64 rounded-lg border border-border bg-background shadow-xl p-4"
-        style={{
-          top: `${position.top}px`,
-          left: `${position.left}px`,
-        }}
+        style={containerStyle}
       >
         <div className="text-sm text-muted-foreground text-center">
           No users found
@@ -81,12 +85,7 @@ export function MentionDropdown({
     <div
       ref={dropdownRef}
       className="fixed z-[9999] w-64 rounded-lg border border-border bg-background shadow-xl overflow-hidden"
-      style={{
-        top: `${position.top}px`,
-        left: `${position.left}px`,
-        maxHeight: "240px",
-        overflowY: "auto",
-      }}
+      style={containerStyle}
     >
       {users.map((user, index) => (
         <button

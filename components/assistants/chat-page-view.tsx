@@ -401,6 +401,7 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
             className="border-primary/50 shadow-lg"
             mode={mode}
             assistantId={assistantId}
+            isAtBottom={true}
           />
         </div>
       </div>
