@@ -18,15 +18,18 @@ export async function generatePDFFromHTML({
   try {
     console.log('[PDF] Launching headless browser...');
 
-    // Launch Puppeteer
+    // Launch Puppeteer with enhanced configuration
     browser = await puppeteer.launch({
       headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions'
+      ],
+      // Use new headless mode for better compatibility
     });
 
     const page = await browser.newPage();

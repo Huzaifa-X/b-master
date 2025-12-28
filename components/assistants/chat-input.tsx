@@ -114,6 +114,7 @@ export function ChatInput({
   const [isLoadingMentions, setIsLoadingMentions] = useState(false)
   const [mentionedUsers, setMentionedUsers] = useState<MentionedUser[]>([]) // Track mentioned users
   const [isMentionOpen, setIsMentionOpen] = useState(false) // Track if mention dropdown is open
+  const [mentionKey, setMentionKey] = useState(0) // Key to force re-render of Mention component
 
   // Use external value if provided, otherwise use internal state
   const value = externalValue !== undefined ? externalValue : internalValue
@@ -273,6 +274,10 @@ export function ChatInput({
   const handleSend = async () => {
     if ((!value.trim() && attachedFiles.length === 0) || isLoading || disabled) return
 
+    // Store current value before clearing
+    const messageToSend = value.trim()
+    const mentionsToSend = [...mentionedUsers]
+
     let attachments: { name: string; url: string; type: string; size: number }[] = []
 
     // Upload files to S3 if there are any attachments
@@ -300,9 +305,14 @@ export function ChatInput({
       attachments = result.files
     }
 
+    // Clear input BEFORE submitting (to make UI feel instant)
+    setMentionedUsers([]) // Clear mentions first
+    onValueChange("") // Then clear the input value
+    setMentionKey(prev => prev + 1) // Force Mention component to re-render
+
     // Call onSubmit with the message, attachments, search options, and mentioned users
     onSubmit(
-      value.trim(),
+      messageToSend,
       attachments.length > 0 ? attachments : undefined,
       {
         webSearch: webSearchEnabled,
@@ -310,16 +320,14 @@ export function ChatInput({
         chatWithAPI: chatWithAPIEnabled,
         dropbox: dropboxEnabled,
         artifact: selectedArtifact || undefined,
-        mentionedUsers: mentionedUsers.length > 0 ? mentionedUsers : undefined,
+        mentionedUsers: mentionsToSend.length > 0 ? mentionsToSend : undefined,
       }
     )
 
-    // Clear input, attachments, and mentioned users
-    onValueChange("")
+    // Clear remaining state
     setAttachedFiles([])
     setShowPreview(false)
     setSelectedArtifact(null)
-    setMentionedUsers([])
     setChatWithAPIEnabled(false)
     setDropboxEnabled(false)
 
@@ -564,6 +572,7 @@ export function ChatInput({
         {mode === "assistant" && assistantId ? (
           <TooltipProvider>
             <Mention
+              key={mentionKey}
               trigger="@"
               value={mentionedUsers.map(u => u.name)}
               onValueChange={(newMentions) => {

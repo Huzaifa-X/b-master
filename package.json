@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "prisma generate && next build --turbopack --no-lint",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "worker": "node --env-file=.env --import tsx scripts/start-worker.ts",
+    "worker:dev": "node --env-file=.env --watch --import tsx scripts/start-worker.ts"
   },
   "prettier": {
     "plugins": [
@@ -78,6 +80,7 @@
     "sonner": "^2.0.7",
     "stripe": "^20.0.0",
     "tailwind-merge": "^3.3.1",
+    "tsx": "^4.21.0",
     "tw-animate-css": "^1.4.0",
     "zod": "^4.1.12",
     "zustand": "^5.0.8"

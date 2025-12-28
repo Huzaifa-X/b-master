@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
 
     console.log("[Artifact Update Stream API] Fetching artifact:", artifactIdInt)
 
-    // Get artifact and verify permissions
+    // Get artifact and verify permissions - include active version
     const artifact = await prisma.assistantArtifact.findFirst({
       where: {
         id: artifactIdInt,
@@ -137,6 +137,13 @@ export async function POST(req: NextRequest) {
             name: true,
             vectorStoreId: true,
           }
+        },
+        activeVersion: {
+          select: {
+            id: true,
+            versionNumber: true,
+            code: true,
+          }
         }
       }
     })
@@ -151,8 +158,16 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: "Video generation artifacts cannot be updated" }), { status: 400 })
     }
 
+    // Get the active version's code (not the latest version)
+    const activeVersionCode = artifact.activeVersion?.code || ""
+
+    if (!activeVersionCode?.trim()) {
+      console.error("[Artifact Update Stream API] No active version code found for artifact:", artifactIdInt)
+      return new Response(JSON.stringify({ error: "No active version found to update from. Please generate the artifact first." }), { status: 400 })
+    }
+
     console.log("[Artifact Update Stream API] Artifact found:", artifact.name)
-    console.log("[Artifact Update Stream API] Using active version code - length:", currentHtmlCode.length, "characters")
+    console.log("[Artifact Update Stream API] Using active version code - Version:", artifact.activeVersion?.versionNumber || 'N/A', "Length:", activeVersionCode.length, "characters")
 
     // Build conversation context from request chatHistory
     let conversationContext = buildConversationContext(chatHistory || [])
@@ -184,30 +199,42 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Build file context if files are uploaded
+    // Build file context from both stored files and newly uploaded files
     let fileContext = ""
+
+    // Get stored files from artifact database
+    const storedFiles = (artifact.files as unknown as UploadedFile[]) || []
+
+    // Combine stored files with newly uploaded files
+    const allFiles: UploadedFile[] = [...storedFiles]
+
+    // Add newly uploaded files (if any)
     if (uploadedFiles && uploadedFiles.length > 0) {
-      fileContext = "\n\n=== UPLOADED FILES CONTEXT ===\n"
-      
-      const files = uploadedFiles as UploadedFile[]
-      
-      files.forEach((file, index) => {
+      const newlyUploadedFiles = uploadedFiles as UploadedFile[]
+      allFiles.push(...newlyUploadedFiles)
+    }
+
+    // Build context from all available files
+    if (allFiles.length > 0) {
+      fileContext = "\n\n=== AVAILABLE FILES CONTEXT ===\n"
+
+      allFiles.forEach((file, index) => {
         fileContext += `\n--- File ${index + 1}: ${file.name} ---\n`
-        
+
         // Add image URLs
         if (file.preview) {
           fileContext += `Image URL: ${file.preview}\n`
           fileContext += `Note: This is an image that should be embedded in the HTML using an <img> tag with this URL.\n`
         }
-        
+
         // Add extracted document content
         if (file.extractedContent) {
           fileContext += `\nExtracted Text:\n${file.extractedContent.text}\n`
-          
+
           if (file.extractedContent.html) {
             fileContext += `\nExtracted HTML:\n${file.extractedContent.html}\n`
           }
-          
+
           // Add tables as base64 images if available
           if (file.extractedContent.tables && file.extractedContent.tables.length > 0) {
             fileContext += `\nTables (${file.extractedContent.tables.length}):\n`
@@ -215,30 +242,32 @@ export async function POST(req: NextRequest) {
               fileContext += `Table ${tableIdx + 1} (Page ${table.page}): data:image/png;base64,${table.base64}\n`
             })
           }
-          
+
           if (file.extractedContent.metadata) {
             fileContext += `\nDocument Metadata: ${file.extractedContent.metadata.pages} page(s)\n`
           }
         }
       })
-      
-      fileContext += "\n=== END UPLOADED FILES CONTEXT ===\n"
+
+      fileContext += "\n=== END AVAILABLE FILES CONTEXT ===\n"
+
+      console.log("[Artifact Update Stream] Using files - Stored:", storedFiles.length, "Newly uploaded:", uploadedFiles?.length || 0, "Total:", allFiles.length)
     }
 
-    // Prepare input for AI
+    // Prepare input for AI using the active version's code
     const aiInput = `${conversationContext}${artifactChatContext}
 
-=== CURRENT ARTIFACT CODE ===
-${currentHtmlCode}
+=== CURRENT ARTIFACT CODE (Active Version ${artifact.activeVersion?.versionNumber || 'N/A'}) ===
+${activeVersionCode}
 === END CURRENT CODE ===
 ${fileContext}
 === USER REQUEST ===
-${userPrompt || "Update the artifact using the uploaded files."}
+${userPrompt || "Update the artifact using the available files."}
 === END USER REQUEST ===
 
-Please update the artifact code based on the user's request while considering the entire conversation history${artifactChatContext ? ', the artifact chat context' : ''}${uploadedFiles && uploadedFiles.length > 0 ? ', and the uploaded files' : ''}. 
+Please update the artifact code based on the user's request while considering the entire conversation history${artifactChatContext ? ', the artifact chat context' : ''}${allFiles.length > 0 ? ', and the available files' : ''}.
 
-${uploadedFiles && uploadedFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are provided, embed them in the HTML using <img> tags with the provided URLs.\n- If documents are provided, use the extracted text/html content to enhance the artifact.\n- Make sure all image URLs are properly used in src attributes.\n\n' : ''}Generate the complete updated HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.`
+${allFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are provided, embed them in the HTML using <img> tags with the provided URLs.\n- If documents are provided, use the extracted text/html content to enhance the artifact.\n- Make sure all image URLs are properly used in src attributes.\n- The files context includes both previously uploaded files and any newly uploaded files.\n\n' : ''}Generate the complete updated HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.`
 
     const vectorStoreId = artifact.assistant?.vectorStoreId
 
@@ -405,6 +434,30 @@ ${uploadedFiles && uploadedFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:
 
             // Sanitize the generated HTML
             generatedCode = sanitizeHtml(generatedCode)
+          }
+
+          // Update artifact's files field if new files were uploaded
+          if (uploadedFiles && uploadedFiles.length > 0) {
+            console.log("[Artifact Update Stream] Updating artifact files field with", uploadedFiles.length, "files")
+
+            // Get existing files from artifact
+            const existingFiles = (artifact.files as unknown as UploadedFile[]) || []
+
+            // Merge new files with existing ones (avoid duplicates by URL)
+            const existingUrls = new Set(existingFiles.map(f => f.url))
+            const newFiles = uploadedFiles.filter((f: UploadedFile) => !existingUrls.has(f.url))
+            const updatedFiles = [...existingFiles, ...newFiles]
+
+            // Update artifact with new files (including extracted content)
+            await prisma.assistantArtifact.update({
+              where: { id: artifactIdInt },
+              data: {
+                files: updatedFiles as any, // Store files with extracted content
+                updatedAt: new Date()
+              }
+            })
+
+            console.log("[Artifact Update Stream] Artifact files updated. Total files:", updatedFiles.length)
           }
 
           // Create a new version with the AI-generated code

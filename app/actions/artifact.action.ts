@@ -244,43 +244,9 @@ export async function createArtifact(data: {
             }
         }
 
-        // Build enhanced instructions with extracted content
-        let enhancedInstructions = data.instructions
-
-        // Add document content
-        if (data.uploadedFiles && data.uploadedFiles.length > 0) {
-            enhancedInstructions += "\n\n=== EXTRACTED DOCUMENT CONTENT ===\n"
-
-            data.uploadedFiles.forEach((file, idx) => {
-                enhancedInstructions += `\n--- Document ${idx + 1}: ${file.name} ---\n`
-
-                if (file.extractedContent) {
-                    enhancedInstructions += `\nPages: ${file.extractedContent.metadata?.pages || "Unknown"}\n`
-                    enhancedInstructions += `\nExtracted Text:\n${file.extractedContent.text}\n`
-
-                    // Add tables as base64 images
-                    if (file.extractedContent.tables && file.extractedContent.tables.length > 0) {
-                        enhancedInstructions += `\nTables (${file.extractedContent.tables.length}):\n`
-                        file.extractedContent.tables.forEach((table, tableIdx) => {
-                            enhancedInstructions += `Table ${tableIdx + 1} (Page ${table.page}): data:image/png;base64,${table.base64}\n`
-                        })
-                    }
-                } else if (file.extractionError) {
-                    enhancedInstructions += `\n[Content extraction failed for this document]\n`
-                }
-            })
-
-            enhancedInstructions += "\n=== END DOCUMENT CONTENT ===\n"
-        }
-
-        // Add image URLs
-        if (data.uploadedImages && data.uploadedImages.length > 0) {
-            enhancedInstructions += "\n\n=== IMAGES TO EMBED ===\n"
-            data.uploadedImages.forEach((img, idx) => {
-                enhancedInstructions += `Image ${idx + 1}: ${img.url} (${img.name})\n`
-            })
-            enhancedInstructions += "=== END IMAGES ===\n"
-        }
+        // Use the original instructions without embedding content
+        // The worker will fetch and use the extracted content from the files JSON field
+        const enhancedInstructions = data.instructions
 
         // For video generation, generate immediately (no streaming needed)
         let generatedCode: string

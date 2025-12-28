@@ -20,16 +20,18 @@ interface ArtifactPanelProps {
   onClose?: () => void;
   streamingContent?: string;
   isStreaming?: boolean;
+  generationProgress?: number;
   artifactId?: string; // Add artifactId to props
   onVersionSelect?: (versionCode: string, versionId: string) => void;
 }
 
-export const ArtifactPanel: FC<ArtifactPanelProps> = ({ 
-  onClose, 
-  streamingContent, 
+export const ArtifactPanel: FC<ArtifactPanelProps> = ({
+  onClose,
+  streamingContent,
   isStreaming = false,
+  generationProgress = 0,
   artifactId,
-  onVersionSelect 
+  onVersionSelect
 }) => {
 
   const { artifactContent, isPreviewMode, togglePreview } = useArtifactStore();
@@ -38,6 +40,9 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
   // Use streaming content if available, otherwise use stored content
   const displayContent = streamingContent || artifactContent?.content || "";
+
+  // Show loading state if streaming and no content yet
+  const showLoadingState = isStreaming && !displayContent;
 
   const [blobUrl, setBlobUrl] = useState<string>("");
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
@@ -168,12 +173,12 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
         {/* Right Section: Action Buttons */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Preview/Code Toggle - Show on larger screens */}
+          {/* Preview/Code Toggle - Always show for HTML */}
           {isHtmlCode && (
             <Button
               variant={isPreviewMode ? "default" : "ghost"}
               size="icon"
-              className="h-7 w-7 md:h-8 md:w-8 hidden sm:flex"
+              className="h-7 w-7 md:h-8 md:w-8"
               title={isPreviewMode ? "Show code" : "Preview"}
               onClick={togglePreview}
             >
@@ -245,7 +250,30 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
       <div className="flex-1 overflow-auto">
 
-        {(displayContent || isStreaming) ? (
+        {showLoadingState ? (
+
+          /* Loading State During Generation */
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="text-center space-y-6 px-4">
+              <div className="rounded-lg border bg-card p-8 shadow-sm max-w-md mx-auto">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mx-auto mb-6"></div>
+                <h3 className="text-xl font-semibold mb-3">Generating Artifact</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  AI is creating your artifact. This may take a minute...
+                </p>
+                {/* Progress Bar */}
+                <div className="w-full bg-muted rounded-full h-2.5 mb-2">
+                  <div
+                    className="bg-primary h-2.5 rounded-full transition-all duration-300"
+                    style={{ width: `${generationProgress}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-muted-foreground">{generationProgress}% complete</p>
+              </div>
+            </div>
+          </div>
+
+        ) : (displayContent || isStreaming) ? (
 
           <div className="h-full">
 
@@ -295,9 +323,14 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
                 {artifactContent?.type === "code" || isStreaming ? (
 
-                  <pre className="m-0 p-6 text-sm font-mono whitespace-pre-wrap break-all overflow-wrap-anywhere bg-muted rounded-lg">
+                  <pre className="m-0 p-6 text-sm font-mono whitespace-pre-wrap break-all overflow-wrap-anywhere bg-muted rounded-lg relative">
 
-                    <code className="block">{displayContent}</code>
+                    <code className="block">
+                      {displayContent}
+                      {isStreaming && displayContent && (
+                        <span className="inline-block w-2 h-4 bg-primary ml-1 animate-pulse"></span>
+                      )}
+                    </code>
 
                   </pre>
 
