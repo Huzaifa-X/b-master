@@ -61,11 +61,16 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
     }
 
     const handleCardClick = (artifact: Artifact) => {
-        // For video_generation artifacts, show in modal instead of navigating
-        if (artifact.category === "video_generation") {
+        // For video_generation artifacts or VIEWER access, show in modal (read-only)
+        // For EDITOR/ADMIN access, navigate to full page with chatbot
+        const isViewerAccess = artifact.access === 'VIEWER'
+        const isVideoArtifact = artifact.category === "video_generation"
+
+        if (isVideoArtifact || isViewerAccess) {
+            // Read-only view in modal (can view and download only)
             setViewArtifactId(artifact.id)
         } else {
-            // For other artifacts, navigate to the detail page with chatbot
+            // Full access - navigate to detail page with chatbot (can edit)
             router.push(`/assistants/${assistantId}/artifacts/${artifact.id}`)
         }
     }
@@ -178,14 +183,14 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                 </Suspense>
             )}
 
-            {/* View Artifact Dialog for Video Generation - Lazy loaded */}
+            {/* View Artifact Dialog - For VIEWER access or Video Generation (Read-only) - Lazy loaded */}
             {viewArtifactId && (
                 <Suspense fallback={null}>
                     <ViewArtifactDialog
                         artifact={viewArtifact ? {
                             id: viewArtifact.id,
                             name: viewArtifact.name,
-                            category: viewArtifact.category || "video_generation",
+                            category: viewArtifact.category || "others",
                             htmlContent: viewArtifact.htmlContent,
                             createdAt: new Date(viewArtifact.createdAt),
                         } : null}

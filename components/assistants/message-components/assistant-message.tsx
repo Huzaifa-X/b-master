@@ -103,7 +103,6 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                 })
 
                 toast.success(`Shared with ${contactName}`)
-                router.push(`/assistants/${assistantId}/chat/${chatResult.chat.id}`)
             } else {
                 toast.error(chatResult.error || 'Failed to create chat')
             }
