@@ -13,10 +13,10 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   _req: Request,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
-    const { jobId } = params;
+    const { jobId } = await params;
     console.log('[Job Status API] Request for job:', jobId);
 
     // Check authentication

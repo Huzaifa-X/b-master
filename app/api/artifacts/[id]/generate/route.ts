@@ -14,10 +14,11 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('[Generate API] Request received for artifact:', params.id);
+    const { id } = await params;
+    console.log('[Generate API] Request received for artifact:', id);
 
     // Check authentication
     const session = await getServerSession(authOptions);
@@ -29,7 +30,7 @@ export async function POST(
     const userId = session.user.id;
     console.log('[Generate API] User authenticated:', userId);
 
-    const artifactId = parseInt(params.id);
+    const artifactId = parseInt(id);
     if (isNaN(artifactId)) {
       return NextResponse.json({ error: 'Invalid artifact ID' }, { status: 400 });
     }

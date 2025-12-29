@@ -14,12 +14,12 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
   const encoder = new TextEncoder();
 
   try {
-    const { jobId } = params;
+    const { jobId } = await params;
     console.log('[Job Stream API] Request for job:', jobId);
 
     // Check authentication
