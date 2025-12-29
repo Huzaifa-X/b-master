@@ -9,6 +9,7 @@ export interface Artifact {
   category: string
   htmlContent: string
   createdAt: Date
+  access?: string // VIEWER, EDITOR, or ADMIN
 }
 
 interface ArtifactCardProps {

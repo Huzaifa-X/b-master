@@ -34,11 +34,10 @@ export default function ArtifactPage({ params }: PageProps) {
   const [streamingContent, setStreamingContent] = useState<string>("")
   const [selectedVersionCode, setSelectedVersionCode] = useState<string | null>(null)
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null)
+  const [generationProgress, setGenerationProgress] = useState<number>(0)
   const eventSourceRef = useRef<EventSource | null>(null)
   const streamingInitiatedRef = useRef(false)
-  const lastUpdateRef = useRef<number>(0)
-  const accumulatedCodeRef = useRef<string>("")
-  const updateThrottleMs = 100 // Update UI every 100ms instead of every chunk
 
   // Use React Query hook to fetch artifact
   const { artifact, isLoading, isError, error, refetch } = useArtifactById(artifactId, {
@@ -48,131 +47,141 @@ export default function ArtifactPage({ params }: PageProps) {
   // Get artifact store methods
   const { setArtifact, setPreviewMode, clearArtifact, closePanel } = useArtifactStore()
 
-  // Function to start streaming artifact generation
+  // Function to start streaming artifact generation using queue system
   const startStreaming = useCallback(async () => {
     if (isStreaming || eventSourceRef.current) return
 
     setIsStreaming(true)
     setStreamingContent("")
-    accumulatedCodeRef.current = ""
-    lastUpdateRef.current = Date.now()
+    setGenerationProgress(0)
 
     try {
-      console.log("[Artifact] Starting streaming request for artifact:", artifactId)
-      // Add timeout to the fetch request (6 minutes total)
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 6 * 60 * 1000)
+      console.log("[Artifact] Creating generation job for artifact:", artifactId)
 
+      // Step 1: Create a generation job
       const response = await fetch('/api/artifacts/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ artifactId }),
-        signal: controller.signal,
       })
-
-      clearTimeout(timeoutId)
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error("[Artifact] Streaming request failed:", response.status, errorText)
+        console.error("[Artifact] Job creation failed:", response.status, errorText)
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`)
       }
 
-      console.log("[Artifact] Streaming response received, starting to read...")
+      const jobData = await response.json()
+      console.log("[Artifact] Job created:", jobData)
 
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
+      if (!jobData.useQueue || !jobData.jobId || !jobData.streamUrl) {
+        throw new Error("Invalid job response")
+      }
 
-      if (reader) {
-        const updateUI = () => {
-          const now = Date.now()
-          if (now - lastUpdateRef.current >= updateThrottleMs) {
-            setStreamingContent(accumulatedCodeRef.current)
-            lastUpdateRef.current = now
-          }
-        }
+      setCurrentJobId(jobData.jobId)
 
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
+      // Step 2: Connect to the job stream using EventSource
+      console.log("[Artifact] Connecting to job stream:", jobData.streamUrl)
+      const eventSource = new EventSource(jobData.streamUrl)
+      eventSourceRef.current = eventSource
 
-          const chunk = decoder.decode(value, { stream: true })
-          const lines = chunk.split('\n')
+      eventSource.onopen = () => {
+        console.log("[Artifact] EventSource connection opened")
+      }
 
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const jsonStr = line.slice(6).trim()
-                if (!jsonStr) continue // Skip empty lines
+      eventSource.onmessage = async (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          console.log("[Artifact] Received event:", data.type, data)
 
-                const data = JSON.parse(jsonStr)
+          switch (data.type) {
+            case 'connected':
+              console.log("[Artifact] Connected to job stream")
+              break
 
-                if (data.type === 'code' && data.content) {
-                  try {
-                    // Decode base64 content to handle special characters safely
-                    const decodedContent = Buffer.from(data.content, 'base64').toString('utf-8')
-                    accumulatedCodeRef.current += decodedContent
-                    updateUI() // Throttled UI update
-                  } catch (decodeError) {
-                    console.error("[Artifact] Base64 decode error:", decodeError)
-                    // Try using content as-is if base64 decode fails (fallback for old format)
-                    accumulatedCodeRef.current += data.content
-                    updateUI()
-                  }
-                } else if (data.type === 'done') {
-                  console.log("[Artifact] Streaming completed, total code length:", accumulatedCodeRef.current.length)
-                  setIsStreaming(false)
-
-                  // Final update with complete code
-                  setStreamingContent(accumulatedCodeRef.current)
-                  setArtifact({
-                    type: "code",
-                    language: "html",
-                    content: accumulatedCodeRef.current,
-                    title: artifact?.name || "Generated",
-                  })
-
-                  // Refetch artifact data to get the final version
-                  await refetch()
-
-                  toast.success("Artifact generated successfully!")
-                  break
-                } else if (data.type === 'error') {
-                  console.error("[Artifact] Streaming error:", data.error)
-                  setIsStreaming(false)
-                  toast.error(data.error || "Failed to generate artifact")
-                  break
-                } else if (data.type === 'connected') {
-                  console.log("[Artifact] Streaming connected successfully")
-                }
-              } catch (parseError) {
-                console.error("[Artifact] JSON parse error:", parseError, "Raw line:", line.slice(0, 200))
-                // Continue processing other lines even if one fails
+            case 'status':
+            case 'progress':
+              // Update progress
+              if (typeof data.progress === 'number') {
+                setGenerationProgress(data.progress)
+                console.log(`[Artifact] Progress: ${data.progress}%`)
               }
-            }
+
+              // Update streaming content if partial result is available
+              if (data.partialResult) {
+                setStreamingContent(data.partialResult)
+                console.log(`[Artifact] Streaming code: ${data.partialResult.length} characters`)
+              }
+              break
+
+            case 'completed':
+              console.log("[Artifact] Generation completed!")
+              setIsStreaming(false)
+              setGenerationProgress(100)
+
+              // Set the generated artifact content
+              if (data.result) {
+                setStreamingContent(data.result)
+                setArtifact({
+                  type: "code",
+                  language: "html",
+                  content: data.result,
+                  title: artifact?.name || "Generated",
+                })
+              }
+
+              // Refetch artifact data to get the final version from database
+              await refetch()
+
+              toast.success("Artifact generated successfully!")
+
+              // Close the EventSource
+              eventSource.close()
+              eventSourceRef.current = null
+              break
+
+            case 'error':
+              console.error("[Artifact] Job error:", data.error)
+              setIsStreaming(false)
+              toast.error(data.error || "Failed to generate artifact")
+
+              // Close the EventSource
+              eventSource.close()
+              eventSourceRef.current = null
+              break
           }
+        } catch (parseError) {
+          console.error("[Artifact] Error parsing event data:", parseError)
         }
       }
+
+      eventSource.onerror = (error) => {
+        console.error("[Artifact] EventSource error:", error)
+        setIsStreaming(false)
+        toast.error("Connection to generation service lost. Please refresh and try again.")
+
+        eventSource.close()
+        eventSourceRef.current = null
+      }
+
     } catch (error: any) {
       console.error("[Artifact] Streaming error:", error)
       setIsStreaming(false)
 
       // Handle different types of errors with specific messages
-      if (error.name === 'AbortError') {
-        toast.error("Request timed out. The generation is taking too long.")
-      } else if (error.message?.includes('HTTP error')) {
+      if (error.message?.includes('HTTP error')) {
         toast.error("Server error occurred. Please try again later.")
       } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
         toast.error("Network error. Please check your connection and try again.")
-      } else if (error.message?.includes('JSON')) {
-        toast.error("Data processing error. Please try again.")
+      } else if (error.message?.includes('Invalid job response')) {
+        toast.error("Invalid server response. Please try again.")
       } else {
         toast.error("Failed to generate artifact. Please try again.")
       }
     }
-  }, [artifactId, setArtifact, refetch, artifact?.name])
+  }, [artifactId, setArtifact, refetch, artifact?.name, isStreaming])
 
   // Set assistant mode in header (automatically handles fetching and cleanup)
   useSetAssistantMode(assistantId)
@@ -372,6 +381,7 @@ export default function ArtifactPage({ params }: PageProps) {
                   onClose={() => setIsPanelOpen(false)}
                   streamingContent={isStreaming ? streamingContent : undefined}
                   isStreaming={isStreaming}
+                  generationProgress={generationProgress}
                   artifactId={artifactId}
                   onVersionSelect={handleVersionSelect}
                 />
@@ -405,6 +415,7 @@ export default function ArtifactPage({ params }: PageProps) {
                 onClose={() => setIsPanelOpen(false)}
                 streamingContent={isStreaming ? streamingContent : undefined}
                 isStreaming={isStreaming}
+                generationProgress={generationProgress}
                 artifactId={artifactId}
                 onVersionSelect={handleVersionSelect}
               />

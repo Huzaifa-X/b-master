@@ -115,7 +115,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     setSelectedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
-  // Upload files to S3
+  // Upload files to S3 and store in artifact database
   const uploadFilesToS3 = async (files: File[]): Promise<UploadedFileData[]> => {
     try {
       const uploadedFiles: UploadedFileData[] = []
@@ -129,7 +129,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
           reader.readAsDataURL(file)
         })
 
-        // Upload to S3 (the API will handle document extraction automatically)
+        // Upload to S3 (the API will handle document extraction automatically using Upstage)
         const uploadResponse = await fetch("/api/artifact/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -159,8 +159,35 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
           type: uploadedFile.type,
           size: uploadedFile.size,
           preview: file.type.startsWith("image/") ? uploadedFile.url : undefined,
-          extractedContent: uploadedFile.extractedContent, // Already extracted by API
+          extractedContent: uploadedFile.extractedContent, // Content extracted by Upstage
         })
+      }
+
+      // Store uploaded files in artifact database for future use
+      if (uploadedFiles.length > 0) {
+        console.log("[Artifact Chatbot] Storing", uploadedFiles.length, "files in artifact database")
+
+        try {
+          const storeResponse = await fetch("/api/artifacts/store-files", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              artifactId,
+              files: uploadedFiles,
+            }),
+          })
+
+          if (!storeResponse.ok) {
+            console.error("[Artifact Chatbot] Failed to store files in database")
+            // Don't throw error - files are still uploaded to S3 and can be used
+          } else {
+            const storeResult = await storeResponse.json()
+            console.log("[Artifact Chatbot] Files stored successfully. Total files in artifact:", storeResult.totalFiles)
+          }
+        } catch (storeError) {
+          console.error("[Artifact Chatbot] Error storing files:", storeError)
+          // Don't throw error - files are still uploaded to S3 and can be used
+        }
       }
 
       return uploadedFiles

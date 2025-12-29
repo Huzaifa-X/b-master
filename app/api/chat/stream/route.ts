@@ -10,7 +10,7 @@ import { uploadToS3 } from "@/lib/aws-s3"
 import { OpenAPITool } from "@/lib/openapi-tool-converter"
 import { executeAPITool, loadAPITools, toOpenAIToolDefinitions } from "@/lib/api-tools-loader"
 import { decrypt } from "@/lib/encryption"
-import { generateInvoicePDF } from "@/lib/services/pdf-generator"
+import { generateInvoicePDFFromData } from "@/lib/services/invoice-pdf-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -133,6 +133,221 @@ export async function POST(req: NextRequest) {
       systemPrompt += `\n\nIMPORTANT: The user has enabled Dropbox integration. You can access their Dropbox files and perform file operations.`
     }
 
+    // ==========================================
+    // FINAL PRODUCTION-READY STRIPE INVOICE PROMPT
+    // Replace lines 132-195 in app/api/chat/stream/route.ts
+    // ==========================================
+
+    // Add Stripe invoice creation instructions
+    systemPrompt += `\n\n## Stripe Invoice Creation Workflow
+
+When the user requests invoice creation, execute the Stripe MCP workflow immediately.
+
+Follow these exact Stripe MCP calls in sequence:
+
+### 🎯 Complete Invoice Flow (6 Steps)
+
+**Step 1: Get or Create Customer**
+- Tool: \`create_customer\` or search with \`search_stripe_resources\`
+- Required: email, name
+- Returns: \`customer_id\` (e.g., "cus_...")
+
+**Step 2: Create Product**
+- Tool: \`create_product\`
+- Required: name (e.g., "SEO Career Support - Basic Package")
+- Optional: description
+- Returns: \`product_id\` (e.g., "prod_...")
+
+**Step 3: Create ONE-TIME Price**
+- Tool: \`create_price\`
+- Required parameters ONLY:
+  - \`product\`: "prod_..." (from Step 2)
+  - \`unit_amount\`: amount in cents (e.g., 2000 = 20.00 CHF)
+  - \`currency\`: lowercase code (e.g., "chf", "usd", "eur")
+- **CRITICAL:** Do NOT include \`recurring\` parameter - omitting it creates a one-time price
+- **WRONG:** \`{product, unit_amount, currency, recurring: {interval: "month"}}\` ❌
+- **CORRECT:** \`{product, unit_amount, currency}\` ✅ (no recurring field!)
+- Returns: \`price_id\` (e.g., "price_...")
+
+**Step 4: Create Draft Invoice**
+- Tool: \`create_invoice\`
+- Required: \`customer\` (customer_id from Step 1)
+- Optional: \`days_until_due\` (e.g., 7 for Net 7 terms), \`description\`
+- Returns: \`invoice_id\` (e.g., "in_...")
+
+**Step 5: Add Line Item to Invoice**
+- Tool: \`create_invoice_item\`
+- Required:
+  - \`invoice\`: invoice_id from Step 4
+  - \`price\`: price_id from Step 3
+- Optional: \`quantity\` (default: 1)
+- Returns: Line item added to draft invoice
+
+**Step 6: Finalize Invoice**
+- Tool: \`finalize_invoice\`
+- Required: \`invoice\` (invoice_id from Step 4)
+- Returns: Finalized invoice with status "open" and \`hosted_invoice_url\` for payment
+
+### ✅ Correct MCP Tool Call Example
+
+\`\`\`json
+// Step 3: Create ONE-TIME Price (CORRECT)
+{
+  "name": "create_price",
+  "arguments": {
+    "product": "prod_Th1bJ3LBv7PTiQ",
+    "unit_amount": 2000,
+    "currency": "chf"
+  }
+}
+// ✅ This creates a one-time price because "recurring" is omitted
+\`\`\`
+
+### ❌ Common Mistakes to AVOID
+
+\`\`\`json
+// ❌ WRONG - Don't add "type" parameter
+{
+  "name": "create_price",
+  "arguments": {
+    "product": "prod_...",
+    "unit_amount": 2000,
+    "currency": "chf",
+    "type": "one_time"  // ❌ This parameter doesn't exist in Stripe API!
+  }
+}
+
+// ❌ WRONG - Don't add "recurring" for invoices
+{
+  "name": "create_price",
+  "arguments": {
+    "product": "prod_...",
+    "unit_amount": 2000,
+    "currency": "chf",
+    "recurring": { "interval": "month" }  // ❌ This creates a subscription price!
+  }
+}
+\`\`\`
+
+### 📋 Complete Real-World Example
+
+**User Request:** "Create invoice for Hassan (hassanmuzaffar100@gmail.com) for 20 CHF for SEO career support"
+
+**Correct MCP Call Sequence:**
+
+\`\`\`json
+// 1. Create customer (or retrieve if exists)
+{
+  "name": "create_customer",
+  "arguments": {
+    "email": "hassanmuzaffar100@gmail.com",
+    "name": "M Hassan Muzaffar"
+  }
+}
+// → Returns: { "id": "cus_Tfi1ZIvpa60tGx", ... }
+
+// 2. Create product
+{
+  "name": "create_product",
+  "arguments": {
+    "name": "SEO Career Support - Basic Package"
+  }
+}
+// → Returns: { "id": "prod_Th1bJ3LBv7PTiQ", ... }
+
+// 3. Create one-time price (NO recurring field!)
+{
+  "name": "create_price",
+  "arguments": {
+    "product": "prod_Th1bJ3LBv7PTiQ",
+    "unit_amount": 2000,
+    "currency": "chf"
+  }
+}
+// → Returns: { "id": "price_...", "type": "one_time", ... }
+
+// 4. Create draft invoice
+{
+  "name": "create_invoice",
+  "arguments": {
+    "customer": "cus_Tfi1ZIvpa60tGx",
+    "days_until_due": 7,
+    "description": "Invoice for SEO Career Support - Basic Package"
+  }
+}
+// → Returns: { "id": "in_1SjdYqGwVMSCaO58lIzPCRA4", "status": "draft", ... }
+
+// 5. Add line item
+{
+  "name": "create_invoice_item",
+  "arguments": {
+    "invoice": "in_1SjdYqGwVMSCaO58lIzPCRA4",
+    "price": "price_...",
+    "quantity": 1
+  }
+}
+// → Returns: { "invoice": "in_...", "amount": 2000, ... }
+
+// 6. Finalize invoice
+{
+  "name": "finalize_invoice",
+  "arguments": {
+    "invoice": "in_1SjdYqGwVMSCaO58lIzPCRA4"
+  }
+}
+// → Returns: {
+//   "id": "in_1SjdYqGwVMSCaO58lIzPCRA4",
+//   "amount_due": 2000,
+//   "currency": "chf",
+//   "hosted_invoice_url": "https://invoice.stripe.com/i/...",
+//   "status": "open"
+// }
+\`\`\`
+
+### 💡 Important Notes
+
+**Amount Format:**
+- Always in cents (smallest currency unit)
+- 2000 = 20.00 CHF
+- 150000 = 1,500.00 USD
+- Formula: amount_in_dollars × 100
+
+**Currency Codes:**
+- Must be lowercase 3-letter ISO code
+- Examples: "chf", "usd", "eur", "gbp", "cad"
+
+**Invoice Status Flow:**
+- "draft" → Created but not finalized
+- "open" → Finalized and ready for payment
+- "paid" → Customer paid
+- "void" → Canceled
+
+**Why Finalization is Critical:**
+- Draft invoices have \`amount_due: null\`
+- Finalization calculates totals, taxes, discounts
+- Only finalized invoices get \`hosted_invoice_url\`
+- Only finalized invoices can be paid
+- Always finalize invoices before sharing with customers
+
+**Multi-Line Invoices:**
+For multiple line items, repeat Steps 2-3 for each item, then add all items in Step 5:
+\`\`\`json
+// Add first item
+{ "name": "create_invoice_item", "arguments": { "invoice": "in_...", "price": "price_1", "quantity": 1 }}
+
+// Add second item
+{ "name": "create_invoice_item", "arguments": { "invoice": "in_...", "price": "price_2", "quantity": 1 }}
+
+// Then finalize
+{ "name": "finalize_invoice", "arguments": { "invoice": "in_..." }}
+\`\`\`
+
+After finalizing, share the \`hosted_invoice_url\` with the customer for payment! 🎉`
+
+    // ==========================================
+    // END OF STRIPE INVOICE PROMPT
+    // ==========================================
+
     // Add artifact information if provided
     if (artifact) {
       systemPrompt += `\n\n## Artifact Information Shared by User\n`
@@ -195,29 +410,51 @@ export async function POST(req: NextRequest) {
     // Extract content from attachments
     const attachmentsToProcess = attachments || []
     let extractedContent = ""
+    let enhancedUserMessage = lastUserMessage
 
     if (attachmentsToProcess.length > 0) {
+      enhancedUserMessage += `## User Attachments Handling Rules 
+      
+      The user may attach one or more files (images, PDFs, documents, or other assets).
+
+      - **Images**:
+        - If the user explicitly asks to use the attached image, **use the provided image URL directly in the code** (do not recreate, summarize, or describe the image unless asked).
+        - If the user does not ask to use the image, ignore it.
+
+      - **PDFs, DOC/DOCX, TXT, or similar documents**:
+        - If the user asks to use the content, **extract and use the text content** from the attachment.
+        - If the user explicitly asks to reference the file itself, **use the attachment URL instead of extracted content**.
+        - If no instruction is given, prefer **extracted content** over the URL.
+
+      - **Other file types**:
+        - Follow the user’s explicit instruction.
+        - If unclear, use the attachment URL and do not assume content structure.
+
+      Only use attachments **when the user explicitly indicates they should be used**.  
+      Never hallucinate attachment contents.  
+      Never modify or invent URLs.
+      `
       const extractedTexts: string[] = []
       for (const attachment of attachmentsToProcess) {
         if (upstageService.isSupportedFileType(attachment.type) && attachment.url) {
           try {
             const extracted = await upstageService.extractFromUrl(attachment.url)
             if (extracted.text) {
-              extractedTexts.push(`\n\n--- Content from ${attachment.name} ---\n${extracted.text}\n--- End of ${attachment.name} ---\n`)
+              extractedTexts.push(`\n\n--- Content from ${attachment.name} \n url: ${attachment.url} \n type: ${attachment.type} ---\n${extracted.text}\n--- End of ${attachment.name} ---\n`)
             }
           } catch (error) {
             console.error(`[Stream] Failed to extract from ${attachment.name}:`, error)
           }
         }
       }
+      enhancedUserMessage += "\n\n## End of Attachments"
       if (extractedTexts.length > 0) {
         extractedContent = extractedTexts.join("\n\n")
       }
     }
 
-    let enhancedUserMessage = lastUserMessage
     if (extractedContent && extractedContent.trim()) {
-      enhancedUserMessage = `${lastUserMessage}\n\n${extractedContent}`
+      enhancedUserMessage += `\n\n${extractedContent}`
     }
 
     // Check for image edit intent and previous response
@@ -255,6 +492,98 @@ export async function POST(req: NextRequest) {
     const fullInput = conversationContext
       ? `${conversationContext}\n\nUser: ${enhancedUserMessage}`
       : `User: ${enhancedUserMessage}`
+
+    const invoicePdfResponse = await openai.responses.create({
+      model: "gpt-5.2",
+      tools: [
+        {
+          "type": "function",
+          "name": "analyze_invoice_request",
+          "description": "Analyze a user message and determine whether they are requesting an invoice to be generated. If yes, extract invoice details. If not, return is_invoice_request as false and all other fields as null.",
+          "strict": true,
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "is_invoice_request": {
+                "type": "boolean",
+                "description": "True if the user is asking to generate or create an invoice, otherwise false."
+              },
+              "name": {
+                "type": ["string", "null"],
+                "description": "Customer full name for the invoice."
+              },
+              "email": {
+                "type": ["string", "null"],
+                "description": "Customer email address for the invoice."
+              },
+              "price": {
+                "type": ["number", "null"],
+                "description": "Invoice total amount as a number."
+              },
+              "description": {
+                "type": ["string", "null"],
+                "description": "Description of what the invoice is for (services or products)."
+              }
+            },
+            "required": [
+              "is_invoice_request",
+              "name",
+              "email",
+              "price",
+              "description"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ],
+      input: [
+        {
+          role: "system",
+          content: `You are an assistant that analyzes user messages.
+
+          If the user is requesting an invoice to be generated, call the analyze_invoice_request tool.
+          If not, still call the tool and set is_invoice_request to false.
+
+          Do not generate explanations or text.
+          Only use the tool.
+          `
+        },
+        {
+          role: "user",
+          content: enhancedUserMessage
+        }
+      ],
+    })
+
+    const toolCall = invoicePdfResponse.output.find(
+      (item) =>
+        item.type === "function_call" &&
+        item.name === "analyze_invoice_request"
+    );
+
+    if (toolCall && toolCall.type === "function_call") {
+      const {
+        is_invoice_request,
+        name,
+        email,
+        price,
+        description,
+      } = JSON.parse(toolCall.arguments as string);
+
+      if (is_invoice_request) {
+        const pdfUrl = await generateInvoicePDFFromData({
+          customerName: name!,
+          customerEmail: email!,
+          amount: price!,
+          description: description!,
+        });
+
+        systemPrompt += `
+      ## Invoice PDF
+      - **URL**: ${pdfUrl}
+      `;
+      }
+    }
 
     // Load API tools if needed
     let apiTools: OpenAPITool[] = []
@@ -306,7 +635,7 @@ export async function POST(req: NextRequest) {
     } else {
       tools.push({ type: "web_search" })
       tools.push({ type: "image_generation" })
-      
+
       // Add Stripe MCP tool
       tools.push({
         type: "mcp",
@@ -473,16 +802,16 @@ export async function POST(req: NextRequest) {
                 break
 
               // ==================== IMAGE GENERATION EVENTS ====================
-              
+
               case "response.image_generation_call.generating":
                 // Image generation started
                 if (!usedTools.includes("image_generation")) {
                   usedTools.push("image_generation")
                 }
                 controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ 
+                  encoder.encode(`data: ${JSON.stringify({
                     type: "image_generating_start",
-                    itemId: event.item_id 
+                    itemId: event.item_id
                   })}\n\n`)
                 )
                 console.log("[Stream] 🎨 Image generation started")
@@ -491,9 +820,9 @@ export async function POST(req: NextRequest) {
               case "response.image_generation_call.in_progress":
                 // Image still generating
                 controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ 
+                  encoder.encode(`data: ${JSON.stringify({
                     type: "image_generating_progress",
-                    itemId: event.item_id 
+                    itemId: event.item_id
                   })}\n\n`)
                 )
                 break
@@ -502,20 +831,20 @@ export async function POST(req: NextRequest) {
                 // Partial preview AND final image (last partial is the final image!)
                 if (event.partial_image_b64) {
                   console.log(`[Stream] 🖼️ Partial/Final image received (index: ${event.partial_image_index})`)
-                  
+
                   // Upload to S3 immediately
                   const imageUrl = await saveImageToS3(
                     event.partial_image_b64,
                     chatIdInt,
                     generatedImageUrls.length
                   )
-                  
+
                   generatedImageUrls.push(imageUrl)
                   console.log(`[Stream] ✅ Image ${event.partial_image_index} uploaded: ${imageUrl}`)
 
                   // Send to frontend with partial flag
                   controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({ 
+                    encoder.encode(`data: ${JSON.stringify({
                       type: event.partial_image_index === 0 ? "image_partial" : "image_complete",
                       url: imageUrl,
                       itemId: event.item_id,
@@ -537,7 +866,7 @@ export async function POST(req: NextRequest) {
                   )
                   generatedImageUrls.push(imageUrl)
                   controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({ 
+                    encoder.encode(`data: ${JSON.stringify({
                       type: "image_complete",
                       url: imageUrl,
                       itemId: event.item_id
@@ -554,34 +883,34 @@ export async function POST(req: NextRequest) {
                 console.log("[Stream] Has result?:", !!event.item?.result)
                 console.log("[Stream] Has b64_json?:", !!(event.item as any)?.b64_json)
                 console.log("[Stream] All item keys:", event.item ? Object.keys(event.item) : 'no item')
-                
+
                 // 1. IMAGE GENERATION COMPLETED (fallback if not caught by completed event)
                 if (event.item?.type === "image_generation_call") {
                   console.log("[Stream] 🎨 Processing image_generation_call in output_item.done")
-                  
+
                   // Try multiple possible fields where the image might be
-                  const imageData = event.item.result || 
-                                   (event.item as any).b64_json ||
-                                   (event.item as any).image ||
-                                   (event.item as any).output
-                  
+                  const imageData = event.item.result ||
+                    (event.item as any).b64_json ||
+                    (event.item as any).image ||
+                    (event.item as any).output
+
                   if (event.item.status === "completed" && imageData) {
                     console.log("[Stream] 🎨 Found image data, uploading to S3...")
                     console.log("[Stream] Image data length:", imageData?.length || 0)
-                    
+
                     // Upload to S3 - no try-catch, let errors bubble up
                     const imageUrl = await saveImageToS3(
                       imageData as string,
                       chatIdInt,
                       generatedImageUrls.length
                     )
-                    
+
                     generatedImageUrls.push(imageUrl)
                     console.log(`[Stream] ✅ Image uploaded: ${imageUrl}`)
 
                     // Send final image to frontend
                     controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({ 
+                      encoder.encode(`data: ${JSON.stringify({
                         type: "image_complete",
                         url: imageUrl,
                         itemId: event.item.id
@@ -590,7 +919,7 @@ export async function POST(req: NextRequest) {
                   } else if (event.item.status === "failed") {
                     console.error("[Stream] ❌ Image generation failed:", event.item.error)
                     controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({ 
+                      encoder.encode(`data: ${JSON.stringify({
                         type: "image_failed",
                         error: event.item.error?.message || "Image generation failed"
                       })}\n\n`)
@@ -609,83 +938,32 @@ export async function POST(req: NextRequest) {
                 if (event.item?.type === "web_search_call" && !usedTools.includes("web_search")) {
                   usedTools.push("web_search")
                 }
-                
+
                 // 3. HANDLE MCP CALLS
                 if (event.item?.type === "mcp_call") {
+                  console.log("===============================================")
                   const mcpCallName = event.item.name || '';
                   const mcpCallArgs = event.item.arguments ? JSON.parse(event.item.arguments) : {};
+                  const mcpServerLabel = event.item.server_label || '';
+                  const mcpOutput = event.item.output;
+
+                  console.log("[Stream] 🔌 MCP call completed via output_item.done")
+                  console.log("[Stream] MCP name:", mcpCallName)
+                  console.log("[Stream] MCP server:", mcpServerLabel)
+                  console.log("[Stream] MCP status:", event.item.status)
+                  console.log("[Stream] MCP output:", mcpOutput)
+                  console.log("===============================================")
 
                   // Dropbox MCP
-                  if (mcpCallName.includes("dropbox") && !usedTools.includes("dropbox")) {
+                  if (mcpServerLabel.toLowerCase().includes("dropbox") && !usedTools.includes("dropbox")) {
                     usedTools.push("dropbox")
                     console.log("[Stream] Dropbox MCP tool used:", mcpCallName)
                   }
 
-                  // Stripe MCP - Generate Invoice PDF
-                  if (mcpCallName.includes("stripe") || mcpCallName.includes("invoice")) {
-                    if (!usedTools.includes("stripe")) {
-                      usedTools.push("stripe")
-                    }
+                  // Stripe MCP - Track tool usage
+                  if (mcpServerLabel.toLowerCase().includes("stripe") && !usedTools.includes("stripe")) {
+                    usedTools.push("stripe")
                     console.log("[Stream] Stripe MCP tool used:", mcpCallName)
-
-                    if (
-                      event.item.status === "completed" &&
-                      event.item.result &&
-                      (mcpCallName.toLowerCase().includes('invoice') ||
-                        mcpCallName.toLowerCase().includes('create'))
-                    ) {
-                      try {
-                        console.log("[Stream] 📄 Generating invoice PDF...")
-
-                        const stripeResult = typeof event.item.result === 'string'
-                          ? JSON.parse(event.item.result)
-                          : event.item.result
-
-                        const invoiceData = {
-                          invoiceNumber: stripeResult.number || stripeResult.id || `INV-${Date.now()}`,
-                          date: new Date(stripeResult.created * 1000 || Date.now()).toLocaleDateString(),
-                          dueDate: stripeResult.due_date
-                            ? new Date(stripeResult.due_date * 1000).toLocaleDateString()
-                            : undefined,
-                          from: {
-                            name: stripeResult.account_name || 'Your Company Name',
-                            email: stripeResult.account_email || process.env.BUSINESS_EMAIL,
-                            address: stripeResult.account_address
-                          },
-                          to: {
-                            name: stripeResult.customer_name || mcpCallArgs.customer_name || 'Customer',
-                            email: stripeResult.customer_email || mcpCallArgs.customer_email,
-                            address: stripeResult.customer_address
-                          },
-                          items: stripeResult.lines?.data?.map((line: any) => ({
-                            description: line.description || 'Service',
-                            quantity: line.quantity || 1,
-                            unitPrice: line.amount / 100,
-                            amount: line.amount / 100
-                          })) || [{
-                            description: mcpCallArgs.description || 'Service',
-                            quantity: 1,
-                            unitPrice: (stripeResult.amount_due || stripeResult.total || 0) / 100,
-                            amount: (stripeResult.amount_due || stripeResult.total || 0) / 100
-                          }],
-                          subtotal: (stripeResult.subtotal || stripeResult.amount_due || 0) / 100,
-                          tax: stripeResult.tax ? stripeResult.tax / 100 : undefined,
-                          taxRate: stripeResult.tax_percent,
-                          total: (stripeResult.total || stripeResult.amount_due || 0) / 100,
-                          currency: stripeResult.currency?.toUpperCase() || 'USD',
-                          notes: stripeResult.footer || mcpCallArgs.notes
-                        }
-
-                        const pdfUrl = await generateInvoicePDF(invoiceData)
-                        console.log("[Stream] ✅ Invoice PDF generated:", pdfUrl)
-
-                        assistantResponse += `\n\n📄 **Invoice PDF Generated**\n[Download Invoice](${pdfUrl})\n\n`
-
-                      } catch (pdfError) {
-                        console.error("[Stream] ❌ PDF generation error:", pdfError)
-                        assistantResponse += `\n\n⚠️ Note: Invoice was created but PDF generation failed.\n\n`
-                      }
-                    }
                   }
                 }
 
@@ -821,6 +1099,16 @@ export async function POST(req: NextRequest) {
                 }
                 break
 
+              case "response.mcp_call.in_progress":
+                // MCP call started (no data here, just notification)
+                console.log("[Stream] 🔌 MCP call in progress")
+                break
+
+              case "response.mcp_call.completed":
+                // MCP call completed (no data here either, actual data is in output_item.done)
+                console.log("[Stream] 🔌 MCP call completed event (data will be in output_item.done)")
+                break
+
               case "response.completed":
                 console.log("[Stream] ✅ Response completed")
                 break
@@ -943,9 +1231,9 @@ export async function POST(req: NextRequest) {
           }
 
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ 
-              type: "error", 
-              error: error instanceof Error ? error.message : "Unknown error" 
+            encoder.encode(`data: ${JSON.stringify({
+              type: "error",
+              error: error instanceof Error ? error.message : "Unknown error"
             })}\n\n`)
           )
           controller.close()

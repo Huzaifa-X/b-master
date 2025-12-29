@@ -1,5 +1,4 @@
 interface InvoiceData {
-  invoiceNumber: string;
   date: string;
   dueDate?: string;
   from: {
@@ -197,7 +196,6 @@ export function generateInvoiceHTML(data: InvoiceData): string {
     <div class="invoice-header">
       <div>
         <div class="invoice-title">INVOICE</div>
-        <div class="invoice-number">#${data.invoiceNumber}</div>
       </div>
       <div class="invoice-date">
         <div><strong>Date:</strong> ${data.date}</div>

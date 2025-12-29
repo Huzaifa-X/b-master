@@ -661,11 +661,12 @@ model AssistantArtifact {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // Soft delete
 
-  assistant     Assistant            @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  permissions   ArtifactPermission[]
-  versions      ArtifactVersion[]
-  activeVersion ArtifactVersion?     @relation("ActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+  assistant        Assistant                 @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user             User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissions      ArtifactPermission[]
+  versions         ArtifactVersion[]
+  activeVersion    ArtifactVersion?          @relation("ActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+  generationJobs   ArtifactGenerationJob[]
 
   @@index([assistantId])
   @@index([userId])
@@ -723,6 +724,39 @@ model ArtifactPermission {
   @@index([userId])
   @@index([artifactId])
   @@map("artifact_permissions")
+}
+
+// ================================================================
+// ARTIFACT GENERATION JOBS - QUEUE SYSTEM
+// ================================================================
+
+model ArtifactGenerationJob {
+  id          String   @id @default(cuid())
+  artifactId  Int
+
+  // Job status tracking
+  status      String   @default("pending") @db.VarChar(50) // pending, processing, completed, failed
+  progress    Int      @default(0) // 0-100
+
+  // Generation result
+  result      String?  @db.Text // Generated code/content
+  error       String?  @db.Text // Error message if failed
+
+  // Metadata
+  metadata    Json?    @db.Json // Store request params, user context, etc.
+
+  // Timestamps
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  artifact AssistantArtifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+
+  @@index([artifactId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("artifact_generation_jobs")
 }
 
 // ================================================================

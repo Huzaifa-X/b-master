@@ -8,7 +8,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Download, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 import type { Artifact } from "./artifact-card"
 
 interface ViewArtifactDialogProps {
@@ -54,14 +57,38 @@ export function ViewArtifactDialog({
     }
   }, [artifact?.htmlContent, open])
 
+  // Handle download artifact as HTML file
+  const handleDownload = () => {
+    if (!artifact?.htmlContent) {
+      toast.error("No content to download")
+      return
+    }
+
+    try {
+      const blob = new Blob([artifact.htmlContent], { type: "text/html" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `${artifact.name.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.html`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      toast.success("Artifact downloaded successfully")
+    } catch (error) {
+      console.error("Download error:", error)
+      toast.error("Failed to download artifact")
+    }
+  }
+
   if (!artifact) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[98vw] sm:!max-w-[98vw] w-full h-[98vh] p-0 flex flex-col overflow-hidden">
+      <DialogContent className="!max-w-[98vw] sm:!max-w-[98vw] w-full h-[98vh] p-0 flex flex-col overflow-hidden [&>button]:hidden">
         <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
               <DialogTitle className="text-2xl">{artifact.name}</DialogTitle>
               <div className="flex items-center gap-2 mt-2">
                 <Badge className={cn("text-xs", getCategoryColor(artifact.category))}>
@@ -75,6 +102,28 @@ export function ViewArtifactDialog({
                   })}
                 </span>
               </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Download Button */}
+              <Button
+                onClick={handleDownload}
+                variant="outline"
+                size="icon"
+                className="flex-shrink-0"
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+
+              {/* Close Button */}
+              <Button
+                onClick={() => onOpenChange(false)}
+                variant="outline"
+                size="icon"
+                className="flex-shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </DialogHeader>
