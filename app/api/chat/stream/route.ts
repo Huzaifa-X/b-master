@@ -10,7 +10,7 @@ import { uploadToS3 } from "@/lib/aws-s3"
 import { OpenAPITool } from "@/lib/openapi-tool-converter"
 import { executeAPITool, loadAPITools, toOpenAIToolDefinitions } from "@/lib/api-tools-loader"
 import { decrypt } from "@/lib/encryption"
-import { generateInvoicePDF } from "@/lib/services/pdf-generator"
+import { generateInvoicePDFFromData } from "@/lib/services/invoice-pdf-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -132,6 +132,221 @@ export async function POST(req: NextRequest) {
     if (dropbox) {
       systemPrompt += `\n\nIMPORTANT: The user has enabled Dropbox integration. You can access their Dropbox files and perform file operations.`
     }
+
+    // ==========================================
+    // FINAL PRODUCTION-READY STRIPE INVOICE PROMPT
+    // Replace lines 132-195 in app/api/chat/stream/route.ts
+    // ==========================================
+
+    // Add Stripe invoice creation instructions
+    systemPrompt += `\n\n## Stripe Invoice Creation Workflow
+
+When the user requests invoice creation, execute the Stripe MCP workflow immediately.
+
+Follow these exact Stripe MCP calls in sequence:
+
+### 🎯 Complete Invoice Flow (6 Steps)
+
+**Step 1: Get or Create Customer**
+- Tool: \`create_customer\` or search with \`search_stripe_resources\`
+- Required: email, name
+- Returns: \`customer_id\` (e.g., "cus_...")
+
+**Step 2: Create Product**
+- Tool: \`create_product\`
+- Required: name (e.g., "SEO Career Support - Basic Package")
+- Optional: description
+- Returns: \`product_id\` (e.g., "prod_...")
+
+**Step 3: Create ONE-TIME Price**
+- Tool: \`create_price\`
+- Required parameters ONLY:
+  - \`product\`: "prod_..." (from Step 2)
+  - \`unit_amount\`: amount in cents (e.g., 2000 = 20.00 CHF)
+  - \`currency\`: lowercase code (e.g., "chf", "usd", "eur")
+- **CRITICAL:** Do NOT include \`recurring\` parameter - omitting it creates a one-time price
+- **WRONG:** \`{product, unit_amount, currency, recurring: {interval: "month"}}\` ❌
+- **CORRECT:** \`{product, unit_amount, currency}\` ✅ (no recurring field!)
+- Returns: \`price_id\` (e.g., "price_...")
+
+**Step 4: Create Draft Invoice**
+- Tool: \`create_invoice\`
+- Required: \`customer\` (customer_id from Step 1)
+- Optional: \`days_until_due\` (e.g., 7 for Net 7 terms), \`description\`
+- Returns: \`invoice_id\` (e.g., "in_...")
+
+**Step 5: Add Line Item to Invoice**
+- Tool: \`create_invoice_item\`
+- Required:
+  - \`invoice\`: invoice_id from Step 4
+  - \`price\`: price_id from Step 3
+- Optional: \`quantity\` (default: 1)
+- Returns: Line item added to draft invoice
+
+**Step 6: Finalize Invoice**
+- Tool: \`finalize_invoice\`
+- Required: \`invoice\` (invoice_id from Step 4)
+- Returns: Finalized invoice with status "open" and \`hosted_invoice_url\` for payment
+
+### ✅ Correct MCP Tool Call Example
+
+\`\`\`json
+// Step 3: Create ONE-TIME Price (CORRECT)
+{
+  "name": "create_price",
+  "arguments": {
+    "product": "prod_Th1bJ3LBv7PTiQ",
+    "unit_amount": 2000,
+    "currency": "chf"
+  }
+}
+// ✅ This creates a one-time price because "recurring" is omitted
+\`\`\`
+
+### ❌ Common Mistakes to AVOID
+
+\`\`\`json
+// ❌ WRONG - Don't add "type" parameter
+{
+  "name": "create_price",
+  "arguments": {
+    "product": "prod_...",
+    "unit_amount": 2000,
+    "currency": "chf",
+    "type": "one_time"  // ❌ This parameter doesn't exist in Stripe API!
+  }
+}
+
+// ❌ WRONG - Don't add "recurring" for invoices
+{
+  "name": "create_price",
+  "arguments": {
+    "product": "prod_...",
+    "unit_amount": 2000,
+    "currency": "chf",
+    "recurring": { "interval": "month" }  // ❌ This creates a subscription price!
+  }
+}
+\`\`\`
+
+### 📋 Complete Real-World Example
+
+**User Request:** "Create invoice for Hassan (hassanmuzaffar100@gmail.com) for 20 CHF for SEO career support"
+
+**Correct MCP Call Sequence:**
+
+\`\`\`json
+// 1. Create customer (or retrieve if exists)
+{
+  "name": "create_customer",
+  "arguments": {
+    "email": "hassanmuzaffar100@gmail.com",
+    "name": "M Hassan Muzaffar"
+  }
+}
+// → Returns: { "id": "cus_Tfi1ZIvpa60tGx", ... }
+
+// 2. Create product
+{
+  "name": "create_product",
+  "arguments": {
+    "name": "SEO Career Support - Basic Package"
+  }
+}
+// → Returns: { "id": "prod_Th1bJ3LBv7PTiQ", ... }
+
+// 3. Create one-time price (NO recurring field!)
+{
+  "name": "create_price",
+  "arguments": {
+    "product": "prod_Th1bJ3LBv7PTiQ",
+    "unit_amount": 2000,
+    "currency": "chf"
+  }
+}
+// → Returns: { "id": "price_...", "type": "one_time", ... }
+
+// 4. Create draft invoice
+{
+  "name": "create_invoice",
+  "arguments": {
+    "customer": "cus_Tfi1ZIvpa60tGx",
+    "days_until_due": 7,
+    "description": "Invoice for SEO Career Support - Basic Package"
+  }
+}
+// → Returns: { "id": "in_1SjdYqGwVMSCaO58lIzPCRA4", "status": "draft", ... }
+
+// 5. Add line item
+{
+  "name": "create_invoice_item",
+  "arguments": {
+    "invoice": "in_1SjdYqGwVMSCaO58lIzPCRA4",
+    "price": "price_...",
+    "quantity": 1
+  }
+}
+// → Returns: { "invoice": "in_...", "amount": 2000, ... }
+
+// 6. Finalize invoice
+{
+  "name": "finalize_invoice",
+  "arguments": {
+    "invoice": "in_1SjdYqGwVMSCaO58lIzPCRA4"
+  }
+}
+// → Returns: {
+//   "id": "in_1SjdYqGwVMSCaO58lIzPCRA4",
+//   "amount_due": 2000,
+//   "currency": "chf",
+//   "hosted_invoice_url": "https://invoice.stripe.com/i/...",
+//   "status": "open"
+// }
+\`\`\`
+
+### 💡 Important Notes
+
+**Amount Format:**
+- Always in cents (smallest currency unit)
+- 2000 = 20.00 CHF
+- 150000 = 1,500.00 USD
+- Formula: amount_in_dollars × 100
+
+**Currency Codes:**
+- Must be lowercase 3-letter ISO code
+- Examples: "chf", "usd", "eur", "gbp", "cad"
+
+**Invoice Status Flow:**
+- "draft" → Created but not finalized
+- "open" → Finalized and ready for payment
+- "paid" → Customer paid
+- "void" → Canceled
+
+**Why Finalization is Critical:**
+- Draft invoices have \`amount_due: null\`
+- Finalization calculates totals, taxes, discounts
+- Only finalized invoices get \`hosted_invoice_url\`
+- Only finalized invoices can be paid
+- Always finalize invoices before sharing with customers
+
+**Multi-Line Invoices:**
+For multiple line items, repeat Steps 2-3 for each item, then add all items in Step 5:
+\`\`\`json
+// Add first item
+{ "name": "create_invoice_item", "arguments": { "invoice": "in_...", "price": "price_1", "quantity": 1 }}
+
+// Add second item
+{ "name": "create_invoice_item", "arguments": { "invoice": "in_...", "price": "price_2", "quantity": 1 }}
+
+// Then finalize
+{ "name": "finalize_invoice", "arguments": { "invoice": "in_..." }}
+\`\`\`
+
+After finalizing, share the \`hosted_invoice_url\` with the customer for payment! 🎉`
+
+    // ==========================================
+    // END OF STRIPE INVOICE PROMPT
+    // ==========================================
 
     // Add artifact information if provided
     if (artifact) {
@@ -277,6 +492,98 @@ export async function POST(req: NextRequest) {
     const fullInput = conversationContext
       ? `${conversationContext}\n\nUser: ${enhancedUserMessage}`
       : `User: ${enhancedUserMessage}`
+
+    const invoicePdfResponse = await openai.responses.create({
+      model: "gpt-5.2",
+      tools: [
+        {
+          "type": "function",
+          "name": "analyze_invoice_request",
+          "description": "Analyze a user message and determine whether they are requesting an invoice to be generated. If yes, extract invoice details. If not, return is_invoice_request as false and all other fields as null.",
+          "strict": true,
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "is_invoice_request": {
+                "type": "boolean",
+                "description": "True if the user is asking to generate or create an invoice, otherwise false."
+              },
+              "name": {
+                "type": ["string", "null"],
+                "description": "Customer full name for the invoice."
+              },
+              "email": {
+                "type": ["string", "null"],
+                "description": "Customer email address for the invoice."
+              },
+              "price": {
+                "type": ["number", "null"],
+                "description": "Invoice total amount as a number."
+              },
+              "description": {
+                "type": ["string", "null"],
+                "description": "Description of what the invoice is for (services or products)."
+              }
+            },
+            "required": [
+              "is_invoice_request",
+              "name",
+              "email",
+              "price",
+              "description"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ],
+      input: [
+        {
+          role: "system",
+          content: `You are an assistant that analyzes user messages.
+
+          If the user is requesting an invoice to be generated, call the analyze_invoice_request tool.
+          If not, still call the tool and set is_invoice_request to false.
+
+          Do not generate explanations or text.
+          Only use the tool.
+          `
+        },
+        {
+          role: "user",
+          content: enhancedUserMessage
+        }
+      ],
+    })
+
+    const toolCall = invoicePdfResponse.output.find(
+      (item) =>
+        item.type === "function_call" &&
+        item.name === "analyze_invoice_request"
+    );
+
+    if (toolCall && toolCall.type === "function_call") {
+      const {
+        is_invoice_request,
+        name,
+        email,
+        price,
+        description,
+      } = JSON.parse(toolCall.arguments as string);
+
+      if (is_invoice_request) {
+        const pdfUrl = await generateInvoicePDFFromData({
+          customerName: name!,
+          customerEmail: email!,
+          amount: price!,
+          description: description!,
+        });
+
+        systemPrompt += `
+      ## Invoice PDF
+      - **URL**: ${pdfUrl}
+      `;
+      }
+    }
 
     // Load API tools if needed
     let apiTools: OpenAPITool[] = []
@@ -634,6 +941,7 @@ export async function POST(req: NextRequest) {
 
                 // 3. HANDLE MCP CALLS
                 if (event.item?.type === "mcp_call") {
+                  console.log("===============================================")
                   const mcpCallName = event.item.name || '';
                   const mcpCallArgs = event.item.arguments ? JSON.parse(event.item.arguments) : {};
                   const mcpServerLabel = event.item.server_label || '';
@@ -643,6 +951,8 @@ export async function POST(req: NextRequest) {
                   console.log("[Stream] MCP name:", mcpCallName)
                   console.log("[Stream] MCP server:", mcpServerLabel)
                   console.log("[Stream] MCP status:", event.item.status)
+                  console.log("[Stream] MCP output:", mcpOutput)
+                  console.log("===============================================")
 
                   // Dropbox MCP
                   if (mcpServerLabel.toLowerCase().includes("dropbox") && !usedTools.includes("dropbox")) {
@@ -650,137 +960,10 @@ export async function POST(req: NextRequest) {
                     console.log("[Stream] Dropbox MCP tool used:", mcpCallName)
                   }
 
-                  // Stripe MCP - Generate Invoice PDF
-                  if ((mcpServerLabel.toLowerCase().includes("stripe") || mcpCallName.toLowerCase().includes("invoice")) &&
-                    event.item.status === "completed" && mcpOutput) {
-                    if (!usedTools.includes("stripe")) {
-                      usedTools.push("stripe")
-                    }
-
+                  // Stripe MCP - Track tool usage
+                  if (mcpServerLabel.toLowerCase().includes("stripe") && !usedTools.includes("stripe")) {
+                    usedTools.push("stripe")
                     console.log("[Stream] Stripe MCP tool used:", mcpCallName)
-
-                    // Check if this is an invoice creation
-                    if (mcpCallName.toLowerCase().includes('invoice') ||
-                      mcpCallName.toLowerCase().includes('create')) {
-                      try {
-                        console.log("[Stream] 📄 Generating invoice PDF with Puppeteer...")
-
-                        const stripeResult = typeof mcpOutput === 'string'
-                          ? JSON.parse(mcpOutput)
-                          : mcpOutput
-
-                        // Use mentioned user info if available
-                        let customerName = stripeResult.customer_name || mcpCallArgs.customer_name || 'Customer'
-                        let customerEmail = stripeResult.customer_email || mcpCallArgs.customer_email
-
-                        // Check if we have mentioned users and use their info
-                        if (mentionedUsers && mentionedUsers.length > 0) {
-                          const mentionedUser = mentionedUsers[0]
-                          customerName = mentionedUser.name
-                          customerEmail = mentionedUser.email
-                          console.log(`[Stream] Using mentioned user for invoice: ${customerName} <${customerEmail}>`)
-                        }
-
-                        const invoiceData = {
-                          invoiceNumber: stripeResult.number || stripeResult.id || `INV-${Date.now()}`,
-                          date: new Date(stripeResult.created * 1000 || Date.now()).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          }),
-                          dueDate: stripeResult.due_date
-                            ? new Date(stripeResult.due_date * 1000).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric'
-                            })
-                            : undefined,
-                          from: {
-                            name: stripeResult.account_name || process.env.BUSINESS_NAME || 'Your Company',
-                            email: stripeResult.account_email || process.env.BUSINESS_EMAIL || 'billing@company.com',
-                            address: stripeResult.account_address || process.env.BUSINESS_ADDRESS
-                          },
-                          to: {
-                            name: customerName,
-                            email: customerEmail,
-                            address: stripeResult.customer_address || mcpCallArgs.customer_address
-                          },
-                          items: stripeResult.lines?.data?.map((line: any) => ({
-                            description: line.description || 'Service',
-                            quantity: line.quantity || 1,
-                            unitPrice: line.amount / 100,
-                            amount: line.amount / 100
-                          })) || [{
-                            description: mcpCallArgs.description || stripeResult.description || 'Professional Services',
-                            quantity: mcpCallArgs.quantity || 1,
-                            unitPrice: (stripeResult.amount_due || stripeResult.total || 0) / 100,
-                            amount: (stripeResult.amount_due || stripeResult.total || 0) / 100
-                          }],
-                          subtotal: (stripeResult.subtotal || stripeResult.amount_due || 0) / 100,
-                          tax: stripeResult.tax ? stripeResult.tax / 100 : undefined,
-                          taxRate: stripeResult.tax_percent,
-                          total: (stripeResult.total || stripeResult.amount_due || 0) / 100,
-                          currency: stripeResult.currency?.toUpperCase() || 'USD',
-                          notes: stripeResult.footer || mcpCallArgs.notes
-                        }
-
-                        console.log("[Stream] Invoice data prepared:", {
-                          number: invoiceData.invoiceNumber,
-                          customer: invoiceData.to.name,
-                          total: invoiceData.total,
-                          currency: invoiceData.currency
-                        })
-
-                        // Generate PDF using Puppeteer
-                        const pdfUrl = await generateInvoicePDF(invoiceData)
-                        console.log("[Stream] ✅ Invoice PDF generated successfully:", pdfUrl)
-
-                        // Add PDF link to assistant response
-                        const pdfMessage = `\n\n📄 **Invoice PDF Generated**\n\n` +
-                          `I've created a professional invoice PDF for you:\n\n` +
-                          `**Invoice Number:** ${invoiceData.invoiceNumber}\n` +
-                          `**Customer:** ${invoiceData.to.name}${invoiceData.to.email ? ` (${invoiceData.to.email})` : ''}\n` +
-                          `**Total Amount:** ${invoiceData.currency} ${invoiceData.total.toFixed(2)}\n\n` +
-                          `[📥 Download Invoice PDF](${pdfUrl})\n\n`
-
-                        assistantResponse += pdfMessage
-
-                        // Stream the PDF link to frontend immediately
-                        controller.enqueue(
-                          encoder.encode(`data: ${JSON.stringify({
-                            type: "text",
-                            content: pdfMessage
-                          })}\n\n`)
-                        )
-
-                        controller.enqueue(
-                          encoder.encode(`data: ${JSON.stringify({
-                            type: "invoice_pdf_generated",
-                            pdfUrl: pdfUrl,
-                            invoiceNumber: invoiceData.invoiceNumber,
-                            total: invoiceData.total,
-                            currency: invoiceData.currency,
-                            customerName: invoiceData.to.name
-                          })}\n\n`)
-                        )
-
-                      } catch (pdfError: any) {
-                        console.error("[Stream] ❌ PDF generation error:", pdfError)
-                        const errorMessage = `\n\n⚠️ **PDF Generation Failed**\n\n` +
-                          `The invoice was created in Stripe, but I encountered an error generating the PDF:\n` +
-                          `${pdfError.message}\n\n` +
-                          `Please check the Stripe dashboard for invoice details.\n\n`
-
-                        assistantResponse += errorMessage
-
-                        controller.enqueue(
-                          encoder.encode(`data: ${JSON.stringify({
-                            type: "text",
-                            content: errorMessage
-                          })}\n\n`)
-                        )
-                      }
-                    }
                   }
                 }
 
