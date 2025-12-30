@@ -12,10 +12,11 @@ export async function POST(req: NextRequest) {
 
     const userId = BigInt(session.user.id);
 
-    // Soft delete the connector
-    await prisma.dropboxConnector.updateMany({
+    // Soft delete the Dropbox connector
+    await prisma.connector.updateMany({
       where: {
         userId,
+        provider: 'DROPBOX',
         deletedAt: null
       },
       data: {

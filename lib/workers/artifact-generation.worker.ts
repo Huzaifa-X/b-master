@@ -167,13 +167,69 @@ async function processArtifactGeneration(jobId: string, artifactId: number) {
     // Get artifact generation prompt
     const ARTIFACT_GENERATION_PROMPT = await getArtifactCodingPrompt();
 
+    // Add booking-specific instructions if this is a booking artifact
+    let bookingInstructions = '';
+    if (artifact.category === 'booking') {
+      bookingInstructions = `
+
+=== BOOKING INTEGRATION INSTRUCTIONS ===
+
+This is a booking artifact with Google Calendar and Gmail integration. You MUST implement the following:
+
+1. **Artifact ID**: Use the placeholder {{ARTIFACT_ID}} which will be replaced with the actual artifact ID when rendered.
+
+2. **Backend API Endpoints**: The artifact MUST call these endpoints:
+   - GET /api/artifacts/{{ARTIFACT_ID}}/availability?date=YYYY-MM-DD - Fetch available time slots for a date
+   - POST /api/artifacts/{{ARTIFACT_ID}}/book - Create a booking with Google Calendar event and Gmail confirmation
+
+3. **Required Implementation**:
+   \`\`\`javascript
+   const ARTIFACT_ID = '{{ARTIFACT_ID}}'; // This placeholder will be replaced
+   const API_BASE_URL = window.location.origin;
+
+   // Fetch available time slots
+   async function fetchAvailableTimes(date) {
+     const dateStr = date.toISOString().split('T')[0];
+     const response = await fetch(\`\${API_BASE_URL}/api/artifacts/\${ARTIFACT_ID}/availability?date=\${dateStr}\`);
+     if (!response.ok) throw new Error('Failed to fetch availability');
+     return await response.json();
+   }
+
+   // Create booking
+   async function createBooking(bookingData) {
+     const response = await fetch(\`\${API_BASE_URL}/api/artifacts/\${ARTIFACT_ID}/book\`, {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({
+         startTime: bookingData.startTime, // ISO string
+         attendeeName: bookingData.name,
+         attendeeEmail: bookingData.email
+       })
+     });
+     if (!response.ok) throw new Error('Failed to create booking');
+     return await response.json();
+   }
+   \`\`\`
+
+4. **DO NOT use localStorage** for storing bookings. All booking data MUST go through the backend API.
+
+5. **Include proper error handling** for API calls and display user-friendly error messages.
+
+6. **Display availability from API**: When a user selects a date, fetch available slots from the availability endpoint and display them. Show loading states while fetching.
+
+7. **Booking flow**: When user selects a time slot and submits the booking form, call the book endpoint with their name, email, and selected time. Show success/error messages.
+
+=== END BOOKING INTEGRATION INSTRUCTIONS ===
+`;
+    }
+
     // Prepare input for AI generation
     const input = `Create a complete HTML artifact.
 
 Name: ${artifact.name}
 Category: ${artifact.category}
 
-${enhancedInstructions}${chatContext}
+${enhancedInstructions}${chatContext}${bookingInstructions}
 
 CRITICAL: Output ONLY the complete HTML code starting with <!DOCTYPE html> and ending with </html>. Do not include any explanations, descriptions, or additional text. Do not use markdown formatting.`;
 
@@ -187,12 +243,27 @@ CRITICAL: Output ONLY the complete HTML code starting with <!DOCTYPE html> and e
     let generatedCode = '';
 
     try {
+      // Build system instructions with booking-specific emphasis if needed
+      let systemInstructions = ARTIFACT_GENERATION_PROMPT;
+
+      if (artifact.category === 'booking') {
+        systemInstructions += `
+
+CRITICAL REQUIREMENT FOR BOOKING ARTIFACTS:
+- You MUST use fetch() to call the backend API endpoints /api/artifacts/{{ARTIFACT_ID}}/availability and /api/artifacts/{{ARTIFACT_ID}}/book
+- You MUST use the placeholder {{ARTIFACT_ID}} in your code (it will be replaced at runtime)
+- You MUST NOT use localStorage, IndexedDB, or any client-side storage for bookings
+- All booking data MUST be persisted via the POST /api/artifacts/{{ARTIFACT_ID}}/book endpoint
+- All availability data MUST be fetched from GET /api/artifacts/{{ARTIFACT_ID}}/availability?date=YYYY-MM-DD
+`;
+      }
+
+      systemInstructions += '\n\nCRITICAL REMINDER: Your response must be ONLY HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.';
+
       // Create AI response with streaming
       const response = await openai.responses.create({
         model: model,
-        instructions:
-          ARTIFACT_GENERATION_PROMPT +
-          '\n\nCRITICAL REMINDER: Your response must be ONLY HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.',
+        instructions: systemInstructions,
         input: input,
         stream: true,
         ...(vectorStoreId && {

@@ -581,6 +581,7 @@ After finalizing, share the \`hosted_invoice_url\` with the customer for payment
         systemPrompt += `
       ## Invoice PDF
       - **URL**: ${pdfUrl}
+      - PLease Include this in the response to the user.
       `;
       }
     }
@@ -648,9 +649,10 @@ After finalizing, share the \`hosted_invoice_url\` with the customer for payment
       // Add Dropbox MCP tool if enabled
       if (dropbox) {
         try {
-          const dropboxConnector = await prisma.dropboxConnector.findFirst({
+          const dropboxConnector = await prisma.connector.findFirst({
             where: {
               userId: BigInt(session.user.id),
+              provider: 'DROPBOX',
               status: 'ACTIVE',
               deletedAt: null
             }

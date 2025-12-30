@@ -10,14 +10,17 @@ import type { Template, Category } from "@/types/artifacts"
 interface TemplateSelectionStepProps {
   selectedTemplate: Template | null
   onTemplateSelect: (template: Template) => void
+  templateHtml: string
+  setTemplateHtml: (html: string) => void
 }
 
 export function TemplateSelectionStep({
   selectedTemplate,
   onTemplateSelect,
+  templateHtml,
+  setTemplateHtml,
 }: TemplateSelectionStepProps) {
   const [selectedCategory, setSelectedCategory] = useState<Category>("accounting")
-  const [templateHtml, setTemplateHtml] = useState<string>("")
 
   // Get templates for selected category
   const categoryTemplates = TEMPLATES.filter((t) => t.category === selectedCategory)

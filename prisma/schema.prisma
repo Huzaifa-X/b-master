@@ -56,7 +56,7 @@ model User {
   notifications             Notification[]
   usageMetrics              UsageMetric[]
   artifactVersions          ArtifactVersion[]
-  dropboxConnectors         DropboxConnector[]
+  connectors                Connector[]
   oauthStates               OAuthState[]
 
   @@index([email])
@@ -237,7 +237,7 @@ model Assistant {
   price            Decimal           @default(0)
   currency         String            @default("CHF") @db.Text
   priceType        String            @default("paid") @db.VarChar(255) // free or paid
-  category         AssistantCategory @default(OTHER) // New: Category field
+  category         AssistantCategory @default(OTHER)
   description      String?           @db.Text
   instructions     String?           @db.Text
   image            String?           @db.VarChar(255)
@@ -262,7 +262,7 @@ model Assistant {
   contacts            AssistantContact[]
   artifactPermissions ArtifactPermission[]
   usageMetrics        UsageMetric[]
-  dropboxConnectors   DropboxConnector[]
+  connectors          Connector[]
 
   @@index([userId])
   @@index([public])
@@ -339,9 +339,9 @@ model AssistantContact {
   assistantId BigInt
   userId      BigInt
   description String?  @db.Text
-  role        String?  @db.VarChar(255) // Renamed from 'Role' to 'role' for Prisma style consistency
-  telephone   String?  @db.VarChar(50) // Contact telephone number
-  information String?  @db.Text // Additional contact information
+  role        String?  @db.VarChar(255)
+  telephone   String?  @db.VarChar(50)
+  information String?  @db.Text
   access      String   @default("admin") @db.VarChar(50) // admin, user
   permissions String?  @db.Text // JSON: ["chat", "contacts", "messenger", "newsfeed", "artifacts"]
   createdAt   DateTime @default(now())
@@ -417,7 +417,7 @@ model AssistantTransaction {
   type                String   @default("sale") @db.VarChar(50) // sale, refund
   status              String   @default("pending") @db.VarChar(50) // pending, completed, failed
   stripeTransactionId String?  @unique @db.VarChar(255)
-  metadata            Json? // Additional transaction data
+  metadata            Json?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -433,17 +433,16 @@ model AssistantTransaction {
 // DUAL CHAT SYSTEM
 // ================================================================
 
-// User <-> Assistant Chat
 enum ChatType {
   ASSISTANT
   ASK_B
 }
 
 enum MessageStatus {
-  PENDING // User message waiting for response
-  PROCESSING // AI is working on it (especially for research mode)
-  COMPLETED // Response received
-  FAILED // Something went wrong
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 model AssistantUserChat {
@@ -452,15 +451,15 @@ model AssistantUserChat {
   topic       String
   assistantId BigInt?
   chatType    String
-  shareableId String?   @unique @db.VarChar(255) // For public sharing
+  shareableId String?   @unique @db.VarChar(255)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  user      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assistant Assistant?                 @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  messages  AssistantUserChatMessage[]
-  dropboxUsages DropboxChatUsage[]
+  user            User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assistant       Assistant?                 @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  messages        AssistantUserChatMessage[]
+  connectorUsages ConnectorChatUsage[]
 
   @@index([userId])
   @@index([assistantId])
@@ -470,18 +469,16 @@ model AssistantUserChat {
 
 model AssistantUserChatMessage {
   id                  Int           @id @default(autoincrement())
-  role                String        @db.VarChar(50) // user or assistant
+  role                String        @db.VarChar(50)
   message             String?       @db.Text
   documents           String?       @db.Text
   userId              BigInt?
   assistantUserChatId Int
-  status              MessageStatus @default(PENDING) // Message processing status
-
-  openaiResponseId String? @db.VarChar(255)
-  hasImages        Boolean @default(false)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status              MessageStatus @default(PENDING)
+  openaiResponseId    String?       @db.VarChar(255)
+  hasImages           Boolean       @default(false)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
   chat        AssistantUserChat @relation(fields: [assistantUserChatId], references: [id], onDelete: Cascade)
   user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -494,12 +491,11 @@ model AssistantUserChatMessage {
   @@map("assistant_user_chat_messages")
 }
 
-// User <-> User Chat (within Assistant context)
 model AssistantChat {
   id            Int       @id @default(autoincrement())
   assistantId   BigInt
-  initiatorId   BigInt // User who started the chat
-  participantId BigInt // Other user in the chat
+  initiatorId   BigInt
+  participantId BigInt
   isActive      Boolean   @default(true)
   lastMessageAt DateTime?
   lastMessageId BigInt?
@@ -525,7 +521,7 @@ model AssistantChatMessage {
   assistantId     BigInt
   senderId        BigInt
   message         String    @db.Text
-  messageType     String    @default("text") @db.VarChar(50) // text, image, file, audio, video
+  messageType     String    @default("text") @db.VarChar(50)
   attachmentUrl   String?   @db.VarChar(255)
   attachmentName  String?   @db.VarChar(255)
   attachmentSize  BigInt?
@@ -557,7 +553,7 @@ model AssistantNewsFeed {
   title        String?  @db.VarChar(255)
   image        String?  @db.Text
   content      String?  @db.Text
-  isPublic     Boolean  @default(true) // true = all see, false = need permission
+  isPublic     Boolean  @default(true)
   likeCount    Int      @default(0)
   commentCount Int      @default(0)
   createdAt    DateTime @default(now())
@@ -567,7 +563,7 @@ model AssistantNewsFeed {
   user        User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   likes       AssistantNewsFeedLike[]
   comments    AssistantNewsFeedComment[]
-  permissions NewsFeedPermission[] // For private posts
+  permissions NewsFeedPermission[]
 
   @@index([assistantId])
   @@index([userId])
@@ -611,8 +607,8 @@ model AssistantNewsFeedComment {
   newsFeedId      Int
   userId          BigInt
   comment         String?  @db.Text
-  parentCommentId Int? // For nested replies
-  status          String   @default("active") @db.VarChar(50) // active or deleted
+  parentCommentId Int?
+  status          String   @default("active") @db.VarChar(50)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -628,13 +624,13 @@ model AssistantNewsFeedComment {
 }
 
 // ================================================================
-// ARTIFACTS & PERMISSIONS WITH SIMPLE SHAREABLE LINK
+// ARTIFACTS & PERMISSIONS
 // ================================================================
 
 enum ArtifactAccessLevel {
-  VIEWER // Read-only
-  EDITOR // Can edit and create versions
-  ADMIN // Full control (creator default)
+  VIEWER
+  EDITOR
+  ADMIN
 }
 
 model AssistantArtifact {
@@ -645,10 +641,10 @@ model AssistantArtifact {
   instructions    String? @db.Text
   category        String? @db.VarChar(255)
   activeVersionId Int?
+  shareableId     String? @unique @db.VarChar(255)
 
-  shareableId String? @unique @db.VarChar(255) // Short code for public sharing
-
-  tools         Json?   @db.Json
+  // JSON Fields for flexible data storage
+  tools         Json?   @db.Json // For booking: connector config, availability, form fields, etc.
   apiKeys       Json?   @db.Json
   files         Json?   @db.Json
   images        Json?   @db.Json
@@ -659,40 +655,37 @@ model AssistantArtifact {
   isPublic  Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  deletedAt DateTime? // Soft delete
+  deletedAt DateTime?
 
-  assistant        Assistant                 @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  user             User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  permissions      ArtifactPermission[]
-  versions         ArtifactVersion[]
-  activeVersion    ArtifactVersion?          @relation("ActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
-  generationJobs   ArtifactGenerationJob[]
+  assistant      Assistant               @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissions    ArtifactPermission[]
+  versions       ArtifactVersion[]
+  activeVersion  ArtifactVersion?        @relation("ActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+  generationJobs ArtifactGenerationJob[]
 
   @@index([assistantId])
   @@index([userId])
   @@index([activeVersionId])
-  @@index([shareableId]) // ✅ NEW: Index for fast lookups
+  @@index([shareableId])
+  @@index([category])
   @@map("assistant_artifacts")
 }
 
 model ArtifactVersion {
-  id         Int    @id @default(autoincrement())
-  artifactId Int
-  userId     BigInt
-
+  id            Int       @id @default(autoincrement())
+  artifactId    Int
+  userId        BigInt
   versionNumber Int
-  versionName   String? @db.VarChar(255)
-
-  code        String  @db.Text
-  description String? @db.Text
-
-  changeType  String  @default("manual") @db.VarChar(50)
-  changedFrom Int?
-  isSnapshot  Boolean @default(false)
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  versionName   String?   @db.VarChar(255)
+  code          String    @db.Text
+  description   String?   @db.Text
+  changeType    String    @default("manual") @db.VarChar(50)
+  changedFrom   Int?
+  isSnapshot    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
   artifact           AssistantArtifact   @relation(fields: [artifactId], references: [id], onDelete: Cascade)
   creator            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -712,7 +705,7 @@ model ArtifactPermission {
   userId      BigInt
   assistantId BigInt
   artifactId  Int
-  access      ArtifactAccessLevel @default(VIEWER) // VIEWER, EDITOR, or ADMIN
+  access      ArtifactAccessLevel @default(VIEWER)
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
@@ -727,29 +720,21 @@ model ArtifactPermission {
 }
 
 // ================================================================
-// ARTIFACT GENERATION JOBS - QUEUE SYSTEM
+// ARTIFACT GENERATION JOBS
 // ================================================================
 
 model ArtifactGenerationJob {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   artifactId  Int
-
-  // Job status tracking
-  status      String   @default("pending") @db.VarChar(50) // pending, processing, completed, failed
-  progress    Int      @default(0) // 0-100
-
-  // Generation result
-  result      String?  @db.Text // Generated code/content
-  error       String?  @db.Text // Error message if failed
-
-  // Metadata
-  metadata    Json?    @db.Json // Store request params, user context, etc.
-
-  // Timestamps
+  status      String    @default("pending") @db.VarChar(50)
+  progress    Int       @default(0)
+  result      String?   @db.Text
+  error       String?   @db.Text
+  metadata    Json?     @db.Json
   startedAt   DateTime?
   completedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   artifact AssistantArtifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
 
@@ -760,7 +745,7 @@ model ArtifactGenerationJob {
 }
 
 // ================================================================
-// Pinned Assistant
+// PINNED ASSISTANT
 // ================================================================
 
 model AssistantPin {
@@ -793,7 +778,7 @@ model Notification {
   relatedType String?   @db.VarChar(100)
   isRead      Boolean   @default(false)
   readAt      DateTime?
-  data        Json? // Additional notification data
+  data        Json?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
@@ -808,108 +793,103 @@ model Notification {
   @@map("notifications")
 }
 
-// ====================================================================
-// Prompts
-// ====================================================================
+// ================================================================
+// PROMPTS
+// ================================================================
 
 model Prompt {
-  id         Int      @id @default(autoincrement())
-  name       String   @unique @db.VarChar(255)
-  prompt     String   @db.Text
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(255)
+  prompt    String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([name])
   @@map("prompts")
 }
 
 // ================================================================
-// MCP CONNECTORS - DROPBOX ONLY
+// GENERIC CONNECTOR SYSTEM (Google, Dropbox, etc.)
 // ================================================================
 
 enum ConnectorStatus {
-  PENDING       // User started auth but hasn't completed
-  ACTIVE        // Connected and working
-  EXPIRED       // Token expired
-  REVOKED       // User revoked access
-  ERROR         // Connection error
-  DISABLED      // User disabled
+  PENDING
+  ACTIVE
+  EXPIRED
+  REVOKED
+  ERROR
+  DISABLED
 }
 
-model DropboxConnector {
-  id          Int             @id @default(autoincrement())
-  userId      BigInt
-  assistantId BigInt?         // Optional: connector can be user-level or assistant-specific
+enum ConnectorProvider {
+  DROPBOX
+  GOOGLE
+  // Future: MICROSOFT, NOTION, SLACK, etc.
+}
 
-  // Connector Identity
-  name        String          @db.VarChar(255)  // User-friendly name: "My Dropbox"
-  description String?         @db.Text
+model Connector {
+  id                Int               @id @default(autoincrement())
+  userId            BigInt
+  assistantId       BigInt?
+  provider          ConnectorProvider
+  name              String            @db.VarChar(255)
+  description       String?           @db.Text
+  accessToken       String            @db.Text
+  refreshToken      String            @db.Text
+  tokenExpiry       DateTime
+  providerAccountId String?           @db.VarChar(255)
+  providerEmail     String?           @db.VarChar(255)
+  scopes            Json              @default("[]")
+  status            ConnectorStatus   @default(PENDING)
+  requireApproval   String            @default("never") @db.VarChar(50)
+  autoRefresh       Boolean           @default(true)
+  config            Json?             @db.Json
+  metadata          Json?             @db.Json
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  deletedAt         DateTime?
 
-  // Authentication
-  accessToken String          @db.Text          // Encrypted OAuth token
-  refreshToken String         @db.Text          // Encrypted refresh token
-  tokenExpiry DateTime                          // When token expires
-  accountId   String?         @db.VarChar(255)  // Dropbox account ID
-  accountEmail String?        @db.VarChar(255)  // Dropbox email
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assistant  Assistant?           @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  chatUsages ConnectorChatUsage[]
 
-  // Settings
-  status      ConnectorStatus  @default(PENDING)
-  requireApproval String       @default("never") @db.VarChar(50) // never, always, per_message
-  autoRefresh Boolean          @default(true)    // Auto-refresh expired tokens
-
-  // Metadata
-  metadata    Json?            @db.Json
-  // Example: {
-  //   "display_name": "John Doe",
-  //   "country": "US",
-  //   "locale": "en",
-  //   "scopes": ["files.content.read", "files.content.write"]
-  // }
-
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  deletedAt   DateTime?
-
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assistant   Assistant?       @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  chatUsages  DropboxChatUsage[]
-
-  @@unique([userId, assistantId]) // One Dropbox connector per user/assistant
+  @@unique([userId, assistantId, provider])
   @@index([userId])
   @@index([assistantId])
+  @@index([provider])
   @@index([status])
-  @@map("dropbox_connectors")
+  @@map("connectors")
 }
 
-// Track which chats are using Dropbox
-model DropboxChatUsage {
+model ConnectorChatUsage {
   id                  Int      @id @default(autoincrement())
-  dropboxConnectorId  Int
+  connectorId         Int
   assistantUserChatId Int
-
-  isActive            Boolean  @default(true)  // User can enable/disable per chat
+  isActive            Boolean  @default(true)
   lastUsedAt          DateTime @default(now())
-  usageCount          Int      @default(0)     // Track how many times used
-
+  usageCount          Int      @default(0)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  connector           DropboxConnector  @relation(fields: [dropboxConnectorId], references: [id], onDelete: Cascade)
-  chat                AssistantUserChat @relation(fields: [assistantUserChatId], references: [id], onDelete: Cascade)
+  connector Connector         @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  chat      AssistantUserChat @relation(fields: [assistantUserChatId], references: [id], onDelete: Cascade)
 
-  @@unique([dropboxConnectorId, assistantUserChatId])
-  @@index([dropboxConnectorId])
+  @@unique([connectorId, assistantUserChatId])
+  @@index([connectorId])
   @@index([assistantUserChatId])
-  @@map("dropbox_chat_usages")
+  @@map("connector_chat_usages")
 }
 
-// OAuth state storage for secure authentication flows
+// ================================================================
+// OAUTH STATE STORAGE
+// ================================================================
+
 model OAuthState {
   id        String   @id @default(cuid())
   state     String   @unique
   userId    BigInt
-  provider  String   @db.VarChar(50) // 'dropbox', 'google', etc.
-  data      Json?    // Any additional data (returnUrl, etc.)
+  provider  String   @db.VarChar(50)
+  data      Json?
   expiresAt DateTime
   createdAt DateTime @default(now())
 

@@ -544,9 +544,10 @@ export async function sendChatMessage(data: {
         let dropboxAccessToken = null
 
         if (data.useDropbox) {
-            dropboxConnector = await prisma.dropboxConnector.findFirst({
+            dropboxConnector = await prisma.connector.findFirst({
                 where: {
                     userId,
+                    provider: 'DROPBOX',
                     status: 'ACTIVE',
                     deletedAt: null
                 }
@@ -706,15 +707,15 @@ export async function sendChatMessage(data: {
 
         // Track Dropbox usage if enabled
         if (data.useDropbox && dropboxConnector) {
-            await prisma.dropboxChatUsage.upsert({
+            await prisma.connectorChatUsage.upsert({
                 where: {
-                    dropboxConnectorId_assistantUserChatId: {
-                        dropboxConnectorId: dropboxConnector.id,
+                    connectorId_assistantUserChatId: {
+                        connectorId: dropboxConnector.id,
                         assistantUserChatId: chatId
                     }
                 },
                 create: {
-                    dropboxConnectorId: dropboxConnector.id,
+                    connectorId: dropboxConnector.id,
                     assistantUserChatId: chatId,
                     usageCount: 1
                 },

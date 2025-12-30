@@ -40,6 +40,30 @@ export interface Contact {
   image?: string | null
 }
 
+export interface BookingConfig {
+  duration: number
+  bufferTime: number
+  timezone: string
+  availability: {
+    timezone: string
+    schedule: {
+      Monday: { start: string; end: string }[]
+      Tuesday: { start: string; end: string }[]
+      Wednesday: { start: string; end: string }[]
+      Thursday: { start: string; end: string }[]
+      Friday: { start: string; end: string }[]
+      Saturday: { start: string; end: string }[]
+      Sunday: { start: string; end: string }[]
+    }
+  }
+  dateRange?: {
+    start: string
+    end: string
+  }
+  eventTitle: string
+  eventDescription: string
+}
+
 export interface ArtifactFormData {
   templateId: string
   name: string
@@ -51,6 +75,7 @@ export interface ArtifactFormData {
   uploadedImages?: UploadedImage[];
   videoDuration?: "4" | "8" | "12";
   selectedChatId?: string | null;
+  bookingConfig?: BookingConfig;
 }
 
 // types/artifacts.ts

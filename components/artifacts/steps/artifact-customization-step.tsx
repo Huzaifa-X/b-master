@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -35,11 +35,13 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { UserSelectTable, type SelectedUser } from "@/components/shared/user-select-table"
 import { ICON_MAP } from "./constants"
-import type { Template, ArtifactFormData, ApiConfig, Contact, UploadedFile, UploadedImage } from "@/types/artifacts"
+import type { Template, ArtifactFormData, ApiConfig, Contact, UploadedFile, UploadedImage, BookingConfig } from "@/types/artifacts"
 import { ArtifactAIInstructionDialog } from "./artifact-ai-instruction-dialog"
 import { deleteArtifactFile } from "@/app/actions/artifact.action"
 import { ChatHistoryItem } from "@/types/chat"
 import { ArtifactChatSelector } from "./artifact-chat-selector"
+import { GoogleConnector } from "@/components/connectors/google-connector"
+import { BookingConfigForm } from "@/components/artifacts/booking-config-form"
 
 interface ArtifactCustomizationStepProps {
   selectedTemplate: Template
@@ -157,6 +159,52 @@ export function ArtifactCustomizationStep({
 
   // Check if this is video generation category
   const isVideoGeneration = selectedTemplate.category === "video_generation"
+
+  // Check if this is booking category
+  const isBookingCategory = selectedTemplate.category === "booking"
+
+  // State for Google connection
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false)
+
+  // State for booking configuration
+  const [bookingConfig, setBookingConfig] = useState<BookingConfig>({
+    duration: 30,
+    bufferTime: 5,
+    timezone: "America/New_York",
+    availability: {
+      timezone: "America/New_York",
+      schedule: {
+        Monday: [{ start: "09:00", end: "17:00" }],
+        Tuesday: [{ start: "09:00", end: "17:00" }],
+        Wednesday: [{ start: "09:00", end: "17:00" }],
+        Thursday: [{ start: "09:00", end: "17:00" }],
+        Friday: [{ start: "09:00", end: "17:00" }],
+        Saturday: [],
+        Sunday: []
+      }
+    },
+    eventTitle: "30-min Meeting",
+    eventDescription: "Book a time to meet with me"
+  })
+
+  // Initialize booking config in formData for booking artifacts
+  useEffect(() => {
+    if (isBookingCategory && !isEditMode && !formData.bookingConfig) {
+      // Use artifact name for event title if available
+      const eventTitle = formData.name || "30-min Meeting"
+      const updatedConfig = {
+        ...bookingConfig,
+        eventTitle: eventTitle,
+        eventDescription: `Book a time to meet - ${eventTitle}`
+      }
+
+      setBookingConfig(updatedConfig)
+      setFormData((prev) => ({
+        ...prev,
+        bookingConfig: updatedConfig
+      }))
+    }
+  }, [isBookingCategory, isEditMode, formData.name]) // React to name changes
 
   // File Upload Handler
   const handleFileUpload = async (file: File, type: "image" | "document") => {
@@ -548,6 +596,42 @@ export function ArtifactCustomizationStep({
             setFormData({ ...formData, selectedChatId: chatId })
           }}
         />
+
+        {/* Google Calendar Integration - Only for booking artifacts */}
+        {isBookingCategory && !isEditMode && (
+          <div className="space-y-4">
+            <GoogleConnector
+              returnUrl={typeof window !== 'undefined' ? window.location.href : undefined}
+              onConnectionChange={setIsGoogleConnected}
+            />
+            {!isGoogleConnected && (
+              <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <p className="text-sm text-amber-900 dark:text-amber-100">
+                  💡 Connect your Google account to enable automatic calendar events and email confirmations for bookings.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Booking Configuration - Only for booking artifacts */}
+        {isBookingCategory && !isEditMode && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Booking Configuration</h3>
+              <p className="text-sm text-muted-foreground">
+                Configure your availability schedule and booking settings
+              </p>
+            </div>
+            <BookingConfigForm
+              config={bookingConfig}
+              onChange={(config) => {
+                setBookingConfig(config)
+                setFormData({ ...formData, bookingConfig: config })
+              }}
+            />
+          </div>
+        )}
 
         {/* Sharing & Permissions */}
         <div>
