@@ -1,6 +1,7 @@
 // app/actions/chat.action.ts
 "use server"
 
+import { randomUUID } from "crypto"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
@@ -45,7 +46,7 @@ export async function createChatWithMessage(data: {
     const userId = BigInt(session.user.id)
 
     // Generate unique shareable ID
-    const shareableId = crypto.randomUUID()
+    const shareableId = randomUUID()
 
     // Create chat with temporary topic
     const chat = await prisma.assistantUserChat.create({
