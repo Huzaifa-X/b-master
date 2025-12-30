@@ -105,6 +105,7 @@ export function ChatInput({
   const [dropboxEnabled, setDropboxEnabled] = useState(false)
   const [selectedArtifact, setSelectedArtifact] = useState<{ id: string; name: string; instructions: string; htmlContent: string } | null>(null)
   const [isArtifactDialogOpen, setIsArtifactDialogOpen] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -282,6 +283,7 @@ export function ChatInput({
 
     // Upload files to S3 if there are any attachments
     if (attachedFiles.length > 0) {
+      setIsUploading(true)
       // Convert files to base64 for server action
       const fileUploadData: FileUploadData[] = await Promise.all(
         attachedFiles.map(async (file) => {
@@ -299,10 +301,12 @@ export function ChatInput({
 
       if (!result.success) {
         toast.error(result.error || 'Failed to upload files. Please try again.')
+        setIsUploading(false)
         return
       }
 
       attachments = result.files
+      setIsUploading(false)
     }
 
     // Clear input BEFORE submitting (to make UI feel instant)
@@ -712,14 +716,14 @@ export function ChatInput({
                 </div>
                 <div className="flex items-center gap-2">
                   <Tooltip>
-                    <TooltipTrigger asChild disabled={disabled || isLoading}>
+                    <TooltipTrigger asChild disabled={disabled || isLoading || isUploading}>
                       <Button
                         onClick={handleSend}
                         disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled}
                         size="icon"
                         className="size-[34px] rounded-full p-1"
                       >
-                        {isLoading ? (
+                        {isLoading || isUploading ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <ArrowUp className="h-5 w-5" />
@@ -805,14 +809,14 @@ export function ChatInput({
               </div>
               <div className="flex items-center gap-2">
                 <Tooltip>
-                  <TooltipTrigger asChild disabled={disabled || isLoading}>
+                  <TooltipTrigger asChild disabled={disabled || isLoading || isUploading}>
                     <Button
                       onClick={handleSend}
                       disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled}
                       size="icon"
                       className="size-[34px] rounded-full p-1"
                     >
-                      {isLoading ? (
+                      {isLoading || isUploading ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <ArrowUp className="h-5 w-5" />
