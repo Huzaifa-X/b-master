@@ -2,12 +2,16 @@ import prisma from '@/lib/prisma';
 import { encrypt, decrypt } from '@/lib/encryption';
 
 export async function refreshDropboxToken(connectorId: number) {
-  const connector = await prisma.dropboxConnector.findUnique({
+  const connector = await prisma.connector.findUnique({
     where: { id: connectorId }
   });
 
   if (!connector || !connector.refreshToken) {
     throw new Error('Connector not found or no refresh token');
+  }
+
+  if (connector.provider !== 'DROPBOX') {
+    throw new Error('Connector is not a Dropbox connector');
   }
 
   const decryptedRefreshToken = decrypt(connector.refreshToken);
@@ -30,7 +34,7 @@ export async function refreshDropboxToken(connectorId: number) {
 
   if (!tokens.access_token) {
     // Token refresh failed, mark as expired
-    await prisma.dropboxConnector.update({
+    await prisma.connector.update({
       where: { id: connectorId },
       data: { status: 'EXPIRED' }
     });
@@ -40,7 +44,7 @@ export async function refreshDropboxToken(connectorId: number) {
   // Update connector with new tokens
   const tokenExpiry = new Date(Date.now() + 4 * 60 * 60 * 1000); // 4 hours
 
-  await prisma.dropboxConnector.update({
+  await prisma.connector.update({
     where: { id: connectorId },
     data: {
       accessToken: encrypt(tokens.access_token),

@@ -2193,13 +2193,13 @@ export async function hardDeleteAssistant(
         where: { assistantId: assistantBigInt },
       }),
 
-      // Dropbox integrations
-      prisma.dropboxChatUsage.deleteMany({
+      // Connector integrations
+      prisma.connectorChatUsage.deleteMany({
         where: {
           chat: { assistantId: assistantBigInt },
         },
       }),
-      prisma.dropboxConnector.deleteMany({
+      prisma.connector.deleteMany({
         where: { assistantId: assistantBigInt },
       }),
 

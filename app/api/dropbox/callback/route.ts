@@ -136,52 +136,54 @@ export async function GET(req: NextRequest) {
     // Create or update connector
     console.log('💾 Saving to database...');
 
-    // Find existing user-level connector
-    const existingConnector = await prisma.dropboxConnector.findFirst({
+    // Find existing user-level Dropbox connector
+    const existingConnector = await prisma.connector.findFirst({
       where: {
         userId,
-        assistantId: null
+        assistantId: null,
+        provider: 'DROPBOX'
       }
     });
 
     if (existingConnector) {
       // Update existing connector
-      await prisma.dropboxConnector.update({
+      await prisma.connector.update({
         where: { id: existingConnector.id },
         data: {
           accessToken: encryptedAccessToken,
           refreshToken: encryptedRefreshToken,
           tokenExpiry,
-          accountId: userInfo.account_id,
-          accountEmail: userInfo.email,
+          providerAccountId: userInfo.account_id,
+          providerEmail: userInfo.email,
+          scopes: ['files.content.read', 'files.content.write'],
           status: 'ACTIVE',
           metadata: {
             display_name: userInfo.name?.display_name,
             country: userInfo.country,
             locale: userInfo.locale,
-            scopes: ['files.content.read', 'files.content.write'],
             reconnected_at: new Date().toISOString()
           }
         }
       });
     } else {
       // Create new connector
-      await prisma.dropboxConnector.create({
+      await prisma.connector.create({
         data: {
           userId,
           assistantId: null,
+          provider: 'DROPBOX',
           name: 'My Dropbox',
           accessToken: encryptedAccessToken,
           refreshToken: encryptedRefreshToken,
           tokenExpiry,
-          accountId: userInfo.account_id,
-          accountEmail: userInfo.email,
+          providerAccountId: userInfo.account_id,
+          providerEmail: userInfo.email,
+          scopes: ['files.content.read', 'files.content.write'],
           status: 'ACTIVE',
           metadata: {
             display_name: userInfo.name?.display_name,
             country: userInfo.country,
             locale: userInfo.locale,
-            scopes: ['files.content.read', 'files.content.write'],
             connected_at: new Date().toISOString()
           }
         }

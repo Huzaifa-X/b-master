@@ -32,6 +32,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
   const isEditMode = Boolean(editArtifactId)
   const [step, setStep] = useState(isEditMode ? 2 : 1) // Start at step 2 for edit mode
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
+  const [templateHtml, setTemplateHtml] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loadingContacts, setLoadingContacts] = useState(false)
@@ -262,6 +263,8 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
           uploadedImages: formData.uploadedImages,
           videoDuration: selectedTemplate?.category === "video_generation" ? formData.videoDuration : undefined,
           selectedChatId: formData.selectedChatId || null,
+          templateHtml: templateHtml || undefined,
+          bookingConfig: formData.bookingConfig,
         })
 
         toast.dismiss("artifact-creation")
@@ -319,6 +322,8 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
                 <TemplateSelectionStep
                   selectedTemplate={selectedTemplate}
                   onTemplateSelect={handleTemplateSelect}
+                  templateHtml={templateHtml}
+                  setTemplateHtml={setTemplateHtml}
                 />
               )}
 

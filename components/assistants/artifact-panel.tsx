@@ -131,7 +131,13 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
     }
 
-    const blob = new Blob([displayContent], { type: "text/html" });
+    // Replace {{ARTIFACT_ID}} placeholder with actual artifact ID
+    let processedContent = displayContent;
+    if (artifactId) {
+      processedContent = displayContent.replace(/\{\{ARTIFACT_ID\}\}/g, artifactId);
+    }
+
+    const blob = new Blob([processedContent], { type: "text/html" });
 
     const url = URL.createObjectURL(blob);
 
@@ -143,7 +149,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
     };
 
-  }, [displayContent, isPreviewMode, isHtmlCode]);
+  }, [displayContent, isPreviewMode, isHtmlCode, artifactId]);
 
   return (
 

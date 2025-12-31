@@ -12,10 +12,11 @@ export async function GET(req: NextRequest) {
 
     const userId = BigInt(session.user.id);
 
-    const connector = await prisma.dropboxConnector.findFirst({
+    const connector = await prisma.connector.findFirst({
       where: {
         userId,
         assistantId: null, // User-level connector
+        provider: 'DROPBOX',
         deletedAt: null
       }
     });

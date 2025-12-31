@@ -197,7 +197,16 @@ export const TEMPLATES: Template[] = [
     isCustom: true,
   },
 
-  // Booking (3 + Custom)
+  // Booking (5 + Custom)
+  {
+    id: "book-calendar",
+    name: "Calendar Booking Widget",
+    description: "Interactive calendar with Google Calendar integration",
+    category: "booking",
+    icon: "Calendar",
+    prefilledInstructions:
+      "Create an interactive booking calendar widget with Google Calendar integration. Automatically creates calendar events with Google Meet links and sends confirmation emails via Gmail. Include availability scheduling, time zone support, booking confirmations, and a beautiful user interface for selecting dates and times.",
+  },
   {
     id: "book-1",
     name: "Online Meeting Scheduler",
@@ -212,7 +221,7 @@ export const TEMPLATES: Template[] = [
     name: "Reservation System",
     description: "Manage bookings for restaurants, hotels, etc.",
     category: "booking",
-    icon: "Calendar",
+    icon: "MapPin",
     prefilledInstructions:
       "Build a reservation system with availability calendar, booking confirmations, and cancellation management.",
   },
@@ -337,6 +346,7 @@ export const TEMPLATE_FILES: Record<string, string> = {
   "pre-6": "/artifcatTemplates/salesPresentation.html",
 
   // Booking
+  "book-calendar": "/artifcatTemplates/calendarBooking.html",
   "book-1": "/artifcatTemplates/meetingScheduler.html",
   "book-2": "/artifcatTemplates/reservationSystem.html",
   "book-3": "/artifcatTemplates/officeBooking.html",

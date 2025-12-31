@@ -220,6 +220,8 @@ export async function createArtifact(data: {
     }>
     videoDuration?: "4" | "8" | "12"
     selectedChatId?: string | null
+    templateHtml?: string
+    bookingConfig?: any
 }) {
     try {
         const session = await getServerSession(authOptions)
@@ -320,8 +322,11 @@ export async function createArtifact(data: {
                     error: videoError instanceof Error ? videoError.message : 'Failed to generate video with Sora'
                 }
             }
+        } else if (data.templateHtml) {
+            // If templateHtml is provided (from template selection), use it as the base
+            generatedCode = data.templateHtml
         } else {
-            // For HTML artifacts, start with empty code - will be streamed on the page
+            // For HTML artifacts without template, start with empty code - will be streamed on the page
             generatedCode = ''
         }
 
@@ -335,8 +340,36 @@ export async function createArtifact(data: {
             }, {} as Record<string, string>)
             : null
 
-        // Store selectedChatId in tools JSON field as metadata (temporary solution)
-        const toolsJson = data.selectedChatId ? { selectedChatId: data.selectedChatId } : undefined
+        // Store selectedChatId and bookingConfig in tools JSON field
+        // For booking artifacts, provide default config if not specified
+        let bookingConfig = data.bookingConfig;
+        if (data.category === 'booking' && !bookingConfig) {
+            // Default booking configuration for booking artifacts
+            bookingConfig = {
+                duration: 30,
+                bufferTime: 5,
+                eventTitle: data.name,
+                eventDescription: "Book a time slot",
+                availability: {
+                    timezone: "America/New_York",
+                    schedule: {
+                        Monday: [{ start: "09:00", end: "17:00" }],
+                        Tuesday: [{ start: "09:00", end: "17:00" }],
+                        Wednesday: [{ start: "09:00", end: "17:00" }],
+                        Thursday: [{ start: "09:00", end: "17:00" }],
+                        Friday: [{ start: "09:00", end: "17:00" }],
+                        Saturday: [],
+                        Sunday: []
+                    }
+                }
+            };
+        }
+
+        const toolsJson = {
+            ...(data.selectedChatId ? { selectedChatId: data.selectedChatId } : {}),
+            ...(bookingConfig ? { bookingConfig: bookingConfig } : {})
+        }
+        const finalToolsJson = Object.keys(toolsJson).length > 0 ? toolsJson : undefined
 
         // Determine if artifact is public
         const isPublic = data.permissions === 'public'
@@ -351,7 +384,7 @@ export async function createArtifact(data: {
                     name: data.name,
                     instructions: enhancedInstructions,
                     category: data.category,
-                    tools: toolsJson ? (toolsJson as any) : undefined,
+                    tools: finalToolsJson ? (finalToolsJson as any) : undefined,
                     apiKeys: apiKeysJson || undefined,
                     files: data.uploadedFiles ? (data.uploadedFiles as any) : undefined,
                     images: data.uploadedImages ? (data.uploadedImages as any) : undefined,

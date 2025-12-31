@@ -1,6 +1,7 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
+import 'server-only';
 import { uploadToS3 } from '@/lib/aws-s3';
 import { generateInvoiceHTML } from '@/lib/invoice-template';
+import type { Browser, Page } from 'puppeteer';
 
 interface GeneratePDFOptions {
   html: string;
@@ -59,8 +60,11 @@ export async function generatePDFFromHTML({
       console.log('[PDF] Using Chrome at:', executablePath);
     }
 
+    // Dynamically import Puppeteer to prevent it from being bundled in the build
+    const puppeteer = await import('puppeteer');
+
     // Launch Puppeteer with enhanced configuration
-    browser = await puppeteer.launch({
+    browser = await puppeteer.default.launch({
       headless: true,
       executablePath, // Use custom Chrome in production
       args: [
