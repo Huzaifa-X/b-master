@@ -284,7 +284,7 @@ ${allFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are prov
 
           let generatedCode = ""
           let buffer = ""
-          const model = 'gpt-5.2'
+          const model = 'gpt-4.1'
           const CHUNK_SIZE = 1024 // Send chunks of ~1KB
 
           // Create AI response with streaming

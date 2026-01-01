@@ -234,7 +234,7 @@ ${enhancedInstructions}${chatContext}${bookingInstructions}
 CRITICAL: Output ONLY the complete HTML code starting with <!DOCTYPE html> and ending with </html>. Do not include any explanations, descriptions, or additional text. Do not use markdown formatting.`;
 
     const vectorStoreId = artifact.assistant?.vectorStoreId;
-    const model = 'gpt-5.2';
+    const model = 'gpt-4.1';
 
     console.log('[Worker] Starting OpenAI generation');
 
