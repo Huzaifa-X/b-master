@@ -10,8 +10,8 @@
     "start": "concurrently \"next start\" \"npm run worker\"",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
-    "worker": "node --env-file=.env --import tsx scripts/start-worker.ts",
-    "worker:dev": "node --env-file=.env --watch --import tsx scripts/start-worker.ts"
+    "worker": "tsx scripts/start-worker.ts",
+    "worker:dev": "tsx watch scripts/start-worker.ts"
   },
   "prettier": {
     "plugins": [
