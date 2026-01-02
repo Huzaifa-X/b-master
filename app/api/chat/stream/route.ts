@@ -665,10 +665,18 @@ export async function POST(req: NextRequest) {
         });
 
         systemPrompt += `
-        ## Invoice PDF
-        - **URL**: ${pdfUrl}
-        - PLease Include this URL in the response to the user as a link.
-        - Please Do not update the Artifact.
+        ## Invoice PDF Generated Successfully
+        An invoice PDF has been generated from the artifact template and uploaded to S3.
+
+        **PDF URL**: ${pdfUrl}
+
+        **CRITICAL INSTRUCTION**: You MUST respond to the user acknowledging the invoice generation. Your response should:
+        1. Confirm the invoice was generated successfully
+        2. Include the PDF URL as a clickable markdown link: [View Invoice PDF](${pdfUrl})
+        3. Mention the customer name: ${name}
+        4. Do NOT call update_artifact function - the template remains unchanged
+
+        Example response: "I've generated the invoice PDF for ${name}. You can view and download it here: [View Invoice PDF](${pdfUrl})"
       `;
       }
       else if (is_invoice_request) {
@@ -680,9 +688,17 @@ export async function POST(req: NextRequest) {
         });
 
         systemPrompt += `
-        ## Invoice PDF
-        - **URL**: ${pdfUrl}
-        - PLease Include this URL in the response to the user as a link.
+        ## Invoice PDF Generated Successfully
+        An invoice PDF has been generated and uploaded to S3.
+
+        **PDF URL**: ${pdfUrl}
+
+        **CRITICAL INSTRUCTION**: You MUST respond to the user acknowledging the invoice generation. Your response should:
+        1. Confirm the invoice was generated successfully
+        2. Include the PDF URL as a clickable markdown link: [View Invoice PDF](${pdfUrl})
+        3. Mention the customer name: ${name}
+
+        Example response: "I've generated the invoice PDF for ${name}. You can view and download it here: [View Invoice PDF](${pdfUrl})"
       `;
       }
     }
