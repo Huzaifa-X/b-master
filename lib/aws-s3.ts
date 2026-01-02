@@ -45,11 +45,25 @@ import {
     folder: string = "assistants"
   ): Promise<string> {
     try {
+      // Validate AWS configuration before attempting upload
+      if (!BUCKET_NAME) {
+        throw new Error("AWS_STORAGE_BUCKET_NAME environment variable is not configured")
+      }
+      if (!process.env.AWS_ACCESS_KEY_ID) {
+        throw new Error("AWS_ACCESS_KEY_ID environment variable is not configured")
+      }
+      if (!process.env.AWS_SECRET_ACCESS_KEY) {
+        throw new Error("AWS_SECRET_ACCESS_KEY environment variable is not configured")
+      }
+      if (!process.env.AWS_S3_REGION_NAME) {
+        throw new Error("AWS_S3_REGION_NAME environment variable is not configured")
+      }
+
       // Generate unique key with timestamp to avoid collisions
       const timestamp = Date.now()
       const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_")
       const key = `${folder}/${timestamp}-${sanitizedFileName}`
-  
+
       // Upload command
       const command = new PutObjectCommand({
         Bucket: BUCKET_NAME,
@@ -64,18 +78,52 @@ import {
         // Optional: Add cache control
         CacheControl: "max-age=31536000", // Cache for 1 year
       })
-  
-      // Execute upload
-      await s3Client.send(command)
-  
+
+      // Execute upload with timeout
+      const uploadPromise = s3Client.send(command)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("S3 upload timeout after 30 seconds")), 30000)
+      )
+
+      await Promise.race([uploadPromise, timeoutPromise])
+
       // Construct and return public URL
       const publicUrl = getPublicUrl(key)
       console.log(`✅ File uploaded successfully: ${publicUrl}`)
-  
+
       return publicUrl
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ S3 Upload Error:", error)
-      throw new Error(`Failed to upload file to S3: ${error instanceof Error ? error.message : "Unknown error"}`)
+
+      // Detailed error logging
+      const errorDetails = {
+        message: error.message,
+        code: error.Code || error.code || error.name,
+        statusCode: error.$metadata?.httpStatusCode,
+        requestId: error.$metadata?.requestId,
+        bucket: BUCKET_NAME,
+        region: process.env.AWS_S3_REGION_NAME,
+        fileName: fileName,
+        folder: folder
+      }
+      console.error("❌ S3 Upload Error Details:", JSON.stringify(errorDetails, null, 2))
+
+      // Provide user-friendly error messages based on error type
+      let userMessage = "Failed to upload file to cloud storage"
+
+      if (error.code === 'NetworkingError' || error.message?.includes('timeout')) {
+        userMessage = "Network error: Unable to connect to AWS S3. Please check your internet connection and try again."
+      } else if (error.code === 'InvalidAccessKeyId' || error.code === 'SignatureDoesNotMatch') {
+        userMessage = "AWS credentials error: Invalid access credentials. Please contact support."
+      } else if (error.code === 'NoSuchBucket') {
+        userMessage = "AWS configuration error: Storage bucket not found. Please contact support."
+      } else if (error.code === 'AccessDenied' || error.code === 'Forbidden') {
+        userMessage = "AWS permission error: Insufficient permissions to upload files. Please contact support."
+      } else if (error.message?.includes('timeout')) {
+        userMessage = "Upload timeout: The file upload took too long. Please try again or use a smaller file."
+      }
+
+      throw new Error(userMessage)
     }
   }
   
@@ -306,6 +354,33 @@ import {
     if (!allowedTypes.includes(contentType)) {
       throw new Error(`Content type ${contentType} is not allowed. Allowed types: ${allowedTypes.join(", ")}`)
     }
-  
+
     return true
   }
+
+// ============================================
+// SAFE UPLOAD (NON-BLOCKING)
+// ============================================
+
+/**
+ * Safe upload that won't block the main operation if AWS fails
+ * Returns { success: boolean, url?: string, error?: string }
+ * Use this for non-critical uploads like images where the main operation should succeed even if upload fails
+ */
+export async function safeUploadToS3(
+  file: Buffer,
+  fileName: string,
+  contentType: string,
+  folder: string = "assistants"
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const url = await uploadToS3(file, fileName, contentType, folder)
+    return { success: true, url }
+  } catch (error: any) {
+    console.error("⚠️ Safe upload failed (non-blocking):", error.message)
+    return {
+      success: false,
+      error: error.message || "Unknown upload error"
+    }
+  }
+}
