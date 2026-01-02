@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "prisma:generate": "prisma generate",
-    "build": "NODE_OPTIONS='--max-old-space-size=8192' next build --no-lint",
-    "build:full": "npm run prisma:generate && npm run build",
+    "build": "prisma generate && NODE_OPTIONS='--max-old-space-size=8192' next build --no-lint",
     "start": "concurrently \"next start\" \"npm run worker\"",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
