@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma"
 import { openai } from "@/lib/openai"
 import upstageService from "@/lib/services/upstageService"
 import { getArtifactCodingPrompt, getSystemPrompt } from "@/utils/prompts"
-import { uploadToS3 } from "@/lib/aws-s3"
+import { safeUploadToS3 } from "@/lib/aws-s3"
 import { OpenAPITool } from "@/lib/openapi-tool-converter"
 import { executeAPITool, loadAPITools, toOpenAIToolDefinitions } from "@/lib/api-tools-loader"
 import { decrypt } from "@/lib/encryption"
@@ -16,25 +16,38 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 /**
- * Save base64 image to S3 and return public URL
+ * Save base64 image to S3 and return public URL (or null if upload fails)
+ * Uses safe upload to prevent chat from failing if S3 is unavailable
  */
 async function saveImageToS3(
   base64Image: string,
   chatId: number,
   imageIndex: number
-): Promise<string> {
-  const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "")
-  const imageBuffer = Buffer.from(base64Data, "base64")
-  const timestamp = Date.now()
-  const fileName = `image-${timestamp}-${imageIndex}.png`
-  const publicUrl = await uploadToS3(
-    imageBuffer,
-    fileName,
-    "image/png",
-    `chat-images/chat-${chatId}`
-  )
-  console.log(`[Stream] ✅ Saved image ${imageIndex + 1} to S3: ${publicUrl}`)
-  return publicUrl
+): Promise<string | null> {
+  try {
+    const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "")
+    const imageBuffer = Buffer.from(base64Data, "base64")
+    const timestamp = Date.now()
+    const fileName = `image-${timestamp}-${imageIndex}.png`
+
+    const uploadResult = await safeUploadToS3(
+      imageBuffer,
+      fileName,
+      "image/png",
+      `chat-images/chat-${chatId}`
+    )
+
+    if (uploadResult.success && uploadResult.url) {
+      console.log(`[Stream] ✅ Saved image ${imageIndex + 1} to S3: ${uploadResult.url}`)
+      return uploadResult.url
+    } else {
+      console.warn(`[Stream] ⚠️ Failed to save image ${imageIndex + 1} to S3: ${uploadResult.error}. Chat will continue without image URL.`)
+      return null
+    }
+  } catch (error) {
+    console.error(`[Stream] ❌ Error saving image ${imageIndex + 1}:`, error)
+    return null
+  }
 }
 
 /**
@@ -834,46 +847,53 @@ After finalizing, share the \`hosted_invoice_url\` with the customer for payment
                 if (event.partial_image_b64) {
                   console.log(`[Stream] 🖼️ Partial/Final image received (index: ${event.partial_image_index})`)
 
-                  // Upload to S3 immediately
+                  // Upload to S3 immediately (safe upload - won't fail the chat)
                   const imageUrl = await saveImageToS3(
                     event.partial_image_b64,
                     chatIdInt,
                     generatedImageUrls.length
                   )
 
-                  generatedImageUrls.push(imageUrl)
-                  console.log(`[Stream] ✅ Image ${event.partial_image_index} uploaded: ${imageUrl}`)
+                  // Only add and send if upload succeeded
+                  if (imageUrl) {
+                    generatedImageUrls.push(imageUrl)
+                    console.log(`[Stream] ✅ Image ${event.partial_image_index} uploaded: ${imageUrl}`)
 
-                  // Send to frontend with partial flag
-                  controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({
-                      type: event.partial_image_index === 0 ? "image_partial" : "image_complete",
-                      url: imageUrl,
-                      itemId: event.item_id,
-                      index: event.partial_image_index,
-                      isPartial: event.partial_image_index === 0
-                    })}\n\n`)
-                  )
+                    // Send to frontend with partial flag
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({
+                        type: event.partial_image_index === 0 ? "image_partial" : "image_complete",
+                        url: imageUrl,
+                        itemId: event.item_id,
+                        index: event.partial_image_index,
+                        isPartial: event.partial_image_index === 0
+                      })}\n\n`)
+                    )
+                  }
                 }
                 break
 
               case "response.image_generation_call.completed":
                 // This event rarely fires in Responses API, handled by partial_image instead
                 console.log("[Stream] 🎨 Image generation completed event (rare)")
-                if (event.b64_json && !generatedImageUrls.some(url => url.includes(event.item_id))) {
+                if (event.b64_json && !generatedImageUrls.some(url => url && url.includes(event.item_id))) {
                   const imageUrl = await saveImageToS3(
                     event.b64_json,
                     chatIdInt,
                     generatedImageUrls.length
                   )
-                  generatedImageUrls.push(imageUrl)
-                  controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({
-                      type: "image_complete",
-                      url: imageUrl,
-                      itemId: event.item_id
-                    })}\n\n`)
-                  )
+
+                  // Only add and send if upload succeeded
+                  if (imageUrl) {
+                    generatedImageUrls.push(imageUrl)
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({
+                        type: "image_complete",
+                        url: imageUrl,
+                        itemId: event.item_id
+                      })}\n\n`)
+                    )
+                  }
                 }
                 break
 
@@ -900,24 +920,27 @@ After finalizing, share the \`hosted_invoice_url\` with the customer for payment
                     console.log("[Stream] 🎨 Found image data, uploading to S3...")
                     console.log("[Stream] Image data length:", imageData?.length || 0)
 
-                    // Upload to S3 - no try-catch, let errors bubble up
+                    // Upload to S3 (safe upload - won't fail the chat)
                     const imageUrl = await saveImageToS3(
                       imageData as string,
                       chatIdInt,
                       generatedImageUrls.length
                     )
 
-                    generatedImageUrls.push(imageUrl)
-                    console.log(`[Stream] ✅ Image uploaded: ${imageUrl}`)
+                    // Only add and send if upload succeeded
+                    if (imageUrl) {
+                      generatedImageUrls.push(imageUrl)
+                      console.log(`[Stream] ✅ Image uploaded: ${imageUrl}`)
 
-                    // Send final image to frontend
-                    controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({
-                        type: "image_complete",
-                        url: imageUrl,
-                        itemId: event.item.id
-                      })}\n\n`)
-                    )
+                      // Send final image to frontend
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "image_complete",
+                          url: imageUrl,
+                          itemId: event.item.id
+                        })}\n\n`)
+                      )
+                    }
                   } else if (event.item.status === "failed") {
                     console.error("[Stream] ❌ Image generation failed:", event.item.error)
                     controller.enqueue(

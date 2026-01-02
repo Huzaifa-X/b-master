@@ -7,7 +7,7 @@ import { openai } from "@/lib/openai";
 import { GenerateInstructionsParams, GenerateInstructionsResponse } from "@/types/ai-instruction"
 import { AssistantCategory } from "@/types/assistant"
 import { revalidatePath } from "next/cache"
-import { uploadToS3 } from "@/lib/aws-s3"
+import { uploadToS3, safeUploadToS3 } from "@/lib/aws-s3"
 import {
     createVectorStore,
     addNoteToVectorStore,
@@ -277,26 +277,29 @@ export async function createCompleteAssistant(
                 // Extract base64 data
                 const base64Data = params.imageData.split(',')[1]
                 const imageBuffer = Buffer.from(base64Data, 'base64')
-                
+
                 // Determine file extension from data URL
                 const mimeMatch = params.imageData.match(/data:image\/(\w+);/)
                 const extension = mimeMatch ? mimeMatch[1] : 'png'
-                
+
                 const fileName = `assistant_${assistantId}_${Date.now()}.${extension}`
                 const mimeType = `image/${extension}`
-                
-                // Upload to S3
-                const imageUrl = await uploadToS3(imageBuffer, fileName, mimeType, 'assistants')
-                
-                // Update assistant with image URL
-                await prisma.assistant.update({
-                    where: { id: assistant.id },
-                    data: { image: imageUrl }
-                })
-                
-                console.log(`✅ Image uploaded: ${imageUrl}`)
+
+                // Upload to S3 using safe upload (won't block assistant creation)
+                const uploadResult = await safeUploadToS3(imageBuffer, fileName, mimeType, 'assistants')
+
+                if (uploadResult.success && uploadResult.url) {
+                    // Update assistant with image URL only if upload succeeded
+                    await prisma.assistant.update({
+                        where: { id: assistant.id },
+                        data: { image: uploadResult.url }
+                    })
+                    console.log(`✅ Image uploaded: ${uploadResult.url}`)
+                } else {
+                    console.warn(`⚠️ Image upload failed: ${uploadResult.error}. Assistant created without image.`)
+                }
             } catch (imageError) {
-                console.error('Error uploading image:', imageError)
+                console.error('⚠️ Error processing image:', imageError)
                 // Don't fail the entire operation if image upload fails
             }
         }
@@ -387,32 +390,36 @@ export async function createCompleteAssistant(
                 for (const file of params.files) {
                     try {
                         const buffer = Buffer.from(await file.arrayBuffer())
-
-                        // s
-                        const fileBuffer = Buffer.from(await file.arrayBuffer())
                         const fileFileName = `${file.name}.${file.type}`
-                        const fileUrl = await uploadToS3(fileBuffer, fileFileName, file.type, 'knowledge-base')
-                        
-                        // Upload to OpenAI vector store
+
+                        // Upload to S3 using safe upload (won't block knowledge base creation)
+                        const uploadResult = await safeUploadToS3(buffer, fileFileName, file.type, 'knowledge-base')
+
+                        // Upload to OpenAI vector store (this is critical, so let it throw if it fails)
                         const vectorFileId = await uploadAndAddToVectorStore(
                             vectorStoreId,
                             buffer,
                             file.name
                         )
-                        
-                        // Save to database
+
+                        // Save to database with or without S3 URL
                         await prisma.assistantKnowledgebase.create({
                             data: {
                                 assistantId: assistant.id,
-                                file: fileUrl,
+                                file: uploadResult.success ? uploadResult.url : null,
                                 vectorFileId: vectorFileId,
                                 type: 'file',
                             }
                         })
-                        
-                        console.log(`✅ File added: ${file.name}`)
+
+                        if (uploadResult.success) {
+                            console.log(`✅ File added to knowledge base: ${file.name} (S3: ${uploadResult.url})`)
+                        } else {
+                            console.warn(`⚠️ File added to knowledge base: ${file.name} (S3 upload failed: ${uploadResult.error}). File saved to OpenAI vector store only.`)
+                        }
                     } catch (fileError) {
-                        console.error(`Error processing file ${file.name}:`, fileError)
+                        console.error(`❌ Error processing file ${file.name}:`, fileError)
+                        // Continue with other files even if one fails
                     }
                 }
             } catch (vectorStoreError) {
@@ -1514,21 +1521,28 @@ export async function updateCompleteAssistant(
             try {
                 const base64Data = params.imageData.split(',')[1]
                 const imageBuffer = Buffer.from(base64Data, 'base64')
-                
+
                 const mimeMatch = params.imageData.match(/data:image\/(\w+);/)
                 const extension = mimeMatch ? mimeMatch[1] : 'png'
-                
+
                 const fileName = `assistant_${assistantId}_${Date.now()}.${extension}`
                 const mimeType = `image/${extension}`
-                
-                const imageUrl = await uploadToS3(imageBuffer, fileName, mimeType, 'assistants')
-                
-                await prisma.assistant.update({
-                    where: { id: assistantBigInt },
-                    data: { image: imageUrl }
-                })
+
+                // Upload to S3 using safe upload (won't block assistant update)
+                const uploadResult = await safeUploadToS3(imageBuffer, fileName, mimeType, 'assistants')
+
+                if (uploadResult.success && uploadResult.url) {
+                    await prisma.assistant.update({
+                        where: { id: assistantBigInt },
+                        data: { image: uploadResult.url }
+                    })
+                    console.log(`✅ Image updated: ${uploadResult.url}`)
+                } else {
+                    console.warn(`⚠️ Image upload failed during update: ${uploadResult.error}. Assistant updated without image change.`)
+                }
             } catch (imageError) {
-                console.error('Error updating image:', imageError)
+                console.error('⚠️ Error updating image:', imageError)
+                // Don't fail the entire update operation
             }
         }
 
@@ -1695,24 +1709,34 @@ export async function updateCompleteAssistant(
 
                     const buffer = Buffer.from(await file.arrayBuffer())
                     const fileFileName = `${file.name}.${file.type}`
-                    const fileUrl = await uploadToS3(buffer, fileFileName, file.type, 'knowledge-base')
-                    
+
+                    // Upload to S3 using safe upload (won't block knowledge base creation)
+                    const uploadResult = await safeUploadToS3(buffer, fileFileName, file.type, 'knowledge-base')
+
+                    // Upload to OpenAI vector store (this is critical, so let it throw if it fails)
                     const vectorFileId = await uploadAndAddToVectorStore(
                         vectorStoreId,
                         buffer,
                         file.name
                     )
-                    
+
+                    // Save to database with or without S3 URL
                     await prisma.assistantKnowledgebase.create({
                         data: {
                             assistantId: assistantBigInt,
-                            file: fileUrl,
+                            file: uploadResult.success ? uploadResult.url : null,
                             vectorFileId: vectorFileId,
                             type: 'file',
                         }
                     })
+
+                    if (uploadResult.success) {
+                        console.log(`✅ File added to knowledge base: ${file.name} (S3: ${uploadResult.url})`)
+                    } else {
+                        console.warn(`⚠️ File added to knowledge base: ${file.name} (S3 upload failed: ${uploadResult.error}). File saved to OpenAI vector store only.`)
+                    }
                 } catch (err) {
-                    console.error(`Error processing file ${file.name}:`, err)
+                    console.error(`❌ Error processing file ${file.name}:`, err)
                 }
             }
         }
