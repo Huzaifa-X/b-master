@@ -11,6 +11,7 @@ import { OpenAPITool } from "@/lib/openapi-tool-converter"
 import { executeAPITool, loadAPITools, toOpenAIToolDefinitions } from "@/lib/api-tools-loader"
 import { decrypt } from "@/lib/encryption"
 import { generateInvoicePDFFromData } from "@/lib/services/invoice-pdf-service"
+import { generatePDFFromHTML } from "@/lib/services/pdf-generator"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -154,208 +155,208 @@ export async function POST(req: NextRequest) {
     // Add Stripe invoice creation instructions
     systemPrompt += `\n\n## Stripe Invoice Creation Workflow
 
-When the user requests invoice creation, execute the Stripe MCP workflow immediately.
+      When the user requests invoice creation, execute the Stripe MCP workflow immediately.
 
-Follow these exact Stripe MCP calls in sequence:
+      Follow these exact Stripe MCP calls in sequence:
 
-### 🎯 Complete Invoice Flow (6 Steps)
+      ### 🎯 Complete Invoice Flow (6 Steps)
 
-**Step 1: Get or Create Customer**
-- Tool: \`create_customer\` or search with \`search_stripe_resources\`
-- Required: email, name
-- Returns: \`customer_id\` (e.g., "cus_...")
+      **Step 1: Get or Create Customer**
+      - Tool: \`create_customer\` or search with \`search_stripe_resources\`
+      - Required: email, name
+      - Returns: \`customer_id\` (e.g., "cus_...")
 
-**Step 2: Create Product**
-- Tool: \`create_product\`
-- Required: name (e.g., "SEO Career Support - Basic Package")
-- Optional: description
-- Returns: \`product_id\` (e.g., "prod_...")
+      **Step 2: Create Product**
+      - Tool: \`create_product\`
+      - Required: name (e.g., "SEO Career Support - Basic Package")
+      - Optional: description
+      - Returns: \`product_id\` (e.g., "prod_...")
 
-**Step 3: Create ONE-TIME Price**
-- Tool: \`create_price\`
-- Required parameters ONLY:
-  - \`product\`: "prod_..." (from Step 2)
-  - \`unit_amount\`: amount in cents (e.g., 2000 = 20.00 CHF)
-  - \`currency\`: lowercase code (e.g., "chf", "usd", "eur")
-- **CRITICAL:** Do NOT include \`recurring\` parameter - omitting it creates a one-time price
-- **WRONG:** \`{product, unit_amount, currency, recurring: {interval: "month"}}\` ❌
-- **CORRECT:** \`{product, unit_amount, currency}\` ✅ (no recurring field!)
-- Returns: \`price_id\` (e.g., "price_...")
+      **Step 3: Create ONE-TIME Price**
+      - Tool: \`create_price\`
+      - Required parameters ONLY:
+        - \`product\`: "prod_..." (from Step 2)
+        - \`unit_amount\`: amount in cents (e.g., 2000 = 20.00 CHF)
+        - \`currency\`: lowercase code (e.g., "chf", "usd", "eur")
+      - **CRITICAL:** Do NOT include \`recurring\` parameter - omitting it creates a one-time price
+      - **WRONG:** \`{product, unit_amount, currency, recurring: {interval: "month"}}\` ❌
+      - **CORRECT:** \`{product, unit_amount, currency}\` ✅ (no recurring field!)
+      - Returns: \`price_id\` (e.g., "price_...")
 
-**Step 4: Create Draft Invoice**
-- Tool: \`create_invoice\`
-- Required: \`customer\` (customer_id from Step 1)
-- Optional: \`days_until_due\` (e.g., 7 for Net 7 terms), \`description\`
-- Returns: \`invoice_id\` (e.g., "in_...")
+      **Step 4: Create Draft Invoice**
+      - Tool: \`create_invoice\`
+      - Required: \`customer\` (customer_id from Step 1)
+      - Optional: \`days_until_due\` (e.g., 7 for Net 7 terms), \`description\`
+      - Returns: \`invoice_id\` (e.g., "in_...")
 
-**Step 5: Add Line Item to Invoice**
-- Tool: \`create_invoice_item\`
-- Required:
-  - \`invoice\`: invoice_id from Step 4
-  - \`price\`: price_id from Step 3
-- Optional: \`quantity\` (default: 1)
-- Returns: Line item added to draft invoice
+      **Step 5: Add Line Item to Invoice**
+      - Tool: \`create_invoice_item\`
+      - Required:
+        - \`invoice\`: invoice_id from Step 4
+        - \`price\`: price_id from Step 3
+      - Optional: \`quantity\` (default: 1)
+      - Returns: Line item added to draft invoice
 
-**Step 6: Finalize Invoice**
-- Tool: \`finalize_invoice\`
-- Required: \`invoice\` (invoice_id from Step 4)
-- Returns: Finalized invoice with status "open" and \`hosted_invoice_url\` for payment
+      **Step 6: Finalize Invoice**
+      - Tool: \`finalize_invoice\`
+      - Required: \`invoice\` (invoice_id from Step 4)
+      - Returns: Finalized invoice with status "open" and \`hosted_invoice_url\` for payment
 
-### ✅ Correct MCP Tool Call Example
+      ### ✅ Correct MCP Tool Call Example
 
-\`\`\`json
-// Step 3: Create ONE-TIME Price (CORRECT)
-{
-  "name": "create_price",
-  "arguments": {
-    "product": "prod_Th1bJ3LBv7PTiQ",
-    "unit_amount": 2000,
-    "currency": "chf"
-  }
-}
-// ✅ This creates a one-time price because "recurring" is omitted
-\`\`\`
+      \`\`\`json
+      // Step 3: Create ONE-TIME Price (CORRECT)
+      {
+        "name": "create_price",
+        "arguments": {
+          "product": "prod_Th1bJ3LBv7PTiQ",
+          "unit_amount": 2000,
+          "currency": "chf"
+        }
+      }
+      // ✅ This creates a one-time price because "recurring" is omitted
+      \`\`\`
 
-### ❌ Common Mistakes to AVOID
+      ### ❌ Common Mistakes to AVOID
 
-\`\`\`json
-// ❌ WRONG - Don't add "type" parameter
-{
-  "name": "create_price",
-  "arguments": {
-    "product": "prod_...",
-    "unit_amount": 2000,
-    "currency": "chf",
-    "type": "one_time"  // ❌ This parameter doesn't exist in Stripe API!
-  }
-}
+      \`\`\`json
+      // ❌ WRONG - Don't add "type" parameter
+      {
+        "name": "create_price",
+        "arguments": {
+          "product": "prod_...",
+          "unit_amount": 2000,
+          "currency": "chf",
+          "type": "one_time"  // ❌ This parameter doesn't exist in Stripe API!
+        }
+      }
 
-// ❌ WRONG - Don't add "recurring" for invoices
-{
-  "name": "create_price",
-  "arguments": {
-    "product": "prod_...",
-    "unit_amount": 2000,
-    "currency": "chf",
-    "recurring": { "interval": "month" }  // ❌ This creates a subscription price!
-  }
-}
-\`\`\`
+      // ❌ WRONG - Don't add "recurring" for invoices
+      {
+        "name": "create_price",
+        "arguments": {
+          "product": "prod_...",
+          "unit_amount": 2000,
+          "currency": "chf",
+          "recurring": { "interval": "month" }  // ❌ This creates a subscription price!
+        }
+      }
+      \`\`\`
 
-### 📋 Complete Real-World Example
+      ### 📋 Complete Real-World Example
 
-**User Request:** "Create invoice for Hassan (hassanmuzaffar100@gmail.com) for 20 CHF for SEO career support"
+      **User Request:** "Create invoice for Hassan (hassanmuzaffar100@gmail.com) for 20 CHF for SEO career support"
 
-**Correct MCP Call Sequence:**
+      **Correct MCP Call Sequence:**
 
-\`\`\`json
-// 1. Create customer (or retrieve if exists)
-{
-  "name": "create_customer",
-  "arguments": {
-    "email": "hassanmuzaffar100@gmail.com",
-    "name": "M Hassan Muzaffar"
-  }
-}
-// → Returns: { "id": "cus_Tfi1ZIvpa60tGx", ... }
+      \`\`\`json
+      // 1. Create customer (or retrieve if exists)
+      {
+        "name": "create_customer",
+        "arguments": {
+          "email": "hassanmuzaffar100@gmail.com",
+          "name": "M Hassan Muzaffar"
+        }
+      }
+      // → Returns: { "id": "cus_Tfi1ZIvpa60tGx", ... }
 
-// 2. Create product
-{
-  "name": "create_product",
-  "arguments": {
-    "name": "SEO Career Support - Basic Package"
-  }
-}
-// → Returns: { "id": "prod_Th1bJ3LBv7PTiQ", ... }
+      // 2. Create product
+      {
+        "name": "create_product",
+        "arguments": {
+          "name": "SEO Career Support - Basic Package"
+        }
+      }
+      // → Returns: { "id": "prod_Th1bJ3LBv7PTiQ", ... }
 
-// 3. Create one-time price (NO recurring field!)
-{
-  "name": "create_price",
-  "arguments": {
-    "product": "prod_Th1bJ3LBv7PTiQ",
-    "unit_amount": 2000,
-    "currency": "chf"
-  }
-}
-// → Returns: { "id": "price_...", "type": "one_time", ... }
+      // 3. Create one-time price (NO recurring field!)
+      {
+        "name": "create_price",
+        "arguments": {
+          "product": "prod_Th1bJ3LBv7PTiQ",
+          "unit_amount": 2000,
+          "currency": "chf"
+        }
+      }
+      // → Returns: { "id": "price_...", "type": "one_time", ... }
 
-// 4. Create draft invoice
-{
-  "name": "create_invoice",
-  "arguments": {
-    "customer": "cus_Tfi1ZIvpa60tGx",
-    "days_until_due": 7,
-    "description": "Invoice for SEO Career Support - Basic Package"
-  }
-}
-// → Returns: { "id": "in_1SjdYqGwVMSCaO58lIzPCRA4", "status": "draft", ... }
+      // 4. Create draft invoice
+      {
+        "name": "create_invoice",
+        "arguments": {
+          "customer": "cus_Tfi1ZIvpa60tGx",
+          "days_until_due": 7,
+          "description": "Invoice for SEO Career Support - Basic Package"
+        }
+      }
+      // → Returns: { "id": "in_1SjdYqGwVMSCaO58lIzPCRA4", "status": "draft", ... }
 
-// 5. Add line item
-{
-  "name": "create_invoice_item",
-  "arguments": {
-    "invoice": "in_1SjdYqGwVMSCaO58lIzPCRA4",
-    "price": "price_...",
-    "quantity": 1
-  }
-}
-// → Returns: { "invoice": "in_...", "amount": 2000, ... }
+      // 5. Add line item
+      {
+        "name": "create_invoice_item",
+        "arguments": {
+          "invoice": "in_1SjdYqGwVMSCaO58lIzPCRA4",
+          "price": "price_...",
+          "quantity": 1
+        }
+      }
+      // → Returns: { "invoice": "in_...", "amount": 2000, ... }
 
-// 6. Finalize invoice
-{
-  "name": "finalize_invoice",
-  "arguments": {
-    "invoice": "in_1SjdYqGwVMSCaO58lIzPCRA4"
-  }
-}
-// → Returns: {
-//   "id": "in_1SjdYqGwVMSCaO58lIzPCRA4",
-//   "amount_due": 2000,
-//   "currency": "chf",
-//   "hosted_invoice_url": "https://invoice.stripe.com/i/...",
-//   "status": "open"
-// }
-\`\`\`
+      // 6. Finalize invoice
+      {
+        "name": "finalize_invoice",
+        "arguments": {
+          "invoice": "in_1SjdYqGwVMSCaO58lIzPCRA4"
+        }
+      }
+      // → Returns: {
+      //   "id": "in_1SjdYqGwVMSCaO58lIzPCRA4",
+      //   "amount_due": 2000,
+      //   "currency": "chf",
+      //   "hosted_invoice_url": "https://invoice.stripe.com/i/...",
+      //   "status": "open"
+      // }
+      \`\`\`
 
-### 💡 Important Notes
+      ### 💡 Important Notes
 
-**Amount Format:**
-- Always in cents (smallest currency unit)
-- 2000 = 20.00 CHF
-- 150000 = 1,500.00 USD
-- Formula: amount_in_dollars × 100
+      **Amount Format:**
+      - Always in cents (smallest currency unit)
+      - 2000 = 20.00 CHF
+      - 150000 = 1,500.00 USD
+      - Formula: amount_in_dollars × 100
 
-**Currency Codes:**
-- Must be lowercase 3-letter ISO code
-- Examples: "chf", "usd", "eur", "gbp", "cad"
+      **Currency Codes:**
+      - Must be lowercase 3-letter ISO code
+      - Examples: "chf", "usd", "eur", "gbp", "cad"
 
-**Invoice Status Flow:**
-- "draft" → Created but not finalized
-- "open" → Finalized and ready for payment
-- "paid" → Customer paid
-- "void" → Canceled
+      **Invoice Status Flow:**
+      - "draft" → Created but not finalized
+      - "open" → Finalized and ready for payment
+      - "paid" → Customer paid
+      - "void" → Canceled
 
-**Why Finalization is Critical:**
-- Draft invoices have \`amount_due: null\`
-- Finalization calculates totals, taxes, discounts
-- Only finalized invoices get \`hosted_invoice_url\`
-- Only finalized invoices can be paid
-- Always finalize invoices before sharing with customers
+      **Why Finalization is Critical:**
+      - Draft invoices have \`amount_due: null\`
+      - Finalization calculates totals, taxes, discounts
+      - Only finalized invoices get \`hosted_invoice_url\`
+      - Only finalized invoices can be paid
+      - Always finalize invoices before sharing with customers
 
-**Multi-Line Invoices:**
-For multiple line items, repeat Steps 2-3 for each item, then add all items in Step 5:
-\`\`\`json
-// Add first item
-{ "name": "create_invoice_item", "arguments": { "invoice": "in_...", "price": "price_1", "quantity": 1 }}
+      **Multi-Line Invoices:**
+      For multiple line items, repeat Steps 2-3 for each item, then add all items in Step 5:
+      \`\`\`json
+      // Add first item
+      { "name": "create_invoice_item", "arguments": { "invoice": "in_...", "price": "price_1", "quantity": 1 }}
 
-// Add second item
-{ "name": "create_invoice_item", "arguments": { "invoice": "in_...", "price": "price_2", "quantity": 1 }}
+      // Add second item
+      { "name": "create_invoice_item", "arguments": { "invoice": "in_...", "price": "price_2", "quantity": 1 }}
 
-// Then finalize
-{ "name": "finalize_invoice", "arguments": { "invoice": "in_..." }}
-\`\`\`
+      // Then finalize
+      { "name": "finalize_invoice", "arguments": { "invoice": "in_..." }}
+      \`\`\`
 
-After finalizing, share the \`hosted_invoice_url\` with the customer for payment! 🎉`
+      After finalizing, share the \`hosted_invoice_url\` with the customer for payment! 🎉`
 
     // ==========================================
     // END OF STRIPE INVOICE PROMPT
@@ -363,21 +364,58 @@ After finalizing, share the \`hosted_invoice_url\` with the customer for payment
 
     // Add artifact information if provided
     if (artifact) {
-      systemPrompt += `\n\n## Artifact Information Shared by User\n`
-      systemPrompt += `The user has shared an artifact named "${artifact.name}" with the following content:\n\n`
-      systemPrompt += `Artifact HTML Content:\n${artifact.htmlContent}\n\n`
-      if (artifact.instructions) {
-        systemPrompt += `Artifact Instructions:\n${artifact.instructions}\n\n`
-      }
-      systemPrompt += `Please use this artifact information to help answer the user's question. Reference the artifact content when relevant.`
+      systemPrompt += `\n\n## 🎨 Artifact Context & Update Capability
 
-      systemPrompt += `\n\n## Artifact Update Capability\n`
-      systemPrompt += `You can update this artifact if the user requests changes. When updating:\n`
-      systemPrompt += `1. Use the update_artifact function to save changes\n`
-      systemPrompt += `2. Create a new version with a clear description of what changed\n`
-      systemPrompt += `3. The artifact will be automatically updated with the new version\n`
-      systemPrompt += `4. Always explain what you changed after updating\n`
-      systemPrompt += `\n\n${await getArtifactCodingPrompt()}`
+      **The user has shared an artifact named "${artifact.name}" in this conversation.**
+
+      ### Artifact Content:
+      \`\`\`html
+      ${artifact.htmlContent}
+      \`\`\`
+      ${artifact.instructions ? `\n### Original Instructions:\n${artifact.instructions}\n` : ''}
+
+      ### Your Role with This Artifact:
+
+      **CRITICAL: Understand User Intent First**
+
+      Before responding, analyze what the user is asking:
+
+      1. **Information Questions** (e.g., "What does this do?", "How does the button work?", "Explain this code"):
+        - DO NOT modify the artifact
+        - Provide clear explanations about the artifact's functionality
+        - Reference specific parts of the code when explaining
+        - Answer their questions directly without making changes
+
+      2. **Modification Requests** (e.g., "Change the color to blue", "Add a counter", "Fix the button", "Make it responsive"):
+        - Use the update_artifact function to implement the changes
+        - Explain what you're changing BEFORE making the update
+        - After updating, clearly describe what was changed and why
+        - Provide a concise summary of the modifications
+
+      3. **Debugging/Help Requests** (e.g., "This isn't working", "Why is it broken?", "Help me fix this"):
+        - First, analyze and explain the issue
+        - If a fix is needed AND user confirms, then update
+        - If unclear whether to update, ASK the user first
+
+      4. **General Conversation** (e.g., "Thanks!", "That looks good", "Hello"):
+        - Respond naturally without modifying the artifact
+        - Acknowledge their message appropriately
+
+      ### Updating the Artifact:
+
+      When you determine the user wants modifications:
+      - Call the \`update_artifact\` function with:
+        - \`updatedCode\`: Complete updated HTML (include ALL code, not just changes)
+        - \`changeDescription\`: Detailed explanation of what changed and why
+        - \`changeSummary\`: One-line summary (e.g., "Changed button color to blue")
+
+      ### Key Principles:
+      - **Don't over-update**: If they ask a question, answer it - don't modify the code unless explicitly requested
+      - **Be explicit**: If you're updating, say "I'll update the artifact to..." BEFORE calling the function
+      - **Confirm uncertain requests**: If unclear whether to modify, ask for confirmation
+      - **Preserve functionality**: When updating, maintain existing features unless told to remove them
+
+      ${await getArtifactCodingPrompt()}`
     }
 
     if (chatType === "ASSISTANT" && chat.assistant?.instructions) {
@@ -583,7 +621,57 @@ After finalizing, share the \`hosted_invoice_url\` with the customer for payment
         description,
       } = JSON.parse(toolCall.arguments as string);
 
-      if (is_invoice_request) {
+      if (is_invoice_request && artifact && artifact.htmlContent) {
+        const updatedHtmlResponse = await openai.responses.create({
+          model: "gpt-4.1",
+          input: `Update the provided invoice HTML template with the following customer details:
+            - Customer Name: ${name}
+            - Customer Email: ${email}
+            - Invoice Amount: ${price}
+            - Description: ${description}
+            - Currency: USD (or extract from context)
+            - Invoice Date: ${new Date().toLocaleDateString()}
+            - User Input: ${enhancedUserMessage}
+
+            ## Invoice Template HTML
+            \`\`\`html
+            ${artifact.htmlContent}
+            \`\`\`
+
+            ## Instructions
+            1. Find the customer name field in the HTML and update it with "${name}"
+            2. Find the customer email field and update it with "${email}"
+            3. Find the invoice amount/price field and update it with "${price}"
+            4. Find the description/items field and update it with "${description}"
+            5. Find the date field and update it with today's date
+            6. Update any totals, subtotals, or calculated fields
+            7. Preserve ALL existing HTML structure, styles, and classes
+            8. Return ONLY the complete updated HTML (no explanations, no markdown)
+
+            ## Important Rules
+            - Do NOT add explanations before or after the HTML
+            - Do NOT wrap the HTML in markdown code blocks
+            - Return the raw HTML ready for PDF generation
+            - Ensure all HTML tags are properly closed
+            - Preserve all CSS styles and JavaScript if present`
+        });
+
+        console.log("updatedHtmlResponse", updatedHtmlResponse.output_text);
+
+        const { pdfUrl } = await generatePDFFromHTML({
+          html: updatedHtmlResponse.output_text || "",
+          filename: `invoice-${Date.now()}.pdf`,
+          s3Folder: "invoices",
+        });
+
+        systemPrompt += `
+        ## Invoice PDF
+        - **URL**: ${pdfUrl}
+        - PLease Include this URL in the response to the user as a link.
+        - Please Do not update the Artifact.
+      `;
+      }
+      else if (is_invoice_request) {
         const pdfUrl = await generateInvoicePDFFromData({
           customerName: name!,
           customerEmail: email!,
@@ -592,9 +680,9 @@ After finalizing, share the \`hosted_invoice_url\` with the customer for payment
         });
 
         systemPrompt += `
-      ## Invoice PDF
-      - **URL**: ${pdfUrl}
-      - PLease Include this in the response to the user.
+        ## Invoice PDF
+        - **URL**: ${pdfUrl}
+        - PLease Include this URL in the response to the user as a link.
       `;
       }
     }
@@ -940,185 +1028,185 @@ After finalizing, share the \`hosted_invoice_url\` with the customer for payment
                           itemId: event.item.id
                         })}\n\n`)
                       )
-                    }
-                  } else if (event.item.status === "failed") {
-                    console.error("[Stream] ❌ Image generation failed:", event.item.error)
-                    controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({
-                        type: "image_failed",
-                        error: event.item.error?.message || "Image generation failed"
-                      })}\n\n`)
-                    )
-                  } else {
-                    console.log("[Stream] ⚠️ Image item done but no image data found")
-                    console.log("[Stream] Item status:", event.item.status)
-                    console.log("[Stream] Full item structure:", JSON.stringify(event.item, null, 2))
-                  }
-                }
-
-                // 2. TRACK TOOL USAGE
-                if (event.item?.type === "file_search_call" && !usedTools.includes("file_search")) {
-                  usedTools.push("file_search")
-                }
-                if (event.item?.type === "web_search_call" && !usedTools.includes("web_search")) {
-                  usedTools.push("web_search")
-                }
-
-                // 3. HANDLE MCP CALLS
-                if (event.item?.type === "mcp_call") {
-                  console.log("===============================================")
-                  const mcpCallName = event.item.name || '';
-                  const mcpCallArgs = event.item.arguments ? JSON.parse(event.item.arguments) : {};
-                  const mcpServerLabel = event.item.server_label || '';
-                  const mcpOutput = event.item.output;
-
-                  console.log("[Stream] 🔌 MCP call completed via output_item.done")
-                  console.log("[Stream] MCP name:", mcpCallName)
-                  console.log("[Stream] MCP server:", mcpServerLabel)
-                  console.log("[Stream] MCP status:", event.item.status)
-                  console.log("[Stream] MCP output:", mcpOutput)
-                  console.log("===============================================")
-
-                  // Dropbox MCP
-                  if (mcpServerLabel.toLowerCase().includes("dropbox") && !usedTools.includes("dropbox")) {
-                    usedTools.push("dropbox")
-                    console.log("[Stream] Dropbox MCP tool used:", mcpCallName)
-                  }
-
-                  // Stripe MCP - Track tool usage
-                  if (mcpServerLabel.toLowerCase().includes("stripe") && !usedTools.includes("stripe")) {
-                    usedTools.push("stripe")
-                    console.log("[Stream] Stripe MCP tool used:", mcpCallName)
-                  }
-                }
-
-                // 4. HANDLE FUNCTION CALLS
-                if (event.item?.type === "function_call") {
-                  const functionName = event.item.name
-                  const functionArgs = event.item.arguments
-                    ? JSON.parse(event.item.arguments)
-                    : {}
-
-                  console.log(`[Stream] Function call detected: ${functionName}`)
-
-                  // Artifact Update
-                  if (functionName === "update_artifact" && artifact) {
-                    console.log(`[Stream] 🎨 Updating artifact: ${artifact.name}`)
-
-                    try {
-                      const { updatedCode, changeDescription, changeSummary } = functionArgs
-
-                      if (!updatedCode || !changeDescription) {
-                        throw new Error("Missing required parameters for artifact update")
-                      }
-
-                      const { createArtifactVersion } = await import("@/app/actions/update-artifact.action")
-
-                      const versionResult = await createArtifactVersion({
-                        artifactId: parseInt(artifact.id),
-                        userId: BigInt(session.user.id),
-                        code: updatedCode,
-                        description: changeDescription,
-                        changeType: 'ai',
-                        setAsActive: true
-                      })
-
-                      if (!versionResult.success) {
-                        throw new Error(versionResult.error || "Failed to create artifact version")
-                      }
-
-                      console.log(`[Stream] ✅ Artifact updated successfully. New version: ${versionResult.version?.versionNumber}`)
-
-                      if (!usedTools.includes("artifact_update")) {
-                        usedTools.push("artifact_update")
-                      }
-
-                      const successMessage = `\n\n✅ **Artifact Updated Successfully**\n\n` +
-                        `**Version:** ${versionResult.version?.versionNumber}\n` +
-                        `**Change:** ${changeSummary}\n\n` +
-                        `The artifact "${artifact.name}" has been updated with your requested changes.\n\n`
-
-                      assistantResponse += successMessage
-
+                    } else if (event.item.status === "failed") {
+                      console.error("[Stream] ❌ Image generation failed:", event.item.error)
                       controller.enqueue(
                         encoder.encode(`data: ${JSON.stringify({
-                          type: "artifact_updated",
-                          artifactId: artifact.id,
-                          artifactName: artifact.name,
-                          versionNumber: versionResult.version?.versionNumber,
-                          changeSummary: changeSummary
+                          type: "image_failed",
+                          error: event.item.error?.message || "Image generation failed"
                         })}\n\n`)
                       )
-
-                      controller.enqueue(
-                        encoder.encode(`data: ${JSON.stringify({
-                          type: "text",
-                          content: successMessage
-                        })}\n\n`)
-                      )
-
-                    } catch (updateError: any) {
-                      console.error(`[Stream] ❌ Artifact update error:`, updateError)
-
-                      const errorMessage = `\n\n⚠️ **Failed to Update Artifact**\n\n` +
-                        `Error: ${updateError.message}\n\n` +
-                        `The artifact could not be updated. Please try again or check your permissions.\n\n`
-
-                      assistantResponse += errorMessage
-
-                      controller.enqueue(
-                        encoder.encode(`data: ${JSON.stringify({
-                          type: "artifact_update_error",
-                          error: updateError.message
-                        })}\n\n`)
-                      )
-
-                      controller.enqueue(
-                        encoder.encode(`data: ${JSON.stringify({
-                          type: "text",
-                          content: errorMessage
-                        })}\n\n`)
-                      )
+                    } else {
+                      console.log("[Stream] ⚠️ Image item done but no image data found")
+                      console.log("[Stream] Item status:", event.item.status)
+                      console.log("[Stream] Full item structure:", JSON.stringify(event.item, null, 2))
                     }
                   }
 
-                  // API Tools
-                  const isAPITool = apiTools.some(t => t.openaiTool.name === functionName)
+                  // 2. TRACK TOOL USAGE
+                  if (event.item?.type === "file_search_call" && !usedTools.includes("file_search")) {
+                    usedTools.push("file_search")
+                  }
+                  if (event.item?.type === "web_search_call" && !usedTools.includes("web_search")) {
+                    usedTools.push("web_search")
+                  }
 
-                  if (isAPITool) {
-                    console.log(`[Stream] Executing API tool: ${functionName}`)
+                  // 3. HANDLE MCP CALLS
+                  if (event.item?.type === "mcp_call") {
+                    console.log("===============================================")
+                    const mcpCallName = event.item.name || '';
+                    const mcpCallArgs = event.item.arguments ? JSON.parse(event.item.arguments) : {};
+                    const mcpServerLabel = event.item.server_label || '';
+                    const mcpOutput = event.item.output;
 
-                    try {
-                      const result = await executeAPITool(apiTools, functionName, functionArgs)
+                    console.log("[Stream] 🔌 MCP call completed via output_item.done")
+                    console.log("[Stream] MCP name:", mcpCallName)
+                    console.log("[Stream] MCP server:", mcpServerLabel)
+                    console.log("[Stream] MCP status:", event.item.status)
+                    console.log("[Stream] MCP output:", mcpOutput)
+                    console.log("===============================================")
 
-                      if (!usedTools.includes(functionName)) {
-                        usedTools.push(functionName)
+                    // Dropbox MCP
+                    if (mcpServerLabel.toLowerCase().includes("dropbox") && !usedTools.includes("dropbox")) {
+                      usedTools.push("dropbox")
+                      console.log("[Stream] Dropbox MCP tool used:", mcpCallName)
+                    }
+
+                    // Stripe MCP - Track tool usage
+                    if (mcpServerLabel.toLowerCase().includes("stripe") && !usedTools.includes("stripe")) {
+                      usedTools.push("stripe")
+                      console.log("[Stream] Stripe MCP tool used:", mcpCallName)
+                    }
+                  }
+
+                  // 4. HANDLE FUNCTION CALLS
+                  if (event.item?.type === "function_call") {
+                    const functionName = event.item.name
+                    const functionArgs = event.item.arguments
+                      ? JSON.parse(event.item.arguments)
+                      : {}
+
+                    console.log(`[Stream] Function call detected: ${functionName}`)
+
+                    // Artifact Update
+                    if (functionName === "update_artifact" && artifact) {
+                      console.log(`[Stream] 🎨 Updating artifact: ${artifact.name}`)
+
+                      try {
+                        const { updatedCode, changeDescription, changeSummary } = functionArgs
+
+                        if (!updatedCode || !changeDescription) {
+                          throw new Error("Missing required parameters for artifact update")
+                        }
+
+                        const { createArtifactVersion } = await import("@/app/actions/update-artifact.action")
+
+                        const versionResult = await createArtifactVersion({
+                          artifactId: parseInt(artifact.id),
+                          userId: BigInt(session.user.id),
+                          code: updatedCode,
+                          description: changeDescription,
+                          changeType: 'ai',
+                          setAsActive: true
+                        })
+
+                        if (!versionResult.success) {
+                          throw new Error(versionResult.error || "Failed to create artifact version")
+                        }
+
+                        console.log(`[Stream] ✅ Artifact updated successfully. New version: ${versionResult.version?.versionNumber}`)
+
+                        if (!usedTools.includes("artifact_update")) {
+                          usedTools.push("artifact_update")
+                        }
+
+                        const successMessage = `\n\n✅ **Artifact Updated Successfully**\n\n` +
+                          `**Version:** ${versionResult.version?.versionNumber}\n` +
+                          `**Change:** ${changeSummary}\n\n` +
+                          `The artifact "${artifact.name}" has been updated with your requested changes.\n\n`
+
+                        assistantResponse += successMessage
+
+                        controller.enqueue(
+                          encoder.encode(`data: ${JSON.stringify({
+                            type: "artifact_updated",
+                            artifactId: artifact.id,
+                            artifactName: artifact.name,
+                            versionNumber: versionResult.version?.versionNumber,
+                            changeSummary: changeSummary
+                          })}\n\n`)
+                        )
+
+                        controller.enqueue(
+                          encoder.encode(`data: ${JSON.stringify({
+                            type: "text",
+                            content: successMessage
+                          })}\n\n`)
+                        )
+
+                      } catch (updateError: any) {
+                        console.error(`[Stream] ❌ Artifact update error:`, updateError)
+
+                        const errorMessage = `\n\n⚠️ **Failed to Update Artifact**\n\n` +
+                          `Error: ${updateError.message}\n\n` +
+                          `The artifact could not be updated. Please try again or check your permissions.\n\n`
+
+                        assistantResponse += errorMessage
+
+                        controller.enqueue(
+                          encoder.encode(`data: ${JSON.stringify({
+                            type: "artifact_update_error",
+                            error: updateError.message
+                          })}\n\n`)
+                        )
+
+                        controller.enqueue(
+                          encoder.encode(`data: ${JSON.stringify({
+                            type: "text",
+                            content: errorMessage
+                          })}\n\n`)
+                        )
                       }
+                    }
 
-                      const resultText = typeof result === 'string'
-                        ? result
-                        : JSON.stringify(result, null, 2)
+                    // API Tools
+                    const isAPITool = apiTools.some(t => t.openaiTool.name === functionName)
 
-                      assistantResponse += `\n\n**API Call Result (${functionName}):**\n\`\`\`json\n${resultText}\n\`\`\`\n\n`
+                    if (isAPITool) {
+                      console.log(`[Stream] Executing API tool: ${functionName}`)
 
-                      controller.enqueue(
-                        encoder.encode(`data: ${JSON.stringify({
-                          type: "tool_result",
-                          tool: functionName,
-                          result: result
-                        })}\n\n`)
-                      )
-                    } catch (apiError: any) {
-                      console.error(`[Stream] ❌ API tool error:`, apiError)
-                      const errorText = `API call failed: ${apiError.message}`
-                      assistantResponse += `\n\n**Error calling ${functionName}:** ${errorText}\n\n`
-                      controller.enqueue(
-                        encoder.encode(`data: ${JSON.stringify({
-                          type: "tool_error",
-                          tool: functionName,
-                          error: errorText
-                        })}\n\n`)
-                      )
+                      try {
+                        const result = await executeAPITool(apiTools, functionName, functionArgs)
+
+                        if (!usedTools.includes(functionName)) {
+                          usedTools.push(functionName)
+                        }
+
+                        const resultText = typeof result === 'string'
+                          ? result
+                          : JSON.stringify(result, null, 2)
+
+                        assistantResponse += `\n\n**API Call Result (${functionName}):**\n\`\`\`json\n${resultText}\n\`\`\`\n\n`
+
+                        controller.enqueue(
+                          encoder.encode(`data: ${JSON.stringify({
+                            type: "tool_result",
+                            tool: functionName,
+                            result: result
+                          })}\n\n`)
+                        )
+                      } catch (apiError: any) {
+                        console.error(`[Stream] ❌ API tool error:`, apiError)
+                        const errorText = `API call failed: ${apiError.message}`
+                        assistantResponse += `\n\n**Error calling ${functionName}:** ${errorText}\n\n`
+                        controller.enqueue(
+                          encoder.encode(`data: ${JSON.stringify({
+                            type: "tool_error",
+                            tool: functionName,
+                            error: errorText
+                          })}\n\n`)
+                        )
+                      }
                     }
                   }
                 }

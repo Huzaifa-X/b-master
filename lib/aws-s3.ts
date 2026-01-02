@@ -10,13 +10,14 @@ import {
   // ============================================
   // S3 CLIENT CONFIGURATION
   // ============================================
-  
+
   const s3Client = new S3Client({
     region: process.env.AWS_S3_REGION_NAME!,
     credentials: {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
     },
+    maxAttempts: 3, // Auto-retry on network errors
     // Optional: Custom endpoint for S3-compatible services (DigitalOcean Spaces, MinIO, etc.)
     ...(process.env.AWS_S3_ENDPOINT && {
       endpoint: process.env.AWS_S3_ENDPOINT,
@@ -79,10 +80,10 @@ import {
         CacheControl: "max-age=31536000", // Cache for 1 year
       })
 
-      // Execute upload with timeout
+      // Execute upload with extended timeout (120 seconds for large PDFs)
       const uploadPromise = s3Client.send(command)
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("S3 upload timeout after 30 seconds")), 30000)
+        setTimeout(() => reject(new Error("S3 upload timeout after 120 seconds")), 120000)
       )
 
       await Promise.race([uploadPromise, timeoutPromise])
@@ -111,7 +112,9 @@ import {
       // Provide user-friendly error messages based on error type
       let userMessage = "Failed to upload file to cloud storage"
 
-      if (error.code === 'NetworkingError' || error.message?.includes('timeout')) {
+      if (error.code === 'ECONNRESET' || error.syscall === 'read') {
+        userMessage = "Connection reset: Network connection to AWS S3 was interrupted. This is often temporary - please try again."
+      } else if (error.code === 'NetworkingError' || error.message?.includes('timeout')) {
         userMessage = "Network error: Unable to connect to AWS S3. Please check your internet connection and try again."
       } else if (error.code === 'InvalidAccessKeyId' || error.code === 'SignatureDoesNotMatch') {
         userMessage = "AWS credentials error: Invalid access credentials. Please contact support."
