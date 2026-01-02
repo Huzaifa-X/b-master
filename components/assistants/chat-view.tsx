@@ -287,11 +287,36 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
     }
   }
 
-  const otherUser = currentChat 
+  const otherUser = currentChat
     ? (currentChat.initiatorId === session?.user?.id
         ? currentChat.participant
         : currentChat.initiator)
     : null
+
+  // Convert URLs in text to clickable links
+  const linkifyText = (text: string, isOwn: boolean) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g
+    const parts = text.split(urlRegex)
+
+    return parts.map((part, index) => {
+      if (part.match(urlRegex)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`underline hover:opacity-80 ${
+              isOwn ? "text-primary-foreground" : "text-primary"
+            }`}
+          >
+            {part}
+          </a>
+        )
+      }
+      return <span key={index}>{part}</span>
+    })
+  }
 
   if (!conversationId) {
     return (
@@ -421,7 +446,9 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
                     
                     {/* Display text message */}
                     {message.message && (
-                      <p className="text-sm whitespace-pre-wrap break-words">{message.message}</p>
+                      <p className="text-sm whitespace-pre-wrap break-words">
+                        {linkifyText(message.message, isOwn)}
+                      </p>
                     )}
                     
                     {/* Display file download link for non-images */}
