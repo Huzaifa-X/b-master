@@ -7,6 +7,7 @@ import { getAssistantForEdit } from "@/app/actions/assistant.action"
 import { AssistantFormData } from "@/types/assistant"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import axios from "axios"
 
 export default function EditAssistantPage() {
   const params = useParams()
@@ -47,19 +48,16 @@ export default function EditAssistantPage() {
               try {
                 console.log(`Fetching file: ${fileInfo.name} from ${fileInfo.url}`)
                 
-                const response = await fetch(fileInfo.url, {
-                  method: 'GET',
+                const response = await axios.get(fileInfo.url, {
+                  responseType: 'blob',
                   headers: {
                     'Cache-Control': 'no-cache',
                   },
+                  // No timeout specified - files may be large and take time to download
+                  validateStatus: (status) => status >= 200 && status < 300,
                 })
                 
-                if (!response.ok) {
-                  console.warn(`Failed to fetch file: ${fileInfo.url} - Status: ${response.status}`)
-                  return null
-                }
-                
-                const blob = await response.blob()
+                const blob = response.data as Blob
                 console.log(`File fetched successfully: ${fileInfo.name}, size: ${blob.size} bytes`)
                 
                 // Ensure clean file name without MIME type contamination
@@ -71,18 +69,25 @@ export default function EditAssistantPage() {
                 // Remove any MIME type suffixes that might have been added (e.g., ".application_pdf")
                 fileName = fileName.replace(/\.(application|text|image|video|audio)_[a-z0-9]+$/i, '')
                 
-                // Determine proper MIME type
-                const fileType = fileInfo.type || blob.type || 'application/octet-stream'
+                // Determine proper MIME type from response or file info
+                const contentType = response.headers['content-type'] || fileInfo.type || blob.type || 'application/octet-stream'
                 
                 // Create File object with clean name
-                const file = new File([blob], fileName, { type: fileType })
+                const file = new File([blob], fileName, { type: contentType })
                 
                 // Verify file was created correctly
                 console.log(`File created: ${file.name}, type: ${file.type}, size: ${file.size}`)
                 
                 return file
               } catch (error) {
-                console.error(`Error converting file ${fileInfo.url}:`, error)
+                if (axios.isAxiosError(error)) {
+                  console.error(`Error fetching file ${fileInfo.url}:`, error.message)
+                  if (error.response) {
+                    console.error(`Status: ${error.response.status}, StatusText: ${error.response.statusText}`)
+                  }
+                } else {
+                  console.error(`Error converting file ${fileInfo.url}:`, error)
+                }
                 console.log(`Failed to load file: ${fileInfo.name}`)
                 return null
               }

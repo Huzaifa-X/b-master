@@ -465,15 +465,20 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
                 onValueChange={(value: keyof typeof EXAMPLE_SCHEMAS) => {
                   if (value && EXAMPLE_SCHEMAS[value]) {
                     const selectedSchema = EXAMPLE_SCHEMAS[value].schema
-                    updateFormData({ schemaText: selectedSchema })
 
                     // Trigger the same parsing logic as manual input
                     try {
-                      const parsedSchema = parseSchemaText(selectedSchema)
-                      if (parsedSchema) {
-                        const parsedOpenAPI = parseOpenAPISchema(parsedSchema)
+                      const parseResult = parseSchemaText(selectedSchema)
+                      if (parseResult.success && parseResult.data) {
+                        const parsedOpenAPI = parseOpenAPISchema(parseResult.data)
 
-                        // Auto-populate authentication if security schemes are detected
+                        // Prepare update object
+                        const updates: any = {
+                          schemaText: selectedSchema,
+                          schema: parseResult.data
+                        }
+
+                        // Auto-populate authentication based on security schemes
                         if (parsedOpenAPI.securitySchemes && parsedOpenAPI.security && parsedOpenAPI.security.length > 0) {
                           const firstSecurityReq = parsedOpenAPI.security[0]
                           const securitySchemeName = Object.keys(firstSecurityReq)[0]
@@ -482,30 +487,44 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
                             const scheme = parsedOpenAPI.securitySchemes[securitySchemeName]
 
                             if (scheme.type === 'apiKey') {
-                              updateFormData({
-                                authenticationType: 'api_key',
-                                authType: scheme.in === 'header' ? 'bearer' : 'basic',
-                                customHeaderName: scheme.in === 'header' ? scheme.name : undefined,
-                              })
+                              updates.authenticationType = 'api_key'
+                              updates.authType = scheme.in === 'header' ? 'bearer' : 'basic'
+                              if (scheme.in === 'header') {
+                                updates.customHeaderName = scheme.name
+                              }
                             } else if (scheme.type === 'http' && scheme.scheme === 'bearer') {
-                              updateFormData({
-                                authenticationType: 'api_key',
-                                authType: 'bearer',
-                              })
+                              updates.authenticationType = 'api_key'
+                              updates.authType = 'bearer'
                             } else if (scheme.type === 'oauth2') {
-                              updateFormData({
-                                authenticationType: 'oauth',
-                              })
+                              updates.authenticationType = 'oauth'
+                              // Auto-populate OAuth URLs if available
+                              if (scheme.flows?.authorizationCode) {
+                                updates.authorizationUrl = scheme.flows.authorizationCode.authorizationUrl
+                                updates.tokenUrl = scheme.flows.authorizationCode.tokenUrl
+                                if (scheme.flows.authorizationCode.scopes) {
+                                  updates.scope = Object.keys(scheme.flows.authorizationCode.scopes).join(' ')
+                                }
+                              }
                             }
                           }
+                        } else {
+                          // No security schemes detected - set to none
+                          updates.authenticationType = 'none'
                         }
 
-                        updateFormData({ schema: parsedSchema })
+                        // Apply all updates at once
+                        updateFormData(updates)
                       } else {
-                        updateFormData({ schema: undefined })
+                        updateFormData({
+                          schemaText: selectedSchema,
+                          schema: undefined
+                        })
                       }
                     } catch {
-                      updateFormData({ schema: undefined })
+                      updateFormData({
+                        schemaText: selectedSchema,
+                        schema: undefined
+                      })
                     }
                   }
                 }}
@@ -543,11 +562,11 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
 
               try {
                 // Parse the schema text (supports both JSON and YAML)
-                const parsedSchema = parseSchemaText(value)
+                const parseResult = parseSchemaText(value)
 
-                if (parsedSchema) {
+                if (parseResult.success && parseResult.data) {
                   // Check for security requirements and auto-populate authentication
-                  const parsedOpenAPI = parseOpenAPISchema(parsedSchema)
+                  const parsedOpenAPI = parseOpenAPISchema(parseResult.data)
 
                   // Auto-populate authentication if security schemes are detected
                   if (parsedOpenAPI.securitySchemes && parsedOpenAPI.security && parsedOpenAPI.security.length > 0) {
@@ -584,7 +603,7 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
                     }
                   }
 
-                  updateFormData({ schema: parsedSchema })
+                  updateFormData({ schema: parseResult.data })
                 } else {
                   updateFormData({ schema: undefined })
                 }

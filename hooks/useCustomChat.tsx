@@ -30,6 +30,14 @@ export function useCustomChat(options: UseCustomChatOptions) {
   const [streamingMessage, setStreamingMessage] = useState("")
   const abortControllerRef = useRef<AbortController | null>(null)
 
+  // OAuth state
+  const [oauthPrompt, setOAuthPrompt] = useState<{
+    show: boolean
+    authUrl: string
+    assistantId: string
+    message: string
+  } | null>(null)
+
   // 🔥 Track if initial cleanup has run (only run once per chat session)
   const hasRunInitialCleanup = useRef(false)
   // Track if auto-streaming has been started for this chat
@@ -381,6 +389,19 @@ export function useCustomChat(options: UseCustomChatOptions) {
                     toast.error(`Failed to update artifact: ${data.error}`)
                     break
 
+                  case "oauth_required":
+                    console.log("[useCustomChat] OAuth required (auto-stream):", data)
+                    // Show OAuth prompt
+                    setOAuthPrompt({
+                      show: true,
+                      authUrl: data.authUrl,
+                      assistantId: data.assistantId,
+                      message: data.message
+                    })
+                    // Remove streaming message
+                    setMessages(prev => prev.filter(msg => msg.id !== tempAssistantId))
+                    break
+
                   case "error":
                     throw new Error(data.error || "Streaming error")
                 }
@@ -660,6 +681,19 @@ export function useCustomChat(options: UseCustomChatOptions) {
                 )
                 break
 
+              case "oauth_required":
+                console.log("[useCustomChat] OAuth required:", data)
+                // Show OAuth prompt
+                setOAuthPrompt({
+                  show: true,
+                  authUrl: data.authUrl,
+                  assistantId: data.assistantId,
+                  message: data.message
+                })
+                // Remove streaming message
+                setMessages(prev => prev.filter(msg => msg.id !== tempAssistantId))
+                break
+
               case "done":
                 // Finalize message - mark as not streaming
                 setMessages(prev =>
@@ -736,6 +770,134 @@ export function useCustomChat(options: UseCustomChatOptions) {
     setMessages(prev => prev.filter(msg => !msg.isStreaming))
   }, [])
 
+  // Handle OAuth connection
+  const handleOAuthConnect = useCallback((authUrl: string, lastMessage?: string) => {
+    console.log("[useCustomChat] Opening OAuth popup:", authUrl)
+
+    // Open popup
+    const popup = window.open(
+      authUrl,
+      'oauth',
+      'width=600,height=700,scrollbars=yes,location=yes'
+    )
+
+    if (!popup) {
+      toast.error("Please allow popups for OAuth connection")
+      return
+    }
+
+    // Listen for OAuth callback
+    const messageHandler = async (event: MessageEvent) => {
+      if (event.data.type === 'oauth_callback') {
+        console.log("[useCustomChat] OAuth callback received:", event.data)
+
+        if (event.data.error) {
+          toast.error(`OAuth failed: ${event.data.error}`)
+          setOAuthPrompt(null)
+          return
+        }
+
+        if (!event.data.code || !event.data.state) {
+          toast.error("Invalid OAuth response")
+          setOAuthPrompt(null)
+          return
+        }
+
+        // Close popup first
+        popup.close()
+
+        // Exchange code for tokens via backend
+        const exchangeTokens = async () => {
+          try {
+            // Get API configuration to retrieve OAuth details
+            const configResponse = await fetch(`/api/assistants/${context?.assistantId}/api-config`)
+            if (!configResponse.ok) {
+              throw new Error('Failed to fetch API configuration')
+            }
+
+            const configData = await configResponse.json()
+
+            // Exchange code for access token
+            const exchangeResponse = await fetch('/api/oauth/exchange-code', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                code: event.data.code,
+                clientId: configData.clientId,
+                clientSecret: configData.clientSecret,
+                tokenUrl: configData.tokenUrl,
+                redirectUri: `${window.location.origin}/api/oauth/callback`,
+                tokenExchangeMethod: configData.tokenExchangeMethod || 'post'
+              })
+            })
+
+            const exchangeData = await exchangeResponse.json()
+
+            if (!exchangeData.success) {
+              throw new Error(exchangeData.error || 'Failed to exchange code for token')
+            }
+
+            // Store tokens in database
+            const updateResponse = await fetch(`/api/assistants/${context?.assistantId}/oauth-tokens`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                accessToken: exchangeData.accessToken,
+                refreshToken: exchangeData.refreshToken,
+                expiresIn: exchangeData.expiresIn
+              })
+            })
+
+            if (!updateResponse.ok) {
+              throw new Error('Failed to store OAuth tokens')
+            }
+
+            toast.success("Connected successfully!")
+
+            // Hide OAuth prompt
+            setOAuthPrompt(null)
+
+            // Auto-retry the last message if provided
+            if (lastMessage && context) {
+              console.log("[useCustomChat] Retrying message after OAuth:", lastMessage)
+              setTimeout(() => {
+                sendMessage(lastMessage, undefined, {
+                  chatWithAPI: true  // Ensure API is enabled for retry
+                })
+              }, 1000)
+            }
+
+          } catch (error: any) {
+            console.error('[useCustomChat] OAuth token exchange failed:', error)
+            toast.error(error.message || 'Failed to complete OAuth connection')
+            setOAuthPrompt(null)
+          }
+        }
+
+        exchangeTokens()
+
+        // Clean up listener
+        window.removeEventListener('message', messageHandler)
+      }
+    }
+
+    window.addEventListener('message', messageHandler)
+
+    // Clean up on popup close
+    const checkPopupClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(checkPopupClosed)
+        window.removeEventListener('message', messageHandler)
+        console.log("[useCustomChat] OAuth popup closed")
+      }
+    }, 500)
+  }, [context, sendMessage, toast])
+
+  // Dismiss OAuth prompt
+  const dismissOAuthPrompt = useCallback(() => {
+    setOAuthPrompt(null)
+  }, [])
+
   // Get display messages - messages array already contains the streaming message
   // No need to add it again, just use messages directly
   const displayMessages: Message[] = messages
@@ -752,5 +914,8 @@ export function useCustomChat(options: UseCustomChatOptions) {
     sendMessage,
     cancelStreaming,
     refetchMessages,
+    oauthPrompt,
+    handleOAuthConnect,
+    dismissOAuthPrompt,
   }
 }

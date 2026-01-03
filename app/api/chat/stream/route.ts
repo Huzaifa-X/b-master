@@ -705,12 +705,19 @@ export async function POST(req: NextRequest) {
 
     // Load API tools if needed
     let apiTools: OpenAPITool[] = []
+    let oauthRequired = false
+    let oauthConfig: any = null
 
     if (chatWithAPI && assistantId) {
       const toolsResult = await loadAPITools(assistantId.toString())
       if (toolsResult.success) {
         apiTools = toolsResult.tools
         console.log(`[Stream] Loaded ${apiTools.length} API tools`)
+      } else if (toolsResult.oauthRequired) {
+        // OAuth connection needed
+        oauthRequired = true
+        oauthConfig = toolsResult.oauthConfig
+        console.log(`[Stream] OAuth required for assistant ${assistantId}`)
       } else {
         console.warn(`[Stream] Failed to load API tools: ${toolsResult.error}`)
       }
@@ -885,6 +892,61 @@ export async function POST(req: NextRequest) {
             encoder.encode(`data: ${JSON.stringify({ type: "connected" })}\n\n`)
           )
 
+          // 🔐 Check if OAuth is required
+          if (oauthRequired && oauthConfig) {
+            console.log("[Stream] 🔐 OAuth connection required")
+
+            // Update user message status to COMPLETED (no AI response needed yet)
+            if (lastUserMessageRecord) {
+              await prisma.assistantUserChatMessage.update({
+                where: { id: lastUserMessageRecord.id },
+                data: { status: "COMPLETED" }
+              })
+              console.log("[Stream] Updated user message status to COMPLETED (OAuth required)")
+            }
+
+            // Generate OAuth authorization URL
+            const { buildAuthorizationUrl } = await import('@/lib/oauth-helper')
+            const state = require('crypto').randomBytes(32).toString('hex')
+
+            // Store state in database for CSRF protection
+            await prisma.oAuthState.create({
+              data: {
+                state,
+                userId: BigInt(session.user.id),
+                provider: 'api',
+                data: { assistantId: assistantId.toString() },
+                expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+              }
+            })
+
+            const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/oauth/callback`
+            const authUrl = buildAuthorizationUrl(
+              oauthConfig.authorizationUrl,
+              oauthConfig.clientId,
+              redirectUri,
+              state,
+              oauthConfig.scope
+            )
+
+            // Send OAuth required event to frontend
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({
+                type: "oauth_required",
+                authUrl,
+                assistantId,
+                message: "To use this API, please connect your account first."
+              })}\n\n`)
+            )
+
+            // Send done signal
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
+            )
+            controller.close()
+            return
+          }
+
           let assistantResponse = ""
           let currentResponseId: string | null = null
           const generatedImageUrls: string[] = []
@@ -1044,185 +1106,188 @@ export async function POST(req: NextRequest) {
                           itemId: event.item.id
                         })}\n\n`)
                       )
-                    } else if (event.item.status === "failed") {
-                      console.error("[Stream] ❌ Image generation failed:", event.item.error)
+                    }
+                  } else if (event.item.status === "failed") {
+                    console.error("[Stream] ❌ Image generation failed:", event.item.error)
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({
+                        type: "image_failed",
+                        error: event.item.error?.message || "Image generation failed"
+                      })}\n\n`)
+                    )
+                  } else {
+                    console.log("[Stream] ⚠️ Image item done but no image data found")
+                    console.log("[Stream] Item status:", event.item.status)
+                    console.log("[Stream] Full item structure:", JSON.stringify(event.item, null, 2))
+                  }
+                }
+
+                // 2. TRACK TOOL USAGE
+                if (event.item?.type === "file_search_call" && !usedTools.includes("file_search")) {
+                  usedTools.push("file_search")
+                }
+                if (event.item?.type === "web_search_call" && !usedTools.includes("web_search")) {
+                  usedTools.push("web_search")
+                }
+
+                // 3. HANDLE MCP CALLS
+                if (event.item?.type === "mcp_call") {
+                  console.log("===============================================")
+                  const mcpCallName = event.item.name || '';
+                  const mcpCallArgs = event.item.arguments ? JSON.parse(event.item.arguments) : {};
+                  const mcpServerLabel = event.item.server_label || '';
+                  const mcpOutput = event.item.output;
+
+                  console.log("[Stream] 🔌 MCP call completed via output_item.done")
+                  console.log("[Stream] MCP name:", mcpCallName)
+                  console.log("[Stream] MCP server:", mcpServerLabel)
+                  console.log("[Stream] MCP status:", event.item.status)
+                  console.log("[Stream] MCP output:", mcpOutput)
+                  console.log("===============================================")
+
+                  // Dropbox MCP
+                  if (mcpServerLabel.toLowerCase().includes("dropbox") && !usedTools.includes("dropbox")) {
+                    usedTools.push("dropbox")
+                    console.log("[Stream] Dropbox MCP tool used:", mcpCallName)
+                  }
+
+                  // Stripe MCP - Track tool usage
+                  if (mcpServerLabel.toLowerCase().includes("stripe") && !usedTools.includes("stripe")) {
+                    usedTools.push("stripe")
+                    console.log("[Stream] Stripe MCP tool used:", mcpCallName)
+                  }
+                }
+
+                // 4. HANDLE FUNCTION CALLS
+                if (event.item?.type === "function_call") {
+                  const functionName = event.item.name
+                  const functionArgs = event.item.arguments
+                    ? JSON.parse(event.item.arguments)
+                    : {}
+
+                  console.log(`[Stream] Function call detected: ${functionName}`)
+
+                  // Artifact Update
+                  if (functionName === "update_artifact" && artifact) {
+                    console.log(`[Stream] 🎨 Updating artifact: ${artifact.name}`)
+
+                    try {
+                      const { updatedCode, changeDescription, changeSummary } = functionArgs
+
+                      if (!updatedCode || !changeDescription) {
+                        throw new Error("Missing required parameters for artifact update")
+                      }
+
+                      const { createArtifactVersion } = await import("@/app/actions/update-artifact.action")
+
+                      const versionResult = await createArtifactVersion({
+                        artifactId: parseInt(artifact.id),
+                        userId: BigInt(session.user.id),
+                        code: updatedCode,
+                        description: changeDescription,
+                        changeType: 'ai',
+                        setAsActive: true
+                      })
+
+                      if (!versionResult.success) {
+                        throw new Error(versionResult.error || "Failed to create artifact version")
+                      }
+
+                      console.log(`[Stream] ✅ Artifact updated successfully. New version: ${versionResult.version?.versionNumber}`)
+
+                      if (!usedTools.includes("artifact_update")) {
+                        usedTools.push("artifact_update")
+                      }
+
+                      const successMessage = `\n\n✅ **Artifact Updated Successfully**\n\n` +
+                        `**Version:** ${versionResult.version?.versionNumber}\n` +
+                        `**Change:** ${changeSummary}\n\n` +
+                        `The artifact "${artifact.name}" has been updated with your requested changes.\n\n`
+
+                      assistantResponse += successMessage
+
                       controller.enqueue(
                         encoder.encode(`data: ${JSON.stringify({
-                          type: "image_failed",
-                          error: event.item.error?.message || "Image generation failed"
+                          type: "artifact_updated",
+                          artifactId: artifact.id,
+                          artifactName: artifact.name,
+                          versionNumber: versionResult.version?.versionNumber,
+                          changeSummary: changeSummary
                         })}\n\n`)
                       )
-                    } else {
-                      console.log("[Stream] ⚠️ Image item done but no image data found")
-                      console.log("[Stream] Item status:", event.item.status)
-                      console.log("[Stream] Full item structure:", JSON.stringify(event.item, null, 2))
+
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "text",
+                          content: successMessage
+                        })}\n\n`)
+                      )
+
+                    } catch (updateError: any) {
+                      console.error(`[Stream] ❌ Artifact update error:`, updateError)
+
+                      const errorMessage = `\n\n⚠️ **Failed to Update Artifact**\n\n` +
+                        `Error: ${updateError.message}\n\n` +
+                        `The artifact could not be updated. Please try again or check your permissions.\n\n`
+
+                      assistantResponse += errorMessage
+
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "artifact_update_error",
+                          error: updateError.message
+                        })}\n\n`)
+                      )
+
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "text",
+                          content: errorMessage
+                        })}\n\n`)
+                      )
                     }
                   }
 
-                  // 2. TRACK TOOL USAGE
-                  if (event.item?.type === "file_search_call" && !usedTools.includes("file_search")) {
-                    usedTools.push("file_search")
-                  }
-                  if (event.item?.type === "web_search_call" && !usedTools.includes("web_search")) {
-                    usedTools.push("web_search")
-                  }
+                  // API Tools
+                  const isAPITool = apiTools.some(t => t.openaiTool.name === functionName)
+                  console.log(`[Stream] isAPITool: ${isAPITool}`)
+                  if (isAPITool) {
+                    console.log(`[Stream] Executing API tool: ${functionName}`)
+                    console.log(`[Stream] API tool arguments:`, functionArgs)
 
-                  // 3. HANDLE MCP CALLS
-                  if (event.item?.type === "mcp_call") {
-                    console.log("===============================================")
-                    const mcpCallName = event.item.name || '';
-                    const mcpCallArgs = event.item.arguments ? JSON.parse(event.item.arguments) : {};
-                    const mcpServerLabel = event.item.server_label || '';
-                    const mcpOutput = event.item.output;
+                    try {
+                      const result = await executeAPITool(apiTools, functionName, functionArgs)
 
-                    console.log("[Stream] 🔌 MCP call completed via output_item.done")
-                    console.log("[Stream] MCP name:", mcpCallName)
-                    console.log("[Stream] MCP server:", mcpServerLabel)
-                    console.log("[Stream] MCP status:", event.item.status)
-                    console.log("[Stream] MCP output:", mcpOutput)
-                    console.log("===============================================")
+                      console.log(`[Stream] ✅ API tool executed successfully`)
+                      console.log(`[Stream] API tool result:`, typeof result === 'string' ? result.substring(0, 200) : JSON.stringify(result).substring(0, 200))
 
-                    // Dropbox MCP
-                    if (mcpServerLabel.toLowerCase().includes("dropbox") && !usedTools.includes("dropbox")) {
-                      usedTools.push("dropbox")
-                      console.log("[Stream] Dropbox MCP tool used:", mcpCallName)
-                    }
-
-                    // Stripe MCP - Track tool usage
-                    if (mcpServerLabel.toLowerCase().includes("stripe") && !usedTools.includes("stripe")) {
-                      usedTools.push("stripe")
-                      console.log("[Stream] Stripe MCP tool used:", mcpCallName)
-                    }
-                  }
-
-                  // 4. HANDLE FUNCTION CALLS
-                  if (event.item?.type === "function_call") {
-                    const functionName = event.item.name
-                    const functionArgs = event.item.arguments
-                      ? JSON.parse(event.item.arguments)
-                      : {}
-
-                    console.log(`[Stream] Function call detected: ${functionName}`)
-
-                    // Artifact Update
-                    if (functionName === "update_artifact" && artifact) {
-                      console.log(`[Stream] 🎨 Updating artifact: ${artifact.name}`)
-
-                      try {
-                        const { updatedCode, changeDescription, changeSummary } = functionArgs
-
-                        if (!updatedCode || !changeDescription) {
-                          throw new Error("Missing required parameters for artifact update")
-                        }
-
-                        const { createArtifactVersion } = await import("@/app/actions/update-artifact.action")
-
-                        const versionResult = await createArtifactVersion({
-                          artifactId: parseInt(artifact.id),
-                          userId: BigInt(session.user.id),
-                          code: updatedCode,
-                          description: changeDescription,
-                          changeType: 'ai',
-                          setAsActive: true
-                        })
-
-                        if (!versionResult.success) {
-                          throw new Error(versionResult.error || "Failed to create artifact version")
-                        }
-
-                        console.log(`[Stream] ✅ Artifact updated successfully. New version: ${versionResult.version?.versionNumber}`)
-
-                        if (!usedTools.includes("artifact_update")) {
-                          usedTools.push("artifact_update")
-                        }
-
-                        const successMessage = `\n\n✅ **Artifact Updated Successfully**\n\n` +
-                          `**Version:** ${versionResult.version?.versionNumber}\n` +
-                          `**Change:** ${changeSummary}\n\n` +
-                          `The artifact "${artifact.name}" has been updated with your requested changes.\n\n`
-
-                        assistantResponse += successMessage
-
-                        controller.enqueue(
-                          encoder.encode(`data: ${JSON.stringify({
-                            type: "artifact_updated",
-                            artifactId: artifact.id,
-                            artifactName: artifact.name,
-                            versionNumber: versionResult.version?.versionNumber,
-                            changeSummary: changeSummary
-                          })}\n\n`)
-                        )
-
-                        controller.enqueue(
-                          encoder.encode(`data: ${JSON.stringify({
-                            type: "text",
-                            content: successMessage
-                          })}\n\n`)
-                        )
-
-                      } catch (updateError: any) {
-                        console.error(`[Stream] ❌ Artifact update error:`, updateError)
-
-                        const errorMessage = `\n\n⚠️ **Failed to Update Artifact**\n\n` +
-                          `Error: ${updateError.message}\n\n` +
-                          `The artifact could not be updated. Please try again or check your permissions.\n\n`
-
-                        assistantResponse += errorMessage
-
-                        controller.enqueue(
-                          encoder.encode(`data: ${JSON.stringify({
-                            type: "artifact_update_error",
-                            error: updateError.message
-                          })}\n\n`)
-                        )
-
-                        controller.enqueue(
-                          encoder.encode(`data: ${JSON.stringify({
-                            type: "text",
-                            content: errorMessage
-                          })}\n\n`)
-                        )
+                      if (!usedTools.includes(functionName)) {
+                        usedTools.push(functionName)
                       }
-                    }
 
-                    // API Tools
-                    const isAPITool = apiTools.some(t => t.openaiTool.name === functionName)
+                      // Send tool result event to frontend for logging/debugging
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "tool_result",
+                          tool: functionName,
+                          result: result
+                        })}\n\n`)
+                      )
 
-                    if (isAPITool) {
-                      console.log(`[Stream] Executing API tool: ${functionName}`)
-
-                      try {
-                        const result = await executeAPITool(apiTools, functionName, functionArgs)
-
-                        if (!usedTools.includes(functionName)) {
-                          usedTools.push(functionName)
-                        }
-
-                        const resultText = typeof result === 'string'
-                          ? result
-                          : JSON.stringify(result, null, 2)
-
-                        assistantResponse += `\n\n**API Call Result (${functionName}):**\n\`\`\`json\n${resultText}\n\`\`\`\n\n`
-
-                        controller.enqueue(
-                          encoder.encode(`data: ${JSON.stringify({
-                            type: "tool_result",
-                            tool: functionName,
-                            result: result
-                          })}\n\n`)
-                        )
-                      } catch (apiError: any) {
-                        console.error(`[Stream] ❌ API tool error:`, apiError)
-                        const errorText = `API call failed: ${apiError.message}`
-                        assistantResponse += `\n\n**Error calling ${functionName}:** ${errorText}\n\n`
-                        controller.enqueue(
-                          encoder.encode(`data: ${JSON.stringify({
-                            type: "tool_error",
-                            tool: functionName,
-                            error: errorText
-                          })}\n\n`)
-                        )
-                      }
+                      // NOTE: We don't manually append the result to assistantResponse here.
+                      // The OpenAI Responses API will automatically feed the result back to the AI,
+                      // and the AI will generate a natural language explanation in the next text delta.
+                    } catch (apiError: any) {
+                      console.error(`[Stream] ❌ API tool error:`, apiError)
+                      const errorText = `API call failed: ${apiError.message}`
+                      assistantResponse += `\n\n**Error calling ${functionName}:** ${errorText}\n\n`
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "tool_error",
+                          tool: functionName,
+                          error: errorText
+                        })}\n\n`)
+                      )
                     }
                   }
                 }

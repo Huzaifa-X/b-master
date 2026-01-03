@@ -301,9 +301,10 @@ model AssistantApiConfiguration {
   // ============================================
   // API KEY AUTHENTICATION (when type = "api_key")
   // ============================================
-  apiKey           String? @db.Text // Encrypted API key
-  authType         String? @db.VarChar(50) // Options: "basic", "bearer", "custom"
-  customHeaderName String? @db.VarChar(255) // Custom header name for API key auth
+  apiKey                String? @db.Text // Encrypted API key
+  authType              String? @db.VarChar(50) // Options: "basic", "bearer", "custom", "query"
+  customHeaderName      String? @db.VarChar(255) // Custom header name for API key auth
+  customQueryParamName  String? @db.VarChar(255) // Custom query param name for API key auth (e.g., "appid", "apikey")
 
   // ============================================
   // OAUTH AUTHENTICATION (when type = "oauth")
@@ -316,11 +317,21 @@ model AssistantApiConfiguration {
   tokenExchangeMethod String? @db.VarChar(50)
   // Options: "post", "basic_auth"
 
+  // OAuth Token Storage (obtained after user authorizes)
+  accessToken         String? @db.Text // Encrypted - obtained after OAuth flow
+  refreshToken        String? @db.Text // Encrypted - for refreshing expired access tokens
+  tokenExpiry         DateTime? // When the access token expires
+
   // ============================================
   // OPENAPI SCHEMA STORAGE (2-part strategy)
   // ============================================
   schemaText String? @db.Text // Raw YAML/JSON (for editing)
   schema     Json? // Parsed JSON (for validation)
+
+  // ============================================
+  // PARSED TOOLS (from OpenAPI schema)
+  // ============================================
+  tools Json? // Array of parsed tool definitions for OpenAI function calling
 
   // ============================================
   // METADATA

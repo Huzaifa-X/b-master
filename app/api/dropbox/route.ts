@@ -1,9 +1,8 @@
-import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma  from '@/lib/prisma';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -24,7 +23,6 @@ export async function GET(req: NextRequest) {
     // Convert BigInt fields to strings for JSON serialization
     const serializedConnector = connector ? {
       ...connector,
-      id: connector.id.toString(),
       userId: connector.userId.toString(),
       assistantId: connector.assistantId?.toString() || null,
     } : null;

@@ -19,14 +19,22 @@ export interface OpenAPITool {
     path: string
     baseUrl: string
     operationId?: string
+    parameterDefinitions?: Array<{
+      name: string
+      in: "path" | "query" | "header" | "cookie"
+      description?: string
+      required: boolean
+      schema: any
+    }>
   }
 }
 
 export interface AuthConfig {
   type: string // 'none', 'api_key', 'oauth'
   apiKey?: string
-  authType?: string // 'bearer', 'basic', 'custom'
+  authType?: string // 'bearer', 'basic', 'custom', 'query'
   customHeaderName?: string
+  customQueryParamName?: string // For query parameter authentication
   clientId?: string
   clientSecret?: string
   tokenUrl?: string
@@ -128,7 +136,15 @@ function convertEndpointToTool(
       method: endpoint.method,
       path: endpoint.path,
       baseUrl,
-      operationId: endpoint.operationId
+      operationId: endpoint.operationId,
+      // Store parameter definitions so we can reconstruct executors later
+      parameterDefinitions: endpoint.parameters.map(p => ({
+        name: p.name,
+        in: p.in,
+        description: p.description,
+        required: p.required,
+        schema: p.schema
+      }))
     }
   }
 
@@ -136,8 +152,9 @@ function convertEndpointToTool(
 
 /**
  * Execute an API call with proper authentication and parameter handling
+ * Exported so it can be used to reconstruct executors from stored tools
  */
-async function executeAPICall(
+export async function executeAPICall(
   baseUrl: string,
   method: string,
   path: string,
@@ -183,6 +200,12 @@ async function executeAPICall(
     url = url.replace(`{${key}}`, encodeURIComponent(String(value)))
   }
 
+  // Add API key to query params if auth type is 'query'
+  if (authConfig?.type === 'api_key' && authConfig.authType === 'query' && authConfig.apiKey) {
+    const paramName = authConfig.customQueryParamName || 'apikey'
+    queryParams[paramName] = authConfig.apiKey
+  }
+
   // Add query parameters
   if (Object.keys(queryParams).length > 0) {
     const queryString = new URLSearchParams(
@@ -201,8 +224,8 @@ async function executeAPICall(
     ...headerParams
   }
 
-  // Add authentication
-  if (authConfig?.type === 'api_key' && authConfig.apiKey) {
+  // Add authentication to headers (for non-query auth types)
+  if (authConfig?.type === 'api_key' && authConfig.apiKey && authConfig.authType !== 'query') {
     switch (authConfig.authType) {
       case 'bearer':
         headers['Authorization'] = `Bearer ${authConfig.apiKey}`
