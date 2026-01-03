@@ -7,6 +7,7 @@ import { UserMessage } from "@/components/assistants/message-components/user-mes
 import { AssistantMessage } from "@/components/assistants/message-components/assistant-message"
 import { ChatInput } from "@/components/assistants/chat-input"
 import { ArtifactPanel } from "@/components/assistants/artifact-panel"
+import { OAuthConnectPrompt } from "@/components/assistants/oauth-connect-prompt"
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { StopCircle, Loader2, ChevronDown } from "lucide-react"
@@ -42,7 +43,10 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
     isStreaming,
     sendMessage,
     cancelStreaming,
-    isReady
+    isReady,
+    oauthPrompt,
+    handleOAuthConnect,
+    dismissOAuthPrompt
   } = useCustomChat({
     mode,
     assistantId,
@@ -319,10 +323,25 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
                   )}
                 </div>
               ))}
-              
+
+              {/* OAuth Connection Prompt */}
+              {oauthPrompt?.show && (
+                <div className="mb-4">
+                  <OAuthConnectPrompt
+                    message={oauthPrompt.message}
+                    authUrl={oauthPrompt.authUrl}
+                    onConnect={() => {
+                      const lastMessage = messages.filter(m => m.role === "user").slice(-1)[0]
+                      handleOAuthConnect(oauthPrompt.authUrl, lastMessage?.content)
+                    }}
+                    onDismiss={dismissOAuthPrompt}
+                  />
+                </div>
+              )}
+
               {/* Loading indicator when waiting for AI response */}
-              {/* Only show if no streaming assistant message exists */}
-              {hasUserMessageWithoutResponse && !messages.some(m => m.role === "assistant" && m.isStreaming) && (
+              {/* Only show if no streaming assistant message exists and OAuth is not required */}
+              {hasUserMessageWithoutResponse && !messages.some(m => m.role === "assistant" && m.isStreaming) && !oauthPrompt?.show && (
                 <div className="mb-4">
                   <div
                     className="mx-auto w-full max-w-[44rem] animate-in py-4 duration-150 ease-out fade-in slide-in-from-bottom-1"

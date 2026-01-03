@@ -109,6 +109,9 @@ export async function POST(request: NextRequest) {
     // Parse response - could be JSON or URL-encoded
     let tokenResponse: any
 
+    console.log('📥 Token response content-type:', contentType)
+    console.log('📥 Token response text (first 200 chars):', responseText.substring(0, 200))
+
     if (contentType.includes('application/json')) {
       tokenResponse = JSON.parse(responseText)
     } else if (contentType.includes('application/x-www-form-urlencoded') || responseText.includes('=')) {
@@ -121,11 +124,17 @@ export async function POST(request: NextRequest) {
         refresh_token: params.get('refresh_token') || undefined,
         scope: params.get('scope') || undefined,
       }
+      console.log('📥 Parsed URL-encoded token response:', {
+        hasAccessToken: !!tokenResponse.access_token,
+        tokenType: tokenResponse.token_type,
+        expiresIn: tokenResponse.expires_in
+      })
     } else {
       // Try JSON as fallback
       try {
         tokenResponse = JSON.parse(responseText)
       } catch {
+        console.error('❌ Failed to parse token response. Response text:', responseText)
         return NextResponse.json(
           {
             success: false,
@@ -137,6 +146,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!tokenResponse.access_token) {
+      console.error('❌ No access_token in parsed response:', tokenResponse)
       return NextResponse.json(
         {
           success: false,

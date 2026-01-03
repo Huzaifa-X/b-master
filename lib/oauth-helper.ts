@@ -192,20 +192,32 @@ export async function refreshOAuthAccessToken(
   tokenUrl: string,
   clientId: string,
   clientSecret: string,
-  refreshToken: string
-): Promise<{ success: boolean; accessToken?: string; refreshToken?: string; error?: string }> {
+  refreshToken: string,
+  tokenExchangeMethod: 'post' | 'basic_auth' = 'post'
+): Promise<{ success: boolean; accessToken?: string; refreshToken?: string; expiresIn?: number; error?: string }> {
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId,
+    })
+
+    if (tokenExchangeMethod === 'basic_auth') {
+      // Use Basic Auth
+      headers['Authorization'] = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
+    } else {
+      // Include secret in body
+      body.append('client_secret', clientSecret)
+    }
+
     const response = await fetch(tokenUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken
-      }).toString(),
+      headers,
+      body: body.toString(),
     })
 
     if (!response.ok) {
@@ -221,7 +233,8 @@ export async function refreshOAuthAccessToken(
     return {
       success: true,
       accessToken: tokenResponse.access_token,
-      refreshToken: tokenResponse.refresh_token
+      refreshToken: tokenResponse.refresh_token,
+      expiresIn: tokenResponse.expires_in,
     }
   } catch (error: any) {
     return {
@@ -229,4 +242,108 @@ export async function refreshOAuthAccessToken(
       error: error.message || 'Failed to refresh OAuth access token'
     }
   }
+}
+
+/**
+ * Build OAuth authorization URL for Authorization Code Flow
+ * User will be redirected to this URL to authorize the app
+ */
+export function buildAuthorizationUrl(
+  authorizationUrl: string,
+  clientId: string,
+  redirectUri: string,
+  state: string,
+  scope?: string
+): string {
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    state,
+  })
+
+  if (scope) {
+    params.append('scope', scope)
+  }
+
+  return `${authorizationUrl}?${params.toString()}`
+}
+
+/**
+ * Exchange authorization code for access token (Authorization Code Flow)
+ */
+export async function exchangeCodeForToken(
+  tokenUrl: string,
+  clientId: string,
+  clientSecret: string,
+  code: string,
+  redirectUri: string,
+  tokenExchangeMethod: 'post' | 'basic_auth' = 'post'
+): Promise<{ success: boolean; accessToken?: string; refreshToken?: string; expiresIn?: number; error?: string }> {
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+      client_id: clientId,
+    })
+
+    if (tokenExchangeMethod === 'basic_auth') {
+      // Use Basic Auth
+      headers['Authorization'] = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
+    } else {
+      // Include secret in body
+      body.append('client_secret', clientSecret)
+    }
+
+    console.log('[OAuth] Exchanging authorization code for token...')
+
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers,
+      body: body.toString(),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[OAuth] Code exchange failed:', errorText)
+      return {
+        success: false,
+        error: `Code exchange failed: ${errorText}`
+      }
+    }
+
+    const tokenResponse: OAuthTokenResponse = await response.json()
+
+    console.log('[OAuth] ✅ Token obtained successfully')
+
+    return {
+      success: true,
+      accessToken: tokenResponse.access_token,
+      refreshToken: tokenResponse.refresh_token,
+      expiresIn: tokenResponse.expires_in,
+    }
+  } catch (error: any) {
+    console.error('[OAuth] Code exchange error:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to exchange code for token'
+    }
+  }
+}
+
+/**
+ * Check if OAuth token is expired or about to expire (within 5 minutes)
+ */
+export function isTokenExpired(tokenExpiry: Date | null): boolean {
+  if (!tokenExpiry) return true
+
+  const now = new Date()
+  const expiryWithBuffer = new Date(tokenExpiry.getTime() - 5 * 60 * 1000) // 5 min buffer
+
+  return now >= expiryWithBuffer
 }

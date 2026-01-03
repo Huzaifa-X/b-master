@@ -20,6 +20,9 @@ import { randomUUID } from "crypto"
 import { canCreateAssistant } from '@/lib/utils/subscription-limits'
 import { stripe } from '@/lib/stripe'
 import { getAssistantGptPromptGeneratorPrompt } from "@/utils/prompts"
+import { encrypt, decrypt } from "@/lib/encryption"
+import { parseOpenAPISchema } from "@/lib/openapi-parser"
+import { convertToOpenAITools, AuthConfig } from "@/lib/openapi-tool-converter"
 
 
 export async function generateAssistantInstructions({
@@ -432,20 +435,78 @@ export async function createCompleteAssistant(
         // STEP 5: CREATE API CONFIGURATION
         // ============================================
         
+        // Create API configuration if schema exists OR authentication type is not 'none'
+        if (params.schema || (params.authenticationType && params.authenticationType !== 'none')) {
             try {
+                // Build auth config for tool generation (only if schema exists)
+                const authConfigForTools: AuthConfig | undefined = params.schema ? {
+                    type: params.authenticationType,
+                    apiKey: params.apiKey,
+                    authType: params.authType,
+                    customHeaderName: params.customHeaderName,
+                    clientId: params.clientId,
+                    clientSecret: params.clientSecret,
+                    tokenUrl: params.tokenUrl,
+                } : undefined
+
+                // Generate tools from schema (only if schema exists)
+                let tools = null
+                if (params.schema && authConfigForTools) {
+                    try {
+                        const parsedSchema = parseOpenAPISchema(params.schema)
+                        const openAITools = convertToOpenAITools(parsedSchema, authConfigForTools)
+                        
+                        // Store tools in format: { openaiTool: {...}, metadata: {...} }
+                        // This allows us to reconstruct executors later
+                        tools = openAITools.map(tool => ({
+                            type: tool.openaiTool.type,
+                            name: tool.openaiTool.name,
+                            description: tool.openaiTool.description,
+                            parameters: tool.openaiTool.parameters,
+                            metadata: {
+                                method: tool.metadata.method,
+                                path: tool.metadata.path,
+                                baseUrl: tool.metadata.baseUrl,
+                                operationId: tool.metadata.operationId,
+                                // Store parameter definitions for executor reconstruction
+                                parameterDefinitions: tool.metadata.parameterDefinitions || []
+                            }
+                        }))
+                        
+                        console.log(`✅ Generated ${tools.length} tools from schema`)
+                    } catch (toolError) {
+                        console.error('Error generating tools from schema:', toolError)
+                        // Continue without tools - user can fix schema later
+                    }
+                }
+
+                // Build API config data with encryption
                 const apiConfigData = {
                     authenticationType: params.authenticationType,
-                    apiKey: params.authenticationType === 'api_key' ? params.apiKey : null,
+                    
+                    // Encrypt API key if provided
+                    apiKey: params.authenticationType === 'api_key' && params.apiKey
+                        ? encrypt(params.apiKey)
+                        : null,
                     authType: params.authenticationType === 'api_key' ? params.authType : null,
                     customHeaderName: params.authenticationType === 'api_key' ? params.customHeaderName : null,
+                    
                     clientId: params.authenticationType === 'oauth' ? params.clientId : null,
-                    clientSecret: params.authenticationType === 'oauth' ? params.clientSecret : null,
+                    
+                    // Encrypt client secret if provided
+                    clientSecret: params.authenticationType === 'oauth' && params.clientSecret
+                        ? encrypt(params.clientSecret)
+                        : null,
                     authorizationUrl: params.authenticationType === 'oauth' ? params.authorizationUrl : null,
                     tokenUrl: params.authenticationType === 'oauth' ? params.tokenUrl : null,
                     scope: params.authenticationType === 'oauth' ? params.scope : null,
                     tokenExchangeMethod: params.authenticationType === 'oauth' ? params.tokenExchangeMethod : null,
-                    schemaText: params.schemaText,
-                    schema: params.schema,
+                    
+                    schemaText: params.schemaText || null,
+                    schema: params.schema || null,
+                    
+                    // Store parsed tools (only if schema exists)
+                    tools: tools,
                 }
                 
                 await prisma.assistantApiConfiguration.create({
@@ -455,9 +516,14 @@ export async function createCompleteAssistant(
                     }
                 })
                 
-                console.log(`✅ API configuration created`)
+                console.log(`✅ API configuration created${tools ? ` with ${tools.length} tools` : ''}`)
             } catch (apiConfigError) {
                 console.error('Error creating API configuration:', apiConfigError)
+                // Log the full error for debugging
+                if (apiConfigError instanceof Error) {
+                    console.error('Error details:', apiConfigError.message, apiConfigError.stack)
+                }
+            }
         }
 
         // ============================================
@@ -1401,33 +1467,52 @@ export async function getAssistantForEdit(assistantId: string) {
                 files, // File URLs for pre-loading
                 sharedUsers,
                 buyerPermissions,
-                apiConfiguration: assistant.apiConfiguration ? {
-                    authenticationType: assistant.apiConfiguration.authenticationType || "none",
-                    apiKey: assistant.apiConfiguration.apiKey || "",
-                    authType: assistant.apiConfiguration.authType || "basic",
-                    customHeaderName: assistant.apiConfiguration.customHeaderName || "",
-                    clientId: assistant.apiConfiguration.clientId || "",
-                    clientSecret: assistant.apiConfiguration.clientSecret || "",
-                    authorizationUrl: assistant.apiConfiguration.authorizationUrl || "",
-                    tokenUrl: assistant.apiConfiguration.tokenUrl || "",
-                    scope: assistant.apiConfiguration.scope || "",
-                    tokenExchangeMethod: assistant.apiConfiguration.tokenExchangeMethod || "post",
-                    schemaText: assistant.apiConfiguration.schemaText || "",
-                    schema: assistant.apiConfiguration.schema,
-                } : {
-                    authenticationType: "none",
-                    apiKey: "",
-                    authType: "basic",
-                    customHeaderName: "",
-                    clientId: "",
-                    clientSecret: "",
-                    authorizationUrl: "",
-                    tokenUrl: "",
-                    scope: "",
-                    tokenExchangeMethod: "post",
-                    schemaText: "",
-                    schema: null,
-                }
+                apiConfiguration: (() => {
+                    if (!assistant.apiConfiguration) {
+                        return {
+                            authenticationType: "none",
+                            apiKey: "",
+                            authType: "basic",
+                            customHeaderName: "",
+                            clientId: "",
+                            clientSecret: "",
+                            authorizationUrl: "",
+                            tokenUrl: "",
+                            scope: "",
+                            tokenExchangeMethod: "post",
+                            schemaText: "",
+                            schema: null,
+                        }
+                    }
+
+                    const config = assistant.apiConfiguration
+                    
+                    // Helper function to safely decrypt
+                    const safeDecrypt = (encryptedValue: string | null | undefined): string => {
+                        if (!encryptedValue) return ""
+                        try {
+                            return decrypt(encryptedValue)
+                        } catch (error) {
+                            console.error('Error decrypting value:', error)
+                            return ""
+                        }
+                    }
+
+                    return {
+                        authenticationType: config.authenticationType || "none",
+                        apiKey: safeDecrypt(config.apiKey),
+                        authType: config.authType || "basic",
+                        customHeaderName: config.customHeaderName || "",
+                        clientId: config.clientId || "",
+                        clientSecret: safeDecrypt(config.clientSecret),
+                        authorizationUrl: config.authorizationUrl || "",
+                        tokenUrl: config.tokenUrl || "",
+                        scope: config.scope || "",
+                        tokenExchangeMethod: config.tokenExchangeMethod || "post",
+                        schemaText: config.schemaText || "",
+                        schema: config.schema,
+                    }
+                })(),
             }
         }
     } catch (error) {
@@ -1748,41 +1833,105 @@ export async function updateCompleteAssistant(
         // API Configuration Update
         // ========================================
         
-        try {
-            const existingApiConfig = await prisma.assistantApiConfiguration.findUnique({
-                where: { assistantId: assistantBigInt }
-            })
-
-            const apiConfigData = {
-                authenticationType: params.authenticationType,
-                apiKey: params.authenticationType === 'api_key' ? params.apiKey : null,
-                authType: params.authenticationType === 'api_key' ? params.authType : null,
-                customHeaderName: params.authenticationType === 'api_key' ? params.customHeaderName : null,
-                clientId: params.authenticationType === 'oauth' ? params.clientId : null,
-                clientSecret: params.authenticationType === 'oauth' ? params.clientSecret : null,
-                authorizationUrl: params.authenticationType === 'oauth' ? params.authorizationUrl : null,
-                tokenUrl: params.authenticationType === 'oauth' ? params.tokenUrl : null,
-                scope: params.authenticationType === 'oauth' ? params.scope : null,
-                tokenExchangeMethod: params.authenticationType === 'oauth' ? params.tokenExchangeMethod : null,
-                schemaText: params.schemaText,
-                schema: params.schema,
-            }
-
-            if (existingApiConfig) {
-                await prisma.assistantApiConfiguration.update({
-                    where: { assistantId: assistantBigInt },
-                    data: apiConfigData
+        // Create/update API configuration if schema exists OR authentication type is not 'none'
+        if (params.schema || (params.authenticationType && params.authenticationType !== 'none')) {
+            try {
+                const existingApiConfig = await prisma.assistantApiConfiguration.findUnique({
+                    where: { assistantId: assistantBigInt }
                 })
-            } else {
-                await prisma.assistantApiConfiguration.create({
-                    data: {
-                        assistantId: assistantBigInt,
-                        ...apiConfigData
+
+                // Build auth config for tool generation (only if schema exists)
+                const authConfigForTools: AuthConfig | undefined = params.schema ? {
+                    type: params.authenticationType,
+                    apiKey: params.apiKey,
+                    authType: params.authType,
+                    customHeaderName: params.customHeaderName,
+                    clientId: params.clientId,
+                    clientSecret: params.clientSecret,
+                    tokenUrl: params.tokenUrl,
+                } : undefined
+
+                // Generate tools from schema (only if schema exists)
+                let tools = null
+                if (params.schema && authConfigForTools) {
+                    try {
+                        const parsedSchema = parseOpenAPISchema(params.schema)
+                        const openAITools = convertToOpenAITools(parsedSchema, authConfigForTools)
+                        
+                        // Store tools in format: { openaiTool: {...}, metadata: {...} }
+                        tools = openAITools.map(tool => ({
+                            type: tool.openaiTool.type,
+                            name: tool.openaiTool.name,
+                            description: tool.openaiTool.description,
+                            parameters: tool.openaiTool.parameters,
+                            metadata: {
+                                method: tool.metadata.method,
+                                path: tool.metadata.path,
+                                baseUrl: tool.metadata.baseUrl,
+                                operationId: tool.metadata.operationId,
+                                // Store parameter definitions for executor reconstruction
+                                parameterDefinitions: tool.metadata.parameterDefinitions || []
+                            }
+                        }))
+                        
+                        console.log(`✅ Generated ${tools.length} tools from schema`)
+                    } catch (toolError) {
+                        console.error('Error generating tools from schema:', toolError)
+                        // Continue without tools - user can fix schema later
                     }
-                })
+                }
+
+                // Build API config data with encryption
+                const apiConfigData = {
+                    authenticationType: params.authenticationType,
+                    
+                    // Encrypt API key if provided
+                    apiKey: params.authenticationType === 'api_key' && params.apiKey
+                        ? encrypt(params.apiKey)
+                        : null,
+                    authType: params.authenticationType === 'api_key' ? params.authType : null,
+                    customHeaderName: params.authenticationType === 'api_key' ? params.customHeaderName : null,
+                    
+                    clientId: params.authenticationType === 'oauth' ? params.clientId : null,
+                    
+                    // Encrypt client secret if provided
+                    clientSecret: params.authenticationType === 'oauth' && params.clientSecret
+                        ? encrypt(params.clientSecret)
+                        : null,
+                    authorizationUrl: params.authenticationType === 'oauth' ? params.authorizationUrl : null,
+                    tokenUrl: params.authenticationType === 'oauth' ? params.tokenUrl : null,
+                    scope: params.authenticationType === 'oauth' ? params.scope : null,
+                    tokenExchangeMethod: params.authenticationType === 'oauth' ? params.tokenExchangeMethod : null,
+                    
+                    schemaText: params.schemaText || null,
+                    schema: params.schema || null,
+                    
+                    // Store parsed tools (only if schema exists)
+                    tools: tools,
+                }
+
+                if (existingApiConfig) {
+                    await prisma.assistantApiConfiguration.update({
+                        where: { assistantId: assistantBigInt },
+                        data: apiConfigData
+                    })
+                } else {
+                    await prisma.assistantApiConfiguration.create({
+                        data: {
+                            assistantId: assistantBigInt,
+                            ...apiConfigData
+                        }
+                    })
+                }
+                
+                console.log(`✅ API configuration updated${tools ? ` with ${tools.length} tools` : ''}`)
+            } catch (apiConfigError) {
+                console.error('Error updating API configuration:', apiConfigError)
+                // Log the full error for debugging
+                if (apiConfigError instanceof Error) {
+                    console.error('Error details:', apiConfigError.message, apiConfigError.stack)
+                }
             }
-        } catch (apiConfigError) {
-            console.error('Error updating API configuration:', apiConfigError)
         }
 
         // ========================================
