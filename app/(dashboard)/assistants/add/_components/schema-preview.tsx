@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   parseSchemaText,
   parseOpenAPISchema,
@@ -235,18 +236,280 @@ interface ActionRowProps {
 function ActionRow({ endpoint, baseUrl, authConfig, securitySchemes, globalSecurity }: ActionRowProps) {
   const [testDialogOpen, setTestDialogOpen] = useState(false)
   const [paramValues, setParamValues] = useState<Record<string, any>>({})
+  const [requestBody, setRequestBody] = useState<string>('')
   const [isTesting, setIsTesting] = useState(false)
+  const [isGettingToken, setIsGettingToken] = useState(false)
+  const [oauthAccessToken, setOauthAccessToken] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<any>(null)
   const [testError, setTestError] = useState<string | null>(null)
 
-  // Initialize parameter values with examples
+  // Initialize parameter values with examples and request body
   useEffect(() => {
     const initialValues: Record<string, any> = {}
     endpoint.parameters.forEach((param) => {
       initialValues[param.name] = generateExampleValue(param.schema)
     })
     setParamValues(initialValues)
+
+    // Initialize request body for POST/PUT/PATCH methods
+    if (['POST', 'PUT', 'PATCH'].includes(endpoint.method) && endpoint.requestBody) {
+      const contentType = Object.keys(endpoint.requestBody.content || {})[0]
+      if (contentType === 'application/json') {
+        const schema = endpoint.requestBody.content[contentType]?.schema
+        if (schema) {
+          const exampleBody = generateExampleValue(schema)
+          setRequestBody(JSON.stringify(exampleBody, null, 2))
+        }
+      }
+    }
   }, [endpoint])
+
+  // Detect OAuth flow type from security schemes
+  const detectOAuthFlow = () => {
+    if (!securitySchemes) return null
+
+    for (const scheme of Object.values(securitySchemes)) {
+      if (scheme.type === 'oauth2' && scheme.flows) {
+        // Check for authorization code flow
+        if (scheme.flows.authorizationCode) {
+          return 'authorizationCode'
+        }
+        // Check for client credentials flow
+        if (scheme.flows.clientCredentials) {
+          return 'clientCredentials'
+        }
+      }
+    }
+    return null
+  }
+
+  const oauthFlowType = detectOAuthFlow()
+
+  // Get OAuth access token for testing (Client Credentials Flow)
+  const getOAuthTokenForTesting = async () => {
+    if (!authConfig || authConfig.authenticationType !== 'oauth') {
+      return { success: false, error: 'OAuth not configured' }
+    }
+
+    setIsGettingToken(true)
+    try {
+      const response = await fetch('/api/oauth/get-test-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: authConfig.clientId,
+          clientSecret: authConfig.clientSecret,
+          tokenUrl: authConfig.tokenUrl,
+          scope: authConfig.scope,
+          tokenExchangeMethod: authConfig.tokenExchangeMethod || 'post'
+        })
+      })
+
+      const data = await response.json()
+
+      if (!data.success) {
+        toast.error('Failed to get OAuth token', { description: data.error })
+        return { success: false, error: data.error }
+      }
+
+      setOauthAccessToken(data.accessToken)
+      toast.success('OAuth token obtained successfully!')
+      return { success: true, accessToken: data.accessToken }
+    } catch (error: any) {
+      toast.error('Failed to get OAuth token', { description: error.message })
+      return { success: false, error: error.message }
+    } finally {
+      setIsGettingToken(false)
+    }
+  }
+
+  // Initiate OAuth Authorization Code Flow
+  const initiateOAuthFlow = () => {
+    if (!authConfig || authConfig.authenticationType !== 'oauth') {
+      toast.error('OAuth not configured')
+      return
+    }
+
+    if (!authConfig.authorizationUrl || !authConfig.clientId) {
+      toast.error('Missing authorization URL or client ID')
+      return
+    }
+
+    // Store OAuth config in sessionStorage so we can retrieve it after callback
+    sessionStorage.setItem('oauth_config', JSON.stringify({
+      clientId: authConfig.clientId,
+      clientSecret: authConfig.clientSecret,
+      tokenUrl: authConfig.tokenUrl,
+      tokenExchangeMethod: authConfig.tokenExchangeMethod || 'post'
+    }))
+
+    // Build authorization URL
+    const params = new URLSearchParams({
+      client_id: authConfig.clientId,
+      redirect_uri: `${window.location.origin}/api/oauth/callback`,
+      response_type: 'code',
+    })
+
+    if (authConfig.scope) {
+      params.append('scope', authConfig.scope)
+    }
+
+    // Generate and store state for CSRF protection
+    const state = Math.random().toString(36).substring(7)
+    sessionStorage.setItem('oauth_state', state)
+    params.append('state', state)
+
+    const authUrl = `${authConfig.authorizationUrl}?${params.toString()}`
+
+    // Open OAuth in popup window (better UX - preserves form state)
+    const width = 600
+    const height = 700
+    const left = window.screenX + (window.outerWidth - width) / 2
+    const top = window.screenY + (window.outerHeight - height) / 2
+
+    const popup = window.open(
+      authUrl,
+      'OAuth Authorization',
+      `width=${width},height=${height},left=${left},top=${top},popup=yes,toolbar=no,menubar=no,location=no,status=no`
+    )
+
+    if (!popup) {
+      toast.error('Popup blocked. Please allow popups for this site and try again.')
+      return
+    }
+
+    // Listen for message from popup/callback
+    const handleMessage = (event: MessageEvent) => {
+      // Verify origin for security
+      if (event.origin !== window.location.origin) return
+
+      if (event.data.type === 'oauth_callback') {
+        const { code, state: returnedState, error, errorDescription } = event.data
+
+        // Remove listener
+        window.removeEventListener('message', handleMessage)
+
+        // Close popup
+        if (popup && !popup.closed) {
+          popup.close()
+        }
+
+        if (error) {
+          toast.error('OAuth authorization failed', { description: errorDescription || error })
+          return
+        }
+
+        if (code) {
+          // Verify state
+          const savedState = sessionStorage.getItem('oauth_state')
+          if (returnedState && savedState && returnedState !== savedState) {
+            toast.error('OAuth state mismatch. Possible CSRF attack.')
+            return
+          }
+
+          // Exchange code for token
+          exchangeCodeForToken(code)
+          sessionStorage.removeItem('oauth_state')
+        }
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+
+    // Fallback: Check if popup was blocked or closed
+    const checkPopup = setInterval(() => {
+      if (!popup || popup.closed) {
+        clearInterval(checkPopup)
+        window.removeEventListener('message', handleMessage)
+      }
+    }, 1000)
+  }
+
+  // Handle OAuth callback (when redirected back from OAuth provider)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const code = urlParams.get('oauth_code')
+    const state = urlParams.get('oauth_state')
+    const error = urlParams.get('oauth_error')
+    const errorDescription = urlParams.get('oauth_error_description')
+
+    if (error) {
+      toast.error('OAuth authorization failed', { description: errorDescription || error })
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname)
+      return
+    }
+
+    if (code && authConfig?.authenticationType === 'oauth') {
+      // Verify state for CSRF protection
+      const savedState = sessionStorage.getItem('oauth_state')
+      if (state && savedState && state !== savedState) {
+        toast.error('OAuth state mismatch. Possible CSRF attack.')
+        window.history.replaceState({}, '', window.location.pathname)
+        return
+      }
+
+      // Exchange code for token
+      exchangeCodeForToken(code)
+
+      // Clean up
+      sessionStorage.removeItem('oauth_state')
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [authConfig])
+
+  // Exchange authorization code for access token
+  const exchangeCodeForToken = async (code: string) => {
+    // Try to get config from sessionStorage first (after redirect), then fall back to authConfig
+    const storedConfigStr = sessionStorage.getItem('oauth_config')
+    let config = authConfig
+
+    if (storedConfigStr) {
+      try {
+        config = JSON.parse(storedConfigStr)
+      } catch (error) {
+        console.error('Failed to parse stored OAuth config:', error)
+      }
+    }
+
+    if (!config) {
+      toast.error('OAuth configuration not found. Please try again.')
+      return
+    }
+
+    setIsGettingToken(true)
+    try {
+      const response = await fetch('/api/oauth/exchange-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          clientId: config.clientId,
+          clientSecret: config.clientSecret,
+          tokenUrl: config.tokenUrl,
+          redirectUri: `${window.location.origin}/api/oauth/callback`,
+          tokenExchangeMethod: config.tokenExchangeMethod || 'post'
+        })
+      })
+
+      const data = await response.json()
+
+      if (!data.success) {
+        toast.error('Failed to exchange code for token', { description: data.error })
+        return
+      }
+
+      setOauthAccessToken(data.accessToken)
+      toast.success('Successfully connected! OAuth token obtained.')
+
+      // Clean up stored config
+      sessionStorage.removeItem('oauth_config')
+    } catch (error: any) {
+      toast.error('Failed to exchange code for token', { description: error.message })
+    } finally {
+      setIsGettingToken(false)
+    }
+  }
 
   const getMethodColor = (method: string) => {
     switch (method) {
@@ -323,15 +586,11 @@ function ActionRow({ endpoint, baseUrl, authConfig, securitySchemes, globalSecur
               break
 
             case 'oauth2':
-              if (authConfig.authenticationType === 'oauth' && authConfig.clientId) {
-                // For OAuth, we would typically need an access token
-                // In a real scenario, you'd implement the OAuth flow first
-                // For now, we'll just indicate that OAuth is configured
-                headers['X-OAuth-Configured'] = 'true'
-                // Note: This is a placeholder. In production, you'd:
-                // 1. Implement OAuth flow to get access token
-                // 2. Store the token
-                // 3. Use it here: headers['Authorization'] = `Bearer ${accessToken}`
+              if (authConfig.authenticationType === 'oauth') {
+                // Use the OAuth access token if we have it
+                if (oauthAccessToken) {
+                  headers['Authorization'] = `Bearer ${oauthAccessToken}`
+                }
               }
               break
           }
@@ -395,8 +654,25 @@ function ActionRow({ endpoint, baseUrl, authConfig, securitySchemes, globalSecur
           throw new Error("API key is required but not configured.")
         }
 
-        if (authConfig.authenticationType === 'oauth' && !authConfig.clientId) {
-          throw new Error("OAuth client ID is required but not configured.")
+        if (authConfig.authenticationType === 'oauth') {
+          if (!authConfig.clientId || !authConfig.clientSecret || !authConfig.tokenUrl) {
+            throw new Error("OAuth configuration is incomplete. Please configure clientId, clientSecret, and tokenUrl.")
+          }
+
+          // Get OAuth token if we don't have one yet
+          if (!oauthAccessToken) {
+            // For authorization code flow, user must click "Connect OAuth Account" first
+            if (oauthFlowType === 'authorizationCode') {
+              throw new Error("Please connect your OAuth account first by clicking 'Connect OAuth Account' button above.")
+            }
+
+            // For client credentials flow, automatically get token
+            console.log('🔐 Getting OAuth access token...')
+            const tokenResult = await getOAuthTokenForTesting()
+            if (!tokenResult.success) {
+              throw new Error(`Failed to get OAuth token: ${tokenResult.error}`)
+            }
+          }
         }
       }
 
@@ -409,10 +685,21 @@ function ActionRow({ endpoint, baseUrl, authConfig, securitySchemes, globalSecur
         )
       }
 
+      // Parse request body if needed
+      let parsedRequestBody = null
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(endpoint.method) && requestBody.trim()) {
+        try {
+          parsedRequestBody = JSON.parse(requestBody)
+        } catch (error) {
+          throw new Error('Request body is not valid JSON')
+        }
+      }
+
       console.log('Testing endpoint:', {
-        method: endpoint.method, // ✅ This is already here
+        method: endpoint.method,
         url,
-        headers: { ...headers, Authorization: headers.Authorization ? '***' : undefined }
+        headers: { ...headers, Authorization: headers.Authorization ? '***' : undefined },
+        hasBody: !!parsedRequestBody
       })
 
       // Call proxy with the correct method
@@ -425,18 +712,21 @@ function ActionRow({ endpoint, baseUrl, authConfig, securitySchemes, globalSecur
           url,
           method: endpoint.method, // ✅ Pass GET, POST, PUT, DELETE, etc.
           headers,
-          // TODO: Add request body for POST/PUT methods (see below)
+          requestBody: parsedRequestBody // ✅ Include request body
         }),
       })
 
-      const data = await response.json()
+      const responseData = await response.json()
 
       if (!response.ok) {
-        setTestError(`Error ${response.status}: ${JSON.stringify(data, null, 2)}`)
-        toast.error(`Request failed with status ${response.status}`)
+        // Handle error from proxy
+        const errorMessage = responseData.error || 'Request failed'
+        setTestError(`Error ${response.status}: ${errorMessage}`)
+        toast.error(`Request failed`, { description: errorMessage })
       } else {
-        setTestResult(data)
-        toast.success("Request successful!")
+        // Success - the proxy returns { success, status, data, headers }
+        setTestResult(responseData.data)
+        toast.success(`Request successful (${responseData.status} ${responseData.statusText})`)
       }
     } catch (error: any) {
       setTestError(error.message || "Request failed")
@@ -598,10 +888,109 @@ function ActionRow({ endpoint, baseUrl, authConfig, securitySchemes, globalSecur
                 </div>
               )}
 
+              {/* Request Body for POST/PUT/PATCH */}
+              {['POST', 'PUT', 'PATCH'].includes(endpoint.method) && endpoint.requestBody && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Request Body (JSON)</Label>
+                    {endpoint.requestBody.required && (
+                      <Badge variant="destructive" className="text-xs">Required</Badge>
+                    )}
+                  </div>
+                  <Textarea
+                    value={requestBody}
+                    onChange={(e) => setRequestBody(e.target.value)}
+                    placeholder='{"key": "value"}'
+                    className="font-mono text-xs"
+                    rows={8}
+                  />
+                  {endpoint.requestBody.description && (
+                    <p className="text-xs text-muted-foreground">
+                      {endpoint.requestBody.description}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* OAuth Token Status */}
+              {authConfig?.authenticationType === 'oauth' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">OAuth Status</Label>
+                    <div className="flex items-center gap-2">
+                      {oauthFlowType && (
+                        <Badge variant="secondary" className="text-xs">
+                          {oauthFlowType === 'authorizationCode' ? 'Auth Code Flow' : 'Client Credentials'}
+                        </Badge>
+                      )}
+                      {oauthAccessToken ? (
+                        <Badge variant="default" className="text-xs bg-green-600">
+                          Token Available
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          No Token
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  {!oauthAccessToken && (
+                    <>
+                      {oauthFlowType === 'authorizationCode' ? (
+                        <Button
+                          onClick={initiateOAuthFlow}
+                          disabled={isGettingToken}
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                        >
+                          {isGettingToken ? (
+                            <>
+                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                              Connecting...
+                            </>
+                          ) : (
+                            <>
+                              <Shield className="mr-2 h-3 w-3" />
+                              Connect OAuth Account
+                            </>
+                          )}
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={getOAuthTokenForTesting}
+                          disabled={isGettingToken}
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                        >
+                          {isGettingToken ? (
+                            <>
+                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                              Getting Token...
+                            </>
+                          ) : (
+                            <>
+                              <Key className="mr-2 h-3 w-3" />
+                              Get OAuth Token
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  {oauthAccessToken && (
+                    <p className="text-xs text-muted-foreground">
+                      Access token is ready. You can now test the endpoints below.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Test Button */}
               <Button
                 onClick={handleTest}
-                disabled={isTesting || !canTest}
+                disabled={isTesting || !canTest || isGettingToken}
                 className="w-full"
               >
                 {isTesting ? (
