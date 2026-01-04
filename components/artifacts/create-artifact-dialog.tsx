@@ -74,7 +74,9 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
       console.log("[Edit Dialog] Loading edit data:", editData)
       console.log("[Edit Dialog] Selected users from edit data:", editData.selectedUsers)
       console.log("[Edit Dialog] Available contacts:", contacts.length)
-      
+      console.log("[Edit Dialog] Uploaded files:", editData.uploadedFiles?.length || 0)
+      console.log("[Edit Dialog] Uploaded images:", editData.uploadedImages?.length || 0)
+
       setFormData((prev) => ({
         ...prev,
         name: editData.name,
@@ -91,8 +93,11 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
           id: `${config.key}-${Date.now()}`
         })),
         selectedChatId: editData.selectedChatId || null,
+        // Load existing uploaded files and images
+        uploadedFiles: editData.uploadedFiles || [],
+        uploadedImages: editData.uploadedImages || [],
       }))
-      
+
       // Create a dummy template for edit mode
       setSelectedTemplate({
         id: 'edit-mode',
@@ -243,10 +248,12 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
             value: config.value
           })),
           selectedChatId: formData.selectedChatId || null,
+          uploadedFiles: formData.uploadedFiles,
+          uploadedImages: formData.uploadedImages,
         })
       } else {
         // Create mode - create new artifact
-        toast.loading("Generating artifact with AI...", { id: "artifact-creation" })
+        toast.loading("Generating artifact...", { id: "artifact-creation" })
 
         const result = await createArtifact({
           assistantId: assistantId,
@@ -275,7 +282,9 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
 
           // Navigate to the artifact page to see streaming generation
           if (result.artifact) {
-            router.push(`/assistants/${assistantId}/artifacts/${result.artifact.id}`)
+            if (selectedTemplate?.category !== "video_generation") {
+              router.push(`/assistants/${assistantId}/artifacts/${result.artifact.id}`)
+            }
           }
         } else {
           toast.error(result.error || "Failed to create artifact")
@@ -352,16 +361,16 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
           {isEditMode ? (
             // Edit mode footer
             <>
-              <Button 
-                variant="outline" 
-                onClick={() => onOpenChange(false)} 
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
                 className="hover:text-primary hover:bg-transparent"
                 disabled={isSubmitting || isUpdating}
               >
                 Cancel
               </Button>
-              <Button 
-                onClick={handleSubmit} 
+              <Button
+                onClick={handleSubmit}
                 disabled={isSubmitting || isUpdating || isLoadingEditData}
               >
                 {isSubmitting || isUpdating ? "Updating..." : "Update Artifact"}

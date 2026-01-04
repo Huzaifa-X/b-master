@@ -193,9 +193,10 @@ export function useCustomChat(options: UseCustomChatOptions) {
       console.log("[useCustomChat] ✅ Auto-starting streaming for PENDING message:", lastMessage.id)
       hasStartedAutoStream.current = true
 
-      // Get attachments from the user message
+      // Get attachments and options from the user message's documents field
       const attachments = lastMessage.attachments || []
-
+      
+      // Parse documents to get options and mentionedUsers
       let options = {
         webSearch: false,
         research: false,
@@ -205,60 +206,34 @@ export function useCustomChat(options: UseCustomChatOptions) {
         mentionedUsers: [] as Array<{ id: string; name: string; email: string }>
       }
 
-      const SESSION_STORAGE_KEY = "chat_mode"
-      const ARTIFACT_STORAGE_KEY = "chat_artifact_data"
-      console.log("[useCustomChat] Checking sessionStorage...")
-      console.log("[useCustomChat] sessionStorage.getItem:", sessionStorage.getItem(SESSION_STORAGE_KEY))
-      console.log("[useCustomChat] All sessionStorage keys:", Object.keys(sessionStorage))
-
       try {
-        const savedMode = sessionStorage.getItem(SESSION_STORAGE_KEY)
-
-        console.log("[useCustomChat] Retrieved mode from sessionStorage:", savedMode)
-
-        if (savedMode === "webSearch") {
-          options.webSearch = true
-        } else if (savedMode === "research") {
-          options.research = true
-        } else if (savedMode === "chatWithAPI") {
-          options.chatWithAPI = true
-        } else if (savedMode === "dropbox") {
-          options.dropbox = true
-        } else if (savedMode === "artifact") {
-          // 🔥 Load artifact data from sessionStorage
-          const savedArtifact = sessionStorage.getItem(ARTIFACT_STORAGE_KEY)
-          if (savedArtifact) {
-            try {
-              options.artifact = JSON.parse(savedArtifact)
-              console.log("[useCustomChat] Retrieved artifact from sessionStorage:", options.artifact.name)
-            } catch (artifactParseError) {
-              console.error("[useCustomChat] Error parsing artifact from sessionStorage:", artifactParseError)
-            }
-          } else {
-            console.warn("[useCustomChat] Artifact mode detected but no artifact data found in sessionStorage")
+        // Get the message from DB to access documents field
+        const dbMessage = dbMessages.find(m => m.id === lastMessage.id)
+        if (dbMessage && dbMessage.documents) {
+          const documentsData = JSON.parse(dbMessage.documents)
+          
+          // Extract options from documents
+          if (documentsData.options) {
+            options.webSearch = documentsData.options.webSearch || false
+            options.research = documentsData.options.research || false
+            options.chatWithAPI = documentsData.options.chatWithAPI || false
+            options.dropbox = documentsData.options.dropbox || false
+            options.artifact = documentsData.options.artifact || null
+            console.log("[useCustomChat] Retrieved options from message documents:", documentsData.options)
           }
-        } else if (savedMode === "mentionedUsers") {
-          // 🔥 Load mentioned users from sessionStorage
-          const savedMentionedUsers = sessionStorage.getItem("chat_mentioned_users")
-          if (savedMentionedUsers) {
-            options.mentionedUsers = JSON.parse(savedMentionedUsers)
-            console.log("[useCustomChat] Retrieved mentioned users from sessionStorage:", options.mentionedUsers)
-          }
-        }
 
-        const savedArtifact = sessionStorage.getItem(ARTIFACT_STORAGE_KEY)
-        if (savedArtifact) {
-          try {
-            options.artifact = JSON.parse(savedArtifact)
-            console.log("[useCustomChat] Retrieved artifact from sessionStorage:", options.artifact.name)
-          } catch (artifactParseError) {
-            console.error("[useCustomChat] Error parsing artifact from sessionStorage:", artifactParseError)
+          // Extract mentionedUsers from documents
+          if (documentsData.mentionedUsers && Array.isArray(documentsData.mentionedUsers)) {
+            options.mentionedUsers = documentsData.mentionedUsers
+            console.log("[useCustomChat] Retrieved mentioned users from message documents:", documentsData.mentionedUsers)
           }
+        } else {
+          console.log("[useCustomChat] No documents field found in message, using default options")
         }
 
         console.log("[useCustomChat] Auto-stream options:", options)
       } catch (error) {
-        console.error("[useCustomChat] Error retrieving options from sessionStorage:", error)
+        console.error("[useCustomChat] Error parsing message documents:", error)
       }
 
       // Start streaming automatically
@@ -371,7 +346,6 @@ export function useCustomChat(options: UseCustomChatOptions) {
                           : msg
                       )
                     )
-                    sessionStorage.removeItem('chat_mentioned_users')
                     await refetchMessages()
                     break
                   case "artifact_updated":

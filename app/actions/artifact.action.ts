@@ -392,9 +392,39 @@ export async function createArtifact(data: {
                     thumbnailUrl: thumbnailUrl || undefined,
                     videoMetadata: videoMetadata ? (videoMetadata as any) : undefined,
                     isPublic: isPublic,
-                    activeVersionId: null // No version yet - will be set during streaming
+                    activeVersionId: null // Will be set after creating first version for video artifacts
                 }
             })
+
+            // For video artifacts, create the first version immediately
+            let firstVersionId: number | null = null
+            if (data.category === "video_generation" && generatedCode) {
+                console.log("[Artifact] Creating first version for video artifact...")
+
+                const firstVersion = await tx.artifactVersion.create({
+                    data: {
+                        artifactId: newArtifact.id,
+                        userId: userId,
+                        versionNumber: 1,
+                        versionName: "Version 1",
+                        code: generatedCode,
+                        description: "Initial video generation",
+                        changeType: "ai",
+                        isSnapshot: false
+                    }
+                })
+
+                firstVersionId = firstVersion.id
+                console.log(`[Artifact] First version created: ${firstVersionId}`)
+
+                // Update artifact with active version
+                await tx.assistantArtifact.update({
+                    where: { id: newArtifact.id },
+                    data: { activeVersionId: firstVersionId }
+                })
+
+                console.log("[Artifact] Active version set for video artifact")
+            }
 
             // Always create ADMIN permission for the creator
             console.log('[Artifact Creation] Creating ADMIN permission for creator:', userId.toString())
@@ -1194,7 +1224,7 @@ export async function shareArtifact(data: {
         }
 
         // Create shareable link
-        const shareableLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/share/${shareableId}`
+        const shareableLink = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/share/${shareableId}`
 
         // Send message with artifact link
         const message = await prisma.assistantChatMessage.create({

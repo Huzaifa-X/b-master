@@ -56,6 +56,7 @@ async function saveImageToS3(
  */
 export async function POST(req: NextRequest) {
   const encoder = new TextEncoder()
+  let isArtifactRequest = false;
 
   try {
     // Check authentication
@@ -362,62 +363,6 @@ export async function POST(req: NextRequest) {
     // END OF STRIPE INVOICE PROMPT
     // ==========================================
 
-    // Add artifact information if provided
-    if (artifact) {
-      systemPrompt += `\n\n## 🎨 Artifact Context & Update Capability
-
-      **The user has shared an artifact named "${artifact.name}" in this conversation.**
-
-      ### Artifact Content:
-      \`\`\`html
-      ${artifact.htmlContent}
-      \`\`\`
-      ${artifact.instructions ? `\n### Original Instructions:\n${artifact.instructions}\n` : ''}
-
-      ### Your Role with This Artifact:
-
-      **CRITICAL: Understand User Intent First**
-
-      Before responding, analyze what the user is asking:
-
-      1. **Information Questions** (e.g., "What does this do?", "How does the button work?", "Explain this code"):
-        - DO NOT modify the artifact
-        - Provide clear explanations about the artifact's functionality
-        - Reference specific parts of the code when explaining
-        - Answer their questions directly without making changes
-
-      2. **Modification Requests** (e.g., "Change the color to blue", "Add a counter", "Fix the button", "Make it responsive"):
-        - Use the update_artifact function to implement the changes
-        - Explain what you're changing BEFORE making the update
-        - After updating, clearly describe what was changed and why
-        - Provide a concise summary of the modifications
-
-      3. **Debugging/Help Requests** (e.g., "This isn't working", "Why is it broken?", "Help me fix this"):
-        - First, analyze and explain the issue
-        - If a fix is needed AND user confirms, then update
-        - If unclear whether to update, ASK the user first
-
-      4. **General Conversation** (e.g., "Thanks!", "That looks good", "Hello"):
-        - Respond naturally without modifying the artifact
-        - Acknowledge their message appropriately
-
-      ### Updating the Artifact:
-
-      When you determine the user wants modifications:
-      - Call the \`update_artifact\` function with:
-        - \`updatedCode\`: Complete updated HTML (include ALL code, not just changes)
-        - \`changeDescription\`: Detailed explanation of what changed and why
-        - \`changeSummary\`: One-line summary (e.g., "Changed button color to blue")
-
-      ### Key Principles:
-      - **Don't over-update**: If they ask a question, answer it - don't modify the code unless explicitly requested
-      - **Be explicit**: If you're updating, say "I'll update the artifact to..." BEFORE calling the function
-      - **Confirm uncertain requests**: If unclear whether to modify, ask for confirmation
-      - **Preserve functionality**: When updating, maintain existing features unless told to remove them
-
-      ${await getArtifactCodingPrompt()}`
-    }
-
     if (chatType === "ASSISTANT" && chat.assistant?.instructions) {
       systemPrompt += `\n\n## Assistant-Specific Instructions\n${chat.assistant.instructions}`
     }
@@ -675,6 +620,7 @@ export async function POST(req: NextRequest) {
         2. Include the PDF URL as a clickable markdown link: [View Invoice PDF](${pdfUrl})
         3. Mention the customer name: ${name}
         4. Do NOT call update_artifact function - the template remains unchanged
+        5. Use the Stripe MCP for the invoice generation and also include the stripe link along with the generated invoice pdf.
 
         Example response: "I've generated the invoice PDF for ${name}. You can view and download it here: [View Invoice PDF](${pdfUrl})"
       `;
@@ -697,9 +643,75 @@ export async function POST(req: NextRequest) {
         1. Confirm the invoice was generated successfully
         2. Include the PDF URL as a clickable markdown link: [View Invoice PDF](${pdfUrl})
         3. Mention the customer name: ${name}
+        4. Do NOT call update_artifact function - the template remains unchanged
+        5. Use the Stripe MCP for the invoice generation and also include the stripe link along with the generated invoice pdf.
 
         Example response: "I've generated the invoice PDF for ${name}. You can view and download it here: [View Invoice PDF](${pdfUrl})"
       `;
+      }
+      else {
+        isArtifactRequest = true;
+      }
+    }
+
+    if (isArtifactRequest) {
+      // Add artifact information if provided
+      console.log("======================")
+      console.log("No Invoice Request Found")
+      console.log("======================")
+      if (artifact) {
+        systemPrompt += `\n\n## 🎨 Artifact Context & Update Capability
+
+      **The user has shared an artifact named "${artifact.name}" in this conversation.**
+
+      ### Artifact Content:
+      \`\`\`html
+      ${artifact.htmlContent}
+      \`\`\`
+      ${artifact.instructions ? `\n### Original Instructions:\n${artifact.instructions}\n` : ''}
+
+      ### Your Role with This Artifact:
+
+      **CRITICAL: Understand User Intent First**
+
+      Before responding, analyze what the user is asking:
+
+      1. **Information Questions** (e.g., "What does this do?", "How does the button work?", "Explain this code"):
+        - DO NOT modify the artifact
+        - Provide clear explanations about the artifact's functionality
+        - Reference specific parts of the code when explaining
+        - Answer their questions directly without making changes
+
+      2. **Modification Requests** (e.g., "Change the color to blue", "Add a counter", "Fix the button", "Make it responsive"):
+        - Use the update_artifact function to implement the changes
+        - Explain what you're changing BEFORE making the update
+        - After updating, clearly describe what was changed and why
+        - Provide a concise summary of the modifications
+
+      3. **Debugging/Help Requests** (e.g., "This isn't working", "Why is it broken?", "Help me fix this"):
+        - First, analyze and explain the issue
+        - If a fix is needed AND user confirms, then update
+        - If unclear whether to update, ASK the user first
+
+      4. **General Conversation** (e.g., "Thanks!", "That looks good", "Hello"):
+        - Respond naturally without modifying the artifact
+        - Acknowledge their message appropriately
+
+      ### Updating the Artifact:
+
+      When you determine the user wants modifications:
+      - Call the \`update_artifact\` function with:
+        - \`updatedCode\`: Complete updated HTML (include ALL code, not just changes)
+        - \`changeDescription\`: Detailed explanation of what changed and why
+        - \`changeSummary\`: One-line summary (e.g., "Changed button color to blue")
+
+      ### Key Principles:
+      - **Don't over-update**: If they ask a question, answer it - don't modify the code unless explicitly requested
+      - **Be explicit**: If you're updating, say "I'll update the artifact to..." BEFORE calling the function
+      - **Confirm uncertain requests**: If unclear whether to modify, ask for confirmation
+      - **Preserve functionality**: When updating, maintain existing features unless told to remove them
+
+      ${await getArtifactCodingPrompt()}`
       }
     }
 
@@ -822,7 +834,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Add artifact update tool
-      if (artifact) {
+      if (artifact && isArtifactRequest) {
         tools.push({
           type: "function",
           name: "update_artifact",

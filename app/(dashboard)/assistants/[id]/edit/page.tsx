@@ -7,7 +7,6 @@ import { getAssistantForEdit } from "@/app/actions/assistant.action"
 import { AssistantFormData } from "@/types/assistant"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import axios from "axios"
 
 export default function EditAssistantPage() {
   const params = useParams()
@@ -37,78 +36,23 @@ export default function EditAssistantPage() {
 
         const assistant = result.assistant
 
-        // Convert file URLs to File objects for pre-population
-        const fileObjects: File[] = []
+        // Process file URLs to match new structure
+        const fileURLs: Array<{ url: string; fileName: string; fileSize: number }> = []
         if (assistant.files && Array.isArray(assistant.files) && assistant.files.length > 0) {
-          try {
-            console.log('Loading files:', assistant.files)
-            
-            // Fetch files and convert to File objects
-            const filePromises = assistant.files.map(async (fileInfo: { url: string; name: string; type?: string; size?: number }) => {
-              try {
-                console.log(`Fetching file: ${fileInfo.name} from ${fileInfo.url}`)
-                
-                const response = await axios.get(fileInfo.url, {
-                  responseType: 'blob',
-                  headers: {
-                    'Cache-Control': 'no-cache',
-                  },
-                  // No timeout specified - files may be large and take time to download
-                  validateStatus: (status) => status >= 200 && status < 300,
-                })
-                
-                const blob = response.data as Blob
-                console.log(`File fetched successfully: ${fileInfo.name}, size: ${blob.size} bytes`)
-                
-                // Ensure clean file name without MIME type contamination
-                let fileName = fileInfo.name || `file_${Date.now()}`
-                
-                // Remove any timestamp prefix patterns like "1765616734544-"
-                fileName = fileName.replace(/^\d+-/, '')
-                
-                // Remove any MIME type suffixes that might have been added (e.g., ".application_pdf")
-                fileName = fileName.replace(/\.(application|text|image|video|audio)_[a-z0-9]+$/i, '')
-                
-                // Determine proper MIME type from response or file info
-                const contentType = response.headers['content-type'] || fileInfo.type || blob.type || 'application/octet-stream'
-                
-                // Create File object with clean name
-                const file = new File([blob], fileName, { type: contentType })
-                
-                // Verify file was created correctly
-                console.log(`File created: ${file.name}, type: ${file.type}, size: ${file.size}`)
-                
-                return file
-              } catch (error) {
-                if (axios.isAxiosError(error)) {
-                  console.error(`Error fetching file ${fileInfo.url}:`, error.message)
-                  if (error.response) {
-                    console.error(`Status: ${error.response.status}, StatusText: ${error.response.statusText}`)
-                  }
-                } else {
-                  console.error(`Error converting file ${fileInfo.url}:`, error)
-                }
-                console.log(`Failed to load file: ${fileInfo.name}`)
-                return null
-              }
+          // Map file URLs to new structure
+          for (const fileInfo of assistant.files) {
+            // Clean up the file name (remove timestamp prefix)
+            let fileName = fileInfo.name || 'file'
+            fileName = fileName.replace(/^\d+_/, '') // Remove timestamp_ prefix
+            fileName = fileName.replace(/^\d+-/, '') // Remove timestamp- prefix
+
+            fileURLs.push({
+              url: fileInfo.url,
+              fileName: fileName,
+              fileSize: 0 // Size unknown from URL, but not critical for display
             })
-            
-            const fetchedFiles = await Promise.all(filePromises)
-            const validFiles = fetchedFiles.filter((f): f is File => f !== null)
-            
-            // console.log(`Successfully loaded ${validFiles.length} out of ${assistant.files.length} files`)
-            
-            if (validFiles.length > 0) {
-              fileObjects.push(...validFiles)
-              console.log(`Loaded ${validFiles.length} file${validFiles.length > 1 ? 's' : ''}`)
-            } else if (assistant.files.length > 0) {
-              console.log('Some files could not be loaded')
-            }
-          } catch (error) {
-            console.error('Error pre-loading files:', error)
-            console.log('Failed to load files')
-            // Continue without files if there's an error
           }
+          console.log(`Loaded ${fileURLs.length} file URL${fileURLs.length > 1 ? 's' : ''}`)
         }
 
         // Map the fetched data to AssistantFormData format
@@ -117,11 +61,11 @@ export default function EditAssistantPage() {
           price: assistant.price,
           category: assistant.category as any,
           description: assistant.description,
-          image: assistant.imageURL,
+          imagePreview: assistant.imageURL, // Use imageURL for preview
           imageURL: assistant.imageURL,
           notes: assistant.notes || [],
           urls: assistant.urls || [],
-          files: fileObjects, // Pre-populated files
+          fileURLs: fileURLs, // Use new fileURLs structure
           instructions: assistant.instructions || "",
           authenticationType: (assistant.apiConfiguration?.authenticationType || "none") as "none" | "api_key" | "oauth",
           apiKey: assistant.apiConfiguration?.apiKey || "",

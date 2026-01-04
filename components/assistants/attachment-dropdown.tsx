@@ -28,9 +28,6 @@ interface AttachmentDropdownProps {
     onRemoveArtifact?: () => void
 }
 
-const SESSION_STORAGE_KEY = "chat_mode"
-const ARTIFACT_STORAGE_KEY = "chat_artifact_data"
-
 export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     onFileSelect,
     onWebSearch,
@@ -60,7 +57,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
         checkDropboxConnection()
     }, [])
 
-    // 🔥 Update selected mode when artifact prop changes
+    // Update selected mode when artifact prop changes
     useEffect(() => {
         if (selectedArtifact) {
             setSelectedMode("artifact")
@@ -69,25 +66,8 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
         }
     }, [selectedArtifact])
 
-    // Load from session storage on mount
-    useEffect(() => {
-        if (typeof window !== "undefined") {
-            const savedMode = sessionStorage.getItem(SESSION_STORAGE_KEY)
-            if (savedMode === "webSearch" || savedMode === "research" || savedMode === "chatWithAPI" || savedMode === "dropbox") {
-                setSelectedMode(savedMode)
-                // Notify parent of the saved mode
-                if (savedMode === "webSearch") {
-                    onWebSearch?.(true)
-                } else if (savedMode === "research") {
-                    onResearch?.(true)
-                } else if (savedMode === "chatWithAPI") {
-                    onChatWithAPI?.()
-                } else if (savedMode === "dropbox") {
-                    onDropbox?.(true)
-                }
-            }
-        }
-    }, [onWebSearch, onResearch, onChatWithAPI, onDropbox])
+    // Note: ChatInput component now handles sessionStorage with assistant-scoped keys
+    // This component just reflects the current state via props
 
     const checkDropboxConnection = async () => {
         setIsCheckingDropbox(true)
@@ -120,18 +100,12 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
         const newState = selectedMode !== "dropbox"
         if (newState) {
             setSelectedMode("dropbox")
-            // Save to session storage
-            if (typeof window !== "undefined") {
-                sessionStorage.setItem(SESSION_STORAGE_KEY, "dropbox")
-            }
+            // Note: ChatInput handles sessionStorage internally
             onDropbox?.(true)
             toast.success('Dropbox enabled for this chat')
         } else {
             setSelectedMode(null)
-            // Remove from session storage
-            if (typeof window !== "undefined") {
-                sessionStorage.removeItem(SESSION_STORAGE_KEY)
-            }
+            // Note: ChatInput handles sessionStorage internally
             onDropbox?.(false)
             toast.info('Dropbox disabled')
         }
@@ -145,20 +119,14 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     const handleWebSearch = () => {
         setSelectedMode("webSearch")
         setIsOpen(false)
-        // Save to session storage
-        if (typeof window !== "undefined") {
-            sessionStorage.setItem(SESSION_STORAGE_KEY, "webSearch")
-        }
+        // Note: ChatInput handles sessionStorage internally
         onWebSearch?.(true)
     }
 
     const handleResearch = () => {
         setSelectedMode("research")
         setIsOpen(false)
-        // Save to session storage
-        if (typeof window !== "undefined") {
-            sessionStorage.setItem(SESSION_STORAGE_KEY, "research")
-        }
+        // Note: ChatInput handles sessionStorage internally
         onResearch?.(true)
     }
 
@@ -166,14 +134,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
         const currentMode = selectedMode
         setSelectedMode(null)
 
-        // Remove from session storage
-        if (typeof window !== "undefined") {
-            sessionStorage.removeItem(SESSION_STORAGE_KEY)
-            // 🔥 Also remove artifact data if it was artifact mode
-            if (currentMode === "artifact") {
-                sessionStorage.removeItem("chat_artifact_data")
-            }
-        }
+        // Note: ChatInput handles sessionStorage cleanup internally
 
         // Notify parent to disable the mode
         if (currentMode === "webSearch") {
@@ -196,10 +157,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     const handleChatWithAPI = () => {
         setSelectedMode("chatWithAPI")
         setIsOpen(false)
-        // Save to session storage
-        if (typeof window !== "undefined") {
-            sessionStorage.setItem(SESSION_STORAGE_KEY, "chatWithAPI")
-        }
+        // Note: ChatInput handles sessionStorage internally
         onChatWithAPI?.()
     }
 
@@ -207,7 +165,71 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
         const files = event.target.files
         if (files && files.length > 0) {
             const fileArray = Array.from(files)
-            onFileSelect?.(fileArray)
+
+            // Validate file types
+            const allowedTypes = new Set([
+                // Images (OpenAI supported formats only)
+                'image/jpeg',
+                'image/png',
+                'image/gif',
+                'image/webp',
+                // Documents
+                'application/pdf',
+                'text/plain',
+                'text/csv',
+                'text/markdown',
+                'text/html',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.ms-powerpoint',
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                'application/rtf',
+                'application/json',
+                'text/javascript',
+                'application/javascript',
+            ])
+
+            const allowedExtensions = new Set([
+                // Images
+                'jpg', 'jpeg', 'png', 'gif', 'webp',
+                // Documents
+                'pdf', 'txt', 'csv', 'md', 'html', 'doc', 'docx',
+                'xls', 'xlsx', 'ppt', 'pptx', 'rtf',
+                // Code
+                'json', 'js', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'cs', 'rb', 'go', 'rs'
+            ])
+
+            const invalidFiles: string[] = []
+            const validFiles: File[] = []
+
+            fileArray.forEach(file => {
+                const extension = file.name.split('.').pop()?.toLowerCase()
+                const isValidType = allowedTypes.has(file.type)
+                const isValidExtension = extension && allowedExtensions.has(extension)
+
+                // Explicitly reject SVG files
+                if (file.type === 'image/svg+xml' || extension === 'svg') {
+                    invalidFiles.push(`${file.name} (SVG not supported)`)
+                } else if (isValidType || isValidExtension) {
+                    validFiles.push(file)
+                } else {
+                    invalidFiles.push(file.name)
+                }
+            })
+
+            // Show error for invalid files
+            if (invalidFiles.length > 0) {
+                toast.error(
+                    `Unsupported file type: ${invalidFiles.join(', ')}. Supported: Images (JPG, PNG, GIF, WebP), Documents (PDF, TXT, CSV, MD), Code files.`
+                )
+            }
+
+            // Only pass valid files to parent
+            if (validFiles.length > 0) {
+                onFileSelect?.(validFiles)
+            }
         }
         // Reset input
         event.target.value = ""
@@ -218,7 +240,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
             <input
                 ref={fileInputRef}
                 type="file"
-                accept="*/*"
+                accept="image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.csv,.md,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.json,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.cs,.rb,.go,.rs"
                 className="hidden"
                 onChange={handleFileChange}
                 multiple

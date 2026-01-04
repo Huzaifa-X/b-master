@@ -6,13 +6,16 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { KnowledgeBaseStepProps } from "@/types/assistant"
-import { Plus, X, Upload, File, Download } from "lucide-react"
+import { Plus, X, Upload, File, Download, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { uploadFileToS3, deleteFileFromS3 } from "@/app/actions/upload.action"
 
 export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseStepProps) {
   const [newNote, setNewNote] = useState("")
   const [newUrl, setNewUrl] = useState("")
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const addNote = () => {
@@ -46,34 +49,186 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
     })
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
-    if (files.length > 0) {
-      updateFormData({
-        files: [...formData.files, ...files],
+    if (files.length === 0) return
+
+    // Allowed file types
+    const allowedTypes = [
+      // PDFs
+      'application/pdf',
+      // Text files
+      'text/plain',
+      'text/csv',
+      'text/markdown',
+      'text/html',
+      // Microsoft Office documents
+      'application/msword', // .doc
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+      'application/vnd.ms-excel', // .xls
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+      'application/vnd.ms-powerpoint', // .ppt
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+      // Other document formats
+      'application/rtf',
+      'application/vnd.oasis.opendocument.text', // .odt
+      'application/vnd.oasis.opendocument.spreadsheet', // .ods
+    ]
+
+    const maxFileSize = 50 * 1024 * 1024 // 50MB in bytes
+
+    // Validate files before processing
+    const validFiles: File[] = []
+    const invalidFiles: Array<{ name: string; reason: string }> = []
+
+    for (const file of files) {
+      // Check file size
+      if (file.size > maxFileSize) {
+        invalidFiles.push({
+          name: file.name,
+          reason: `File size exceeds 50MB limit (${(file.size / 1024 / 1024).toFixed(2)}MB)`
+        })
+        continue
+      }
+
+      // Check file type
+      const fileExtension = file.name.split('.').pop()?.toLowerCase()
+      const isValidType = allowedTypes.includes(file.type) || 
+        (fileExtension && [
+          'pdf', 'txt', 'csv', 'md', 'html', 'doc', 'docx', 
+          'xls', 'xlsx', 'ppt', 'pptx', 'rtf', 'odt', 'ods'
+        ].includes(fileExtension))
+
+      if (!isValidType) {
+        invalidFiles.push({
+          name: file.name,
+          reason: 'File type not allowed. Only documents, PDFs, and text files are permitted'
+        })
+        continue
+      }
+
+      validFiles.push(file)
+    }
+
+    // Show errors for invalid files
+    if (invalidFiles.length > 0) {
+      invalidFiles.forEach(({ name, reason }) => {
+        toast.error(`${name}: ${reason}`)
       })
-      toast.success(`${files.length} file(s) added`)
+    }
+
+    if (validFiles.length === 0) {
+      // Reset file input if no valid files
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+      return
+    }
+
+    setIsUploading(true)
+    const successfulUploads: Array<{ url: string; fileName: string; fileSize: number }> = []
+    let failedCount = 0
+
+    for (const file of validFiles) {
+      // Add to uploading set
+      setUploadingFiles(prev => new Set(prev).add(file.name))
+
+      try {
+        // Create FormData for this file
+        const formDataObj = new FormData()
+        formDataObj.append("file", file)
+        formDataObj.append("folder", "knowledge-base")
+
+        // Upload to S3
+        const uploadResult = await uploadFileToS3(formDataObj)
+
+        if (uploadResult.success && uploadResult.url) {
+          successfulUploads.push({
+            url: uploadResult.url,
+            fileName: uploadResult.fileName || file.name,
+            fileSize: uploadResult.fileSize || file.size
+          })
+        } else {
+          failedCount++
+          toast.error(`Failed to upload ${file.name}: ${uploadResult.error}`)
+        }
+      } catch (error: any) {
+        console.error(`Error uploading ${file.name}:`, error)
+        failedCount++
+        toast.error(`Failed to upload ${file.name}`)
+      } finally {
+        // Remove from uploading set
+        setUploadingFiles(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(file.name)
+          return newSet
+        })
+      }
+    }
+
+    // Update form data with successfully uploaded files
+    if (successfulUploads.length > 0) {
+      updateFormData({
+        fileURLs: [...(formData.fileURLs || []), ...successfulUploads]
+      })
+      toast.success(`${successfulUploads.length} file(s) uploaded successfully`)
+    }
+
+    if (failedCount > 0) {
+      toast.error(`${failedCount} file(s) failed to upload`)
+    }
+
+    setIsUploading(false)
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
     }
   }
 
-  const removeFile = (index: number) => {
-    updateFormData({
-      files: formData.files.filter((_, i) => i !== index),
-    })
-    toast.success("File removed")
+  const removeFile = async (index: number) => {
+    const fileToRemove = formData.fileURLs?.[index]
+
+    if (!fileToRemove) return
+
+    // Delete from S3 first
+    try {
+      const deleteResult = await deleteFileFromS3(fileToRemove.url)
+      if (deleteResult.success) {
+        // Remove from form data after successful S3 deletion
+        updateFormData({
+          fileURLs: (formData.fileURLs || []).filter((_, i) => i !== index)
+        })
+        toast.success("File removed from storage")
+      } else {
+        console.warn("Failed to delete file from S3:", deleteResult.error)
+        // Still remove from form data, but warn user
+        updateFormData({
+          fileURLs: (formData.fileURLs || []).filter((_, i) => i !== index)
+        })
+        toast.warning("File removed locally, but may still exist in storage")
+      }
+    } catch (error) {
+      console.error("Error deleting file:", error)
+      // Still remove from form data, but warn user
+      updateFormData({
+        fileURLs: (formData.fileURLs || []).filter((_, i) => i !== index)
+      })
+      toast.warning("File removed locally, but may still exist in storage")
+    }
   }
 
-  const handleDownloadFile = (file: File, index: number) => {
+  const handleDownloadFile = (fileUrl: string, fileName: string) => {
     try {
-      const url = URL.createObjectURL(file)
+      // Open the S3 URL in a new tab to download
       const link = document.createElement('a')
-      link.href = url
-      link.download = file.name
+      link.href = fileUrl
+      link.download = fileName
+      link.target = '_blank'
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-      toast.success("File downloaded")
+      toast.success("Download started")
     } catch (error) {
       console.error("Error downloading file:", error)
       toast.error("Failed to download file")
@@ -198,48 +353,80 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
             onChange={handleFileChange}
             className="hidden"
             id="files-upload"
+            accept=".pdf,.txt,.csv,.md,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.odt,.ods,application/pdf,text/plain,text/csv,text/markdown,text/html,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/rtf,application/vnd.oasis.opendocument.text,application/vnd.oasis.opendocument.spreadsheet"
           />
 
           <div
-            onClick={handleCardClick}
+            onClick={isUploading ? undefined : handleCardClick}
             className={cn(
-              "border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer",
-              "hover:border-primary hover:bg-muted/50 active:scale-[0.99]"
+              "border-2 border-dashed rounded-lg p-8 text-center transition-all",
+              isUploading
+                ? "cursor-not-allowed opacity-60"
+                : "cursor-pointer hover:border-primary hover:bg-muted/50 active:scale-[0.99]"
             )}
           >
-            <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-            <p className="text-sm font-medium mb-1">
-              Click to upload files
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Upload documents, PDFs, or text files
-            </p>
+            {isUploading ? (
+              <>
+                <Loader2 className="h-10 w-10 mx-auto mb-3 text-primary animate-spin" />
+                <p className="text-sm font-medium mb-1">
+                  Uploading files...
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Please wait while files are being uploaded to cloud storage
+                </p>
+              </>
+            ) : (
+              <>
+                <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+                <p className="text-sm font-medium mb-1">
+                  Click to upload files
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Upload documents, PDFs, or text files (max 50MB each)
+                </p>
+              </>
+            )}
           </div>
 
-          {formData.files.length > 0 && (
+          {uploadingFiles.size > 0 && (
+            <div className="space-y-2 mt-3">
+              <p className="text-sm font-medium text-muted-foreground">
+                Uploading... ({uploadingFiles.size} file{uploadingFiles.size > 1 ? 's' : ''})
+              </p>
+              {Array.from(uploadingFiles).map((fileName) => (
+                <div
+                  key={fileName}
+                  className="flex items-center gap-2 bg-muted p-3 rounded-md"
+                >
+                  <Loader2 className="h-4 w-4 text-primary animate-spin flex-shrink-0" />
+                  <span className="text-sm truncate">{fileName}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {(formData.fileURLs?.length ?? 0) > 0 && (
             <div className="space-y-2 mt-3">
               <p className="text-sm font-medium">
-                Uploaded Files ({formData.files.length})
+                Uploaded Files ({formData.fileURLs?.length ?? 0})
               </p>
-              {formData.files.map((file, index) => (
+              {(formData.fileURLs || []).map((file, index) => (
                 <div
                   key={index}
                   className="flex items-center justify-between bg-muted p-3 rounded-md"
                 >
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="text-sm truncate break-words">{file.name}</span>
-                    {file.size && (
-                      <span className="text-xs text-muted-foreground flex-shrink-0">
-                        ({(file.size / 1024).toFixed(1)} KB)
-                      </span>
-                    )}
+                    <span className="text-sm truncate break-words">{file.fileName}</span>
+                    <span className="text-xs text-muted-foreground flex-shrink-0">
+                      ({(file.fileSize / 1024).toFixed(1)} KB)
+                    </span>
                   </div>
                   <div className="flex items-center gap-1 ml-2">
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleDownloadFile(file, index)}
+                      onClick={() => handleDownloadFile(file.url, file.fileName)}
                       className="h-8 w-8 bg-transparent hover:bg-transparent text-muted-foreground hover:text-primary"
                       title="Download file"
                     >

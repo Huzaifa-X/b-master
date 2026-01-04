@@ -269,7 +269,8 @@ export default function ArtifactPage({ params }: PageProps) {
         eventSourceRef.current = null
       }
       setIsStreaming(false)
-      streamingInitiatedRef.current = false
+      // Don't reset streamingInitiatedRef here to prevent double streaming
+      // in React 18 Strict Mode (development) which causes effects to run twice
       setStreamingContent("")
       setSelectedVersionCode(null)
       setSelectedVersionId(null)

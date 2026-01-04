@@ -90,8 +90,8 @@ export function ShareArtifactDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="h-5 w-5 text-primary" />
             Share Artifact
@@ -102,7 +102,7 @@ export function ShareArtifactDialog({
         </DialogHeader>
 
         {/* Search Input */}
-        <div className="relative">
+        <div className="relative flex-shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search contacts..."
@@ -113,62 +113,64 @@ export function ShareArtifactDialog({
         </div>
 
         {/* Contacts List */}
-        <ScrollArea className="h-[300px] rounded-md border">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : filteredContacts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center p-6">
-              <User className="h-12 w-12 text-muted-foreground mb-2" />
-              <p className="text-sm font-medium">No contacts found</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {searchQuery ? "Try a different search" : "Add contacts to this assistant first"}
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y">
-              {filteredContacts.map((contact) => {
-                const userId = contact.userId || contact.contactId
-                return (
-                  <div
-                    key={userId}
-                    className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                        {contact.avatar ? (
-                          <img
-                            src={contact.avatar}
-                            alt={contact.name}
-                            className="w-full h-full rounded-full object-cover"
-                          />
-                        ) : (
-                          <User className="h-5 w-5 text-primary" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm truncate">{contact.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{contact.email}</p>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => handleShare(contact)}
-                      disabled={isSharing}
-                      className="shrink-0"
+        <ScrollArea className="flex-1 min-h-0 rounded-md border">
+          <div className="pr-4">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-[300px]">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : filteredContacts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[300px] text-center p-6">
+                <User className="h-12 w-12 text-muted-foreground mb-2" />
+                <p className="text-sm font-medium">No contacts found</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {searchQuery ? "Try a different search" : "Add contacts to this assistant first"}
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {filteredContacts.map((contact) => {
+                  const userId = contact.userId || contact.contactId
+                  return (
+                    <div
+                      key={userId}
+                      className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
                     >
-                      {isSharing ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        "Share"
-                      )}
-                    </Button>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          {contact.avatar ? (
+                            <img
+                              src={contact.avatar}
+                              alt={contact.name}
+                              className="w-full h-full rounded-full object-cover"
+                            />
+                          ) : (
+                            <User className="h-5 w-5 text-primary" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm truncate">{contact.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{contact.email}</p>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => handleShare(contact)}
+                        disabled={isSharing}
+                        className="shrink-0"
+                      >
+                        {isSharing ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          "Share"
+                        )}
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </ScrollArea>
       </DialogContent>
     </Dialog>
