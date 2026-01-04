@@ -59,10 +59,10 @@ export async function createChatWithMessage(data: {
       }
     })
 
-    // Prepare documents data - store attachments and mentioned users
+    // Prepare documents data - store attachments, mentioned users, and options
     let documentsJson: string | null = null
 
-    if (data.attachments || data.mentionedUsers) {
+    if (data.attachments || data.mentionedUsers || data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifact) {
       const documentsData: any = {}
 
       if (data.attachments && data.attachments.length > 0) {
@@ -73,6 +73,18 @@ export async function createChatWithMessage(data: {
       if (data.mentionedUsers && data.mentionedUsers.length > 0) {
         documentsData.mentionedUsers = data.mentionedUsers
         console.log(`[createChatWithMessage] Message mentions ${data.mentionedUsers.length} user(s):`, data.mentionedUsers.map(u => `${u.name} (${u.email})`).join(", "))
+      }
+
+      // Store options for auto-streaming
+      if (data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifact) {
+        documentsData.options = {
+          webSearch: data.webSearch || false,
+          research: data.research || false,
+          chatWithAPI: data.chatWithAPI || false,
+          dropbox: data.dropbox || false,
+          artifact: data.artifact || null
+        }
+        console.log(`[createChatWithMessage] Storing message options:`, documentsData.options)
       }
 
       documentsJson = JSON.stringify(documentsData)
@@ -491,7 +503,8 @@ export async function getChatMessages(chatId: string, limit?: number) {
           content: msg.message || "",
           createdAt: msg.createdAt,
           attachments: attachments.length > 0 ? attachments : undefined,
-          status: msg.status
+          status: msg.status,
+          documents: msg.documents // Include raw documents field for options parsing
         }
       })
     }
@@ -580,10 +593,10 @@ export async function sendChatMessage(data: {
       return { success: false, error: "Chat not found" }
     }
 
-    // Prepare documents data - store attachments and mentioned users
+    // Prepare documents data - store attachments, mentioned users, and options
     let documentsJson: string | null = null
 
-    if (data.attachments || data.mentionedUsers) {
+    if (data.attachments || data.mentionedUsers || data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifact) {
       const documentsData: any = {}
 
       if (data.attachments && data.attachments.length > 0) {
@@ -594,6 +607,18 @@ export async function sendChatMessage(data: {
       if (data.mentionedUsers && data.mentionedUsers.length > 0) {
         documentsData.mentionedUsers = data.mentionedUsers
         console.log(`[sendChatMessage] Message mentions ${data.mentionedUsers.length} user(s):`, data.mentionedUsers.map(u => `${u.name} (${u.email})`).join(", "))
+      }
+
+      // Store options for auto-streaming
+      if (data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifact) {
+        documentsData.options = {
+          webSearch: data.webSearch || false,
+          research: data.research || false,
+          chatWithAPI: data.chatWithAPI || false,
+          dropbox: data.dropbox || false,
+          artifact: data.artifact || null
+        }
+        console.log(`[sendChatMessage] Storing message options:`, documentsData.options)
       }
 
       documentsJson = JSON.stringify(documentsData)

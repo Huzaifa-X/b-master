@@ -1194,7 +1194,7 @@ export async function shareArtifact(data: {
         }
 
         // Create shareable link
-        const shareableLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/share/${shareableId}`
+        const shareableLink = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/share/${shareableId}`
 
         // Send message with artifact link
         const message = await prisma.assistantChatMessage.create({

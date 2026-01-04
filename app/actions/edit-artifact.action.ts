@@ -13,6 +13,38 @@ export interface EditArtifactParams {
   selectedUsers: Array<{ id: string; name: string; email: string }>
   apiConfigs: Array<{ key: string; value: string }>
   selectedChatId?: string | null
+  uploadedFiles?: Array<{
+    url: string
+    name: string
+    type: string
+    size: number
+    uploadedAt: string
+    extractedContent?: {
+      text: string
+      html: string
+      tables?: Array<{
+        base64: string
+        page: number
+      }>
+      metadata?: {
+        pages: number
+        model: string
+      }
+    }
+    extractedImages?: Array<{
+      id: string
+      page: number
+      coordinates?: any
+    }>
+    extractionError?: string
+  }>
+  uploadedImages?: Array<{
+    url: string
+    name: string
+    type: string
+    size: number
+    uploadedAt: string
+  }>
 }
 
 export interface EditArtifactResult {
@@ -36,6 +68,38 @@ export interface GetArtifactEditDataResult {
     selectedUsers: Array<{ id: string; name: string; email: string; image: string | null }>
     apiConfigs: Array<{ key: string; value: string }>
     selectedChatId?: string | null
+    uploadedFiles?: Array<{
+      url: string
+      name: string
+      type: string
+      size: number
+      uploadedAt: string
+      extractedContent?: {
+        text: string
+        html: string
+        tables?: Array<{
+          base64: string
+          page: number
+        }>
+        metadata?: {
+          pages: number
+          model: string
+        }
+      }
+      extractedImages?: Array<{
+        id: string
+        page: number
+        coordinates?: any
+      }>
+      extractionError?: string
+    }>
+    uploadedImages?: Array<{
+      url: string
+      name: string
+      type: string
+      size: number
+      uploadedAt: string
+    }>
   }
 }
 
@@ -131,6 +195,54 @@ export async function getArtifactEditData(artifactId: string): Promise<GetArtifa
       }
     }
 
+    // Extract uploaded files
+    let uploadedFiles: Array<{
+      url: string
+      name: string
+      type: string
+      size: number
+      uploadedAt: string
+      extractedContent?: {
+        text: string
+        html: string
+        tables?: Array<{ base64: string; page: number }>
+        metadata?: { pages: number; model: string }
+      }
+      extractedImages?: Array<{ id: string; page: number; coordinates?: any }>
+      extractionError?: string
+    }> = []
+    
+    if (artifact.files) {
+      try {
+        const filesData = Array.isArray(artifact.files) 
+          ? artifact.files 
+          : (typeof artifact.files === 'string' ? JSON.parse(artifact.files) : artifact.files)
+        uploadedFiles = Array.isArray(filesData) ? filesData : []
+      } catch (error) {
+        console.error('Error parsing artifact files:', error)
+      }
+    }
+
+    // Extract uploaded images
+    let uploadedImages: Array<{
+      url: string
+      name: string
+      type: string
+      size: number
+      uploadedAt: string
+    }> = []
+    
+    if (artifact.images) {
+      try {
+        const imagesData = Array.isArray(artifact.images)
+          ? artifact.images
+          : (typeof artifact.images === 'string' ? JSON.parse(artifact.images) : artifact.images)
+        uploadedImages = Array.isArray(imagesData) ? imagesData : []
+      } catch (error) {
+        console.error('Error parsing artifact images:', error)
+      }
+    }
+
     return {
       success: true,
       data: {
@@ -141,7 +253,9 @@ export async function getArtifactEditData(artifactId: string): Promise<GetArtifa
         permissions: permissionsType,
         selectedUsers,
         apiConfigs,
-        selectedChatId
+        selectedChatId,
+        uploadedFiles: uploadedFiles.length > 0 ? uploadedFiles : undefined,
+        uploadedImages: uploadedImages.length > 0 ? uploadedImages : undefined
       }
     }
 
@@ -155,14 +269,16 @@ export async function getArtifactEditData(artifactId: string): Promise<GetArtifa
 }
 
 /**
- * Update artifact (instructions, contacts, APIs only)
+ * Update artifact (instructions, contacts, APIs, files, and images)
  */
 export async function updateArtifact({
   artifactId,
   instructions,
   selectedUsers,
   apiConfigs,
-  selectedChatId
+  selectedChatId,
+  uploadedFiles,
+  uploadedImages
 }: EditArtifactParams): Promise<EditArtifactResult> {
   try {
     const session = await getServerSession(authOptions)
@@ -220,6 +336,10 @@ export async function updateArtifact({
     // Prepare tools JSON with selectedChatId
     const toolsJson = selectedChatId ? { selectedChatId: selectedChatId } : undefined
 
+    // Prepare files and images JSON
+    const filesJson = uploadedFiles && uploadedFiles.length > 0 ? (uploadedFiles as any) : undefined
+    const imagesJson = uploadedImages && uploadedImages.length > 0 ? (uploadedImages as any) : undefined
+
     // Update artifact in a transaction
     await prisma.$transaction(async (tx) => {
       // Update artifact
@@ -229,6 +349,8 @@ export async function updateArtifact({
           instructions,
           apiKeys: apiKeysJson || undefined,
           tools: toolsJson ? (toolsJson as any) : undefined,
+          files: filesJson || undefined,
+          images: imagesJson || undefined,
           updatedAt: new Date()
         }
       })

@@ -2,9 +2,16 @@
 
 import { FC, useEffect, useState } from "react";
 
-import { X, Copy, Code2, FileCode, Eye, Code, Download, Share2 } from "lucide-react";
+import { X, Copy, Code2, FileCode, Eye, Code, Download, Share2, FileText, FileDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 import { useArtifactStore } from "@/lib/stores/artifact-store";
 
@@ -46,6 +53,12 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
   const [blobUrl, setBlobUrl] = useState<string>("");
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  // Check if the code is HTML
+  const isHtmlCode = artifactContent?.language?.toLowerCase() === 'html' ||
+    displayContent?.trim().startsWith('<!DOCTYPE') ||
+    displayContent?.trim().startsWith('<html');
 
   const handleCopy = () => {
 
@@ -59,44 +72,103 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
   };
 
-  const handleDownload = () => {
+  // Generate filename based on title and language
+  const getFileName = () => {
+    return artifactContent?.title
+      ? `${artifactContent.title.replace(/\s+/g, "-").toLowerCase()}`
+      : "artifact";
+  };
 
+  const handleDownloadAsHTML = () => {
+    if (!displayContent || !isHtmlCode) return;
+
+    // Replace {{ARTIFACT_ID}} placeholder with actual artifact ID
+    let processedContent = displayContent;
+    if (artifactId) {
+      processedContent = displayContent.replace(/\{\{ARTIFACT_ID\}\}/g, artifactId);
+    }
+
+    const blob = new Blob([processedContent], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${getFileName()}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Artifact downloaded as HTML");
+  };
+
+  const handleDownloadAsPDF = async () => {
+    if (!displayContent || !isHtmlCode) return;
+
+    setIsGeneratingPDF(true);
+    try {
+      // Replace {{ARTIFACT_ID}} placeholder with actual artifact ID
+      let processedContent = displayContent;
+      if (artifactId) {
+        processedContent = displayContent.replace(/\{\{ARTIFACT_ID\}\}/g, artifactId);
+      }
+
+      const response = await fetch("/api/artifacts/generate-pdf", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          html: processedContent,
+          filename: getFileName(),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to generate PDF");
+      }
+
+      const data = await response.json();
+      const pdfUrl = data.pdfUrl;
+
+      // Download the PDF
+      const a = document.createElement("a");
+      a.href = pdfUrl;
+      a.download = `${getFileName()}.pdf`;
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      toast.success("PDF generated and downloaded successfully");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to generate PDF");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const handleDownload = () => {
     if (!displayContent) return;
 
     const blob = new Blob([displayContent], {
-
       type: artifactContent?.language === "html" ? "text/html" : "text/plain"
-
     });
 
     const url = URL.createObjectURL(blob);
-
     const a = document.createElement("a");
-
     a.href = url;
 
-    // Generate filename based on title and language
-
-    const fileName = artifactContent?.title
-
-      ? `${artifactContent.title.replace(/\s+/g, "-").toLowerCase()}`
-
-      : "artifact";
-
+    const fileName = getFileName();
     const extension = artifactContent?.language === "html" ? "html" : "txt";
-
     a.download = `${fileName}.${extension}`;
 
     document.body.appendChild(a);
-
     a.click();
-
     document.body.removeChild(a);
-
     URL.revokeObjectURL(url);
 
     toast.success("Artifact downloaded successfully");
-
   };
 
   const handleClose = () => {
@@ -104,14 +176,6 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     onClose?.();
 
   };
-
-  // Check if the code is HTML
-
-  const isHtmlCode = artifactContent?.language?.toLowerCase() === 'html' ||
-
-    displayContent?.trim().startsWith('<!DOCTYPE') ||
-
-    displayContent?.trim().startsWith('<html');
 
   // Create blob URL for secure iframe isolation
 
@@ -192,16 +256,45 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
             </Button>
           )}
 
-          {/* Download - Hide on mobile */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 md:h-8 md:w-8 hidden md:flex"
-            title="Download"
-            onClick={handleDownload}
-          >
-            <Download className="h-3 w-3 md:h-4 md:w-4" />
-          </Button>
+          {/* Download Dropdown - Hide on mobile */}
+          {displayContent && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 md:h-8 md:w-8 hidden md:flex"
+                  title="Download"
+                  disabled={isGeneratingPDF}
+                >
+                  {isGeneratingPDF ? (
+                    <div className="h-3 w-3 md:h-4 md:w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <Download className="h-3 w-3 md:h-4 md:w-4" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {isHtmlCode ? (
+                  <>
+                    <DropdownMenuItem onClick={handleDownloadAsHTML} disabled={isGeneratingPDF}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Download as HTML
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleDownloadAsPDF} disabled={isGeneratingPDF}>
+                      <FileDown className="h-4 w-4 mr-2" />
+                      Download as PDF
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <DropdownMenuItem onClick={handleDownload} disabled={isGeneratingPDF}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download as {artifactContent?.language || "txt"}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           {/* Copy - Always show */}
           <Button

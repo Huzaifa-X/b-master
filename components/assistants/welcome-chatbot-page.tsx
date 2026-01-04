@@ -71,24 +71,8 @@ export function WelcomeChatbotPage({
 
       console.log("[WelcomePage] Chat created, navigating to:", result.chatId)
 
-      const SESSION_STORAGE_KEY = "chat_mode"
-      if (options?.webSearch) {
-        sessionStorage.setItem(SESSION_STORAGE_KEY, "webSearch")
-      } else if (options?.research) {
-        sessionStorage.setItem(SESSION_STORAGE_KEY, "research")
-      } else if (options?.chatWithAPI) {
-        sessionStorage.setItem(SESSION_STORAGE_KEY, "chatWithAPI")
-      } else if (options?.dropbox) {
-        sessionStorage.setItem(SESSION_STORAGE_KEY, "dropbox")
-      } else if (options?.artifact) {
-        sessionStorage.setItem(SESSION_STORAGE_KEY, "artifact")
-        sessionStorage.setItem("chat_artifact_data", JSON.stringify(options.artifact))
-        console.log("[WelcomePage] Stored artifact data:", options.artifact.name)
-      } else if (options?.mentionedUsers) {
-        sessionStorage.setItem(SESSION_STORAGE_KEY, "mentionedUsers")
-        sessionStorage.setItem("chat_mentioned_users", JSON.stringify(options.mentionedUsers))
-        console.log("[WelcomePage] Stored mentioned users:", options.mentionedUsers)
-      }
+      // Note: ChatInput component now handles sessionStorage internally with assistant-scoped keys
+      // No need to manually store here - options are passed directly to createChatWithMessage
 
       // Navigate to chat page first
       const url = chatType === "ask-b"

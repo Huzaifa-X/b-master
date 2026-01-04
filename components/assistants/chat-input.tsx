@@ -243,10 +243,45 @@ export function ChatInput({
     onValueChange(newValue)
   }, [onValueChange])
 
+  // Helper functions for assistant-scoped sessionStorage
+  const getStorageKey = useCallback((key: string) => {
+    return assistantId ? `chat_${key}_${assistantId}` : key
+  }, [assistantId])
+
+  const getStorageItem = useCallback((key: string) => {
+    if (typeof window === "undefined" || !assistantId) return null
+    return sessionStorage.getItem(getStorageKey(key))
+  }, [assistantId, getStorageKey])
+
+  const setStorageItem = useCallback((key: string, value: string) => {
+    if (typeof window === "undefined" || !assistantId) return
+    sessionStorage.setItem(getStorageKey(key), value)
+  }, [assistantId, getStorageKey])
+
+  const removeStorageItem = useCallback((key: string) => {
+    if (typeof window === "undefined" || !assistantId) return
+    sessionStorage.removeItem(getStorageKey(key))
+  }, [assistantId, getStorageKey])
+
+  // Clear all state when assistantId changes
   useEffect(() => {
-    // Load mode and artifact from sessionStorage on mount
+    // Reset all mode states when assistant changes
+    setWebSearchEnabled(false)
+    setResearchEnabled(false)
+    setChatWithAPIEnabled(false)
+    setDropboxEnabled(false)
+    setSelectedArtifact(null)
+    setMentionedUsers([])
+  }, [assistantId])
+
+  // Load mode and artifact from sessionStorage on mount or when assistantId changes
+  useEffect(() => {
+    if (!assistantId || mode !== "assistant") {
+      return
+    }
+
     if (typeof window !== "undefined") {
-      const savedMode = sessionStorage.getItem("chat_mode")
+      const savedMode = getStorageItem("mode")
 
       if (savedMode === "webSearch") {
         setWebSearchEnabled(true)
@@ -257,11 +292,12 @@ export function ChatInput({
       } else if (savedMode === "dropbox") {
         setDropboxEnabled(true)
       } else if (savedMode === "artifact") {
-        // 🔥 Load artifact data from sessionStorage
-        const savedArtifact = sessionStorage.getItem("chat_artifact_data")
+        // Load artifact data from sessionStorage
+        const savedArtifact = getStorageItem("artifact_data")
         if (savedArtifact) {
           try {
             const artifact = JSON.parse(savedArtifact)
+            // Verify artifact belongs to current assistant (if artifact has assistantId property)
             setSelectedArtifact(artifact)
             console.log("[ChatInput] Loaded artifact from sessionStorage:", artifact.name)
           } catch (error) {
@@ -270,7 +306,7 @@ export function ChatInput({
         }
       }
     }
-  }, [])
+  }, [assistantId, mode, getStorageItem])
 
   const handleSend = async () => {
     if ((!value.trim() && attachedFiles.length === 0) || isLoading || disabled) return
@@ -358,13 +394,11 @@ export function ChatInput({
     setChatWithAPIEnabled(false)
     setDropboxEnabled(false)
 
-    // 🔥 Clear mode AND artifact data from sessionStorage
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("chat_mode")
-      sessionStorage.removeItem("chat_artifact_data")
-      sessionStorage.removeItem('chat_mentioned_users')
-      console.log("[ChatInput] Cleared mode and artifact after send")
-    }
+    // Clear mode AND artifact data from sessionStorage (scoped to assistantId)
+    removeStorageItem("mode")
+    removeStorageItem("artifact_data")
+    removeStorageItem("mentioned_users")
+    console.log("[ChatInput] Cleared mode and artifact after send")
   }
 
   const handleWebSearchChange = (enabled: boolean) => {
@@ -372,11 +406,13 @@ export function ChatInput({
     if (enabled) {
       setResearchEnabled(false)
       setSelectedArtifact(null)
-      // 🔥 Clear artifact data from sessionStorage
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem("chat_artifact_data")
-        sessionStorage.removeItem('chat_mentioned_users')
-      }
+      // Clear artifact data from sessionStorage (scoped to assistantId)
+      removeStorageItem("artifact_data")
+      removeStorageItem("mentioned_users")
+      // Store webSearch mode
+      setStorageItem("mode", "webSearch")
+    } else {
+      removeStorageItem("mode")
     }
     onWebSearch?.(enabled)
   }
@@ -386,11 +422,13 @@ export function ChatInput({
     if (enabled) {
       setWebSearchEnabled(false)
       setSelectedArtifact(null)
-      // 🔥 Clear artifact data from sessionStorage
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem("chat_artifact_data")
-        sessionStorage.removeItem('chat_mentioned_users')
-      }
+      // Clear artifact data from sessionStorage (scoped to assistantId)
+      removeStorageItem("artifact_data")
+      removeStorageItem("mentioned_users")
+      // Store research mode
+      setStorageItem("mode", "research")
+    } else {
+      removeStorageItem("mode")
     }
     onResearch?.(enabled)
   }
@@ -400,11 +438,11 @@ export function ChatInput({
     setWebSearchEnabled(false)
     setResearchEnabled(false)
     setSelectedArtifact(null)
-    // 🔥 Clear artifact data from sessionStorage
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("chat_artifact_data")
-      sessionStorage.removeItem('chat_mentioned_users')
-    }
+    // Clear artifact data from sessionStorage (scoped to assistantId)
+    removeStorageItem("artifact_data")
+    removeStorageItem("mentioned_users")
+    // Store chatWithAPI mode
+    setStorageItem("mode", "chatWithAPI")
     onWebSearch?.(false)
     onResearch?.(false)
     onChatWithAPI?.()
@@ -414,11 +452,13 @@ export function ChatInput({
     setDropboxEnabled(enabled)
     if (enabled) {
       setSelectedArtifact(null)
-      // 🔥 Clear artifact data from sessionStorage
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem("chat_artifact_data")
-        sessionStorage.removeItem('chat_mentioned_users')
-      }
+      // Clear artifact data from sessionStorage (scoped to assistantId)
+      removeStorageItem("artifact_data")
+      removeStorageItem("mentioned_users")
+      // Store dropbox mode
+      setStorageItem("mode", "dropbox")
+    } else {
+      removeStorageItem("mode")
     }
     onDropbox?.(enabled)
   }
@@ -464,15 +504,13 @@ export function ChatInput({
     onResearch?.(false)
     onDropbox?.(false)
 
-    // 🔥 Store BOTH mode and artifact data in sessionStorage
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("chat_mode", "artifact")
-      sessionStorage.setItem("chat_artifact_data", JSON.stringify(artifact))
+    // Store BOTH mode and artifact data in sessionStorage (scoped to assistantId)
+    setStorageItem("mode", "artifact")
+    setStorageItem("artifact_data", JSON.stringify(artifact))
 
-      console.log("[ChatInput] Stored artifact mode and data in sessionStorage:", artifact.name)
-      console.log("[ChatInput] Verification - mode:", sessionStorage.getItem("chat_mode"))
-      console.log("[ChatInput] Verification - data:", sessionStorage.getItem("chat_artifact_data"))
-    }
+    console.log("[ChatInput] Stored artifact mode and data in sessionStorage:", artifact.name)
+    console.log("[ChatInput] Verification - mode:", getStorageItem("mode"))
+    console.log("[ChatInput] Verification - data:", getStorageItem("artifact_data"))
   }
 
   const handleRemoveFile = (index: number) => {
@@ -699,13 +737,12 @@ export function ChatInput({
                     disabled={disabled || isLoading}
                     mode={mode}
                     assistantId={assistantId}
-                    selectedArtifact={selectedArtifact}  // 🔥 Pass selected artifact
-                    onRemoveArtifact={() => {            // 🔥 Handle removal
+                    selectedArtifact={selectedArtifact}  // Pass selected artifact
+                    onRemoveArtifact={() => {            // Handle removal
                       setSelectedArtifact(null)
-                      if (typeof window !== "undefined") {
-                        sessionStorage.removeItem("chat_selected_artifact")
-                        sessionStorage.removeItem('chat_mentioned_users')
-                      }
+                      removeStorageItem("mode")
+                      removeStorageItem("artifact_data")
+                      removeStorageItem("mentioned_users")
                     }}
                   />
                   {assistantId && (
@@ -795,10 +832,9 @@ export function ChatInput({
                   selectedArtifact={selectedArtifact}
                   onRemoveArtifact={() => {
                     setSelectedArtifact(null)
-                    if (typeof window !== "undefined") {
-                      sessionStorage.removeItem("chat_selected_artifact")
-                      sessionStorage.removeItem('chat_mentioned_users')
-                    }
+                    removeStorageItem("mode")
+                    removeStorageItem("artifact_data")
+                    removeStorageItem("mentioned_users")
                   }}
                 />
                 {assistantId && (

@@ -18,6 +18,7 @@ export interface Message {
         type: string
         size: number
     }[]
+    documents?: string | null // Raw documents JSON string for accessing options
 }
 
 export interface Chat {

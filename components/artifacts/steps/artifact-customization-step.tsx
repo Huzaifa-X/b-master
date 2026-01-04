@@ -425,15 +425,17 @@ export function ArtifactCustomizationStep({
           </div>
         </div>
 
-        {/* File Upload Section - Hide in edit mode */}
-        {!isEditMode && (
-          <div className="space-y-4">
-            <div>
-              <Label className="text-base font-semibold">Documents & Images</Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                Upload documents (PDF, Word) or images to include in your artifact
-              </p>
-            </div>
+        {/* File Upload Section - Now editable in edit mode */}
+        <div className="space-y-4">
+          <div>
+            <Label className="text-base font-semibold">Documents & Images</Label>
+            <p className="text-sm text-muted-foreground mt-1">
+              {isEditMode 
+                ? "Manage documents and images for your artifact"
+                : "Upload documents (PDF, Word) or images to include in your artifact"
+              }
+            </p>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Document Upload */}
             <div className="border-2 border-dashed rounded-lg p-6 hover:border-primary/50 transition-colors">
@@ -583,8 +585,7 @@ export function ArtifactCustomizationStep({
               </div>
             </div>
           )}
-          </div>
-        )}
+        </div>
 
         {/* Chat Selection */}
         <ArtifactChatSelector

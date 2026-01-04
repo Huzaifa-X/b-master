@@ -148,8 +148,8 @@ export function VersionHistoryDialog({
           <History className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[80vh]">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <History className="h-5 w-5" />
             Version History
@@ -159,101 +159,103 @@ export function VersionHistoryDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center py-12 space-y-4">
-            <p className="text-sm text-destructive">Failed to load versions</p>
-            <Button onClick={() => refetch()} variant="outline" size="sm">
-              Try Again
-            </Button>
-          </div>
-        ) : versions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 space-y-2">
-            <History className="h-12 w-12 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">No version history available</p>
-          </div>
-        ) : (
-          <ScrollArea className="max-h-[calc(80vh-180px)] pr-4">
-            <div className="space-y-2">
-              {versions.map((version) => (
-                <div
-                  key={version.id}
-                  className={cn(
-                    "group relative rounded-lg border p-4 transition-all hover:border-primary/50 hover:bg-accent/50 cursor-pointer",
-                    version.isActive && "border-primary bg-accent/30",
-                    settingActiveVersion === version.id && "opacity-50 pointer-events-none"
-                  )}
-                  onClick={() => handleVersionClick(version)}
-                >
-                  {/* Active indicator */}
-                  {version.isActive && (
-                    <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r" />
-                  )}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <p className="text-sm text-destructive">Failed to load versions</p>
+              <Button onClick={() => refetch()} variant="outline" size="sm">
+                Try Again
+              </Button>
+            </div>
+          ) : versions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-2">
+              <History className="h-12 w-12 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">No version history available</p>
+            </div>
+          ) : (
+            <ScrollArea className="h-full">
+              <div className="space-y-2 pr-4">
+                {versions.map((version) => (
+                  <div
+                    key={version.id}
+                    className={cn(
+                      "group relative rounded-lg border p-4 transition-all hover:border-primary/50 hover:bg-accent/50 cursor-pointer",
+                      version.isActive && "border-primary bg-accent/30",
+                      settingActiveVersion === version.id && "opacity-50 pointer-events-none"
+                    )}
+                    onClick={() => handleVersionClick(version)}
+                  >
+                    {/* Active indicator */}
+                    {version.isActive && (
+                      <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r" />
+                    )}
 
-                  <div className="flex items-start justify-between gap-4">
-                    {/* Left side: Version info */}
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-semibold text-sm">
-                          {version.versionName || `Version ${version.versionNumber}`}
-                        </h4>
-                        {getChangeTypeBadge(version.changeType)}
-                        {version.isActive && (
-                          <Badge variant="default" className="text-xs gap-1">
-                            <Check className="h-3 w-3" />
-                            Active
-                          </Badge>
+                    <div className="flex items-start justify-between gap-4">
+                      {/* Left side: Version info */}
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-semibold text-sm">
+                            {version.versionName || `Version ${version.versionNumber}`}
+                          </h4>
+                          {getChangeTypeBadge(version.changeType)}
+                          {version.isActive && (
+                            <Badge variant="default" className="text-xs gap-1">
+                              <Check className="h-3 w-3" />
+                              Active
+                            </Badge>
+                          )}
+                        </div>
+
+                        {version.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {version.description}
+                          </p>
+                        )}
+
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          {/* Creator */}
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-5 w-5">
+                              <AvatarImage src={version.creator.image || undefined} />
+                              <AvatarFallback className="text-[10px]">
+                                {version.creator.name.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span>{version.creator.name}</span>
+                          </div>
+
+                          {/* Timestamp */}
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            <span>{formatDate(version.createdAt)}</span>
+                          </div>
+
+                          {/* Version number */}
+                          <div className="flex items-center gap-1">
+                            <span>v{version.versionNumber}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right side: Action indicator */}
+                      <div className="flex items-center">
+                        {settingActiveVersion === version.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                         )}
                       </div>
-
-                      {version.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {version.description}
-                        </p>
-                      )}
-
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        {/* Creator */}
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-5 w-5">
-                            <AvatarImage src={version.creator.image || undefined} />
-                            <AvatarFallback className="text-[10px]">
-                              {version.creator.name.charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span>{version.creator.name}</span>
-                        </div>
-
-                        {/* Timestamp */}
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          <span>{formatDate(version.createdAt)}</span>
-                        </div>
-
-                        {/* Version number */}
-                        <div className="flex items-center gap-1">
-                          <span>v{version.versionNumber}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Right side: Action indicator */}
-                    <div className="flex items-center">
-                      {settingActiveVersion === version.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                      )}
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        )}
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   )
