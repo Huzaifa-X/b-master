@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils"
 import ReactMarkdown from "react-markdown"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
-import { uploadFilesToS3, type FileUploadData } from "@/app/actions/file-upload.action"
+import { uploadFileToS3 } from "@/app/actions/upload.action"
 
 interface User {
   id: string
@@ -284,28 +284,51 @@ export function ChatInput({
     // Upload files to S3 if there are any attachments
     if (attachedFiles.length > 0) {
       setIsUploading(true)
-      // Convert files to base64 for server action
-      const fileUploadData: FileUploadData[] = await Promise.all(
-        attachedFiles.map(async (file) => {
-          const base64 = await fileToBase64(file)
-          return {
-            fileName: file.name,
-            fileData: base64,
-            contentType: file.type || 'application/octet-stream',
+
+      // Upload files one by one using FormData (same approach as assistant creation)
+      const successfulUploads: { name: string; url: string; type: string; size: number }[] = []
+      let failedCount = 0
+
+      for (const file of attachedFiles) {
+        try {
+          // Create FormData for this file
+          const formData = new FormData()
+          formData.append("file", file)
+          formData.append("folder", "attachments")
+
+          // Upload to S3
+          const uploadResult = await uploadFileToS3(formData)
+
+          if (uploadResult.success && uploadResult.url) {
+            successfulUploads.push({
+              name: uploadResult.fileName || file.name,
+              url: uploadResult.url,
+              type: file.type || 'application/octet-stream',
+              size: uploadResult.fileSize || file.size
+            })
+          } else {
+            failedCount++
+            console.error(`Failed to upload ${file.name}:`, uploadResult.error)
           }
-        })
-      )
+        } catch (error) {
+          console.error(`Error uploading ${file.name}:`, error)
+          failedCount++
+        }
+      }
 
-      // Upload to S3
-      const result = await uploadFilesToS3(fileUploadData)
-
-      if (!result.success) {
-        toast.error(result.error || 'Failed to upload files. Please try again.')
+      if (failedCount > 0) {
+        toast.error(`${failedCount} file(s) failed to upload. Please try again.`)
         setIsUploading(false)
         return
       }
 
-      attachments = result.files
+      if (successfulUploads.length === 0) {
+        toast.error('Failed to upload files. Please try again.')
+        setIsUploading(false)
+        return
+      }
+
+      attachments = successfulUploads
       setIsUploading(false)
     }
 
@@ -342,22 +365,6 @@ export function ChatInput({
       sessionStorage.removeItem('chat_mentioned_users')
       console.log("[ChatInput] Cleared mode and artifact after send")
     }
-  }
-
-  // Helper function to convert File to base64
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          resolve(reader.result)
-        } else {
-          reject(new Error('Failed to read file'))
-        }
-      }
-      reader.onerror = () => reject(reader.error)
-      reader.readAsDataURL(file)
-    })
   }
 
   const handleWebSearchChange = (enabled: boolean) => {

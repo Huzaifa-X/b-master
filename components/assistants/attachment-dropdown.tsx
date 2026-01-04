@@ -207,7 +207,71 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
         const files = event.target.files
         if (files && files.length > 0) {
             const fileArray = Array.from(files)
-            onFileSelect?.(fileArray)
+
+            // Validate file types
+            const allowedTypes = new Set([
+                // Images (OpenAI supported formats only)
+                'image/jpeg',
+                'image/png',
+                'image/gif',
+                'image/webp',
+                // Documents
+                'application/pdf',
+                'text/plain',
+                'text/csv',
+                'text/markdown',
+                'text/html',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.ms-powerpoint',
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                'application/rtf',
+                'application/json',
+                'text/javascript',
+                'application/javascript',
+            ])
+
+            const allowedExtensions = new Set([
+                // Images
+                'jpg', 'jpeg', 'png', 'gif', 'webp',
+                // Documents
+                'pdf', 'txt', 'csv', 'md', 'html', 'doc', 'docx',
+                'xls', 'xlsx', 'ppt', 'pptx', 'rtf',
+                // Code
+                'json', 'js', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'cs', 'rb', 'go', 'rs'
+            ])
+
+            const invalidFiles: string[] = []
+            const validFiles: File[] = []
+
+            fileArray.forEach(file => {
+                const extension = file.name.split('.').pop()?.toLowerCase()
+                const isValidType = allowedTypes.has(file.type)
+                const isValidExtension = extension && allowedExtensions.has(extension)
+
+                // Explicitly reject SVG files
+                if (file.type === 'image/svg+xml' || extension === 'svg') {
+                    invalidFiles.push(`${file.name} (SVG not supported)`)
+                } else if (isValidType || isValidExtension) {
+                    validFiles.push(file)
+                } else {
+                    invalidFiles.push(file.name)
+                }
+            })
+
+            // Show error for invalid files
+            if (invalidFiles.length > 0) {
+                toast.error(
+                    `Unsupported file type: ${invalidFiles.join(', ')}. Supported: Images (JPG, PNG, GIF, WebP), Documents (PDF, TXT, CSV, MD), Code files.`
+                )
+            }
+
+            // Only pass valid files to parent
+            if (validFiles.length > 0) {
+                onFileSelect?.(validFiles)
+            }
         }
         // Reset input
         event.target.value = ""
@@ -218,7 +282,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
             <input
                 ref={fileInputRef}
                 type="file"
-                accept="*/*"
+                accept="image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.csv,.md,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.json,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.cs,.rb,.go,.rs"
                 className="hidden"
                 onChange={handleFileChange}
                 multiple

@@ -38,11 +38,11 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
       price: "",
       category: "Other",
       description: "",
-      image: null, // For preview (base64)
-      imageURL: null,
+      imagePreview: null, // For preview only (base64)
+      imageURL: null, // S3 URL
       notes: [],
       urls: [],
-      files: [],
+      fileURLs: [], // Changed from files: File[] to fileURLs
       instructions: "",
       authenticationType: "none",
       apiKey: "",
@@ -146,18 +146,18 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
         price: formData.price,
         category: formData.category,
         description: formData.description,
-        
-        // Step 2: Image
-        imageData: formData.image,
-        
-        // Step 3: Knowledge Base
+
+        // Step 2: Image (send S3 URL, not base64)
+        imageURL: formData.imageURL,
+
+        // Step 3: Knowledge Base (send S3 URLs, not File objects)
         notes: formData.notes,
         urls: formData.urls,
-        files: formData.files,
-        
+        fileURLs: formData.fileURLs, // Array of {url, fileName, fileSize}
+
         // Step 4: Instructions
         instructions: formData.instructions,
-        
+
         // Step 5: API Config
         authenticationType: formData.authenticationType,
         apiKey: formData.apiKey,
@@ -171,7 +171,7 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
         tokenExchangeMethod: formData.tokenExchangeMethod,
         schemaText: formData.schemaText,
         schema: formData.schema,
-        
+
         // Step 6: Sharing
         permissionLevel: formData.permissionLevel,
         sharedUsers: formData.sharedUsers,

@@ -139,32 +139,42 @@ import {
    * @param fileUrl - Full URL or S3 key of the file to delete
    */
   export async function deleteFromS3(fileUrl: string): Promise<void> {
+    // Extract key from URL (do this outside try block so it's accessible in catch)
+    const key = extractKeyFromUrl(fileUrl)
+
+    if (!key) {
+      throw new Error("Invalid S3 URL or key")
+    }
+
     try {
-      // Extract key from URL
-      const key = extractKeyFromUrl(fileUrl)
-  
-      if (!key) {
-        throw new Error("Invalid S3 URL or key")
-      }
-  
       // Check if file exists before attempting delete
       const exists = await checkFileExists(key)
       if (!exists) {
         console.warn(`⚠️ File not found in S3: ${key}`)
         return // Don't throw error, just return
       }
-  
+
       // Delete command
       const command = new DeleteObjectCommand({
         Bucket: BUCKET_NAME,
         Key: key,
       })
-  
+
       // Execute delete
       await s3Client.send(command)
       console.log(`✅ File deleted successfully: ${key}`)
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ S3 Delete Error:", error)
+
+      // Check if it's an access denied error
+      if (error.name === 'AccessDenied' || error.Code === 'AccessDenied') {
+        console.warn(`⚠️ S3 DeleteObject permission missing. File not deleted: ${key}`)
+        console.warn(`⚠️ Please add s3:DeleteObject permission to your IAM user policy`)
+        // Don't throw error - just warn and continue
+        // This prevents blocking the user experience
+        return
+      }
+
       throw new Error(`Failed to delete file from S3: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
   }

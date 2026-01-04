@@ -29,25 +29,29 @@ export interface AssistantFormData {
   description: string
 
   // Step 2: Visual Identity
-  image: string | null // For preview (base64)
-  imageURL: string | null // For uploaded URL
+  imagePreview: string | null // For preview only (base64 data URL)
+  imageURL: string | null // Uploaded S3 URL (sent to backend)
 
   // Step 3: Knowledge Base
   notes: string[]
   urls: string[]
-  files: File[]
+  fileURLs: Array<{ // Changed from File[] to uploaded URLs
+    url: string
+    fileName: string
+    fileSize: number
+  }>
 
   // Step 4: Instructions
   instructions: string
 
   // Step 5: Advanced Configuration - API Configuration
   authenticationType: AuthenticationType
-  
+
   // API Key Authentication fields
   apiKey?: string
   authType?: AuthType
   customHeaderName?: string
-  
+
   // OAuth Authentication fields
   clientId?: string
   clientSecret?: string
@@ -55,7 +59,7 @@ export interface AssistantFormData {
   tokenUrl?: string
   scope?: string
   tokenExchangeMethod?: TokenExchangeMethod
-  
+
   // OpenAPI Schema
   schema?: any // JSON object
   schemaText?: string // Raw schema text for editing

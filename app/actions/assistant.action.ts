@@ -7,7 +7,6 @@ import { openai } from "@/lib/openai";
 import { GenerateInstructionsParams, GenerateInstructionsResponse } from "@/types/ai-instruction"
 import { AssistantCategory } from "@/types/assistant"
 import { revalidatePath } from "next/cache"
-import { uploadToS3, safeUploadToS3 } from "@/lib/aws-s3"
 import {
     createVectorStore,
     addNoteToVectorStore,
@@ -115,18 +114,22 @@ interface CreateCompleteAssistantParams {
     price: string
     category: AssistantCategory
     description: string
-    
-    // Step 2: Image
-    imageData?: string | null
-    
-    // Step 3: Knowledge Base
+
+    // Step 2: Image (now receives S3 URL instead of base64)
+    imageURL?: string | null
+
+    // Step 3: Knowledge Base (now receives S3 URLs instead of File objects)
     notes: string[]
     urls: string[]
-    files: File[]
-    
+    fileURLs: Array<{
+        url: string
+        fileName: string
+        fileSize: number
+    }>
+
     // Step 4: Instructions
     instructions: string
-    
+
     // Step 5: API Config
     authenticationType: string
     apiKey?: string
@@ -140,7 +143,7 @@ interface CreateCompleteAssistantParams {
     tokenExchangeMethod?: string
     schemaText?: string
     schema?: any
-    
+
     // Step 6: Sharing
     permissionLevel: string
     sharedUsers: Array<{
@@ -272,38 +275,21 @@ export async function createCompleteAssistant(
         }
 
         // ============================================
-        // STEP 2: UPLOAD IMAGE (IF PROVIDED)
+        // STEP 2: SET IMAGE URL (ALREADY UPLOADED TO S3)
         // ============================================
-        
-        if (params.imageData && params.imageData.startsWith('data:image/')) {
+
+        if (params.imageURL) {
             try {
-                // Extract base64 data
-                const base64Data = params.imageData.split(',')[1]
-                const imageBuffer = Buffer.from(base64Data, 'base64')
-
-                // Determine file extension from data URL
-                const mimeMatch = params.imageData.match(/data:image\/(\w+);/)
-                const extension = mimeMatch ? mimeMatch[1] : 'png'
-
-                const fileName = `assistant_${assistantId}_${Date.now()}.${extension}`
-                const mimeType = `image/${extension}`
-
-                // Upload to S3 using safe upload (won't block assistant creation)
-                const uploadResult = await safeUploadToS3(imageBuffer, fileName, mimeType, 'assistants')
-
-                if (uploadResult.success && uploadResult.url) {
-                    // Update assistant with image URL only if upload succeeded
-                    await prisma.assistant.update({
-                        where: { id: assistant.id },
-                        data: { image: uploadResult.url }
-                    })
-                    console.log(`✅ Image uploaded: ${uploadResult.url}`)
-                } else {
-                    console.warn(`⚠️ Image upload failed: ${uploadResult.error}. Assistant created without image.`)
-                }
+                // Image was already uploaded to S3 by the client
+                // Just update the assistant record with the URL
+                await prisma.assistant.update({
+                    where: { id: assistant.id },
+                    data: { image: params.imageURL }
+                })
+                console.log(`✅ Image URL saved: ${params.imageURL}`)
             } catch (imageError) {
-                console.error('⚠️ Error processing image:', imageError)
-                // Don't fail the entire operation if image upload fails
+                console.error('⚠️ Error saving image URL:', imageError)
+                // Don't fail the entire operation if saving URL fails
             }
         }
 
@@ -314,7 +300,7 @@ export async function createCompleteAssistant(
         let vectorStoreId: string | null = null
         
         // Only create vector store if there's content to add
-        if (params.notes.length > 0 || params.urls.length > 0 || params.files.length > 0) {
+        if (params.notes.length > 0 || params.urls.length > 0 || params.fileURLs.length > 0) {
             try {
                 // Create OpenAI vector store
                 const vectorStoreName = `${params.name}_${randomUUID()}`
@@ -389,39 +375,41 @@ export async function createCompleteAssistant(
                     }
                 }
                 
-                // Process files
-                for (const file of params.files) {
+                // Process files (already uploaded to S3, now add to OpenAI vector store)
+                for (const fileData of params.fileURLs) {
                     try {
-                        const buffer = Buffer.from(await file.arrayBuffer())
-                        const fileFileName = `${file.name}.${file.type}`
+                        // Files are already uploaded to S3, we have the URL
+                        // Now we need to download from S3 and upload to OpenAI vector store
 
-                        // Upload to S3 using safe upload (won't block knowledge base creation)
-                        const uploadResult = await safeUploadToS3(buffer, fileFileName, file.type, 'knowledge-base')
+                        // Fetch file from S3 URL
+                        const response = await fetch(fileData.url)
+                        if (!response.ok) {
+                            throw new Error(`Failed to fetch file from S3: ${response.statusText}`)
+                        }
 
-                        // Upload to OpenAI vector store (this is critical, so let it throw if it fails)
+                        const arrayBuffer = await response.arrayBuffer()
+                        const buffer = Buffer.from(arrayBuffer)
+
+                        // Upload to OpenAI vector store
                         const vectorFileId = await uploadAndAddToVectorStore(
                             vectorStoreId,
                             buffer,
-                            file.name
+                            fileData.fileName
                         )
 
-                        // Save to database with or without S3 URL
+                        // Save to database with S3 URL
                         await prisma.assistantKnowledgebase.create({
                             data: {
                                 assistantId: assistant.id,
-                                file: uploadResult.success ? uploadResult.url : null,
+                                file: fileData.url, // S3 URL (already uploaded)
                                 vectorFileId: vectorFileId,
                                 type: 'file',
                             }
                         })
 
-                        if (uploadResult.success) {
-                            console.log(`✅ File added to knowledge base: ${file.name} (S3: ${uploadResult.url})`)
-                        } else {
-                            console.warn(`⚠️ File added to knowledge base: ${file.name} (S3 upload failed: ${uploadResult.error}). File saved to OpenAI vector store only.`)
-                        }
+                        console.log(`✅ File added to knowledge base: ${fileData.fileName} (S3: ${fileData.url})`)
                     } catch (fileError) {
-                        console.error(`❌ Error processing file ${file.name}:`, fileError)
+                        console.error(`❌ Error processing file ${fileData.fileName}:`, fileError)
                         // Continue with other files even if one fails
                     }
                 }
@@ -483,16 +471,16 @@ export async function createCompleteAssistant(
                 // Build API config data with encryption
                 const apiConfigData = {
                     authenticationType: params.authenticationType,
-                    
+
                     // Encrypt API key if provided
                     apiKey: params.authenticationType === 'api_key' && params.apiKey
                         ? encrypt(params.apiKey)
                         : null,
                     authType: params.authenticationType === 'api_key' ? params.authType : null,
                     customHeaderName: params.authenticationType === 'api_key' ? params.customHeaderName : null,
-                    
+
                     clientId: params.authenticationType === 'oauth' ? params.clientId : null,
-                    
+
                     // Encrypt client secret if provided
                     clientSecret: params.authenticationType === 'oauth' && params.clientSecret
                         ? encrypt(params.clientSecret)
@@ -501,14 +489,14 @@ export async function createCompleteAssistant(
                     tokenUrl: params.authenticationType === 'oauth' ? params.tokenUrl : null,
                     scope: params.authenticationType === 'oauth' ? params.scope : null,
                     tokenExchangeMethod: params.authenticationType === 'oauth' ? params.tokenExchangeMethod : null,
-                    
+
                     schemaText: params.schemaText || null,
                     schema: params.schema || null,
-                    
-                    // Store parsed tools (only if schema exists)
-                    tools: tools,
+
+                    // Store parsed tools (only if schema exists) - use undefined instead of null
+                    ...(tools && { tools }),
                 }
-                
+
                 await prisma.assistantApiConfiguration.create({
                     data: {
                         assistantId: assistant.id,
@@ -1601,32 +1589,18 @@ export async function updateCompleteAssistant(
             }
         })
 
-        // Update image if provided
-        if (params.imageData && params.imageData.startsWith('data:image/')) {
+        // Update image if provided (image is already uploaded to S3)
+        if (params.imageURL) {
             try {
-                const base64Data = params.imageData.split(',')[1]
-                const imageBuffer = Buffer.from(base64Data, 'base64')
-
-                const mimeMatch = params.imageData.match(/data:image\/(\w+);/)
-                const extension = mimeMatch ? mimeMatch[1] : 'png'
-
-                const fileName = `assistant_${assistantId}_${Date.now()}.${extension}`
-                const mimeType = `image/${extension}`
-
-                // Upload to S3 using safe upload (won't block assistant update)
-                const uploadResult = await safeUploadToS3(imageBuffer, fileName, mimeType, 'assistants')
-
-                if (uploadResult.success && uploadResult.url) {
-                    await prisma.assistant.update({
-                        where: { id: assistantBigInt },
-                        data: { image: uploadResult.url }
-                    })
-                    console.log(`✅ Image updated: ${uploadResult.url}`)
-                } else {
-                    console.warn(`⚠️ Image upload failed during update: ${uploadResult.error}. Assistant updated without image change.`)
-                }
+                // Image was already uploaded to S3 by the client
+                // Just update the assistant record with the URL
+                await prisma.assistant.update({
+                    where: { id: assistantBigInt },
+                    data: { image: params.imageURL }
+                })
+                console.log(`✅ Image URL updated: ${params.imageURL}`)
             } catch (imageError) {
-                console.error('⚠️ Error updating image:', imageError)
+                console.error('⚠️ Error updating image URL:', imageError)
                 // Don't fail the entire update operation
             }
         }
@@ -1638,7 +1612,7 @@ export async function updateCompleteAssistant(
         let vectorStoreId = existingAssistant.vectorStoreId
 
         // Create vector store if needed
-        if ((params.notes.length > 0 || params.urls.length > 0 || params.files.length > 0) && !vectorStoreId) {
+        if ((params.notes.length > 0 || params.urls.length > 0 || params.fileURLs.length > 0) && !vectorStoreId) {
             try {
                 const vectorStoreName = `${params.name}_${randomUUID()}`
                 vectorStoreId = await createVectorStore(vectorStoreName)
@@ -1770,64 +1744,71 @@ export async function updateCompleteAssistant(
         }
 
         // ========================================
-        // FILES: Differential Update
+        // FILES: Differential Update (using pre-uploaded S3 URLs)
         // ========================================
-        // For files, we compare by filename since File objects don't have IDs
-        const existingFileNames = new Set(
-            existingFiles
-                .map(f => f.file?.split('/').pop()?.split('.')[0]) // Extract filename without extension
-                .filter(Boolean)
-        )
+        const newFileUrlSet = new Set(params.fileURLs.map(f => f.url).filter(Boolean))
+        const existingFileUrls = new Set(existingFiles.map(f => f.file).filter(Boolean))
 
-        if (params.files.length > 0 && vectorStoreId) {
-            for (const file of params.files) {
+        // Delete removed files
+        const filesToDelete = existingFiles.filter(f => !newFileUrlSet.has(f.file || ''))
+        for (const fileItem of filesToDelete) {
+            // Delete from OpenAI vector store
+            if (fileItem.vectorFileId && vectorStoreId) {
                 try {
-                    // Check if file with same name already exists
-                    const existingFile = existingFiles.find(f => 
-                        f.file?.includes(file.name.split('.')[0]) // Match base filename
-                    )
-                    
-                    if (existingFile) {
-                        console.log(`File ${file.name} already exists, skipping`)
+                    await deleteFileFromVectorStore(vectorStoreId, fileItem.vectorFileId)
+                    console.log(`✅ File deleted from vector store: ${fileItem.file}`)
+                } catch (err) {
+                    console.error('Error deleting file from vector store:', err)
+                }
+            }
+
+            // Delete from database
+            await prisma.assistantKnowledgebase.delete({ where: { id: fileItem.id } })
+            console.log(`✅ File removed from database: ${fileItem.file}`)
+        }
+
+        // Add new files
+        if (params.fileURLs.length > 0 && vectorStoreId) {
+            for (const fileData of params.fileURLs) {
+                try {
+                    // Check if file with same URL already exists
+                    if (existingFileUrls.has(fileData.url)) {
+                        console.log(`File ${fileData.fileName} already exists, skipping`)
                         continue
                     }
 
-                    const buffer = Buffer.from(await file.arrayBuffer())
-                    const fileFileName = `${file.name}.${file.type}`
+                    // Files are already uploaded to S3, fetch and add to OpenAI vector store
+                    const response = await fetch(fileData.url)
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch file from S3: ${response.statusText}`)
+                    }
 
-                    // Upload to S3 using safe upload (won't block knowledge base creation)
-                    const uploadResult = await safeUploadToS3(buffer, fileFileName, file.type, 'knowledge-base')
+                    const arrayBuffer = await response.arrayBuffer()
+                    const buffer = Buffer.from(arrayBuffer)
 
-                    // Upload to OpenAI vector store (this is critical, so let it throw if it fails)
+                    // Upload to OpenAI vector store
                     const vectorFileId = await uploadAndAddToVectorStore(
                         vectorStoreId,
                         buffer,
-                        file.name
+                        fileData.fileName
                     )
 
-                    // Save to database with or without S3 URL
+                    // Save to database with S3 URL
                     await prisma.assistantKnowledgebase.create({
                         data: {
                             assistantId: assistantBigInt,
-                            file: uploadResult.success ? uploadResult.url : null,
+                            file: fileData.url, // S3 URL (already uploaded)
                             vectorFileId: vectorFileId,
                             type: 'file',
                         }
                     })
 
-                    if (uploadResult.success) {
-                        console.log(`✅ File added to knowledge base: ${file.name} (S3: ${uploadResult.url})`)
-                    } else {
-                        console.warn(`⚠️ File added to knowledge base: ${file.name} (S3 upload failed: ${uploadResult.error}). File saved to OpenAI vector store only.`)
-                    }
+                    console.log(`✅ File added to knowledge base: ${fileData.fileName} (S3: ${fileData.url})`)
                 } catch (err) {
-                    console.error(`❌ Error processing file ${file.name}:`, err)
+                    console.error(`❌ Error processing file ${fileData.fileName}:`, err)
                 }
             }
         }
-
-        // Note: If you want to support file deletion, you'll need to pass
-        // information about which files to keep/delete from the frontend
 
         // ========================================
         // API Configuration Update
@@ -1884,16 +1865,16 @@ export async function updateCompleteAssistant(
                 // Build API config data with encryption
                 const apiConfigData = {
                     authenticationType: params.authenticationType,
-                    
+
                     // Encrypt API key if provided
                     apiKey: params.authenticationType === 'api_key' && params.apiKey
                         ? encrypt(params.apiKey)
                         : null,
                     authType: params.authenticationType === 'api_key' ? params.authType : null,
                     customHeaderName: params.authenticationType === 'api_key' ? params.customHeaderName : null,
-                    
+
                     clientId: params.authenticationType === 'oauth' ? params.clientId : null,
-                    
+
                     // Encrypt client secret if provided
                     clientSecret: params.authenticationType === 'oauth' && params.clientSecret
                         ? encrypt(params.clientSecret)
@@ -1902,12 +1883,12 @@ export async function updateCompleteAssistant(
                     tokenUrl: params.authenticationType === 'oauth' ? params.tokenUrl : null,
                     scope: params.authenticationType === 'oauth' ? params.scope : null,
                     tokenExchangeMethod: params.authenticationType === 'oauth' ? params.tokenExchangeMethod : null,
-                    
+
                     schemaText: params.schemaText || null,
                     schema: params.schema || null,
-                    
-                    // Store parsed tools (only if schema exists)
-                    tools: tools,
+
+                    // Store parsed tools (only if schema exists) - use undefined instead of null
+                    ...(tools && { tools }),
                 }
 
                 if (existingApiConfig) {
