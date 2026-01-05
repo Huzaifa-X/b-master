@@ -2,17 +2,15 @@
 
 import { useState } from "react"
 import { Tabs } from "@/components/ui/vercel-tabs"
-import { User } from "lucide-react"
 import ProfileTab from "./_components/profile-tab"
 import BillingTab from "./_components/billing-tab"
 import WalletTab from "./_components/wallet-tab"
 import SecurityTab from "./_components/security-tab"
 import { useUser } from "@/hooks/useUser"
 import { Skeleton } from "@/components/ui/skeleton"
-import Image from "next/image"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
-import { changePassword } from "@/app/actions/auth.actions"
+import { useChangePasswordMutation } from "@/hooks/useAuth"
 import { toast } from "sonner"
 import { useSession } from "next-auth/react"
 
@@ -27,6 +25,7 @@ export default function ProfilePage() {
     const [activeTab, setActiveTab] = useState("profile")
     const { user, loading, error, updateProfile, isUpdating } = useUser()
     const { data: session } = useSession()
+    const changePasswordMutation = useChangePasswordMutation()
 
     const handleProfileSave = async (data: {
         name: string
@@ -66,22 +65,15 @@ export default function ProfilePage() {
         }
 
         try {
-            const result = await changePassword(
-                session.user.id,
+            const result = await changePasswordMutation.mutateAsync({
+                userId: session.user.id,
                 currentPassword,
                 newPassword
-            )
+            })
 
-            if (result.success) {
-                toast.success(result.message || "Password changed successfully!")
-                return true
-            } else {
-                toast.error(result.error || "Failed to change password")
-                return false
-            }
+            return result.success
         } catch (error) {
             console.error("Error changing password:", error)
-            toast.error("An unexpected error occurred")
             return false
         }
     }

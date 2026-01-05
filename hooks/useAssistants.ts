@@ -5,7 +5,7 @@ import { getAssistants, type AssistantListItem } from "@/app/actions/assistant.a
 import { useMemo } from "react"
 
 interface UseAssistantsParams {
-    type: 'my' | 'purchased' | 'shared'
+    type: 'my' | 'purchased' | 'shared' | 'public'
     search?: string
     limit?: number
 }
@@ -39,8 +39,8 @@ export function useAssistants({ type, search = '', limit = 12 }: UseAssistantsPa
             return result
         },
         getNextPageParam: (lastPage) => {
-            return lastPage.pagination.hasMore 
-                ? lastPage.pagination.page + 1 
+            return lastPage.pagination.hasMore
+                ? lastPage.pagination.page + 1
                 : undefined
         },
         initialPageParam: 1,
@@ -93,7 +93,7 @@ export function useAssistants({ type, search = '', limit = 12 }: UseAssistantsPa
 // Hook to invalidate all assistant queries (useful after creating/deleting)
 export function useInvalidateAssistants() {
     const queryClient = useQueryClient()
-    
+
     return () => {
         queryClient.invalidateQueries({ queryKey: ['assistants'] })
     }

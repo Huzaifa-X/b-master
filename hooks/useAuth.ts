@@ -7,7 +7,8 @@ import {
     resendOTP,
     forgotPassword,
     resetPassword,
-    verifyResetPasswordOTP
+    verifyResetPasswordOTP,
+    changePassword
 } from "@/app/actions/auth.actions"
 import { RegisterInput } from "@/lib/validations/auth"
 import { toast } from "sonner"
@@ -146,6 +147,33 @@ export function useResetPasswordMutation() {
         },
         onError: (error: Error) => {
             toast.error("Failed to reset password", {
+                description: error.message,
+            })
+        },
+    })
+}
+
+// ============================================
+// CHANGE PASSWORD MUTATION
+// ============================================
+export function useChangePasswordMutation() {
+    return useMutation({
+        mutationFn: ({ userId, currentPassword, newPassword }: {
+            userId: string
+            currentPassword: string
+            newPassword: string
+        }) => changePassword(userId, currentPassword, newPassword),
+        onSuccess: (result) => {
+            if (result.success) {
+                toast.success("Password changed successfully!", {
+                    description: result.message || "Your password has been updated",
+                })
+            } else {
+                toast.error(result.error || "Failed to change password")
+            }
+        },
+        onError: (error: Error) => {
+            toast.error("Failed to change password", {
                 description: error.message,
             })
         },

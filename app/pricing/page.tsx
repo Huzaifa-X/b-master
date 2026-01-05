@@ -16,35 +16,19 @@ import { ArrowRight, BadgeCheck, X, Loader2 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter } from "next/navigation"
-import { getPlans, createCheckoutSession } from "@/app/actions/subscription.action"
 import { toast } from "sonner"
-import { useSubscription } from "@/hooks/useSubscription"
+import { useSubscription, usePlans } from "@/hooks/useSubscription"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function PricingPage() {
   const router = useRouter()
   const { subscription, loading: subscriptionLoading } = useSubscription()
+  const { plans: allPlans, loading: plansLoading } = usePlans()
+  const { createCheckout, isCreatingCheckout } = useSubscription()
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly")
-  const [plans, setPlans] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
   const [subscribingPlanId, setSubscribingPlanId] = useState<number | null>(null)
 
-  useEffect(() => {
-    async function fetchPlans() {
-      try {
-        const fetchedPlans = await getPlans()
-        console.log("fetchedPlans", fetchedPlans)
-        setPlans(fetchedPlans)
-      } catch (error) {
-        console.error("Error fetching plans:", error)
-        toast.error("Failed to load plans")
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchPlans()
-  }, [])
-
-  const currentPlans = plans.filter((plan) => {
+  const currentPlans = allPlans.filter((plan) => {
     if (billingCycle === "monthly") {
       return plan.period === "monthly" || plan.period === "free"
     } else {
@@ -55,14 +39,14 @@ export default function PricingPage() {
   const handleSubscribe = async (planId: number) => {
     try {
       setSubscribingPlanId(planId)
-      
-      const result = await createCheckoutSession(planId)
-      
-      if (result.success && result.url) {
+
+      const result = await createCheckout(planId)
+
+      if (result.success && 'url' in result && result.url) {
         // Redirect to Stripe Checkout
         window.location.href = result.url
       } else {
-        toast.error(result.error || "Failed to create checkout session")
+        toast.error('error' in result ? result.error : "Failed to create checkout session")
         setSubscribingPlanId(null)
       }
     } catch (error: any) {
@@ -112,9 +96,35 @@ export default function PricingPage() {
         </div>
 
         {/* Pricing Cards */}
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        {plansLoading ? (
+          <div className={cn(
+            "grid gap-6 mx-auto",
+            billingCycle === "monthly" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-6xl"
+          )}>
+            {Array.from({ length: billingCycle === "monthly" ? 4 : 3 }).map((_, i) => (
+              <Card key={i} className="relative w-full text-left flex flex-col">
+                <CardHeader>
+                  <Skeleton className="h-6 w-32 mb-2" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <div className="flex items-baseline gap-1">
+                      <Skeleton className="h-8 w-24" />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="grid gap-3 flex-1">
+                  {Array.from({ length: 5 }).map((_, j) => (
+                    <div key={j} className="flex gap-2">
+                      <Skeleton className="h-5 w-5 rounded" />
+                      <Skeleton className="h-4 w-full" />
+                    </div>
+                  ))}
+                </CardContent>
+                <CardFooter>
+                  <Skeleton className="h-10 w-full" />
+                </CardFooter>
+              </Card>
+            ))}
           </div>
         ) : (
           <div className={cn(
@@ -127,7 +137,7 @@ export default function PricingPage() {
               const isSubscribing = subscribingPlanId === plan.id
               const isFree = plan.period === "free"
               const isCurrentPlan = subscription?.planId === plan.id
-              
+
               return (
                 <Card
                   className={cn(
@@ -164,13 +174,13 @@ export default function PricingPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-3 flex-1">
-                    {features.map((feature: string, index: number) => (
+                    {features.map((feature, index: number) => (
                       <div
                         className="flex gap-2 text-muted-foreground text-sm items-start"
                         key={index}
                       >
                         <BadgeCheck className="h-5 w-5 flex-none text-[#BDA76D] mt-0.5" />
-                        <span>{feature}</span>
+                        <span>{String(feature)}</span>
                       </div>
                     ))}
                   </CardContent>

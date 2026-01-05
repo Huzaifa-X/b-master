@@ -1,77 +1,12 @@
 "use client"
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Wallet, TrendingUp, Clock, ArrowDownToLine, ArrowUpRight, Loader2, DollarSign } from "lucide-react"
 import { useWallet } from "@/hooks/useWallet"
-import { toast } from "sonner"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 
 export default function WalletTab() {
-  const { wallet, transactions, stats, loading, transactionsLoading, statsLoading, releaseEarnings, requestWithdrawal } = useWallet()
-  const [isReleasing, setIsReleasing] = useState(false)
-  const [isRequestingPayout, setIsRequestingPayout] = useState(false)
-  const [payoutAmount, setPayoutAmount] = useState("")
-
-  const handleReleaseEarnings = async () => {
-    try {
-      setIsReleasing(true)
-      const result = await releaseEarnings(7)
-
-      if (result.success) {
-        toast.success(result.message || `Released ${formatCurrency(result.amountReleased || 0, result.currency || "CHF")} to available balance`)
-      } else {
-        toast.error(result.error || "Failed to release earnings")
-      }
-    } catch (error: any) {
-      toast.error(error.message || "Something went wrong")
-    } finally {
-      setIsReleasing(false)
-    }
-  }
-
-  const handleRequestPayout = async () => {
-    const amount = parseFloat(payoutAmount)
-    
-    if (isNaN(amount) || amount <= 0) {
-      toast.error("Please enter a valid amount")
-      return
-    }
-
-    if (wallet && amount > wallet.availableAmount) {
-      toast.error("Insufficient available balance")
-      return
-    }
-
-    try {
-      setIsRequestingPayout(true)
-      const result = await requestWithdrawal(amount)
-
-      if (result.success) {
-        toast.success(result.message || "Payout request submitted successfully")
-        setPayoutAmount("")
-      } else {
-        toast.error(result.error || "Failed to request payout")
-      }
-    } catch (error: any) {
-      toast.error(error.message || "Something went wrong")
-    } finally {
-      setIsRequestingPayout(false)
-    }
-  }
+  const { wallet, transactions, stats, loading, transactionsLoading, statsLoading } = useWallet()
 
   const formatCurrency = (amount: number, currency: string = "CHF") => {
     return new Intl.NumberFormat("en-US", {
@@ -119,8 +54,13 @@ export default function WalletTab() {
           {/* Pending Amount */}
           <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50">
             {loading ? (
-              <div className="flex items-center gap-4">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="w-4 h-4 rounded" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-3 w-48" />
               </div>
             ) : (
               <div className="space-y-2">
@@ -141,8 +81,13 @@ export default function WalletTab() {
           {/* Available Amount */}
           <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50">
             {loading ? (
-              <div className="flex items-center gap-4">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="w-4 h-4 rounded" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-3 w-36" />
               </div>
             ) : (
               <div className="space-y-2">
@@ -163,8 +108,13 @@ export default function WalletTab() {
           {/* Total Earnings */}
           <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50">
             {loading ? (
-              <div className="flex items-center gap-4">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="w-4 h-4 rounded" />
+                  <Skeleton className="h-4 w-28" />
+                </div>
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-3 w-32" />
               </div>
             ) : (
               <div className="space-y-2">
@@ -184,7 +134,35 @@ export default function WalletTab() {
         </div>
 
         {/* Stats Card */}
-        {stats && !statsLoading && (
+        {statsLoading ? (
+          <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50">
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <Skeleton className="w-12 h-12 rounded-lg" />
+                <Skeleton className="h-6 w-40" />
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+                <div className="space-y-1">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-6 w-12" />
+                </div>
+                <div className="space-y-1">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-6 w-12" />
+                </div>
+                <div className="space-y-1">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-6 w-24" />
+                </div>
+                <div className="space-y-1">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-6 w-24" />
+                </div>
+              </div>
+            </div>
+          </Card>
+        ) : stats && (
           <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50">
             <div className="space-y-4">
               <div className="flex items-center gap-4">
@@ -220,108 +198,6 @@ export default function WalletTab() {
           </Card>
         )}
 
-        {/* Actions Card */}
-        {/* <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50 max-w-md mx-auto">
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Actions</h3>
-
-            <div className="flex flex-col sm:flex-row gap-4">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="flex items-center gap-2"
-                    disabled={loading || !wallet || wallet.pendingAmount <= 0 || isReleasing}
-                  >
-                    {isReleasing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Releasing...
-                      </>
-                    ) : (
-                      <>
-                        <ArrowUpRight className="h-4 w-4" />
-                        Release Pending Earnings
-                      </>
-                    )}
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Release Pending Earnings?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will move earnings from transactions older than 7 days from your pending balance to your available balance.
-                      <br /><br />
-                      <strong>Current Pending:</strong> {formatCurrency(wallet?.pendingAmount || 0, wallet?.currency)}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleReleaseEarnings}>
-                      Release Earnings
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    className="flex items-center gap-2"
-                    disabled={loading || !wallet || wallet.availableAmount <= 0 || isRequestingPayout}
-                  >
-                    {isRequestingPayout ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Wallet className="h-4 w-4" />
-                        Request Payout
-                      </>
-                    )}
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Request Payout</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Enter the amount you want to withdraw from your available balance.
-                      <br /><br />
-                      <strong>Available Balance:</strong> {formatCurrency(wallet?.availableAmount || 0, wallet?.currency)}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <div className="py-4">
-                    <Label htmlFor="payout-amount">Amount ({wallet?.currency || "CHF"})</Label>
-                    <Input
-                      id="payout-amount"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max={wallet?.availableAmount || 0}
-                      value={payoutAmount}
-                      onChange={(e) => setPayoutAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="mt-2"
-                    />
-                  </div>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setPayoutAmount("")}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleRequestPayout}>
-                      Request Payout
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Note: Payout requests require Stripe Connect integration. Contact support for setup.
-            </p>
-          </div>
-        </Card> */}
-
         {/* Transaction History Card */}
         <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50">
           <div className="space-y-4">
@@ -333,8 +209,16 @@ export default function WalletTab() {
             </div>
 
             {transactionsLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="space-y-3 mt-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="grid grid-cols-5 gap-4">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                ))}
               </div>
             ) : transactions.length > 0 ? (
               <div className="overflow-hidden">

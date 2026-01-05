@@ -13,6 +13,7 @@ import {
   AvatarFallback,
 } from "@/components/ui/avatar"
 import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,7 +63,11 @@ export function NavUser({
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
-                <span className="truncate text-xs">{loading ? "Loading..." : planName}</span>
+                {loading ? (
+                  <Skeleton className="h-3 w-16" />
+                ) : (
+                  <span className="truncate text-xs">{planName}</span>
+                )}
               </div>
               <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -82,7 +87,11 @@ export function NavUser({
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
-                  <span className="truncate text-xs">{loading ? "Loading..." : planName}</span>
+                  {loading ? (
+                    <Skeleton className="h-3 w-16" />
+                  ) : (
+                    <span className="truncate text-xs">{planName}</span>
+                  )}
                 </div>
               </div>
             </DropdownMenuLabel>

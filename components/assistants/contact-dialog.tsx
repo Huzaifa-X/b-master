@@ -39,7 +39,7 @@ interface ContactDialogProps {
   onOpenChange: (open: boolean) => void
   contact?: ContactFormData | null
   assistantId?: string
-  onSave: (contact: ContactFormData) => void | Promise<void>
+  onSave?: (contact: ContactFormData) => void | Promise<void>
 }
 
 export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave }: ContactDialogProps) {
@@ -102,7 +102,9 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
 
     setIsSubmitting(true)
     try {
-      await onSave(formData)
+      if (onSave) {
+        await onSave(formData)
+      }
       // Don't close dialog or show success here - let the parent handle it
       // The parent will handle success/error messages and closing
     } catch (error) {
