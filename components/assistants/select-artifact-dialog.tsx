@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog"
 import { useArtifacts } from "@/hooks/useArtifact"
 import { Loader2, Sparkles } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 
@@ -87,7 +86,7 @@ export function SelectArtifactDialog({
                   className={cn(
                     "w-full text-left p-4 rounded-lg border transition-colors",
                     "hover:bg-muted hover:border-muted/50",
-                  )}    
+                  )}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">

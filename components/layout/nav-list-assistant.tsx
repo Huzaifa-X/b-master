@@ -60,17 +60,17 @@ export function NavListAssistant() {
 
   // All hooks must be called before any conditional returns
   const assistantId = assistantStore.currentAssistantId || ""
-  
-  const { 
-    chats, 
-    isLoading, 
-    deleteChat, 
+
+  const {
+    chats,
+    isLoading,
+    deleteChat,
     renameChat,
     isDeleting,
     isRenaming
-  } = useChatHistory({ 
-    mode: "assistant", 
-    assistantId: assistantId || undefined 
+  } = useChatHistory({
+    mode: "assistant",
+    assistantId: assistantId || undefined
   })
 
   const [renamingChatId, setRenamingChatId] = useState<string | null>(null)
@@ -84,8 +84,8 @@ export function NavListAssistant() {
 
   // Extract current chat ID from pathname
   const pathParts = pathname.split("/")
-  const currentChatId = pathParts.length >= 4 && pathParts[1] === "assistants" 
-    ? pathParts[3] 
+  const currentChatId = pathParts.length >= 4 && pathParts[1] === "assistants"
+    ? pathParts[3]
     : null
 
   const handleNewChat = () => {
@@ -121,7 +121,7 @@ export function NavListAssistant() {
     if (deletingChatId) {
       deleteChat(deletingChatId)
       setDeletingChatId(null)
-      
+
       // If deleting current chat, navigate to welcome page
       if (deletingChatId === currentChatId) {
         router.push(`/assistants/${assistantId}`)
@@ -136,12 +136,15 @@ export function NavListAssistant() {
           Chats
         </SidebarGroupLabel>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton disabled>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Loading chats...</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {/* Show 5 skeleton items while loading */}
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SidebarMenuItem key={i}>
+              <SidebarMenuButton disabled>
+                <Skeleton className="h-4 w-4 rounded" />
+                <Skeleton className="h-4 flex-1" />
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
         </SidebarMenu>
       </SidebarGroup>
     )
@@ -166,7 +169,7 @@ export function NavListAssistant() {
           ) : (
             chats.map((chat) => (
               <SidebarMenuItem key={chat.id}>
-                <SidebarMenuButton 
+                <SidebarMenuButton
                   asChild
                   className={cn(
                     "cursor-pointer",
@@ -204,7 +207,7 @@ export function NavListAssistant() {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      className="text-destructive focus:text-destructive focus:!text-destructive focus:!bg-muted cursor-pointer"
+                      className="text-destructive focus:!text-destructive focus:!bg-muted cursor-pointer"
                       onClick={(e) => handleDelete(chat.id, e)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -241,8 +244,8 @@ export function NavListAssistant() {
             <Button variant="outline" onClick={() => setRenamingChatId(null)}>
               Cancel
             </Button>
-            <Button 
-              onClick={handleRenameConfirm} 
+            <Button
+              onClick={handleRenameConfirm}
               disabled={!newChatName.trim() || isRenaming}
             >
               {isRenaming ? "Saving..." : "Save"}
@@ -262,7 +265,7 @@ export function NavListAssistant() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleDeleteConfirm}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isDeleting}

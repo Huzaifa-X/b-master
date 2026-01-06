@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { getArtifactById, getArtifacts, getArtifactVersions, setActiveArtifactVersion } from "@/app/actions/artifact.action"
+import { getArtifactById, getArtifacts, getArtifactVersions, setActiveArtifactVersion, createArtifact, shareArtifact, deleteArtifactFile } from "@/app/actions/artifact.action"
 import { updateArtifactWithAI, type UpdateArtifactParams, type UpdateArtifactResult } from "@/app/actions/update-artifact.action"
 import { getArtifactEditData, updateArtifact, type EditArtifactParams } from "@/app/actions/edit-artifact.action"
 import { toast } from "sonner"
@@ -57,11 +57,11 @@ export function useArtifactById(
     queryKey: ["artifact", artifactId],
     queryFn: async () => {
       const result = await getArtifactById(artifactId)
-      
+
       if (!result.success) {
         throw new Error(result.error || "Failed to fetch artifact")
       }
-      
+
       return result.artifact as ArtifactData
     },
     enabled: options?.enabled ?? true,
@@ -128,11 +128,11 @@ export function useArtifacts(
     queryKey: ["artifacts", assistantId],
     queryFn: async () => {
       const result = await getArtifacts(assistantId)
-      
+
       if (!result.success) {
         throw new Error(result.error || "Failed to fetch artifacts")
       }
-      
+
       return result.artifacts as Artifact[]
     },
     enabled: options?.enabled ?? true,
@@ -186,11 +186,11 @@ export function useUpdateArtifact(options?: UseUpdateArtifactOptions) {
   const mutation = useMutation({
     mutationFn: async (params: UpdateArtifactParams): Promise<UpdateArtifactResult> => {
       const result = await updateArtifactWithAI(params)
-      
+
       if (!result.success) {
         throw new Error(result.error || "Failed to update artifact")
       }
-      
+
       return result
     },
     onSuccess: (result) => {
@@ -198,17 +198,17 @@ export function useUpdateArtifact(options?: UseUpdateArtifactOptions) {
       if (result.artifact) {
         queryClient.invalidateQueries({ queryKey: ["artifact", result.artifact.id] })
       }
-      
+
       // Show success toast
       toast.success("Artifact updated successfully!")
-      
+
       // Call custom success callback
       options?.onSuccess?.(result)
     },
     onError: (error: Error) => {
       // Show error toast
       toast.error(error.message || "Failed to update artifact")
-      
+
       // Call custom error callback
       options?.onError?.(error.message)
     },
@@ -273,11 +273,11 @@ export function useArtifactVersions(
     queryKey: ["artifactVersions", artifactId],
     queryFn: async () => {
       const result = await getArtifactVersions(artifactId)
-      
+
       if (!result.success) {
         throw new Error(result.error || "Failed to fetch artifact versions")
       }
-      
+
       return result
     },
     enabled: options?.enabled ?? true,
@@ -310,28 +310,28 @@ export function useSetActiveVersion(options?: UseSetActiveVersionOptions) {
   const mutation = useMutation({
     mutationFn: async ({ artifactId, versionId }: { artifactId: string; versionId: string }) => {
       const result = await setActiveArtifactVersion(artifactId, versionId)
-      
+
       if (!result.success) {
         throw new Error(result.error || "Failed to set active version")
       }
-      
+
       return result
     },
     onSuccess: (_, variables) => {
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ["artifact", variables.artifactId] })
       queryClient.invalidateQueries({ queryKey: ["artifactVersions", variables.artifactId] })
-      
+
       // Show success toast
       toast.success("Active version updated successfully!")
-      
+
       // Call custom success callback
       options?.onSuccess?.()
     },
     onError: (error: Error) => {
       // Show error toast
       toast.error(error.message || "Failed to set active version")
-      
+
       // Call custom error callback
       options?.onError?.(error.message)
     },
@@ -368,11 +368,11 @@ export function useArtifactEditData(
     queryKey: ["artifactEditData", artifactId],
     queryFn: async () => {
       const result = await getArtifactEditData(artifactId)
-      
+
       if (!result.success) {
         throw new Error(result.error || "Failed to fetch artifact edit data")
       }
-      
+
       return result.data
     },
     enabled: options?.enabled ?? true,
@@ -404,11 +404,11 @@ export function useUpdateArtifactMutation(options?: UseUpdateArtifactMutationOpt
   const mutation = useMutation({
     mutationFn: async (params: EditArtifactParams) => {
       const result = await updateArtifact(params)
-      
+
       if (!result.success) {
         throw new Error(result.error || "Failed to update artifact")
       }
-      
+
       return result
     },
     onSuccess: (result) => {
@@ -418,10 +418,10 @@ export function useUpdateArtifactMutation(options?: UseUpdateArtifactMutationOpt
         queryClient.invalidateQueries({ queryKey: ["artifactEditData", result.artifact.id] })
         queryClient.invalidateQueries({ queryKey: ["artifacts"] })
       }
-      
+
       // Show success toast
       toast.success("Artifact updated successfully!")
-      
+
       // Call custom success callback
       if (result.artifact) {
         options?.onSuccess?.(result.artifact.id)
@@ -430,7 +430,7 @@ export function useUpdateArtifactMutation(options?: UseUpdateArtifactMutationOpt
     onError: (error: Error) => {
       // Show error toast
       toast.error(error.message || "Failed to update artifact")
-      
+
       // Call custom error callback
       options?.onError?.(error.message)
     },
@@ -447,3 +447,175 @@ export function useUpdateArtifactMutation(options?: UseUpdateArtifactMutationOpt
   }
 }
 
+interface CreateArtifactParams {
+  assistantId: string
+  name: string
+  instructions: string
+  category: string
+  permissions: "private" | "team" | "public"
+  selectedUsers: Array<{ id: string; name: string; email: string }>
+  apiConfigs: Array<{ key: string; value: string }>
+  uploadedFiles: any[]
+  uploadedImages: any[]
+  videoDuration?: "4" | "8" | "12"
+  selectedChatId?: string | null
+  templateHtml?: string
+  bookingConfig?: any
+}
+
+interface UseCreateArtifactOptions {
+  onSuccess?: (artifactId: string) => void
+  onError?: (error: string) => void
+}
+
+/**
+ * Hook to create artifact using React Query mutation
+ * @param options - Optional callbacks for success and error handling
+ */
+export function useCreateArtifact(options?: UseCreateArtifactOptions) {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async (params: CreateArtifactParams) => {
+      const result = await createArtifact(params)
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to create artifact")
+      }
+
+      return result
+    },
+    onSuccess: (result, variables) => {
+      // Invalidate artifacts list for this assistant
+      queryClient.invalidateQueries({ queryKey: ["artifacts", variables.assistantId] })
+      queryClient.invalidateQueries({ queryKey: ["artifacts"] })
+
+      // Show success toast
+      toast.success("Artifact created successfully!")
+
+      // Call custom success callback
+      if (result.artifact) {
+        options?.onSuccess?.(result.artifact.id.toString())
+      }
+    },
+    onError: (error: Error) => {
+      // Show error toast
+      toast.error(error.message || "Failed to create artifact")
+
+      // Call custom error callback
+      options?.onError?.(error.message)
+    },
+  })
+
+  return {
+    createArtifact: mutation.mutate,
+    createArtifactAsync: mutation.mutateAsync,
+    isCreating: mutation.isPending,
+    isError: mutation.isError,
+    error: mutation.error,
+    isSuccess: mutation.isSuccess,
+    data: mutation.data,
+  }
+}
+
+interface ShareArtifactParams {
+  artifactId: string
+  artifactName: string
+  assistantId: string
+  recipientUserId: string
+  recipientName: string
+}
+
+interface UseShareArtifactOptions {
+  onSuccess?: (recipientName: string) => void
+  onError?: (error: string) => void
+}
+
+/**
+ * Hook to share artifact with a contact using React Query mutation
+ * @param options - Optional callbacks for success and error handling
+ */
+export function useShareArtifact(options?: UseShareArtifactOptions) {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async (params: ShareArtifactParams) => {
+      const result = await shareArtifact(params)
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to share artifact")
+      }
+
+      return result
+    },
+    onSuccess: (_, variables) => {
+      // Optionally invalidate relevant queries if needed
+      // queryClient.invalidateQueries({ queryKey: ["artifact", variables.artifactId] })
+
+      // Show success toast
+      toast.success(`Artifact shared with ${variables.recipientName}!`)
+
+      // Call custom success callback
+      options?.onSuccess?.(variables.recipientName)
+    },
+    onError: (error: Error) => {
+      // Show error toast
+      toast.error(error.message || "Failed to share artifact")
+
+      // Call custom error callback
+      options?.onError?.(error.message)
+    },
+  })
+
+  return {
+    shareArtifact: mutation.mutate,
+    shareArtifactAsync: mutation.mutateAsync,
+    isSharing: mutation.isPending,
+    isError: mutation.isError,
+    error: mutation.error,
+    isSuccess: mutation.isSuccess,
+  }
+}
+
+interface UseDeleteArtifactFileOptions {
+  onSuccess?: () => void
+  onError?: (error: string) => void
+}
+
+/**
+ * Hook to delete artifact file from storage using React Query mutation
+ * @param options - Optional callbacks for success and error handling
+ */
+export function useDeleteArtifactFile(options?: UseDeleteArtifactFileOptions) {
+  const mutation = useMutation({
+    mutationFn: async (fileUrl: string) => {
+      const result = await deleteArtifactFile(fileUrl)
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to delete file from storage")
+      }
+
+      return result
+    },
+    onSuccess: () => {
+      // Call custom success callback
+      options?.onSuccess?.()
+    },
+    onError: (error: Error) => {
+      // Show error toast
+      toast.error(error.message || "Failed to delete file from storage")
+
+      // Call custom error callback
+      options?.onError?.(error.message)
+    },
+  })
+
+  return {
+    deleteFile: mutation.mutate,
+    deleteFileAsync: mutation.mutateAsync,
+    isDeleting: mutation.isPending,
+    isError: mutation.isError,
+    error: mutation.error,
+    isSuccess: mutation.isSuccess,
+  }
+}

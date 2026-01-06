@@ -82,41 +82,71 @@ export async function generatePDFFromHTML({
 
     page = await browser.newPage();
 
-    // Set viewport for consistent rendering
+    // 🔥 OPTIMIZED VIRTUAL DESKTOP: Render at 850px
+    // Narrowing the width from 1200px to 850px ensures the content (usually ~800px) 
+    // fills the horizontal space better and eliminates excessive white background.
+    const VIRTUAL_WIDTH = 850;
+
     await page.setViewport({
-      width: 1200,
-      height: 1600,
-      deviceScaleFactor: 2, // Higher quality rendering
+      width: VIRTUAL_WIDTH,
+      height: 1200, // Reduced height for more natural proportion
+      deviceScaleFactor: 2,
     });
 
+    // Emulate 'screen' media to look exactly like the web view
+    await page.emulateMediaType('screen');
+
     // Set timeout for page operations
-    page.setDefaultTimeout(30000); // 30 seconds
+    page.setDefaultTimeout(30000);
 
     console.log('[PDF] Loading HTML content...');
 
-    // Set content with timeout
+    // Set content and wait for network to settle
     await page.setContent(html, {
-      waitUntil: 'networkidle0', // Wait for all network requests to finish
+      waitUntil: 'networkidle0',
       timeout: 30000,
     });
 
-    // Optional: Wait for any dynamic content to render
-    // await page.waitForTimeout(1000);
+    // Force exact colors and ensure content expands to the 850px viewport
+    await page.addStyleTag({
+      content: `
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        html, body { 
+          width: 100% !important; 
+          max-width: 100% !important; 
+          min-width: ${VIRTUAL_WIDTH}px !important;
+          overflow-x: hidden !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        /* Ensure the main container fills the available width */
+        .invoice-container, [class*="container"] {
+          max-width: 100% !important;
+          margin-left: 0 !important;
+          margin-right: 0 !important;
+        }
+      `
+    });
 
-    console.log('[PDF] Generating PDF...');
+    console.log('[PDF] Generating A4 PDF with optimized fit scale...');
 
-    // Generate PDF
+    // 🔥 HIGH-FILL SCALING: Fit 850px content into A4 width
+    // A4 width (794px) / Virtual width (850px) = ~0.93 scale.
+    // This maximizes usage of the page while maintaining the desktop layout.
+    const scale = 0.93;
+
     const pdfUint8Array = await page.pdf({
       format: 'A4',
       printBackground: true,
-      preferCSSPageSize: false, // Use A4 format
+      preferCSSPageSize: false,
+      scale: scale,
       margin: {
-        top: '20px',
-        right: '20px',
-        bottom: '20px',
-        left: '20px',
+        top: '10mm',
+        right: '10mm',
+        bottom: '10mm',
+        left: '10mm',
       },
-      timeout: 30000, // 30 second timeout for PDF generation
+      timeout: 30000,
     });
 
     // Close browser before uploading (free up resources)

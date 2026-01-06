@@ -17,21 +17,21 @@ import {
 import { AttachmentDropdown } from "@/components/assistants/attachment-dropdown"
 import { DictateButton } from "@/components/assistants/dictate-button"
 import { SelectArtifactDialog } from "@/components/assistants/select-artifact-dialog"
-import { 
-  Mention, 
-  MentionInput, 
-  MentionContent, 
+import {
+  Mention,
+  MentionInput,
+  MentionContent,
   MentionItem,
-  MentionPortal 
+  MentionPortal
 } from "@/components/ui/mention"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { searchUsersForMention } from "@/app/actions/user.action"
+import { useSearchUsersForMention } from "@/hooks/useUser"
+import { useUploadFileToS3 } from "@/hooks/useUpload"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import ReactMarkdown from "react-markdown"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
-import { uploadFileToS3 } from "@/app/actions/upload.action"
 
 interface User {
   id: string
@@ -111,11 +111,20 @@ export function ChatInput({
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Mention functionality
-  const [mentionUsers, setMentionUsers] = useState<User[]>([])
-  const [isLoadingMentions, setIsLoadingMentions] = useState(false)
+  const [mentionSearchTerm, setMentionSearchTerm] = useState("")
   const [mentionedUsers, setMentionedUsers] = useState<MentionedUser[]>([]) // Track mentioned users
   const [isMentionOpen, setIsMentionOpen] = useState(false) // Track if mention dropdown is open
   const [mentionKey, setMentionKey] = useState(0) // Key to force re-render of Mention component
+
+  // Use hook for searching mention users
+  const { users: mentionUsers, isLoading: isLoadingMentions } = useSearchUsersForMention(
+    mode === "assistant" ? assistantId : null,
+    mentionSearchTerm,
+    { enabled: mode === "assistant" && !!assistantId }
+  )
+
+  // Use hook for file uploads
+  const { uploadFileAsync } = useUploadFileToS3()
 
   // Use external value if provided, otherwise use internal state
   const value = externalValue !== undefined ? externalValue : internalValue
@@ -189,51 +198,24 @@ export function ChatInput({
 
   // Filter users for mention (exclude already mentioned)
   const getFilteredMentionUsers = useCallback(() => {
-    return mentionUsers.filter(user => 
+    return mentionUsers.filter(user =>
       !mentionedUsers.some(mentioned => mentioned.id === user.id)
     )
   }, [mentionUsers, mentionedUsers])
 
-  // State to track current mention search term
-  const [mentionSearchTerm, setMentionSearchTerm] = useState("")
 
-  // Load users when mention search term changes
-  useEffect(() => {
-    if (mode !== "assistant" || !assistantId) {
-      setMentionUsers([])
-      return
-    }
 
-    const loadUsers = async () => {
-      setIsLoadingMentions(true)
-      try {
-        const users = await searchUsersForMention(assistantId, mentionSearchTerm)
-        setMentionUsers(users)
-      } catch (error) {
-        console.error("Error loading mention users:", error)
-        setMentionUsers([])
-      } finally {
-        setIsLoadingMentions(false)
-      }
-    }
-
-    // Debounce the search
+  // Handle mention filter (update search term with debounce)
+  const handleMentionFilter = useCallback((options: string[], term: string) => {
+    // Debounce the search term update
     const timeoutId = setTimeout(() => {
-      loadUsers()
+      setMentionSearchTerm(term)
     }, 300)
 
-    return () => clearTimeout(timeoutId)
-  }, [mode, assistantId, mentionSearchTerm])
-
-  // Handle mention filter (client-side filtering + update search term)
-  const handleMentionFilter = useCallback((options: string[], term: string) => {
-    // Update search term for async loading
-    setMentionSearchTerm(term)
-    
-    // Also do client-side filtering on current options
+    // Client-side filtering on current options
     if (!term) return options
     const lowerTerm = term.toLowerCase()
-    return options.filter(option => 
+    return options.filter(option =>
       option.toLowerCase().includes(lowerTerm)
     )
   }, [])
@@ -332,20 +314,15 @@ export function ChatInput({
           formData.append("file", file)
           formData.append("folder", "attachments")
 
-          // Upload to S3
-          const uploadResult = await uploadFileToS3(formData)
+          // Upload to S3 using the hook
+          const uploadResult = await uploadFileAsync(formData)
 
-          if (uploadResult.success && uploadResult.url) {
-            successfulUploads.push({
-              name: uploadResult.fileName || file.name,
-              url: uploadResult.url,
-              type: file.type || 'application/octet-stream',
-              size: uploadResult.fileSize || file.size
-            })
-          } else {
-            failedCount++
-            console.error(`Failed to upload ${file.name}:`, uploadResult.error)
-          }
+          successfulUploads.push({
+            name: uploadResult.fileName || file.name,
+            url: uploadResult.url,
+            type: file.type || 'application/octet-stream',
+            size: uploadResult.fileSize || file.size
+          })
         } catch (error) {
           console.error(`Error uploading ${file.name}:`, error)
           failedCount++
@@ -805,7 +782,7 @@ export function ChatInput({
                 placeholder={placeholder}
                 disabled={disabled || isLoading}
                 rows={1}
-                className="text-primary min-h-[44px] w-full resize-none border-none bg-transparent shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-foreground placeholder:text-muted-foreground"
+                className="text-foreground placeholder:text-muted-foreground min-h-[44px] w-full resize-none border-none bg-transparent shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
               />
 
               {/* Drag and drop overlay */}
@@ -817,62 +794,62 @@ export function ChatInput({
                 </div>
               )}
 
-            <PromptInputActions className="px-2 pb-1 justify-between">
-              <div className="flex items-center gap-2">
-                <AttachmentDropdown
-                  onFileSelect={handleFileSelect}
-                  onWebSearch={handleWebSearchChange}
-                  onResearch={handleResearchChange}
-                  onChatWithArtifact={handleChatWithArtifact}
-                  onChatWithAPI={handleChatWithAPIChange}
-                  onDropbox={handleDropboxChange}
-                  disabled={disabled || isLoading}
-                  mode={mode}
-                  assistantId={assistantId}
-                  selectedArtifact={selectedArtifact}
-                  onRemoveArtifact={() => {
-                    setSelectedArtifact(null)
-                    removeStorageItem("mode")
-                    removeStorageItem("artifact_data")
-                    removeStorageItem("mentioned_users")
-                  }}
-                />
-                {assistantId && (
-                  <SelectArtifactDialog
-                    open={isArtifactDialogOpen}
-                    onOpenChange={setIsArtifactDialogOpen}
+              <PromptInputActions className="px-2 pb-1 justify-between">
+                <div className="flex items-center gap-2">
+                  <AttachmentDropdown
+                    onFileSelect={handleFileSelect}
+                    onWebSearch={handleWebSearchChange}
+                    onResearch={handleResearchChange}
+                    onChatWithArtifact={handleChatWithArtifact}
+                    onChatWithAPI={handleChatWithAPIChange}
+                    onDropbox={handleDropboxChange}
+                    disabled={disabled || isLoading}
+                    mode={mode}
                     assistantId={assistantId}
-                    onSelect={handleArtifactSelect}
+                    selectedArtifact={selectedArtifact}
+                    onRemoveArtifact={() => {
+                      setSelectedArtifact(null)
+                      removeStorageItem("mode")
+                      removeStorageItem("artifact_data")
+                      removeStorageItem("mentioned_users")
+                    }}
                   />
-                )}
-                <DictateButton
-                  onTranscript={handleDictateTranscript}
-                  disabled={disabled || isLoading}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Tooltip>
-                  <TooltipTrigger asChild disabled={disabled || isLoading || isUploading}>
-                    <Button
-                      onClick={handleSend}
-                      disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled}
-                      size="icon"
-                      className="size-[34px] rounded-full p-1"
-                    >
-                      {isLoading || isUploading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <ArrowUp className="h-5 w-5" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    Send message (Enter)
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </PromptInputActions>
-          </div>
+                  {assistantId && (
+                    <SelectArtifactDialog
+                      open={isArtifactDialogOpen}
+                      onOpenChange={setIsArtifactDialogOpen}
+                      assistantId={assistantId}
+                      onSelect={handleArtifactSelect}
+                    />
+                  )}
+                  <DictateButton
+                    onTranscript={handleDictateTranscript}
+                    disabled={disabled || isLoading}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild disabled={disabled || isLoading || isUploading}>
+                      <Button
+                        onClick={handleSend}
+                        disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled}
+                        size="icon"
+                        className="size-[34px] rounded-full p-1"
+                      >
+                        {isLoading || isUploading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ArrowUp className="h-5 w-5" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      Send message (Enter)
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </PromptInputActions>
+            </div>
           </TooltipProvider>
         )}
       </div>

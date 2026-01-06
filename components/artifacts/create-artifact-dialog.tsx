@@ -16,8 +16,8 @@ import { toast } from "sonner"
 import { TemplateSelectionStep } from "./steps/template-selection-step"
 import { ArtifactCustomizationStep } from "./steps/artifact-customization-step"
 import type { ArtifactFormData, Template, Contact } from "@/types/artifacts"
-import { getAssistantContacts, createArtifact } from "@/app/actions/artifact.action"
-import { useArtifactEditData, useUpdateArtifactMutation } from "@/hooks/useArtifact"
+import { useArtifactEditData, useUpdateArtifactMutation, useCreateArtifact } from "@/hooks/useArtifact"
+import { useAssistantContacts } from "@/hooks/useContacts"
 import { useChatHistory } from "@/hooks/useChatHistory"
 
 interface CreateArtifactDialogProps {
@@ -34,9 +34,10 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
   const [templateHtml, setTemplateHtml] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [contacts, setContacts] = useState<Contact[]>([])
-  const [loadingContacts, setLoadingContacts] = useState(false)
   const { chats, isLoading: isLoadingChatwithAssistant, error: chatError } = useChatHistory({ mode: "assistant", assistantId: assistantId })
+
+  // Fetch contacts using the hook
+  const { contacts, isLoading: loadingContacts } = useAssistantContacts(assistantId, { enabled: open })
 
   const [formData, setFormData] = useState<ArtifactFormData>({
     templateId: "",
@@ -58,6 +59,17 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
     editArtifactId || "",
     { enabled: open && isEditMode && Boolean(editArtifactId) }
   )
+
+  // Create artifact mutation
+  const { createArtifactAsync, isCreating } = useCreateArtifact({
+    onSuccess: (artifactId) => {
+      onOpenChange(false)
+      // Navigate to the artifact page to see streaming generation
+      if (selectedTemplate?.category !== "video_generation") {
+        router.push(`/assistants/${assistantId}/artifacts/${artifactId}`)
+      }
+    }
+  })
 
   // Update artifact mutation for edit mode
   const { updateArtifact, isLoading: isUpdating } = useUpdateArtifactMutation({
@@ -111,32 +123,6 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
     }
   }, [isEditMode, editData, open, loadingContacts, contacts.length])
 
-  // Fetch contacts when dialog opens
-  useEffect(() => {
-    const fetchContacts = async () => {
-      if (open && assistantId) {
-        console.log("[Dialog] Fetching contacts for assistant:", assistantId)
-        setLoadingContacts(true)
-        try {
-          const result = await getAssistantContacts(assistantId)
-          if (result.success) {
-            console.log("[Dialog] Contacts loaded successfully:", result.contacts.length, "contacts")
-            setContacts(result.contacts)
-          } else {
-            console.error('Failed to fetch contacts:', result.error)
-            toast.error('Failed to load contacts')
-          }
-        } catch (error) {
-          console.error('Error fetching contacts:', error)
-          toast.error('Failed to load contacts')
-        } finally {
-          setLoadingContacts(false)
-        }
-      }
-    }
-
-    fetchContacts()
-  }, [open, assistantId])
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -159,12 +145,10 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
           })
         }
         setErrors({})
-        // Only clear contacts when dialog closes, NOT when it opens
-        setContacts([])
       }, 200)
     } else if (open && isEditMode) {
-      // When opening in edit mode, prepare for edit data load (don't clear contacts!)
-      console.log("[Dialog] Opening in edit mode, keeping contacts for user selection")
+      // When opening in edit mode, prepare for edit data load
+      console.log("[Dialog] Opening in edit mode")
     }
   }, [open, isEditMode])
 
@@ -255,45 +239,31 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
         // Create mode - create new artifact
         toast.loading("Generating artifact...", { id: "artifact-creation" })
 
-        const result = await createArtifact({
+        await createArtifactAsync({
           assistantId: assistantId,
           name: formData.name,
           instructions: formData.instructions,
           category: selectedTemplate?.category || 'others',
-          permissions: formData.permissions,
+          permissions: formData.permissions as "private" | "team" | "public",
           selectedUsers: formData.selectedUsers,
           apiConfigs: formData.apiConfigs.map(config => ({
             key: config.key,
             value: config.value
           })),
-          uploadedFiles: formData.uploadedFiles,
-          uploadedImages: formData.uploadedImages,
-          videoDuration: selectedTemplate?.category === "video_generation" ? formData.videoDuration : undefined,
+          uploadedFiles: formData.uploadedFiles || [],
+          uploadedImages: formData.uploadedImages || [],
+          videoDuration: selectedTemplate?.category === "video_generation" ? formData.videoDuration as "4" | "8" | "12" : undefined,
           selectedChatId: formData.selectedChatId || null,
           templateHtml: templateHtml || undefined,
           bookingConfig: formData.bookingConfig,
         })
 
         toast.dismiss("artifact-creation")
-
-        if (result.success) {
-          toast.success("Artifact created successfully!")
-          onOpenChange(false)
-
-          // Navigate to the artifact page to see streaming generation
-          if (result.artifact) {
-            if (selectedTemplate?.category !== "video_generation") {
-              router.push(`/assistants/${assistantId}/artifacts/${result.artifact.id}`)
-            }
-          }
-        } else {
-          toast.error(result.error || "Failed to create artifact")
-        }
       }
     } catch (error) {
       toast.dismiss("artifact-creation")
       console.error(`Error ${isEditMode ? 'updating' : 'creating'} artifact:`, error)
-      toast.error("An unexpected error occurred")
+      // Error toast is already shown by the hook
     } finally {
       setIsSubmitting(false)
     }

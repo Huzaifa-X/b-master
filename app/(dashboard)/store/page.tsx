@@ -9,8 +9,7 @@ import { Search, Plus, Bot, Loader2, CheckCircle2, XCircle } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { useAssistants } from "@/hooks/useAssistants"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { getAssistants } from "@/app/actions/assistant.action"
+import { useInvalidateAssistants } from "@/hooks/useAssistants"
 import { useDebounce } from "@/hooks/useDebounce"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PurchaseAssistantDialog } from "@/components/assistants/purchase-assistant-dialog"
@@ -42,13 +41,13 @@ interface Assistant {
 export default function StorePage() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const queryClient = useQueryClient()
+    const invalidateAssistants = useInvalidateAssistants()
     const [activeTab, setActiveTab] = useState<"marketplace" | "my">("marketplace")
     const [searchQuery, setSearchQuery] = useState("")
     const debouncedSearch = useDebounce(searchQuery, 500)
     const [selectedAssistant, setSelectedAssistant] = useState<Assistant | null>(null)
     const [isDialogOpen, setIsDialogOpen] = useState(false)
-    
+
     // Success/Cancel dialog states
     const [showSuccessDialog, setShowSuccessDialog] = useState(false)
     const [showCancelDialog, setShowCancelDialog] = useState(false)
@@ -68,27 +67,15 @@ export default function StorePage() {
 
     // For "Marketplace Assistants" tab - get public assistants
     const {
-        data: marketplaceData,
+        assistants: marketplaceAssistants,
         isLoading: isLoadingMarketplace,
         isError: isErrorMarketplace,
         error: errorMarketplace,
-    } = useQuery({
-        queryKey: ["assistants", "public", debouncedSearch],
-        queryFn: async () => {
-            const result = await getAssistants({
-                type: "public",
-                search: debouncedSearch,
-                limit: 100,
-            })
-            if (!result.success) {
-                throw new Error(result.error || "Failed to fetch assistants")
-            }
-            return result
-        },
-        staleTime: 2 * 60 * 1000, // 2 minutes
+    } = useAssistants({
+        type: "public",
+        search: debouncedSearch,
+        limit: 100,
     })
-
-    const marketplaceAssistants = marketplaceData?.assistants || []
 
     const getCurrentAssistants = () => {
         switch (activeTab) {
@@ -118,7 +105,7 @@ export default function StorePage() {
                 setProcessingPayment(false)
                 setShowSuccessDialog(true)
                 // Invalidate queries to refresh the lists
-                queryClient.invalidateQueries({ queryKey: ["assistants"] })
+                invalidateAssistants()
                 // Clean URL
                 router.replace("/store", { scroll: false })
             }, 2000)
@@ -128,7 +115,7 @@ export default function StorePage() {
             // Clean URL
             router.replace("/store", { scroll: false })
         }
-    }, [searchParams, queryClient, router])
+    }, [searchParams, invalidateAssistants, router])
 
     // Reset search when tab changes
     useEffect(() => {
@@ -201,7 +188,7 @@ export default function StorePage() {
                         <Bot className="h-16 w-16 mx-auto mb-4 text-destructive" />
                         <h3 className="text-lg font-semibold mb-2">Error loading assistants</h3>
                         <p className="text-sm text-muted-foreground mb-4">
-                            {typeof error === "string" ? error : error?.message || "Something went wrong"}
+                            {error || "Something went wrong"}
                         </p>
                     </div>
                 )}
@@ -268,7 +255,7 @@ export default function StorePage() {
             />
 
             {/* Processing Payment Dialog */}
-            <Dialog open={processingPayment} onOpenChange={() => {}}>
+            <Dialog open={processingPayment} onOpenChange={() => { }}>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader className="text-center">
                         <Loader2 className="h-16 w-16 mx-auto mb-4 animate-spin text-[#BDA76D]" />
@@ -287,7 +274,7 @@ export default function StorePage() {
                         <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-green-500" />
                         <DialogTitle className="text-2xl">Purchase Successful!</DialogTitle>
                         <DialogDescription className="text-base pt-2">
-                            Congratulations! Your assistant purchase is complete. 
+                            Congratulations! Your assistant purchase is complete.
                             The assistant has been added to your collection.
                         </DialogDescription>
                     </DialogHeader>

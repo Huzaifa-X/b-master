@@ -24,8 +24,7 @@ import { useRouter } from "next/navigation"
 import { PresignedNextImage } from "@/components/ui/presigned-next-image"
 import { useSession } from "next-auth/react"
 import { useAssistantPermissions } from "@/hooks/usePermissions"
-import { hardDeleteAssistant } from "@/app/actions/assistant.action"
-import { toast } from "sonner"
+import { useHardDeleteAssistant } from "@/hooks/useAssistantMutations"
 
 interface Assistant {
   id: string
@@ -52,11 +51,18 @@ export function AssistantDetailsDialog({
   const router = useRouter()
   const { data: session } = useSession()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-  
+
   // Check permissions to see if user can edit/delete
   const { permissions } = useAssistantPermissions(assistant?.id || null)
   const canEdit = permissions?.access === 'admin' || permissions?.isOwner
+
+  // Delete assistant mutation
+  const { deleteAssistantAsync, isDeleting } = useHardDeleteAssistant({
+    onSuccess: () => {
+      onOpenChange(false)
+      router.push("/assistants")
+    }
+  })
 
   if (!assistant) return null
 
@@ -77,24 +83,8 @@ export function AssistantDetailsDialog({
   const handleDeleteConfirm = async () => {
     if (!assistant?.id) return
 
-    setIsDeleting(true)
-    try {
-      const result = await hardDeleteAssistant(assistant.id)
-      
-      if (result.success) {
-        toast.success("Assistant deleted successfully")
-        onOpenChange(false)
-        router.push("/assistants")
-      } else {
-        toast.error(result.error || "Failed to delete assistant")
-      }
-    } catch (error) {
-      console.error("Error deleting assistant:", error)
-      toast.error("An error occurred while deleting the assistant")
-    } finally {
-      setIsDeleting(false)
-      setShowDeleteDialog(false)
-    }
+    await deleteAssistantAsync(assistant.id)
+    setShowDeleteDialog(false)
   }
 
   return (
@@ -106,7 +96,7 @@ export function AssistantDetailsDialog({
             {canEdit ? "View or edit your assistant information" : "View assistant information"}
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-4 sm:space-y-6 py-2 sm:py-4">
           {/* Logo */}
           <div className="flex justify-center">
@@ -200,7 +190,7 @@ export function AssistantDetailsDialog({
           </div>
         </div>
       </DialogContent>
-      
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent className="w-[95vw] max-w-[500px] mx-4 sm:mx-auto">

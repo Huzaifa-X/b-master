@@ -1,7 +1,7 @@
 "use client"
 
-import { useQuery } from "@tanstack/react-query"
-import { getCurrentSubscription } from "@/app/actions/subscription.action"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { getCurrentSubscription, cancelSubscription, getPlans, createCheckoutSession } from "@/app/actions/subscription.action"
 
 export interface SubscriptionWithPlan {
   id: number
@@ -24,7 +24,60 @@ export interface SubscriptionWithPlan {
   }
 }
 
+export interface Plan {
+  id: number
+  title: string
+  description: string | null
+  amount: number
+  currency: string
+  period: string
+  features: string[]
+  isActive: boolean
+}
+
+// Query keys for React Query cache management
+const SUBSCRIPTION_KEYS = {
+  all: ["subscription"] as const,
+  current: () => [...SUBSCRIPTION_KEYS.all, "current"] as const,
+  plans: () => [...SUBSCRIPTION_KEYS.all, "plans"] as const,
+}
+
+/**
+ * Hook to fetch all available subscription plans
+ */
+export function usePlans() {
+  const {
+    data: plans,
+    isLoading: loading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: SUBSCRIPTION_KEYS.plans(),
+    queryFn: async () => {
+      return await getPlans()
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes - plans don't change often
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    retry: 2,
+    refetchOnWindowFocus: false,
+  })
+
+  return {
+    plans: plans || [],
+    loading,
+    isError,
+    error: error instanceof Error ? error.message : null,
+    refetch,
+  }
+}
+
+/**
+ * Hook to manage user's subscription
+ */
 export function useSubscription() {
+  const queryClient = useQueryClient()
+
   const {
     data: subscription,
     isLoading: loading,
@@ -32,7 +85,7 @@ export function useSubscription() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["subscription", "current"],
+    queryKey: SUBSCRIPTION_KEYS.current(),
     queryFn: async () => {
       const data = await getCurrentSubscription()
       return data as SubscriptionWithPlan | null
@@ -43,12 +96,67 @@ export function useSubscription() {
     refetchOnWindowFocus: false,
   })
 
+  // Mutation for canceling subscription
+  const cancelSubscriptionMutation = useMutation({
+    mutationFn: async () => {
+      const result = await cancelSubscription()
+      if (!result.success) {
+        throw new Error(result.error || "Failed to cancel subscription")
+      }
+      return result
+    },
+    onSuccess: () => {
+      // Invalidate and refetch subscription queries
+      queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEYS.current() })
+    },
+  })
+
+  // Mutation for creating checkout session
+  const createCheckoutMutation = useMutation({
+    mutationFn: async (planId: number) => {
+      const result = await createCheckoutSession(planId)
+      if (!result.success) {
+        throw new Error(result.error || "Failed to create checkout session")
+      }
+      return result
+    },
+    onSuccess: () => {
+      // Invalidate subscription queries as user might have a new subscription
+      queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEYS.current() })
+    },
+  })
+
   return {
     subscription: subscription || null,
     loading,
     isError,
     error: error instanceof Error ? error.message : null,
     refetch,
+
+    // Mutation for canceling subscription
+    cancelSubscription: async () => {
+      try {
+        const result = await cancelSubscriptionMutation.mutateAsync()
+        return result
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    },
+
+    // Mutation state for cancel
+    isCanceling: cancelSubscriptionMutation.isPending,
+
+    // Mutation for creating checkout session
+    createCheckout: async (planId: number) => {
+      try {
+        const result = await createCheckoutMutation.mutateAsync(planId)
+        return result
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    },
+
+    // Mutation state for checkout
+    isCreatingCheckout: createCheckoutMutation.isPending,
   }
 }
-

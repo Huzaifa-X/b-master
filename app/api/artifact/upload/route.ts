@@ -6,7 +6,7 @@ import { uploadToS3, validateFileSize } from "@/lib/aws-s3";
 import upstageService from "@/lib/services/upstageService";
 
 export const runtime = "nodejs";
-export const maxDuration = 60; // Extended timeout for file processing
+export const maxDuration = 300; // 5 minutes timeout for large document processing (100+ pages)
 
 export async function POST(request: NextRequest) {
   try {

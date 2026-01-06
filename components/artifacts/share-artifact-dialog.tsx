@@ -8,8 +8,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { User, Search, Loader2, Share2 } from "lucide-react"
 import { useAssistantContacts } from "@/hooks/useContacts"
-import { toast } from "sonner"
-import { shareArtifact } from "@/app/actions/artifact.action"
+import { useShareArtifact } from "@/hooks/useArtifact"
 
 interface Contact {
   id: string
@@ -32,17 +31,24 @@ interface ShareArtifactDialogProps {
   assistantId: string
 }
 
-export function ShareArtifactDialog({ 
-  open, 
-  onOpenChange, 
-  artifactId, 
+export function ShareArtifactDialog({
+  open,
+  onOpenChange,
+  artifactId,
   artifactName,
-  assistantId 
+  assistantId
 }: ShareArtifactDialogProps) {
   const [searchQuery, setSearchQuery] = useState("")
-  const [isSharing, setIsSharing] = useState(false)
   const { data: session } = useSession()
   const { contacts, isLoading } = useAssistantContacts(assistantId, { enabled: open })
+
+  // Share artifact mutation
+  const { shareArtifactAsync, isSharing } = useShareArtifact({
+    onSuccess: () => {
+      onOpenChange(false)
+      setSearchQuery("")
+    }
+  })
 
   // Filter out current user from contacts
   const filteredContacts = useMemo(() => {
@@ -62,30 +68,14 @@ export function ShareArtifactDialog({
 
   const handleShare = async (contact: typeof contacts[0]) => {
     const userId = contact.userId || contact.contactId
-    setIsSharing(true)
 
-    try {
-      const result = await shareArtifact({
-        artifactId,
-        artifactName,
-        assistantId,
-        recipientUserId: userId,
-        recipientName: contact.name,
-      })
-
-      if (result.success) {
-        toast.success(`Artifact shared with ${contact.name}!`)
-        onOpenChange(false)
-        setSearchQuery("")
-      } else {
-        toast.error(result.error || "Failed to share artifact")
-      }
-    } catch (error) {
-      console.error("Error sharing artifact:", error)
-      toast.error("Failed to share artifact. Please try again.")
-    } finally {
-      setIsSharing(false)
-    }
+    await shareArtifactAsync({
+      artifactId,
+      artifactName,
+      assistantId,
+      recipientUserId: userId,
+      recipientName: contact.name,
+    })
   }
 
   return (

@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useSession } from "next-auth/react"
-import { getCurrentUser, updateUserProfile } from "@/app/actions/user.action"
+import { getCurrentUser, updateUserProfile, searchUsersForMention } from "@/app/actions/user.action"
 import { toast } from "sonner"
 
 interface UserData {
@@ -43,7 +43,7 @@ export function useUser(): UseUserReturn {
     queryKey: USER_QUERY_KEY,
     queryFn: async () => {
       const result = await getCurrentUser()
-      
+
       if (result.success && result.user) {
         return result.user as UserData
       } else {
@@ -95,7 +95,7 @@ export function useUser(): UseUserReturn {
     onSuccess: async (updatedUser) => {
       // Invalidate and refetch user data everywhere
       await queryClient.invalidateQueries({ queryKey: USER_QUERY_KEY })
-      
+
       // Update NextAuth session so sidebar updates
       if (updatedUser) {
         await updateSession({
@@ -114,7 +114,7 @@ export function useUser(): UseUserReturn {
       if (context?.previousUser) {
         queryClient.setQueryData(USER_QUERY_KEY, context.previousUser)
       }
-      
+
       toast.error(error instanceof Error ? error.message : "Failed to update profile")
     },
   })
@@ -136,6 +136,61 @@ export function useUser(): UseUserReturn {
     refetch: () => refetch(),
     updateProfile,
     isUpdating: mutation.isPending,
+  }
+}
+
+interface MentionUser {
+  id: string
+  name: string
+  email: string
+  image: string | null
+}
+
+interface UseSearchUsersForMentionResult {
+  users: MentionUser[]
+  isLoading: boolean
+  isError: boolean
+  error: Error | null
+}
+
+/**
+ * Hook to search users for mention in assistant chat
+ * @param assistantId - The ID of the assistant
+ * @param searchTerm - The search term to filter users
+ * @param options - Optional configuration
+ */
+export function useSearchUsersForMention(
+  assistantId: string | null | undefined,
+  searchTerm: string = "",
+  options?: {
+    enabled?: boolean
+  }
+): UseSearchUsersForMentionResult {
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["mentionUsers", assistantId, searchTerm],
+    queryFn: async () => {
+      if (!assistantId) {
+        return []
+      }
+
+      const users = await searchUsersForMention(assistantId, searchTerm)
+      return users as MentionUser[]
+    },
+    enabled: (options?.enabled ?? true) && !!assistantId,
+    staleTime: 30 * 1000, // 30 seconds
+    retry: 1,
+  })
+
+  return {
+    users: data || [],
+    isLoading,
+    isError,
+    error: error as Error | null,
   }
 }
 

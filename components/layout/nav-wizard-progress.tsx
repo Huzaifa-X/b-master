@@ -4,7 +4,6 @@ import { Check, ArrowLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWizardStore } from "@/lib/stores/wizard-store"
 import { SidebarGroup, SidebarGroupLabel, SidebarMenuButton, useSidebar } from "@/components/ui/sidebar"
-import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -82,8 +81,8 @@ export function NavWizardProgress() {
                           isCurrent
                             ? "border-primary bg-primary text-primary-foreground"
                             : isCompleted
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-muted-foreground/30 bg-background text-muted-foreground"
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-muted-foreground/30 bg-background text-muted-foreground"
                         )}
                       >
                         {isCompleted ? (

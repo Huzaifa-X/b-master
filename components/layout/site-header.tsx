@@ -10,8 +10,7 @@ import { useAssistantStore } from "@/lib/stores/assistant-store"
 import { usePathname } from "next/navigation"
 import { usePinnedAssistants } from "@/hooks/usePinnedAssistants"
 import { useMemo } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { getSpecificChat } from "@/app/actions/chat.action"
+import { useSpecificChat } from "@/hooks/useSpecificChat"
 import { Skeleton } from "../ui/skeleton"
 
 export function SiteHeader() {
@@ -25,8 +24,8 @@ export function SiteHeader() {
     // For ask-b: /ask-b/[id]
     if (pathname.startsWith("/ask-b/")) {
       const parts = pathname.split("/ask-b/")
-      return { 
-        chatId: parts[1] || null, 
+      return {
+        chatId: parts[1] || null,
         assistantIdFromPath: null,
         isChatPage: !!parts[1]
       }
@@ -38,7 +37,7 @@ export function SiteHeader() {
       const nonChatRoutes = ["contacts", "messages", "news", "artifacts", "add", "profile"]
       const thirdSegment = parts.length >= 4 ? parts[3] : null
       const isChat = thirdSegment && !nonChatRoutes.includes(thirdSegment)
-      
+
       return {
         chatId: isChat ? thirdSegment : null,
         assistantIdFromPath: parts.length >= 3 ? parts[2] : null,
@@ -54,13 +53,8 @@ export function SiteHeader() {
   const isAssistantAddPage = pathname.startsWith("/assistants/add") || pathname.startsWith("/assistants/new") || (pathname.startsWith("/assistants/") && pathname.includes("/edit"))
 
   // Fetch chat data if chat ID exists
-  const { data: chatData } = useQuery({
-    queryKey: ["chat-header", chatId],
-    queryFn: async () => {
-      if (!chatId || chatId.trim() === '') return null
-      const result = await getSpecificChat(chatId)
-      return result.success ? result.chat : null
-    },
+  const { data: chatData } = useSpecificChat({
+    chatId,
     enabled: !!chatId && chatId.trim() !== '',
     staleTime: 1000 * 5, // 5 seconds - update more frequently for topic changes
     refetchInterval: 1000 * 10, // Refetch every 10 seconds to catch topic updates

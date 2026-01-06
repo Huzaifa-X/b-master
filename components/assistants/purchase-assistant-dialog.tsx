@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -11,9 +10,8 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Loader2, ShoppingCart } from "lucide-react"
-import { toast } from "sonner"
 import Image from "next/image"
-import { purchaseAssistant } from "@/app/actions/assistant.action"
+import { usePurchaseAssistant } from "@/hooks/useAssistantMutations"
 
 interface Assistant {
   id: string
@@ -35,27 +33,12 @@ export function PurchaseAssistantDialog({
   onOpenChange,
   assistant,
 }: PurchaseAssistantDialogProps) {
-  const [isPurchasing, setIsPurchasing] = useState(false)
+  const { purchaseAssistant, isPurchasing } = usePurchaseAssistant()
 
   if (!assistant) return null
 
-  const handlePurchase = async () => {
-    try {
-      setIsPurchasing(true)
-      const result = await purchaseAssistant(assistant.id)
-
-      if (result.success && result.url) {
-        // Redirect to Stripe Checkout
-        window.location.href = result.url
-      } else {
-        toast.error(result.error || "Failed to initiate purchase")
-        setIsPurchasing(false)
-      }
-    } catch (error: any) {
-      console.error("Error purchasing assistant:", error)
-      toast.error(error.message || "Something went wrong")
-      setIsPurchasing(false)
-    }
+  const handlePurchase = () => {
+    purchaseAssistant(assistant.id)
   }
 
   return (

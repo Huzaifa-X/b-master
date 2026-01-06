@@ -1,12 +1,11 @@
 "use client"
 
-import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { CreditCard, FileText, XCircle, Loader2 } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { FileText, XCircle, Loader2 } from "lucide-react"
 import { useSubscription } from "@/hooks/useSubscription"
 import { useInvoices } from "@/hooks/useInvoices"
-import { cancelSubscription } from "@/app/actions/subscription.action"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import {
@@ -23,9 +22,13 @@ import {
 
 export default function BillingTab() {
   const router = useRouter()
-  const { subscription, loading: subscriptionLoading, refetch: refetchSubscription } = useSubscription()
+  const {
+    subscription,
+    loading: subscriptionLoading,
+    cancelSubscription,
+    isCanceling
+  } = useSubscription()
   const { invoices, loading: invoicesLoading } = useInvoices()
-  const [isCanceling, setIsCanceling] = useState(false)
 
   const handleAdjustPlan = () => {
     router.push("/pricing")
@@ -33,20 +36,16 @@ export default function BillingTab() {
 
   const handleCancelSubscription = async () => {
     try {
-      setIsCanceling(true)
       const result = await cancelSubscription()
 
       if (result.success) {
         toast.success(result.message || "Subscription canceled successfully")
-        refetchSubscription()
       } else {
         toast.error(result.error || "Failed to cancel subscription")
       }
     } catch (error: any) {
       console.error("Error canceling subscription:", error)
       toast.error(error.message || "Something went wrong")
-    } finally {
-      setIsCanceling(false)
     }
   }
 
@@ -92,9 +91,16 @@ export default function BillingTab() {
         {/* Current Plan Card */}
         <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50">
           {subscriptionLoading ? (
-            <div className="flex items-center gap-4">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Loading subscription...</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Skeleton className="w-12 h-12 rounded-lg" />
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+              </div>
+              <Skeleton className="h-9 w-24" />
             </div>
           ) : subscription ? (
             <div className="flex items-center justify-between">
@@ -196,8 +202,15 @@ export default function BillingTab() {
             </div>
 
             {invoicesLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="space-y-3 mt-3">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="grid grid-cols-4 gap-4">
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                ))}
               </div>
             ) : invoices.length > 0 ? (
               <div className="overflow-hidden">
@@ -286,7 +299,7 @@ export default function BillingTab() {
 
         {/* Already Canceled Card */}
         {subscription && subscription.cancelAtPeriodEnd && (
-          <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50 border-yellow-500/50">
+          <Card className="p-6 bg-transparent backdrop-blur-sm border-yellow-500/50">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-lg bg-yellow-500/10 flex items-center justify-center">

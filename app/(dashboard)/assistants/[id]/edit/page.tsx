@@ -1,107 +1,15 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { AssistantWizard } from "@/app/(dashboard)/assistants/add/_components/assistant-wizard"
-import { getAssistantForEdit } from "@/app/actions/assistant.action"
-import { AssistantFormData } from "@/types/assistant"
+import { useAssistantForEdit } from "@/hooks/useAssistant"
 import { Loader2 } from "lucide-react"
-import { toast } from "sonner"
 
 export default function EditAssistantPage() {
   const params = useParams()
   const assistantId = params.id as string
-  const [initialData, setInitialData] = useState<AssistantFormData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const fetchAssistantData = async () => {
-      if (!assistantId) {
-        setError("Assistant ID is required")
-        setIsLoading(false)
-        return
-      }
-
-      try {
-        setIsLoading(true)
-        const result = await getAssistantForEdit(assistantId)
-
-        if (!result.success || !result.assistant) {
-          setError(result.error || "Failed to load assistant data")
-          console.log(result.error || "Failed to load assistant data")
-          setIsLoading(false)
-          return
-        }
-
-        const assistant = result.assistant
-
-        // Process file URLs to match new structure
-        const fileURLs: Array<{ url: string; fileName: string; fileSize: number }> = []
-        if (assistant.files && Array.isArray(assistant.files) && assistant.files.length > 0) {
-          // Map file URLs to new structure
-          for (const fileInfo of assistant.files) {
-            // Clean up the file name (remove timestamp prefix)
-            let fileName = fileInfo.name || 'file'
-            fileName = fileName.replace(/^\d+_/, '') // Remove timestamp_ prefix
-            fileName = fileName.replace(/^\d+-/, '') // Remove timestamp- prefix
-
-            fileURLs.push({
-              url: fileInfo.url,
-              fileName: fileName,
-              fileSize: 0 // Size unknown from URL, but not critical for display
-            })
-          }
-          console.log(`Loaded ${fileURLs.length} file URL${fileURLs.length > 1 ? 's' : ''}`)
-        }
-
-        // Map the fetched data to AssistantFormData format
-        const formData: AssistantFormData = {
-          name: assistant.name,
-          price: assistant.price,
-          category: assistant.category as any,
-          description: assistant.description,
-          imagePreview: assistant.imageURL, // Use imageURL for preview
-          imageURL: assistant.imageURL,
-          notes: assistant.notes || [],
-          urls: assistant.urls || [],
-          fileURLs: fileURLs, // Use new fileURLs structure
-          instructions: assistant.instructions || "",
-          authenticationType: (assistant.apiConfiguration?.authenticationType || "none") as "none" | "api_key" | "oauth",
-          apiKey: assistant.apiConfiguration?.apiKey || "",
-          authType: (assistant.apiConfiguration?.authType || "basic") as "basic" | "bearer" | "custom" | undefined,
-          customHeaderName: assistant.apiConfiguration?.customHeaderName || "",
-          clientId: assistant.apiConfiguration?.clientId || "",
-          clientSecret: assistant.apiConfiguration?.clientSecret || "",
-          authorizationUrl: assistant.apiConfiguration?.authorizationUrl || "",
-          tokenUrl: assistant.apiConfiguration?.tokenUrl || "",
-          scope: assistant.apiConfiguration?.scope || "",
-          tokenExchangeMethod: (assistant.apiConfiguration?.tokenExchangeMethod || "post") as "post" | "basic_auth" | undefined,
-          schema: assistant.apiConfiguration?.schema || null,
-          schemaText: assistant.apiConfiguration?.schemaText || "",
-          permissionLevel: (assistant.permissionLevel === "public" ? "public" : "private") as "private" | "public",
-          sharedUsers: assistant.sharedUsers || [],
-          buyerPermissions: assistant.buyerPermissions || {
-            chat: false,
-            contact: false,
-            messenger: false,
-            artifact: false,
-            newsFeed: false,
-          },
-        }
-
-        setInitialData(formData)
-      } catch (err) {
-        console.error("Error fetching assistant:", err)
-        setError("Failed to load assistant data")
-        toast.error("Failed to load assistant data")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchAssistantData()
-  }, [assistantId])
+  const { assistantData, isLoading, isError, error } = useAssistantForEdit(assistantId)
 
   if (isLoading) {
     return (
@@ -114,12 +22,12 @@ export default function EditAssistantPage() {
     )
   }
 
-  if (error || !initialData) {
+  if (isError || !assistantData) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center">
           <p className="text-lg font-semibold mb-2">Error</p>
-          <p className="text-sm text-muted-foreground">{error || "Failed to load assistant data"}</p>
+          <p className="text-sm text-muted-foreground">{error?.message || "Failed to load assistant data"}</p>
         </div>
       </div>
     )
@@ -133,13 +41,13 @@ export default function EditAssistantPage() {
           <h1 className="text-2xl font-medium">Edit Assistant</h1>
         </div>
       </div>
-      
+
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="container mx-auto px-4 py-8 max-w-4xl pb-16">
-          <AssistantWizard 
+          <AssistantWizard
             assistantId={assistantId}
-            initialData={initialData}
+            initialData={assistantData}
             mode="edit"
           />
         </div>

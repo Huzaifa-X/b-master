@@ -14,9 +14,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useQuery } from "@tanstack/react-query"
-import { getArtifactVersions, setActiveArtifactVersion } from "@/app/actions/artifact.action"
-import { toast } from "sonner"
+import { useArtifactVersions, useSetActiveVersion } from "@/hooks/useArtifact"
 import { cn } from "@/lib/utils"
 
 interface VersionHistoryDialogProps {
@@ -49,59 +47,38 @@ export function VersionHistoryDialog({
   disabled = false,
 }: VersionHistoryDialogProps) {
   const [open, setOpen] = useState(false)
-  const [settingActiveVersion, setSettingActiveVersion] = useState<string | null>(null)
 
-  // Fetch versions using React Query
+  // Fetch versions using the hook
   const {
-    data: versionsData,
+    versions,
+    activeVersionId,
     isLoading,
+    isError,
     error,
     refetch,
-  } = useQuery({
-    queryKey: ["artifactVersions", artifactId],
-    queryFn: async () => {
-      const result = await getArtifactVersions(artifactId)
-      if (!result.success) {
-        throw new Error(result.error || "Failed to fetch versions")
-      }
-      return result
-    },
-    enabled: open, // Only fetch when dialog is open
+  } = useArtifactVersions(artifactId, { enabled: open })
+
+  // Set active version mutation
+  const { setActiveVersion, isLoading: isSettingActive } = useSetActiveVersion({
+    onSuccess: () => {
+      refetch()
+    }
   })
 
-  const versions = (versionsData?.versions || []) as ArtifactVersion[]
-  const activeVersionId = versionsData?.activeVersionId
-
   const handleVersionClick = async (version: ArtifactVersion) => {
-    try {
-      // If selecting a different version than the active one, set it as active
-      if (!version.isActive) {
-        setSettingActiveVersion(version.id)
-        const result = await setActiveArtifactVersion(artifactId, version.id)
-        
-        if (!result.success) {
-          toast.error(result.error || "Failed to set active version")
-          setSettingActiveVersion(null)
-          return
-        }
-
-        toast.success(`Version ${version.versionNumber} is now active`)
-        
-        // Refetch versions to update active status
-        await refetch()
-        setSettingActiveVersion(null)
-      }
-
-      // Call the callback to update the preview
-      onVersionSelect?.(version.code, version.id)
-      
-      // Close the dialog
-      setOpen(false)
-    } catch (error) {
-      console.error("Error selecting version:", error)
-      toast.error("Failed to select version")
-      setSettingActiveVersion(null)
+    // If selecting a different version than the active one, set it as active
+    if (!version.isActive) {
+      setActiveVersion({
+        artifactId,
+        versionId: version.id
+      })
     }
+
+    // Call the callback to update the preview
+    onVersionSelect?.(version.code, version.id)
+
+    // Close the dialog
+    setOpen(false)
   }
 
   const getChangeTypeBadge = (changeType: string) => {
@@ -110,9 +87,9 @@ export function VersionHistoryDialog({
       ai: { variant: "secondary", label: "AI Generated" },
       rollback: { variant: "outline", label: "Rollback" },
     }
-    
+
     const config = variants[changeType] || variants.manual
-    
+
     return (
       <Badge variant={config.variant} className="text-xs">
         {config.label}
@@ -131,7 +108,7 @@ export function VersionHistoryDialog({
     if (diffMins < 60) return `${diffMins}m ago`
     if (diffHours < 24) return `${diffHours}h ago`
     if (diffDays < 7) return `${diffDays}d ago`
-    
+
     return new Date(date).toLocaleDateString()
   }
 
@@ -164,7 +141,7 @@ export function VersionHistoryDialog({
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : error ? (
+          ) : isError ? (
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
               <p className="text-sm text-destructive">Failed to load versions</p>
               <Button onClick={() => refetch()} variant="outline" size="sm">
@@ -185,7 +162,7 @@ export function VersionHistoryDialog({
                     className={cn(
                       "group relative rounded-lg border p-4 transition-all hover:border-primary/50 hover:bg-accent/50 cursor-pointer",
                       version.isActive && "border-primary bg-accent/30",
-                      settingActiveVersion === version.id && "opacity-50 pointer-events-none"
+                      isSettingActive && "opacity-50 pointer-events-none"
                     )}
                     onClick={() => handleVersionClick(version)}
                   >
@@ -241,9 +218,10 @@ export function VersionHistoryDialog({
                         </div>
                       </div>
 
+
                       {/* Right side: Action indicator */}
                       <div className="flex items-center">
-                        {settingActiveVersion === version.id ? (
+                        {isSettingActive ? (
                           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                         ) : (
                           <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />

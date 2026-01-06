@@ -3,7 +3,6 @@
 import {
   MoreHorizontal,
   Pin,
-  Loader2,
 } from "lucide-react"
 
 import {
@@ -25,6 +24,7 @@ import Link from "next/link"
 import { usePinnedAssistants } from "@/hooks/usePinnedAssistants"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export function NavListDefault() {
   const { isMobile } = useSidebar()
@@ -32,7 +32,7 @@ export function NavListDefault() {
 
   const handleUnpin = async (assistantId: string, e: React.MouseEvent) => {
     e.preventDefault()
-    await unpinAssistant(assistantId)
+    unpinAssistant(assistantId)
   }
 
   if (loading) {
@@ -40,12 +40,15 @@ export function NavListDefault() {
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
         <SidebarGroupLabel>Assistants</SidebarGroupLabel>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton disabled>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Loading...</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {/* Show 3 skeleton items while loading */}
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SidebarMenuItem key={i}>
+              <SidebarMenuButton disabled>
+                <Skeleton className="h-5 w-5 rounded-full" />
+                <Skeleton className="h-4 flex-1" />
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
         </SidebarMenu>
       </SidebarGroup>
     )
@@ -88,7 +91,7 @@ export function NavListDefault() {
                   side={isMobile ? "bottom" : "right"}
                   align={isMobile ? "end" : "start"}
                 >
-                  <DropdownMenuItem 
+                  <DropdownMenuItem
                     className="text-muted-foreground focus:!text-muted-foreground focus:!bg-muted cursor-pointer"
                     onClick={(e) => handleUnpin(assistant.id, e)}
                   >

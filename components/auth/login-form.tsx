@@ -10,14 +10,14 @@ import {
   FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Eye, EyeOff, Loader2 } from "lucide-react"
 import Link from "next/link"
 // import Image from "next/image" // COMMENTED OUT - Google provider disabled
 import { useRouter, useSearchParams } from "next/navigation"
 import { signIn } from "next-auth/react"
 import { loginSchema, LoginInput } from "@/lib/validations/auth"
-import { resendVerificationEmail } from "@/app/actions/auth.actions"
+import { useResendVerificationEmail } from "@/hooks/useAuth"
 import { toast } from "sonner"
 
 export function LoginForm({
@@ -27,6 +27,9 @@ export function LoginForm({
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get("callbackUrl") || "/home"
+
+  // Use the resend verification email hook
+  const { mutate: resendVerification } = useResendVerificationEmail()
 
   const [formData, setFormData] = useState<LoginInput>({
     email: "",
@@ -128,24 +131,16 @@ export function LoginForm({
     }
   }
 
-  async function handleResendVerification(email: string) {
-    try {
-      const result = await resendVerificationEmail(email)
-
-      if (result.success) {
-        toast.success("Verification email sent!", {
-          description: "Please check your inbox",
-        })
-        // Store email and redirect to verification page
-        sessionStorage.setItem("verification_email", email)
-        router.push(`/verify-email?email=${encodeURIComponent(email)}`)
-      } else {
-        toast.error(result.error || "Failed to resend verification email")
+  function handleResendVerification(email: string) {
+    resendVerification(email, {
+      onSuccess: (result) => {
+        if (result.success) {
+          // Store email and redirect to verification page
+          sessionStorage.setItem("verification_email", email)
+          router.push(`/verify-email?email=${encodeURIComponent(email)}`)
+        }
       }
-    } catch (error) {
-      console.error("Resend verification error:", error)
-      toast.error("Failed to resend verification email")
-    }
+    })
   }
 
   // async function handleGoogleSignIn() {

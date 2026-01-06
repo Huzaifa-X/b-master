@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query"
-import { getAssistantContacts, getAllContacts, deleteContact } from "@/app/actions/contact.action"
+import { getAssistantContacts, getAllContacts, deleteContact, addContact, updateContact } from "@/app/actions/contact.action"
+import type { AddContactParams, UpdateContactParams } from "@/app/actions/contact.action"
 import { getContactStatistics } from "@/app/actions/contact.action"
 import { toast } from "sonner"
 
@@ -232,11 +233,11 @@ export function useDeleteContact(options?: UseDeleteContactOptions) {
   const mutation = useMutation({
     mutationFn: async (contactId: string) => {
       const result = await deleteContact(contactId)
-      
+
       if (!result.success) {
         throw new Error(result.error || "Failed to delete contact")
       }
-      
+
       return result
     },
     onSuccess: () => {
@@ -245,17 +246,17 @@ export function useDeleteContact(options?: UseDeleteContactOptions) {
         queryClient.invalidateQueries({ queryKey: ["contacts", "assistant", options.assistantId] })
       }
       queryClient.invalidateQueries({ queryKey: ["contacts", "all"] })
-      
+
       // Show success toast
       toast.success("Contact deleted successfully")
-      
+
       // Call custom success callback
       options?.onSuccess?.()
     },
     onError: (error: Error) => {
       // Show error toast
       toast.error(error.message || "Failed to delete contact")
-      
+
       // Call custom error callback
       options?.onError?.(error.message)
     },
@@ -265,6 +266,116 @@ export function useDeleteContact(options?: UseDeleteContactOptions) {
     deleteContact: mutation.mutate,
     deleteContactAsync: mutation.mutateAsync,
     isLoading: mutation.isPending,
+    isError: mutation.isError,
+    error: mutation.error,
+    isSuccess: mutation.isSuccess,
+  }
+}
+
+interface UseAddContactOptions {
+  assistantId?: string
+  onSuccess?: () => void
+  onError?: (error: string) => void
+}
+
+/**
+ * Hook to add a contact using React Query mutation
+ * @param options - Optional configuration including assistantId for cache invalidation
+ */
+export function useAddContact(options?: UseAddContactOptions) {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async (params: AddContactParams) => {
+      const result = await addContact(params)
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to add contact")
+      }
+
+      return result
+    },
+    onSuccess: () => {
+      // Invalidate contact queries
+      if (options?.assistantId) {
+        queryClient.invalidateQueries({ queryKey: ["contacts", "assistant", options.assistantId] })
+      }
+      queryClient.invalidateQueries({ queryKey: ["contacts", "all"] })
+
+      // Show success toast
+      toast.success("Contact added successfully")
+
+      // Call custom success callback
+      options?.onSuccess?.()
+    },
+    onError: (error: Error) => {
+      // Show error toast
+      toast.error(error.message || "Failed to add contact")
+
+      // Call custom error callback
+      options?.onError?.(error.message)
+    },
+  })
+
+  return {
+    addContact: mutation.mutate,
+    addContactAsync: mutation.mutateAsync,
+    isAdding: mutation.isPending,
+    isError: mutation.isError,
+    error: mutation.error,
+    isSuccess: mutation.isSuccess,
+  }
+}
+
+interface UseUpdateContactOptions {
+  assistantId?: string
+  onSuccess?: () => void
+  onError?: (error: string) => void
+}
+
+/**
+ * Hook to update a contact using React Query mutation
+ * @param options - Optional configuration including assistantId for cache invalidation
+ */
+export function useUpdateContact(options?: UseUpdateContactOptions) {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async (params: UpdateContactParams) => {
+      const result = await updateContact(params)
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to update contact")
+      }
+
+      return result
+    },
+    onSuccess: () => {
+      // Invalidate contact queries
+      if (options?.assistantId) {
+        queryClient.invalidateQueries({ queryKey: ["contacts", "assistant", options.assistantId] })
+      }
+      queryClient.invalidateQueries({ queryKey: ["contacts", "all"] })
+
+      // Show success toast
+      toast.success("Contact updated successfully")
+
+      // Call custom success callback
+      options?.onSuccess?.()
+    },
+    onError: (error: Error) => {
+      // Show error toast
+      toast.error(error.message || "Failed to update contact")
+
+      // Call custom error callback
+      options?.onError?.(error.message)
+    },
+  })
+
+  return {
+    updateContact: mutation.mutate,
+    updateContactAsync: mutation.mutateAsync,
+    isUpdating: mutation.isPending,
     isError: mutation.isError,
     error: mutation.error,
     isSuccess: mutation.isSuccess,
