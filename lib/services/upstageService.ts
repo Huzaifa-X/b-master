@@ -128,7 +128,7 @@ class UpstageService {
       // Request base64 encoding for tables and charts
       formData.append("base64_encoding", JSON.stringify(["table", "chart"]));
 
-      // Enable OCR
+      // Enable OCR with auto mode for mixed text/image PDFs
       formData.append("ocr", "auto");
 
       // Get coordinates for element positioning
@@ -167,24 +167,29 @@ class UpstageService {
    */
   private processUpstageResponse(data: UpstageResponse): UpstageExtractedContent {
     console.log(`[Upstage] Processing API response...`);
-    
+
     const result: UpstageExtractedContent = {
       text: data.content?.text || "",
       html: data.content?.html || "",
       images: [],
       tables: [],
       metadata: {
-        pages: data.api?.pages || 0, // Fix 1: Provide default value
+        pages: data.api?.pages || 0,
       },
     };
 
     console.log(`[Upstage] Extracted ${result.text.length} characters of text`);
-    console.log(`[Upstage] Total pages: ${result.metadata?.pages || 0}`); // Fix 1: Use optional chaining
+    console.log(`[Upstage] Total pages: ${result.metadata?.pages || 0}`);
+
+    // Validate that content was actually extracted
+    if (result.text.length === 0 && result.html.length === 0) {
+      console.warn(`[Upstage] WARNING: No text content extracted from document!`);
+    }
 
     // Process elements to extract images and tables
     if (data.elements && Array.isArray(data.elements)) {
       console.log(`[Upstage] Processing ${data.elements.length} elements...`);
-      
+
       data.elements.forEach((element) => {
         // Extract images
         if (element.category === "figure" || element.type === "image") {
@@ -207,6 +212,14 @@ class UpstageService {
 
       console.log(`[Upstage] Found ${result.images?.length || 0} images`);
       console.log(`[Upstage] Found ${result.tables?.length || 0} tables`);
+    } else {
+      console.log(`[Upstage] No elements found in response`);
+    }
+
+    // Final validation log for large documents
+    if (result.metadata && result.metadata.pages > 30) {
+      console.log(`[Upstage] ✓ Large document processed successfully: ${result.metadata.pages} pages`);
+      console.log(`[Upstage] Text length: ${result.text.length} chars, HTML length: ${result.html.length} chars`);
     }
 
     return result;

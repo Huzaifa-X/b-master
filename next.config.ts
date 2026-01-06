@@ -12,10 +12,9 @@ const nextConfig: NextConfig = {
   // Experimental features configuration
   experimental: {
     // Server Actions body size limit
-    // NOTE: With pre-upload architecture, this is now a safety measure only
-    // Files and images are uploaded to S3 before being sent to Server Actions
+    // NOTE: Supports large document uploads (up to 50MB for PDF processing)
     serverActions: {
-      bodySizeLimit: '5mb', // Increased from default 1MB to 5MB as safety buffer
+      bodySizeLimit: '50mb', // Support large PDFs for Upstage extraction
     },
   },
   // Images configuration to prevent aggressive preloading
