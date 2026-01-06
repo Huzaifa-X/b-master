@@ -54,11 +54,11 @@ export function NavListAskB() {
   const { isMobile } = useSidebar()
   const router = useRouter()
   const pathname = usePathname()
-  
-  const { 
-    chats, 
-    isLoading, 
-    deleteChat, 
+
+  const {
+    chats,
+    isLoading,
+    deleteChat,
     renameChat,
     isDeleting,
     isRenaming
@@ -69,8 +69,8 @@ export function NavListAskB() {
   const [newChatName, setNewChatName] = useState("")
 
   // Extract current chat ID from pathname
-  const currentChatId = pathname.startsWith("/ask-b/") 
-    ? pathname.split("/ask-b/")[1] 
+  const currentChatId = pathname.startsWith("/ask-b/")
+    ? pathname.split("/ask-b/")[1]
     : null
 
   const handleNewChat = () => {
@@ -106,7 +106,7 @@ export function NavListAskB() {
     if (deletingChatId) {
       deleteChat(deletingChatId)
       setDeletingChatId(null)
-      
+
       // If deleting current chat, navigate to welcome page
       if (deletingChatId === currentChatId) {
         router.push("/ask-b")
@@ -119,12 +119,15 @@ export function NavListAskB() {
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
         <SidebarGroupLabel>Chats</SidebarGroupLabel>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton disabled>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Loading chats...</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {/* Show 5 skeleton items while loading */}
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SidebarMenuItem key={i}>
+              <SidebarMenuButton disabled>
+                <Skeleton className="h-4 w-4 rounded" />
+                <Skeleton className="h-4 flex-1" />
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
         </SidebarMenu>
       </SidebarGroup>
     )
@@ -147,7 +150,7 @@ export function NavListAskB() {
           ) : (
             chats.map((chat) => (
               <SidebarMenuItem key={chat.id}>
-                <SidebarMenuButton 
+                <SidebarMenuButton
                   asChild
                   className={cn(
                     "cursor-pointer",
@@ -185,7 +188,7 @@ export function NavListAskB() {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      className="text-destructive focus:text-destructive focus:!text-destructive focus:!bg-muted cursor-pointer"
+                      className="text-destructive focus:!text-destructive focus:!bg-muted cursor-pointer"
                       onClick={(e) => handleDelete(chat.id, e)}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -222,8 +225,8 @@ export function NavListAskB() {
             <Button variant="outline" onClick={() => setRenamingChatId(null)}>
               Cancel
             </Button>
-            <Button 
-              onClick={handleRenameConfirm} 
+            <Button
+              onClick={handleRenameConfirm}
               disabled={!newChatName.trim() || isRenaming}
             >
               {isRenaming ? "Saving..." : "Save"}
@@ -243,7 +246,7 @@ export function NavListAskB() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleDeleteConfirm}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isDeleting}

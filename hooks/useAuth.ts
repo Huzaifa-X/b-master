@@ -8,7 +8,8 @@ import {
     forgotPassword,
     resetPassword,
     verifyResetPasswordOTP,
-    changePassword
+    changePassword,
+    resendVerificationEmail
 } from "@/app/actions/auth.actions"
 import { RegisterInput } from "@/lib/validations/auth"
 import { toast } from "sonner"
@@ -174,6 +175,29 @@ export function useChangePasswordMutation() {
         },
         onError: (error: Error) => {
             toast.error("Failed to change password", {
+                description: error.message,
+            })
+        },
+    })
+}
+
+// ============================================
+// RESEND VERIFICATION EMAIL MUTATION
+// ============================================
+export function useResendVerificationEmail() {
+    return useMutation({
+        mutationFn: (email: string) => resendVerificationEmail(email),
+        onSuccess: (result) => {
+            if (result.success) {
+                toast.success("Verification email sent!", {
+                    description: "Please check your inbox",
+                })
+            } else {
+                toast.error(result.error || "Failed to resend verification email")
+            }
+        },
+        onError: (error: Error) => {
+            toast.error("Failed to resend verification email", {
                 description: error.message,
             })
         },

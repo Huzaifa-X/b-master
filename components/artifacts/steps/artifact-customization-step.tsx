@@ -37,7 +37,7 @@ import { UserSelectTable, type SelectedUser } from "@/components/shared/user-sel
 import { ICON_MAP } from "./constants"
 import type { Template, ArtifactFormData, ApiConfig, Contact, UploadedFile, UploadedImage, BookingConfig } from "@/types/artifacts"
 import { ArtifactAIInstructionDialog } from "./artifact-ai-instruction-dialog"
-import { deleteArtifactFile } from "@/app/actions/artifact.action"
+import { useDeleteArtifactFile } from "@/hooks/useArtifact"
 import { ChatHistoryItem } from "@/types/chat"
 import { ArtifactChatSelector } from "./artifact-chat-selector"
 import { GoogleConnector } from "@/components/connectors/google-connector"
@@ -76,6 +76,9 @@ export function ArtifactCustomizationStep({
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string>("")
+
+  // Delete file mutation
+  const { deleteFileAsync } = useDeleteArtifactFile()
 
   // Get available contacts (not yet added)
   const availableContacts = contacts.filter(
@@ -258,50 +261,28 @@ export function ArtifactCustomizationStep({
     const file = formData.uploadedFiles?.[index]
     if (!file) return
 
-    // Delete from S3 first
-    try {
-      const result = await deleteArtifactFile(file.url)
-      if (!result.success) {
-        toast.error(result.error || "Failed to delete file from storage")
-        return
-      }
-    } catch (error) {
-      console.error("Error deleting file:", error)
-      toast.error("Failed to delete file from storage")
-      return
-    }
+    // Delete from S3 using the hook
+    await deleteFileAsync(file.url)
 
     // Remove from state
     setFormData((prev) => ({
       ...prev,
       uploadedFiles: prev.uploadedFiles?.filter((_, i) => i !== index) || [],
     }))
-    // toast.success(`File removed: ${file.name}`)
   }
 
   const removeImage = async (index: number) => {
     const image = formData.uploadedImages?.[index]
     if (!image) return
 
-    // Delete from S3 first
-    try {
-      const result = await deleteArtifactFile(image.url)
-      if (!result.success) {
-        toast.error(result.error || "Failed to delete image from storage")
-        return
-      }
-    } catch (error) {
-      console.error("Error deleting image:", error)
-      toast.error("Failed to delete image from storage")
-      return
-    }
+    // Delete from S3 using the hook
+    await deleteFileAsync(image.url)
 
     // Remove from state
     setFormData((prev) => ({
       ...prev,
       uploadedImages: prev.uploadedImages?.filter((_, i) => i !== index) || [],
     }))
-    // toast.success(`Image removed: ${image.name}`)
   }
 
   return (
@@ -430,7 +411,7 @@ export function ArtifactCustomizationStep({
           <div>
             <Label className="text-base font-semibold">Documents & Images</Label>
             <p className="text-sm text-muted-foreground mt-1">
-              {isEditMode 
+              {isEditMode
                 ? "Manage documents and images for your artifact"
                 : "Upload documents (PDF, Word) or images to include in your artifact"
               }

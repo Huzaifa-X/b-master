@@ -299,7 +299,7 @@ export default function BillingTab() {
 
         {/* Already Canceled Card */}
         {subscription && subscription.cancelAtPeriodEnd && (
-          <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50 border-yellow-500/50">
+          <Card className="p-6 bg-transparent backdrop-blur-sm border-yellow-500/50">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-lg bg-yellow-500/10 flex items-center justify-center">

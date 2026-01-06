@@ -10,7 +10,7 @@ import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
 import { useChatMessages, useSendMessage, useMarkAsRead, useMessageSubscription, useUserChats } from "@/hooks/use-assistant-chat"
 import { useSession } from "next-auth/react"
 import { format } from "date-fns"
-import { uploadFilesToS3, type FileUploadData } from "@/app/actions/file-upload.action"
+import { useUploadFileToS3 } from "@/hooks/useUpload"
 import { toast } from "sonner"
 
 interface ChatViewProps {
@@ -43,7 +43,9 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
     conversationId || "",
     !!conversationId
   )
-  const [uploading, setUploading] = useState(false)
+
+  // Use the existing upload hook
+  const { uploadFileAsync, isUploading } = useUploadFileToS3()
   const [showScrollButton, setShowScrollButton] = useState(false)
   const hasScrolledToBottomRef = useRef(false)
   const userScrolledUpRef = useRef(false)
@@ -54,13 +56,13 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
   // Check if user is near bottom of scroll
   const checkScrollPosition = () => {
     if (!containerRef.current) return
-    
+
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight
     const isNearBottom = distanceFromBottom < 100 // 100px threshold
-    
+
     setShowScrollButton(!isNearBottom)
-    
+
     // Track if user has scrolled up manually
     if (hasScrolledToBottomRef.current && distanceFromBottom > 150) {
       userScrolledUpRef.current = true
@@ -74,13 +76,13 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
     if (!containerRef.current) return
 
     const scrollContainer = containerRef.current
-    
+
     if (behavior === 'instant') {
       // Force instant scroll with multiple attempts
       const performScroll = () => {
         scrollContainer.scrollTop = scrollContainer.scrollHeight
       }
-      
+
       performScroll()
       requestAnimationFrame(() => {
         performScroll()
@@ -89,12 +91,12 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
       })
     } else {
       // Smooth scroll using scrollIntoView
-      messagesEndRef.current?.scrollIntoView({ 
+      messagesEndRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "end"
       })
     }
-    
+
     // Reset user scrolled flag and hide button
     userScrolledUpRef.current = false
     setTimeout(checkScrollPosition, 300)
@@ -111,13 +113,13 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
   // Scroll to bottom on initial load
   useEffect(() => {
     if (!conversationId || messagesLoading || allMessages.length === 0) return
-    
+
     // Only auto-scroll on first load
     if (!hasScrolledToBottomRef.current) {
       const scrollTimer = setTimeout(() => {
         scrollToBottom('instant')
         hasScrolledToBottomRef.current = true
-        
+
         // Double-check after render
         setTimeout(() => {
           if (containerRef.current) {
@@ -138,13 +140,13 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
   // Handle new messages - only auto-scroll if user hasn't scrolled up
   useEffect(() => {
     if (!hasScrolledToBottomRef.current || !conversationId || messagesLoading) return
-    
+
     const currentMessageCount = allMessages.length
     const hasNewMessages = currentMessageCount > previousMessageCountRef.current
-    
+
     if (hasNewMessages) {
       previousMessageCountRef.current = currentMessageCount
-      
+
       // Only auto-scroll if user is near bottom or hasn't manually scrolled up
       if (!userScrolledUpRef.current) {
         requestAnimationFrame(() => {
@@ -211,27 +213,11 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
     })
   }
 
-  // Helper function to convert File to base64
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          resolve(reader.result)
-        } else {
-          reject(new Error('Failed to read file'))
-        }
-      }
-      reader.onerror = () => reject(reader.error)
-      reader.readAsDataURL(file)
-    })
-  }
-
   // Helper function to check if file is an image
   const isImageFile = (fileName: string, contentType?: string): boolean => {
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico']
     const imageMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp']
-    
+
     const extension = fileName.toLowerCase().substring(fileName.lastIndexOf('.'))
     return imageExtensions.includes(extension) || (contentType ? imageMimeTypes.includes(contentType) : false)
   }
@@ -240,57 +226,43 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
     if (!conversationId || files.length === 0) return
 
     const file = files[0]
-    
+
     // Check file size (10MB limit)
     if (file.size > 10 * 1024 * 1024) {
       toast.error("File size must be less than 10MB")
       return
     }
 
-    setUploading(true)
     try {
-      // Convert file to base64
-      const base64 = await fileToBase64(file)
-      
-      // Prepare file upload data
-      const fileUploadData: FileUploadData[] = [{
-        fileName: file.name,
-        fileData: base64,
-        contentType: file.type || 'application/octet-stream',
-      }]
+      // Create FormData for file upload
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("folder", "attachments")
 
-      // Upload to S3 using existing function
-      const result = await uploadFilesToS3(fileUploadData)
+      // Upload to S3 using the existing hook
+      const uploadResult = await uploadFileAsync(formData)
 
-      if (!result.success) {
-        toast.error(result.error || "Failed to upload file")
-        return
-      }
-
-      const uploadedFile = result.files[0]
       const isImage = isImageFile(file.name, file.type)
-      
+
       sendMessage({
         assistantId,
         chatId: conversationId,
         message: isImage ? "" : `[File: ${file.name}]`,
         messageType: isImage ? "image" : "file",
-        attachmentUrl: uploadedFile.url,
-        attachmentName: uploadedFile.name,
-        attachmentSize: uploadedFile.size
+        attachmentUrl: uploadResult.url,
+        attachmentName: uploadResult.fileName,
+        attachmentSize: uploadResult.fileSize
       })
     } catch (error) {
       console.error("File upload error:", error)
       toast.error("Failed to upload file")
-    } finally {
-      setUploading(false)
     }
   }
 
   const otherUser = currentChat
     ? (currentChat.initiatorId === session?.user?.id
-        ? currentChat.participant
-        : currentChat.initiator)
+      ? currentChat.participant
+      : currentChat.initiator)
     : null
 
   // Convert URLs in text to clickable links
@@ -306,9 +278,8 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
             href={part}
             target="_blank"
             rel="noopener noreferrer"
-            className={`underline hover:opacity-80 ${
-              isOwn ? "text-primary-foreground" : "text-primary"
-            }`}
+            className={`underline hover:opacity-80 ${isOwn ? "text-primary-foreground" : "text-primary"
+              }`}
           >
             {part}
           </a>
@@ -359,8 +330,8 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
         )}
         <div className="flex items-center gap-3">
           <Avatar className="h-8 w-8">
-            <PresignedAvatarImage 
-              src={otherUser.image || ""} 
+            <PresignedAvatarImage
+              src={otherUser.image || ""}
             />
             <AvatarFallback>
               {otherUser.name?.slice(0, 2).toUpperCase() || "?"}
@@ -376,7 +347,7 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
       </header>
 
       {/* Messages Area */}
-      <div 
+      <div
         ref={containerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4 chat-scrollbar relative"
       >
@@ -401,29 +372,28 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
               // Check if message is from current user
               // Handle both real messages and optimistic messages
               const currentUserId = session?.user?.id
-              const isOwn = currentUserId 
-                ? (message.senderId === currentUserId || 
-                   message.senderId === 'temp-own-message' ||
-                   (message as any)._isOptimistic === true)
+              const isOwn = currentUserId
+                ? (message.senderId === currentUserId ||
+                  message.senderId === 'temp-own-message' ||
+                  (message as any)._isOptimistic === true)
                 : false
-              
+
               // Check if attachment is an image
               const isImage = message.attachmentUrl && (
-                message.messageType === 'image' || 
+                message.messageType === 'image' ||
                 (message.attachmentName && isImageFile(message.attachmentName))
               )
-              
+
               return (
                 <div
                   key={message.id}
                   className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[70%] rounded-2xl px-4 py-2 ${
-                      isOwn
+                    className={`max-w-[70%] rounded-2xl px-4 py-2 ${isOwn
                         ? "bg-primary text-primary-foreground"
                         : "bg-muted"
-                    }`}
+                      }`}
                   >
                     {/* Display image inline */}
                     {isImage && message.attachmentUrl && (
@@ -443,34 +413,32 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
                         </a>
                       </div>
                     )}
-                    
+
                     {/* Display text message */}
                     {message.message && (
                       <p className="text-sm whitespace-pre-wrap break-words">
                         {linkifyText(message.message, isOwn)}
                       </p>
                     )}
-                    
+
                     {/* Display file download link for non-images */}
                     {message.attachmentUrl && !isImage && (
                       <a
                         href={message.attachmentUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`mt-2 flex items-center gap-2 text-sm ${
-                          isOwn ? "text-primary-foreground/80 hover:text-primary-foreground" : "text-primary hover:text-primary/80"
-                        }`}
+                        className={`mt-2 flex items-center gap-2 text-sm ${isOwn ? "text-primary-foreground/80 hover:text-primary-foreground" : "text-primary hover:text-primary/80"
+                          }`}
                       >
                         <File className="h-4 w-4" />
                         <span className="underline">{message.attachmentName || "Download File"}</span>
                       </a>
                     )}
-                    
-                    <p className={`text-xs mt-1 ${
-                      isOwn 
-                        ? "text-primary-foreground/70" 
+
+                    <p className={`text-xs mt-1 ${isOwn
+                        ? "text-primary-foreground/70"
                         : "text-muted-foreground"
-                    }`}>
+                      }`}>
                       {format(new Date(message.createdAt), "HH:mm")}
                     </p>
                   </div>
@@ -485,7 +453,7 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
       {/* Message Input */}
       <div className="shrink-0 border-t">
         <AIInput
-          placeholder={isSending || uploading ? "Sending..." : "Type a message..."}
+          placeholder={isSending || isUploading ? "Sending..." : "Type a message..."}
           onSubmit={handleSendMessage}
           onFileUpload={handleFileUpload}
           minHeight={52}

@@ -14,7 +14,7 @@ import { toast } from "sonner"
 import { useWizardStore } from "@/lib/stores/wizard-store"
 import { AssistantFormData } from "@/types/assistant"
 import { useRouter } from "next/navigation"
-import { createCompleteAssistant, updateCompleteAssistant } from "@/app/actions/assistant.action"
+import { useAssistantMutations } from "@/hooks/useAssistantMutations"
 
 interface AssistantWizardProps {
   assistantId?: string
@@ -29,8 +29,9 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
   const addCompletedStep = useWizardStore((state) => state.addCompletedStep)
   const resetWizard = useWizardStore((state) => state.reset)
 
-  // Loading state for final submission
-  const [isCreating, setIsCreating] = useState(false)
+  // Assistant mutations
+  const { createAssistant, updateAssistant, isCreating, isUpdating } = useAssistantMutations()
+  const isSaving = isCreating || isUpdating
 
   const [formData, setFormData] = useState<AssistantFormData>(
     initialData || {
@@ -125,7 +126,7 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
 
   const handleNext = () => {
     if (!validateStep(currentStep)) return
-    
+
     addCompletedStep(currentStep)
     setCurrentStep(currentStep + 1)
   }
@@ -137,80 +138,71 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
   const handleFinalSubmit = async () => {
     if (!validateStep(6)) return
 
-    setIsCreating(true)
+    const params = {
+      // Step 1: Basic Info
+      name: formData.name,
+      price: formData.price,
+      category: formData.category,
+      description: formData.description,
 
-    try {
-      const params = {
-        // Step 1: Basic Info
-        name: formData.name,
-        price: formData.price,
-        category: formData.category,
-        description: formData.description,
+      // Step 2: Image (send S3 URL, not base64)
+      imageURL: formData.imageURL,
 
-        // Step 2: Image (send S3 URL, not base64)
-        imageURL: formData.imageURL,
+      // Step 3: Knowledge Base (send S3 URLs, not File objects)
+      notes: formData.notes,
+      urls: formData.urls,
+      fileURLs: formData.fileURLs, // Array of {url, fileName, fileSize}
 
-        // Step 3: Knowledge Base (send S3 URLs, not File objects)
-        notes: formData.notes,
-        urls: formData.urls,
-        fileURLs: formData.fileURLs, // Array of {url, fileName, fileSize}
+      // Step 4: Instructions
+      instructions: formData.instructions,
 
-        // Step 4: Instructions
-        instructions: formData.instructions,
+      // Step 5: API Config
+      authenticationType: formData.authenticationType,
+      apiKey: formData.apiKey,
+      authType: formData.authType,
+      customHeaderName: formData.customHeaderName,
+      clientId: formData.clientId,
+      clientSecret: formData.clientSecret,
+      authorizationUrl: formData.authorizationUrl,
+      tokenUrl: formData.tokenUrl,
+      scope: formData.scope,
+      tokenExchangeMethod: formData.tokenExchangeMethod,
+      schemaText: formData.schemaText,
+      schema: formData.schema,
 
-        // Step 5: API Config
-        authenticationType: formData.authenticationType,
-        apiKey: formData.apiKey,
-        authType: formData.authType,
-        customHeaderName: formData.customHeaderName,
-        clientId: formData.clientId,
-        clientSecret: formData.clientSecret,
-        authorizationUrl: formData.authorizationUrl,
-        tokenUrl: formData.tokenUrl,
-        scope: formData.scope,
-        tokenExchangeMethod: formData.tokenExchangeMethod,
-        schemaText: formData.schemaText,
-        schema: formData.schema,
+      // Step 6: Sharing
+      permissionLevel: formData.permissionLevel,
+      sharedUsers: formData.sharedUsers,
+      buyerPermissions: formData.buyerPermissions,
+    }
 
-        // Step 6: Sharing
-        permissionLevel: formData.permissionLevel,
-        sharedUsers: formData.sharedUsers,
-        buyerPermissions: formData.buyerPermissions,
+    let result
+    if (mode === "edit" && assistantId) {
+      result = await updateAssistant({ assistantId, ...params })
+    } else {
+      result = await createAssistant(params)
+    }
+
+    if (result.success) {
+      toast.success(mode === "edit" ? "Assistant updated successfully!" : "Assistant created successfully!")
+      addCompletedStep(6)
+
+      // Show additional info for URLs being processed
+      if (formData.urls.length > 0) {
+        toast.info(
+          `${formData.urls.length} URL${formData.urls.length > 1 ? 's are' : ' is'} being processed in the background.`,
+          { duration: 5000 }
+        )
       }
 
-      let result
+      // Redirect to assistant detail page or list
       if (mode === "edit" && assistantId) {
-        result = await updateCompleteAssistant(assistantId, params)
+        router.push(`/assistants/${assistantId}`)
       } else {
-        result = await createCompleteAssistant(params)
+        router.push('/assistants')
       }
-
-      if (result.success) {
-        toast.success(mode === "edit" ? "Assistant updated successfully!" : "Assistant created successfully!")
-        addCompletedStep(6)
-        
-        // Show additional info for URLs being processed
-        if (formData.urls.length > 0) {
-          toast.info(
-            `${formData.urls.length} URL${formData.urls.length > 1 ? 's are' : ' is'} being processed in the background.`,
-            { duration: 5000 }
-          )
-        }
-        
-        // Redirect to assistant detail page or list
-        if (mode === "edit" && assistantId) {
-          router.push(`/assistants/${assistantId}`)
-        } else {
-          router.push('/assistants')
-        }
-      } else {
-        toast.error(result.error || `Failed to ${mode === "edit" ? "update" : "create"} assistant`)
-      }
-    } catch (error) {
-      console.error(`Error ${mode === "edit" ? "updating" : "creating"} assistant:`, error)
-      toast.error(`Failed to ${mode === "edit" ? "update" : "create"} assistant`)
-    } finally {
-      setIsCreating(false)
+    } else {
+      toast.error(result.error || `Failed to ${mode === "edit" ? "update" : "create"} assistant`)
     }
   }
 
@@ -243,7 +235,7 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
         <Button
           variant="outline"
           onClick={handleBack}
-          disabled={currentStep === 1 || isCreating}
+          disabled={currentStep === 1 || isSaving}
           className="flex items-center gap-2 bg-background hover:bg-muted hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" />
@@ -261,10 +253,10 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
         ) : (
           <Button
             onClick={handleFinalSubmit}
-            disabled={isCreating}
+            disabled={isSaving}
             className="flex items-center gap-2"
           >
-            {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
             {mode === "edit" ? "Update Assistant" : "Create Assistant"}
           </Button>
         )}

@@ -145,7 +145,7 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
 
       // Add scroll listener
       viewport.addEventListener('scroll', handleScroll, { passive: true })
-      
+
       // Also check on resize and content changes
       const handleResize = () => {
         checkScrollPosition()
@@ -158,7 +158,7 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
         setTimeout(checkScrollPosition, 50)
       })
       observer.observe(viewport, { childList: true, subtree: true })
-      
+
       // Also check after a short delay to ensure initial render is complete
       setTimeout(checkScrollPosition, 100)
 
@@ -261,21 +261,21 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
   const handleCancel = () => {
     cancelStreaming()
   }
-  
+
   // Find the last user message
   const lastUserMessage = messages.filter(m => m.role === "user").slice(-1)[0]
-  
+
   // Check if there's an assistant message after the last user message
   const lastUserIndex = messages.findIndex(m => m.id === lastUserMessage?.id)
-  const hasAssistantResponseAfter = lastUserIndex >= 0 && 
+  const hasAssistantResponseAfter = lastUserIndex >= 0 &&
     messages.slice(lastUserIndex + 1).some(m => m.role === "assistant" && m.content.trim())
-  
+
   // Show loading if:
   // 1. There's a user message
   // 2. No assistant response with content after it
   // 3. Not currently streaming (streaming will show its own loading indicator)
-  const hasUserMessageWithoutResponse = 
-    messages.length > 0 && 
+  const hasUserMessageWithoutResponse =
+    messages.length > 0 &&
     lastUserMessage &&
     !hasAssistantResponseAfter &&
     !isStreaming
@@ -297,86 +297,86 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
       {/* Messages */}
       <div ref={containerRef} className="flex-1 relative overflow-auto">
         <div className="min-h-full">
-        <div className="mx-auto w-full max-w-[44rem] px-4 py-4 overflow-x-auto sm:max-w-[44rem] max-w-none">
-          {messages.length === 0 ? (
-            <div className="flex items-center justify-center h-full min-h-[400px]">
-              <p className="text-muted-foreground text-sm">
-                No messages yet. Start the conversation below.
-              </p>
-            </div>
-          ) : (
-            <>
-              {messages.map((message) => (
-                <div key={message.id} className="mb-4">
-                  {message.role === "user" ? (
-                    <UserMessage
-                      content={message.content}
-                      attachments={message.attachments}
-                      timestamp={message.createdAt}
-                    />
-                  ) : (
-                    <AssistantMessage
-                      content={message.content}
-                      timestamp={message.createdAt}
-                      isLoading={message.isStreaming}
-                    />
-                  )}
-                </div>
-              ))}
+          <div className="mx-auto w-full max-w-[44rem] px-4 py-4 overflow-x-auto">
+            {messages.length === 0 ? (
+              <div className="flex items-center justify-center h-full min-h-[400px]">
+                <p className="text-muted-foreground text-sm">
+                  No messages yet. Start the conversation below.
+                </p>
+              </div>
+            ) : (
+              <>
+                {messages.map((message) => (
+                  <div key={message.id} className="mb-4">
+                    {message.role === "user" ? (
+                      <UserMessage
+                        content={message.content}
+                        attachments={message.attachments}
+                        timestamp={message.createdAt}
+                      />
+                    ) : (
+                      <AssistantMessage
+                        content={message.content}
+                        timestamp={message.createdAt}
+                        isLoading={message.isStreaming}
+                      />
+                    )}
+                  </div>
+                ))}
 
-              {/* OAuth Connection Prompt */}
-              {oauthPrompt?.show && (
-                <div className="mb-4">
-                  <OAuthConnectPrompt
-                    message={oauthPrompt.message}
-                    authUrl={oauthPrompt.authUrl}
-                    onConnect={() => {
-                      const lastMessage = messages.filter(m => m.role === "user").slice(-1)[0]
-                      handleOAuthConnect(oauthPrompt.authUrl, lastMessage?.content)
-                    }}
-                    onDismiss={dismissOAuthPrompt}
-                  />
-                </div>
-              )}
+                {/* OAuth Connection Prompt */}
+                {oauthPrompt?.show && (
+                  <div className="mb-4">
+                    <OAuthConnectPrompt
+                      message={oauthPrompt.message}
+                      authUrl={oauthPrompt.authUrl}
+                      onConnect={() => {
+                        const lastMessage = messages.filter(m => m.role === "user").slice(-1)[0]
+                        handleOAuthConnect(oauthPrompt.authUrl, lastMessage?.content)
+                      }}
+                      onDismiss={dismissOAuthPrompt}
+                    />
+                  </div>
+                )}
 
-              {/* Loading indicator when waiting for AI response */}
-              {/* Only show if no streaming assistant message exists and OAuth is not required */}
-              {hasUserMessageWithoutResponse && !messages.some(m => m.role === "assistant" && m.isStreaming) && !oauthPrompt?.show && (
-                <div className="mb-4">
-                  <div
-                    className="mx-auto w-full max-w-[44rem] animate-in py-4 duration-150 ease-out fade-in slide-in-from-bottom-1"
-                    data-role="assistant"
-                  >
-                    <div className="flex gap-4 px-2">
-                      <div className="flex-shrink-0 pt-1">
-                        <div className="flex size-8 items-center justify-center rounded-full">
-                          <Image
-                            src="/bmaster-icon.png"
-                            alt="Assistant"
-                            width={24}
-                            height={24}
-                            style={{ width: "auto", height: "24px" }}
-                            unoptimized
-                          />
+                {/* Loading indicator when waiting for AI response */}
+                {/* Only show if no streaming assistant message exists and OAuth is not required */}
+                {hasUserMessageWithoutResponse && !messages.some(m => m.role === "assistant" && m.isStreaming) && !oauthPrompt?.show && (
+                  <div className="mb-4">
+                    <div
+                      className="mx-auto w-full max-w-[44rem] animate-in py-4 duration-150 ease-out fade-in slide-in-from-bottom-1"
+                      data-role="assistant"
+                    >
+                      <div className="flex gap-4 px-2">
+                        <div className="flex-shrink-0 pt-1">
+                          <div className="flex size-8 items-center justify-center rounded-full">
+                            <Image
+                              src="/bmaster-icon.png"
+                              alt="Assistant"
+                              width={24}
+                              height={24}
+                              style={{ width: "auto", height: "24px" }}
+                              unoptimized
+                            />
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="inline-block rounded-2xl px-4 py-2.5 bg-muted">
-                          <div className="flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">Thinking...</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="inline-block rounded-2xl px-4 py-2.5 bg-muted">
+                            <div className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                              <span className="text-sm text-muted-foreground">Thinking...</span>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
-              
-              <div className="min-h-8" />
-            </>
-          )}
-        </div>
+                )}
+
+                <div className="min-h-8" />
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -411,7 +411,7 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
               </Button>
             </div>
           )} */}
-          
+
           <ChatInput
             onSubmit={handleSend}
             isLoading={isStreaming || isCreating}
@@ -460,7 +460,7 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
       </ResizablePanel>
 
       {/* Resizable Handle - More responsive with wider hit area */}
-      <ResizableHandle 
+      <ResizableHandle
         withHandle
       />
 

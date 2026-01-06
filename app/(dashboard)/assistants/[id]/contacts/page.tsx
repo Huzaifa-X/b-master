@@ -9,8 +9,7 @@ import { ExpandableContactCards } from "@/components/assistants/expandable-conta
 import { ContactDialog, type ContactFormData } from "@/components/assistants/contact-dialog"
 import { toast } from "sonner"
 import { useSetAssistantMode } from "@/hooks/useAssistant"
-import { addContact, updateContact } from "@/app/actions/contact.action"
-import { useAssistantContacts, useInvalidateContacts } from "@/hooks/useContacts"
+import { useAssistantContacts, useAddContact, useUpdateContact } from "@/hooks/useContacts"
 import { useAssistantPermissions } from "@/hooks/usePermissions"
 
 interface PageProps {
@@ -19,20 +18,29 @@ interface PageProps {
 
 export default function ContactsPage({ params }: PageProps) {
   const { id: assistantId } = use(params)
-  
+
   // Set assistant mode in header (automatically handles fetching and cleanup)
   useSetAssistantMode(assistantId)
-  
+
   // Fetch permissions
   const { permissions, isLoading: isLoadingPermissions } = useAssistantPermissions(assistantId)
-  
+
   // Fetch contacts for this assistant
-  const { contacts, isLoading: isLoadingContacts, refetch: refetchContacts } = useAssistantContacts(assistantId)
-  const { invalidateAssistantContacts } = useInvalidateContacts()
-  
+  const { contacts, isLoading: isLoadingContacts } = useAssistantContacts(assistantId)
+
+  // Contact mutations
+  const { addContactAsync, isAdding } = useAddContact({
+    assistantId,
+    onSuccess: () => setDialogOpen(false)
+  })
+  const { updateContactAsync, isUpdating } = useUpdateContact({
+    assistantId,
+    onSuccess: () => setDialogOpen(false)
+  })
+
   const [searchQuery, setSearchQuery] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
-  
+
   // Check if user can add/edit contacts (only owners/admins can add/edit)
   // Buyers and shared users should check their permissions, but for contacts management, only owners are allowed
   const canAddContacts = permissions?.isOwner ?? false
@@ -42,55 +50,30 @@ export default function ContactsPage({ params }: PageProps) {
   }
 
   const handleSaveNewContact = async (contact: ContactFormData) => {
-    try {
-      if (contact.id) {
-        // Update existing contact
-        const result = await updateContact({
-          contactId: contact.id,
-          role: contact.role,
-          description: contact.description,
-          telephone: contact.telephone,
-          information: contact.information,
-        })
-
-        if (result.success) {
-          toast.success("Contact updated successfully!")
-          setDialogOpen(false)
-          // Refresh the contacts list
-          invalidateAssistantContacts(assistantId)
-          refetchContacts()
-        } else {
-          toast.error(result.error || "Failed to update contact")
-        }
-      } else {
-        // Add new contact
-        if (!assistantId) {
-          toast.error("Assistant ID is required")
-          return
-        }
-
-        const result = await addContact({
-          assistantId,
-          email: contact.email,
-          role: contact.role,
-          description: contact.description,
-          telephone: contact.telephone,
-          information: contact.information,
-        })
-
-        if (result.success) {
-    toast.success("Contact added successfully!")
-          setDialogOpen(false)
-          // Refresh the contacts list
-          invalidateAssistantContacts(assistantId)
-          refetchContacts()
-        } else {
-          toast.error(result.error || "Failed to add contact")
-        }
+    if (contact.id) {
+      // Update existing contact
+      await updateContactAsync({
+        contactId: contact.id,
+        role: contact.role,
+        description: contact.description,
+        telephone: contact.telephone,
+        information: contact.information,
+      })
+    } else {
+      // Add new contact
+      if (!assistantId) {
+        toast.error("Assistant ID is required")
+        return
       }
-    } catch (error) {
-      console.error("Error saving contact:", error)
-      toast.error("An unexpected error occurred")
+
+      await addContactAsync({
+        assistantId,
+        email: contact.email,
+        role: contact.role,
+        description: contact.description,
+        telephone: contact.telephone,
+        information: contact.information,
+      })
     }
   }
 
@@ -107,8 +90,8 @@ export default function ContactsPage({ params }: PageProps) {
               </p>
             </div>
             {canAddContacts && (
-              <Button 
-                onClick={handleAddContact} 
+              <Button
+                onClick={handleAddContact}
                 className="flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 <Plus className="h-4 w-4" />
@@ -132,15 +115,12 @@ export default function ContactsPage({ params }: PageProps) {
         </div>
 
         {/* Expandable Contact Cards */}
-        <ExpandableContactCards 
-          searchQuery={searchQuery} 
+        <ExpandableContactCards
+          searchQuery={searchQuery}
           assistantId={assistantId}
           contacts={contacts}
           isLoading={isLoadingContacts}
-          onContactDeleted={() => {
-            invalidateAssistantContacts(assistantId)
-            refetchContacts()
-          }}
+          onContactDeleted={() => { }}
           canEdit={canAddContacts}
         />
 

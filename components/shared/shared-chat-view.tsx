@@ -4,7 +4,6 @@ import { FC } from "react"
 import { UserMessage } from "@/components/assistants/message-components/user-message"
 import { AssistantMessage } from "@/components/assistants/message-components/assistant-message"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import Image from "next/image"
 import { MessageSquare, User, Bot } from "lucide-react"
 
 interface SharedChat {
