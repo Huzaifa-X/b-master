@@ -340,6 +340,17 @@ export async function updateArtifact({
     const filesJson = uploadedFiles && uploadedFiles.length > 0 ? (uploadedFiles as any) : undefined
     const imagesJson = uploadedImages && uploadedImages.length > 0 ? (uploadedImages as any) : undefined
 
+    console.log('[Artifact Update] Update data:', {
+      artifactId: artifactIdInt,
+      instructions: instructions.substring(0, 100) + '...',
+      apiKeysCount: Object.keys(apiKeysJson || {}).length,
+      hasToolsJson: !!toolsJson,
+      selectedChatId,
+      filesCount: uploadedFiles?.length || 0,
+      imagesCount: uploadedImages?.length || 0,
+      selectedUsersCount: selectedUsers.length
+    })
+
     // Update artifact in a transaction
     await prisma.$transaction(async (tx) => {
       // Update artifact
