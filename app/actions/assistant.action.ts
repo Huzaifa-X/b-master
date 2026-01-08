@@ -1185,7 +1185,8 @@ export async function getAssistants({
                 // Get all public assistants (marketplace) excluding:
                 // 1. User's own assistants
                 // 2. Assistants already purchased by the user
-                
+                // 3. Assistants already shared with the user
+
                 // First, get IDs of assistants the user has already purchased
                 const purchasedAssistantIds = await prisma.assistantPurchase.findMany({
                     where: {
@@ -1200,16 +1201,31 @@ export async function getAssistants({
 
                 const purchasedIds: bigint[] = purchasedAssistantIds.map(p => p.assistantId)
 
-                // Build where clause - exclude user's own and purchased assistants
+                // Get IDs of assistants that have been shared with the user
+                const sharedAssistantIds = await prisma.assistantContact.findMany({
+                    where: {
+                        userId: userId
+                    },
+                    select: {
+                        assistantId: true
+                    }
+                })
+
+                const sharedIds: bigint[] = sharedAssistantIds.map((p: { assistantId: bigint }) => p.assistantId)
+
+                // Combine purchased and shared IDs to exclude
+                const excludedIds: bigint[] = [...purchasedIds, ...sharedIds]
+
+                // Build where clause - exclude user's own, purchased, and shared assistants
                 const publicWhere: any = {
                     public: true,
                     deletedAt: null,
                     userId: {
                         not: userId // Exclude user's own assistants
                     },
-                    ...(purchasedIds.length > 0 && {
+                    ...(excludedIds.length > 0 && {
                         id: {
-                            notIn: purchasedIds
+                            notIn: excludedIds
                         }
                     })
                 }
@@ -2034,21 +2050,32 @@ export async function purchaseAssistant(assistantId: string) {
             }
         }
 
-        // Check if user already purchased this assistant
+        // Check if user already purchased this assistant (completed or pending)
         const existingPurchase = await prisma.assistantPurchase.findFirst({
             where: {
                 buyerId: userId,
                 assistantId: assistantIdBigInt,
-                status: "completed",
                 deletedAt: null,
             },
         })
 
         if (existingPurchase) {
-            return {
-                success: false,
-                error: "You have already purchased this assistant",
-                url: undefined,
+            // If already completed, return error
+            if (existingPurchase.status === "completed") {
+                return {
+                    success: false,
+                    error: "You have already purchased this assistant",
+                    url: undefined,
+                }
+            }
+
+            // If pending, delete the old pending purchase and create a new one
+            // This handles abandoned checkout sessions
+            if (existingPurchase.status === "pending") {
+                console.log(`[Purchase] Found existing pending purchase ${existingPurchase.id}, deleting it to create a new checkout session`)
+                await prisma.assistantPurchase.delete({
+                    where: { id: existingPurchase.id }
+                })
             }
         }
 
@@ -2057,6 +2084,22 @@ export async function purchaseAssistant(assistantId: string) {
             return {
                 success: false,
                 error: "You cannot purchase your own assistant",
+                url: undefined,
+            }
+        }
+
+        // Check if assistant has already been shared with this user
+        const existingContact = await prisma.assistantContact.findFirst({
+            where: {
+                assistantId: assistantIdBigInt,
+                userId: userId,
+            },
+        })
+
+        if (existingContact) {
+            return {
+                success: false,
+                error: "This assistant has already been shared with you. You can access it from your assistants list.",
                 url: undefined,
             }
         }

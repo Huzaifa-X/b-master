@@ -67,7 +67,7 @@ export function useArtifactById(
     enabled: options?.enabled ?? true,
     refetchOnMount: options?.refetchOnMount ?? false,
     refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 30 * 1000, // 30 seconds - reduced for better update responsiveness
     retry: 1,
   })
 
@@ -411,12 +411,33 @@ export function useUpdateArtifactMutation(options?: UseUpdateArtifactMutationOpt
 
       return result
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       if (result.artifact) {
-        // Invalidate artifact queries
-        queryClient.invalidateQueries({ queryKey: ["artifact", result.artifact.id] })
-        queryClient.invalidateQueries({ queryKey: ["artifactEditData", result.artifact.id] })
-        queryClient.invalidateQueries({ queryKey: ["artifacts"] })
+        console.log('[useUpdateArtifactMutation] Update successful, invalidating cache for artifact:', result.artifact.id)
+
+        // Invalidate and refetch artifact queries immediately
+        await queryClient.invalidateQueries({
+          queryKey: ["artifact", result.artifact.id],
+          refetchType: 'active' // Force active queries to refetch
+        })
+        await queryClient.invalidateQueries({
+          queryKey: ["artifactEditData", result.artifact.id],
+          refetchType: 'active'
+        })
+        await queryClient.invalidateQueries({
+          queryKey: ["artifacts"],
+          refetchType: 'active'
+        })
+
+        console.log('[useUpdateArtifactMutation] Cache invalidated, forcing refetch...')
+
+        // Also manually refetch the specific artifact to ensure it updates
+        await queryClient.refetchQueries({
+          queryKey: ["artifact", result.artifact.id],
+          type: 'active'
+        })
+
+        console.log('[useUpdateArtifactMutation] ✅ Refetch complete')
       }
 
       // Show success toast

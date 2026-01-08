@@ -136,26 +136,26 @@ export function VersionHistoryDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 w-full overflow-hidden">
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex h-full items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : isError ? (
-            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <div className="flex h-full flex-col items-center justify-center space-y-4">
               <p className="text-sm text-destructive">Failed to load versions</p>
               <Button onClick={() => refetch()} variant="outline" size="sm">
                 Try Again
               </Button>
             </div>
           ) : versions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 space-y-2">
+            <div className="flex h-full flex-col items-center justify-center space-y-2">
               <History className="h-12 w-12 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">No version history available</p>
             </div>
           ) : (
-            <ScrollArea className="h-full">
-              <div className="space-y-2 pr-4">
+            <div className="max-h-[60vh] w-full overflow-y-auto">
+              <div className="space-y-2 pr-4 pb-4">
                 {versions.map((version) => (
                   <div
                     key={version.id}
@@ -231,7 +231,7 @@ export function VersionHistoryDialog({
                   </div>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
           )}
         </div>
       </DialogContent>

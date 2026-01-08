@@ -156,11 +156,51 @@ export async function POST(req: NextRequest) {
     // Add Stripe invoice creation instructions
     systemPrompt += `\n\n## Stripe Invoice Creation Workflow
 
-      When the user requests invoice creation, execute the Stripe MCP workflow immediately.
+      When the user requests invoice creation, you MUST gather all required information BEFORE creating the invoice.
 
-      Follow these exact Stripe MCP calls in sequence:
+      ### Step 0: Information Gathering (MANDATORY FIRST STEP)
 
-      ### 🎯 Complete Invoice Flow (6 Steps)
+      **Before calling ANY Stripe tools, verify you have ALL required information:**
+
+      1. **Customer Information:**
+         - Full name (from @mention or user input)
+         - Email address (from @mention or user input)
+         - ✅ If mentioned user provided (@mention), you already have name and email - don't ask again!
+
+      2. **Invoice Details:**
+         - ⚠️ **Description of service/product** (REQUIRED - NEVER generate without this!)
+         - Amount/price (from user message)
+         - Currency (default to CHF if not specified, or ask)
+
+      3. **Optional Information (ask if relevant to context):**
+         - Invoice due date / payment terms (e.g., "Net 7", "Net 30")
+         - Invoice date (default to today if not specified)
+         - Additional line items or details
+
+      **CRITICAL RULES:**
+      - ❌ NEVER generate an invoice with missing description - always ask!
+      - ❌ NEVER assume invoice details - ask for clarification
+      - ❌ NEVER proceed to Stripe MCP calls if description is missing
+      - ✅ If user mentions someone (@mention), you already have their email - use it!
+      - ✅ Ask ONE question with ALL missing fields at once (don't ask multiple times)
+      - ✅ Use a natural, conversational tone when asking
+      - ✅ Only proceed to Step 1 after ALL required information is confirmed
+
+      **Example Clarification Questions:**
+
+      If description is missing:
+      "I'll create an invoice for [Name] at [Amount] CHF. Before I proceed, could you please provide:
+      - **Description** of the service/product (what is this invoice for?)
+      - Payment terms (e.g., due in 7 days, 30 days, etc.) - optional
+      - Any additional details for the invoice"
+
+      If both description and amount are missing:
+      "I'd be happy to create an invoice for [Name]. Could you please provide:
+      - **Amount** to charge
+      - **Description** of the service/product
+      - Payment terms (optional)"
+
+      ### 🎯 Complete Invoice Flow (6 Steps - ONLY after Step 0 is complete)
 
       **Step 1: Get or Create Customer**
       - Tool: \`create_customer\` or search with \`search_stripe_resources\`
@@ -357,7 +397,34 @@ export async function POST(req: NextRequest) {
       { "name": "finalize_invoice", "arguments": { "invoice": "in_..." }}
       \`\`\`
 
-      After finalizing, share the \`hosted_invoice_url\` with the customer for payment! 🎉`
+      After finalizing, share the \`hosted_invoice_url\` with the customer for payment! 🎉
+
+      ### 🔄 Modifying or Regenerating Invoices
+
+      **If the user asks to change an invoice AFTER it's been generated:**
+
+      ❌ **NEVER say:** "It's not possible to change an existing invoice" or "Invoices cannot be modified"
+
+      ✅ **ALWAYS do this instead:**
+
+      1. **For Draft Invoices (status: "draft"):**
+         - Draft invoices CAN be modified before finalization
+         - Use \`update_invoice\` or add/remove line items
+         - Example: "I'll update the draft invoice with the new details..."
+
+      2. **For Finalized/Open Invoices (status: "open"):**
+         - Finalized invoices cannot be directly edited
+         - ✅ **Solution:** Create a NEW invoice with the corrected details
+         - Void the old invoice if needed (use \`void_invoice\`)
+         - Example response: "Since the invoice is already finalized, I'll create a new invoice with the updated information (including the correct date, description, etc.) and void the old one if you'd like."
+
+      3. **Be Proactive:**
+         - If user wants to add missing fields (date, description, etc.), create a new invoice with ALL details
+         - Always confirm what changes they want before regenerating
+         - Use the corrected information from the conversation history
+
+      **Example User Request:** "Please update the invoice with today's date"
+      **Correct Response:** "I'll create a new invoice with today's date ([date]), the description you provided earlier, and all the correct details. Would you also like me to void the previous invoice?"`
 
     // ==========================================
     // END OF STRIPE INVOICE PROMPT
@@ -495,30 +562,30 @@ export async function POST(req: NextRequest) {
         {
           "type": "function",
           "name": "analyze_invoice_request",
-          "description": "Analyze a user message and determine whether they are requesting an invoice to be generated. If yes, extract invoice details. If not, return is_invoice_request as false and all other fields as null.",
+          "description": "Analyze a user message and determine whether they are requesting an invoice to be generated WITH ALL REQUIRED INFORMATION. Only return is_invoice_request as true if ALL fields (name, email, price, description) are present in the message. If ANY field is missing, return is_invoice_request as false.",
           "strict": true,
           "parameters": {
             "type": "object",
             "properties": {
               "is_invoice_request": {
                 "type": "boolean",
-                "description": "True if the user is asking to generate or create an invoice, otherwise false."
+                "description": "True ONLY if the user is requesting invoice generation AND all required fields (name, email, price, description) are present. False if any field is missing or if this is not an invoice request."
               },
               "name": {
                 "type": ["string", "null"],
-                "description": "Customer full name for the invoice."
+                "description": "Customer full name for the invoice. Extract from @mention or message text. Set to null if not present."
               },
               "email": {
                 "type": ["string", "null"],
-                "description": "Customer email address for the invoice."
+                "description": "Customer email address for the invoice. Extract from @mention or message text. Set to null if not present."
               },
               "price": {
                 "type": ["number", "null"],
-                "description": "Invoice total amount as a number."
+                "description": "Invoice total amount as a number (not string). Extract from message. Set to null if not present."
               },
               "description": {
                 "type": ["string", "null"],
-                "description": "Description of what the invoice is for (services or products)."
+                "description": "Description of what the invoice is for (services or products). This is CRITICAL - set to null if not explicitly provided in the message."
               }
             },
             "required": [
@@ -535,11 +602,35 @@ export async function POST(req: NextRequest) {
       input: [
         {
           role: "system",
-          content: `You are an assistant that analyzes user messages.
+          content: `You are an assistant that analyzes user messages for invoice generation requests.
 
-          If the user is requesting an invoice to be generated, call the analyze_invoice_request tool.
-          If not, still call the tool and set is_invoice_request to false.
+          **CRITICAL RULE:** Only set is_invoice_request to TRUE if ALL of the following are present:
+          1. Customer name (from @mention or explicit name in message)
+          2. Customer email (from @mention or explicit email in message)
+          3. Invoice amount/price
+          4. Description of service/product (what the invoice is for)
 
+          If ANY of these fields are missing, set is_invoice_request to FALSE.
+
+          **Examples:**
+
+          ✅ Valid (all fields present):
+          "Generate invoice for @John (john@example.com) at 100 CHF for web design services"
+          → is_invoice_request: true
+
+          ❌ Invalid (missing description):
+          "Generate invoice for @John at 100 CHF"
+          → is_invoice_request: false (description missing)
+
+          ❌ Invalid (missing amount):
+          "Generate invoice for @John for consulting"
+          → is_invoice_request: false (price missing)
+
+          ❌ Invalid (missing customer info):
+          "Generate an invoice for 100 CHF for consulting"
+          → is_invoice_request: false (name/email missing)
+
+          Call the analyze_invoice_request tool with extracted data.
           Do not generate explanations or text.
           Only use the tool.
           `

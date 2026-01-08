@@ -26,6 +26,8 @@ export async function POST(request: NextRequest) {
     let buffer: Buffer;
 
     // Handle both FormData and JSON (base64) formats
+    let detectedMimeType: string = "";
+
     if (contentType?.includes("application/json")) {
       // JSON format with base64 data
       const body = await request.json();
@@ -39,10 +41,13 @@ export async function POST(request: NextRequest) {
       }
 
       fileName = name;
-      
+      detectedMimeType = mimeType || "application/octet-stream";
+
       // Determine file type
-      if (mimeType?.startsWith("image/")) {
+      if (detectedMimeType.startsWith("image/")) {
         fileType = "image";
+      } else {
+        fileType = "document";
       }
 
       // Extract base64 data (handle both data:type;base64,data and plain base64)
@@ -65,6 +70,7 @@ export async function POST(request: NextRequest) {
       }
 
       fileName = file.name;
+      detectedMimeType = file.type;
       fileType = type || (file.type.startsWith("image/") ? "image" : "document");
 
       // Convert file to buffer
@@ -94,30 +100,35 @@ export async function POST(request: NextRequest) {
     // Determine folder based on file type
     const folder = fileType === "image" ? "artifacts/images" : "artifacts/documents";
 
-    // Determine MIME type
-    const mimeType = file?.type || (fileType === "image" ? "image/png" : "application/octet-stream");
+    // Use the detected MIME type (fallback to default if not set)
+    const finalMimeType = detectedMimeType || (fileType === "image" ? "image/png" : "application/octet-stream");
+
+    console.log(`[Upload] File: ${fileName}, Type: ${fileType}, MIME: ${finalMimeType}`);
 
     // Upload file to S3
     const fileUrl = await uploadToS3(
       buffer,
       fileName,
-      mimeType,
+      finalMimeType,
       folder
     );
 
     const result: any = {
       url: fileUrl,
       name: fileName,
-      type: mimeType,
+      type: finalMimeType,
       size: buffer.length,
       uploadedAt: new Date().toISOString(),
     };
 
     // Process document with Upstage
-    if (fileType === "document" && upstageService.isSupportedFileType(mimeType)) {
+    console.log(`[Upload] Checking Upstage eligibility - fileType: ${fileType}, supported: ${upstageService.isSupportedFileType(finalMimeType)}`);
+
+    if (fileType === "document" && upstageService.isSupportedFileType(finalMimeType)) {
       try {
-        console.log(`Processing document with Upstage: ${fileName}`);
-        
+        console.log(`[Upload] ✓ Processing document with Upstage: ${fileName} (${finalMimeType})`);
+        console.log(`[Upload] File URL: ${fileUrl}`);
+
         const extractedContent = await upstageService.extractFromUrl(fileUrl);
 
         result.extractedContent = {
@@ -137,10 +148,12 @@ export async function POST(request: NextRequest) {
         console.log(`- Found ${extractedContent.images?.length || 0} images`);
         console.log(`- Found ${extractedContent.tables?.length || 0} tables`);
       } catch (extractError) {
-        console.error("Upstage extraction failed:", extractError);
+        console.error("[Upload] Upstage extraction failed:", extractError);
         // Still return the file URL even if extraction fails
         result.extractionError = "Failed to extract document content";
       }
+    } else {
+      console.log(`[Upload] ⊗ Skipping Upstage - fileType: ${fileType}, MIME: ${finalMimeType}, isSupported: ${upstageService.isSupportedFileType(finalMimeType)}`);
     }
 
     return NextResponse.json({
