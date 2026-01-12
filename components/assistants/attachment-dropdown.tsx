@@ -26,6 +26,11 @@ interface AttachmentDropdownProps {
     assistantId?: string
     selectedArtifact?: { id: string; name: string; instructions: string; htmlContent: string } | null
     onRemoveArtifact?: () => void
+    // Mode state props to sync with parent
+    webSearchEnabled?: boolean
+    researchEnabled?: boolean
+    chatWithAPIEnabled?: boolean
+    dropboxEnabled?: boolean
 }
 
 export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
@@ -40,6 +45,10 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     assistantId,
     selectedArtifact,
     onRemoveArtifact,
+    webSearchEnabled = false,
+    researchEnabled = false,
+    chatWithAPIEnabled = false,
+    dropboxEnabled = false,
 }) => {
     const [isOpen, setIsOpen] = useState(false)
     const [selectedMode, setSelectedMode] = useState<"webSearch" | "research" | "chatWithAPI" | "dropbox" | "artifact" | null>(null)
@@ -65,6 +74,51 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
             setSelectedMode(null)
         }
     }, [selectedArtifact])
+
+    // Sync internal state with parent component mode props
+    useEffect(() => {
+        console.log("[AttachmentDropdown] Syncing mode state:", {
+            webSearchEnabled,
+            researchEnabled,
+            chatWithAPIEnabled,
+            dropboxEnabled,
+            currentSelectedMode: selectedMode
+        })
+
+        // Priority order: artifact > specific modes
+        if (selectedArtifact) {
+            // Artifact takes precedence
+            if (selectedMode !== "artifact") {
+                setSelectedMode("artifact")
+            }
+        } else if (webSearchEnabled) {
+            if (selectedMode !== "webSearch") {
+                console.log("[AttachmentDropdown] Setting mode to webSearch")
+                setSelectedMode("webSearch")
+            }
+        } else if (researchEnabled) {
+            if (selectedMode !== "research") {
+                console.log("[AttachmentDropdown] Setting mode to research")
+                setSelectedMode("research")
+            }
+        } else if (chatWithAPIEnabled) {
+            if (selectedMode !== "chatWithAPI") {
+                console.log("[AttachmentDropdown] Setting mode to chatWithAPI")
+                setSelectedMode("chatWithAPI")
+            }
+        } else if (dropboxEnabled) {
+            if (selectedMode !== "dropbox") {
+                console.log("[AttachmentDropdown] Setting mode to dropbox")
+                setSelectedMode("dropbox")
+            }
+        } else {
+            // No mode enabled, clear selection
+            if (selectedMode !== null) {
+                console.log("[AttachmentDropdown] Clearing mode")
+                setSelectedMode(null)
+            }
+        }
+    }, [webSearchEnabled, researchEnabled, chatWithAPIEnabled, dropboxEnabled, selectedArtifact])
 
     // Note: ChatInput component now handles sessionStorage with assistant-scoped keys
     // This component just reflects the current state via props

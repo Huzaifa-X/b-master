@@ -115,6 +115,24 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     setSelectedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
+  // Handle file upload from drag and drop (used by PromptInput component)
+  const handleFileUpload = (files: FileList) => {
+    const fileArray = Array.from(files)
+    if (fileArray.length === 0) return
+
+    // Validate file sizes (10MB max per file)
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    const invalidFiles = fileArray.filter(file => file.size > maxSize)
+
+    if (invalidFiles.length > 0) {
+      toast.error(`Some files exceed 10MB limit: ${invalidFiles.map(f => f.name).join(", ")}`)
+      return
+    }
+
+    // Add to selected files
+    setSelectedFiles(prev => [...prev, ...fileArray])
+  }
+
   // Upload files to S3 and store in artifact database
   const uploadFilesToS3 = async (files: File[]): Promise<UploadedFileData[]> => {
     try {
@@ -706,6 +724,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
           isLoading={isStreaming}
           maxHeight={120}
           disabled={disabled || isGenerating || isUploadingFiles}
+          onFileUpload={handleFileUpload}
           className="border-primary/50 shadow-[0_0_100px_0px_hsl(var(--primary)),0_0_60px_0px_hsl(var(--primary)),0_0_30px_0px_hsl(var(--primary)),0_0_15px_0px_hsl(var(--primary))] dark:border-primary/60 dark:shadow-[0_0_120px_0px_hsl(var(--primary)),0_0_80px_0px_hsl(var(--primary)),0_0_40px_0px_hsl(var(--primary)),0_0_20px_0px_hsl(var(--primary))]"
         >
           <PromptInputTextarea

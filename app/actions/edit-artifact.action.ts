@@ -378,15 +378,31 @@ export async function updateArtifact({
       // Add new permissions if there are selected users
       if (selectedUsers.length > 0) {
         console.log('[Artifact Update] Creating new permissions for users:', selectedUsers.map(u => u.email))
-        await tx.artifactPermission.createMany({
-          data: selectedUsers.map(user => ({
-            userId: BigInt(user.id),
-            assistantId: artifact.assistantId,
-            artifactId: artifactIdInt,
-            access: 'EDITOR' // Default access level
-          }))
+
+        // Validate that all user IDs are valid before creating permissions
+        const validUsers = selectedUsers.filter(user => {
+          const isValid = user.id && !isNaN(Number(user.id))
+          if (!isValid) {
+            console.error('[Artifact Update] Invalid user ID:', user)
+          }
+          return isValid
         })
-        console.log('[Artifact Update] ✅ New artifact permissions created successfully')
+
+        if (validUsers.length > 0) {
+          await tx.artifactPermission.createMany({
+            data: validUsers.map(user => ({
+              userId: BigInt(user.id),
+              assistantId: artifact.assistantId,
+              artifactId: artifactIdInt,
+              access: 'EDITOR' // Default access level
+            }))
+          })
+          console.log('[Artifact Update] ✅ New artifact permissions created successfully for', validUsers.length, 'users')
+        }
+
+        if (validUsers.length < selectedUsers.length) {
+          console.warn('[Artifact Update] ⚠️ Skipped', selectedUsers.length - validUsers.length, 'invalid user IDs')
+        }
       } else {
         console.log('[Artifact Update] ⚠️ No users selected, no permissions created')
       }

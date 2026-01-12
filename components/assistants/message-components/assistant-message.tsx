@@ -20,7 +20,6 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -361,7 +360,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopy} title="Copy">
                             <Copy className="h-3.5 w-3.5" />
                         </Button>
-                        {!shared && !isAskBMode &&(
+                        {!shared && !isAskBMode && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="h-6 w-6" title="Share">

@@ -81,16 +81,24 @@ export function ArtifactCustomizationStep({
   const { deleteFileAsync } = useDeleteArtifactFile()
 
   // Get available contacts (not yet added)
+  // Compare using userId since selectedUsers now stores userId, not contact record ID
   const availableContacts = contacts.filter(
-    (contact) => !formData.selectedUsers.some((user) => user.id === contact.id)
+    (contact) => !formData.selectedUsers.some((user) => user.id === contact.userId)
   )
 
   // User Select Handlers
-  const handleAddUser = (userId: string) => {
-    const contact = contacts.find((c) => c.id === userId)
+  const handleAddUser = (contactId: string) => {
+    const contact = contacts.find((c) => c.id === contactId)
     if (contact) {
+      // IMPORTANT: Use userId (the actual user ID from users table), not contact.id (contact record ID)
+      if (!contact.userId) {
+        console.error('[Artifact] Contact missing userId:', contact)
+        toast.error('Invalid contact - missing user ID')
+        return
+      }
+
       const newUser: SelectedUser = {
-        id: contact.id,
+        id: contact.userId, // Use userId, not contact.id
         name: contact.name,
         email: contact.email,
       }
