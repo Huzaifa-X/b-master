@@ -264,31 +264,41 @@ export function ChatInput({
 
     if (typeof window !== "undefined") {
       const savedMode = getStorageItem("mode")
+      console.log("[ChatInput] Loading saved mode from sessionStorage:", savedMode)
 
       if (savedMode === "webSearch") {
+        console.log("[ChatInput] Restoring webSearch mode")
         setWebSearchEnabled(true)
+        onWebSearch?.(true) // Notify parent component
       } else if (savedMode === "research") {
+        console.log("[ChatInput] Restoring research mode")
         setResearchEnabled(true)
+        onResearch?.(true) // Notify parent component
       } else if (savedMode === "chatWithAPI") {
+        console.log("[ChatInput] Restoring chatWithAPI mode")
         setChatWithAPIEnabled(true)
+        onChatWithAPI?.() // Notify parent component
       } else if (savedMode === "dropbox") {
+        console.log("[ChatInput] Restoring dropbox mode")
         setDropboxEnabled(true)
+        onDropbox?.(true) // Notify parent component
       } else if (savedMode === "artifact") {
         // Load artifact data from sessionStorage
         const savedArtifact = getStorageItem("artifact_data")
         if (savedArtifact) {
           try {
             const artifact = JSON.parse(savedArtifact)
-            // Verify artifact belongs to current assistant (if artifact has assistantId property)
+            console.log("[ChatInput] Restoring artifact mode:", artifact.name)
             setSelectedArtifact(artifact)
-            console.log("[ChatInput] Loaded artifact from sessionStorage:", artifact.name)
+            onChatWithArtifact?.() // Notify parent component
           } catch (error) {
             console.error("[ChatInput] Error loading artifact from sessionStorage:", error)
           }
         }
       }
     }
-  }, [assistantId, mode, getStorageItem])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assistantId, mode])
 
   const handleSend = async () => {
     if ((!value.trim() && attachedFiles.length === 0) || isLoading || disabled) return
@@ -364,18 +374,24 @@ export function ChatInput({
       }
     )
 
-    // Clear remaining state
+    // Clear only temporary state (attachments, preview, mentions)
     setAttachedFiles([])
     setShowPreview(false)
-    setSelectedArtifact(null)
-    setChatWithAPIEnabled(false)
-    setDropboxEnabled(false)
 
-    // Clear mode AND artifact data from sessionStorage (scoped to assistantId)
-    removeStorageItem("mode")
-    removeStorageItem("artifact_data")
+    // Clear mentioned users from sessionStorage (they're per-message, not per-mode)
     removeStorageItem("mentioned_users")
-    console.log("[ChatInput] Cleared mode and artifact after send")
+
+    // IMPORTANT: Do NOT clear modes or artifacts here!
+    // Modes (webSearch, research, artifact, chatWithAPI, dropbox) should persist
+    // until the user manually removes them or switches assistants.
+    // This allows users to send multiple messages with the same mode active.
+    console.log("[ChatInput] Cleared attachments and mentions, kept mode active:", {
+      webSearch: webSearchEnabled,
+      research: researchEnabled,
+      chatWithAPI: chatWithAPIEnabled,
+      dropbox: dropboxEnabled,
+      artifact: selectedArtifact?.name
+    })
   }
 
   const handleWebSearchChange = (enabled: boolean) => {
@@ -721,6 +737,11 @@ export function ChatInput({
                       removeStorageItem("artifact_data")
                       removeStorageItem("mentioned_users")
                     }}
+                    // Pass mode states to sync UI
+                    webSearchEnabled={webSearchEnabled}
+                    researchEnabled={researchEnabled}
+                    chatWithAPIEnabled={chatWithAPIEnabled}
+                    dropboxEnabled={dropboxEnabled}
                   />
                   {assistantId && (
                     <SelectArtifactDialog
@@ -813,6 +834,11 @@ export function ChatInput({
                       removeStorageItem("artifact_data")
                       removeStorageItem("mentioned_users")
                     }}
+                    // Pass mode states to sync UI
+                    webSearchEnabled={webSearchEnabled}
+                    researchEnabled={researchEnabled}
+                    chatWithAPIEnabled={chatWithAPIEnabled}
+                    dropboxEnabled={dropboxEnabled}
                   />
                   {assistantId && (
                     <SelectArtifactDialog

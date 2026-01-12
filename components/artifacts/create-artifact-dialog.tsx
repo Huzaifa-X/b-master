@@ -10,13 +10,23 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { TemplateSelectionStep } from "./steps/template-selection-step"
 import { ArtifactCustomizationStep } from "./steps/artifact-customization-step"
 import type { ArtifactFormData, Template, Contact } from "@/types/artifacts"
-import { useArtifactEditData, useUpdateArtifactMutation, useCreateArtifact } from "@/hooks/useArtifact"
+import { useArtifactEditData, useUpdateArtifactMutation, useCreateArtifact, useDeleteArtifact } from "@/hooks/useArtifact"
 import { useAssistantContacts } from "@/hooks/useContacts"
 import { useChatHistory } from "@/hooks/useChatHistory"
 
@@ -34,6 +44,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
   const [templateHtml, setTemplateHtml] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const { chats, isLoading: isLoadingChatwithAssistant, error: chatError } = useChatHistory({ mode: "assistant", assistantId: assistantId })
 
   // Fetch contacts using the hook
@@ -77,6 +88,16 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
       onOpenChange(false)
       // No need to navigate - we're already on the artifact page
       // The cache invalidation will trigger a refetch automatically
+    }
+  })
+
+  // Delete artifact mutation for edit mode
+  const { deleteArtifact, isDeleting } = useDeleteArtifact({
+    onSuccess: () => {
+      onOpenChange(false)
+      setShowDeleteConfirm(false)
+      // Navigate back to artifacts list
+      router.push(`/assistants/${assistantId}/artifacts`)
     }
   })
 
@@ -269,8 +290,15 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
     }
   }
 
+  const handleDeleteArtifact = () => {
+    if (editArtifactId) {
+      deleteArtifact(editArtifactId)
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="!max-w-[98vw] sm:!max-w-[98vw] w-full h-[98vh] p-0 flex flex-col overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -330,22 +358,33 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
         <DialogFooter className="px-6 py-4 border-t flex-shrink-0">
           {isEditMode ? (
             // Edit mode footer
-            <>
+            <div className="flex items-center justify-between w-full">
               <Button
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                className="hover:text-primary hover:bg-transparent"
-                disabled={isSubmitting || isUpdating}
+                variant="destructive"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={isSubmitting || isUpdating || isDeleting || isLoadingEditData}
+                className="mr-auto"
               >
-                Cancel
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Artifact
               </Button>
-              <Button
-                onClick={handleSubmit}
-                disabled={isSubmitting || isUpdating || isLoadingEditData}
-              >
-                {isSubmitting || isUpdating ? "Updating..." : "Update Artifact"}
-              </Button>
-            </>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  className="hover:text-primary hover:bg-transparent"
+                  disabled={isSubmitting || isUpdating || isDeleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || isUpdating || isDeleting || isLoadingEditData}
+                >
+                  {isSubmitting || isUpdating ? "Updating..." : "Update Artifact"}
+                </Button>
+              </div>
+            </div>
           ) : (
             // Create mode footer
             <>
@@ -378,5 +417,36 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Delete Confirmation Dialog */}
+    <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Artifact?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete this artifact, all its versions, permissions, and related data.
+            This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDeleteArtifact}
+            disabled={isDeleting}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {isDeleting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              "Delete Artifact"
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }

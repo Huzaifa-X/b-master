@@ -13,7 +13,8 @@ export type NotificationType =
   | 'artifact_updated'
   | 'welcome_notification'
   | 'notification'
-  | 'chat_message';
+  | 'chat_message'
+  | 'artifact_deleted';
 
 export interface NotificationData {
   [key: string]: any;

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { getArtifactById, getArtifacts, getArtifactVersions, setActiveArtifactVersion, createArtifact, shareArtifact, deleteArtifactFile } from "@/app/actions/artifact.action"
+import { getArtifactById, getArtifacts, getArtifactVersions, setActiveArtifactVersion, createArtifact, shareArtifact, deleteArtifactFile, deleteArtifact } from "@/app/actions/artifact.action"
 import { updateArtifactWithAI, type UpdateArtifactParams, type UpdateArtifactResult } from "@/app/actions/update-artifact.action"
 import { getArtifactEditData, updateArtifact, type EditArtifactParams } from "@/app/actions/edit-artifact.action"
 import { toast } from "sonner"
@@ -634,6 +634,61 @@ export function useDeleteArtifactFile(options?: UseDeleteArtifactFileOptions) {
   return {
     deleteFile: mutation.mutate,
     deleteFileAsync: mutation.mutateAsync,
+    isDeleting: mutation.isPending,
+    isError: mutation.isError,
+    error: mutation.error,
+    isSuccess: mutation.isSuccess,
+  }
+}
+
+interface UseDeleteArtifactOptions {
+  onSuccess?: (artifactId: string) => void
+  onError?: (error: string) => void
+}
+
+/**
+ * Hook to delete artifact with cascade deletion using React Query mutation
+ * Deletes artifact, versions, permissions, generation jobs, and S3 files
+ * @param options - Optional callbacks for success and error handling
+ */
+export function useDeleteArtifact(options?: UseDeleteArtifactOptions) {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async (artifactId: string) => {
+      const result = await deleteArtifact(artifactId)
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to delete artifact")
+      }
+
+      return result
+    },
+    onSuccess: (result, artifactId) => {
+      // Invalidate all artifact-related queries
+      queryClient.invalidateQueries({ queryKey: ["artifacts"] })
+      queryClient.invalidateQueries({ queryKey: ["artifact", artifactId] })
+      queryClient.invalidateQueries({ queryKey: ["artifactEditData", artifactId] })
+      queryClient.invalidateQueries({ queryKey: ["artifactVersions", artifactId] })
+
+      // Show success toast
+      toast.success("Artifact deleted successfully!")
+
+      // Call custom success callback
+      options?.onSuccess?.(artifactId)
+    },
+    onError: (error: Error) => {
+      // Show error toast
+      toast.error(error.message || "Failed to delete artifact")
+
+      // Call custom error callback
+      options?.onError?.(error.message)
+    },
+  })
+
+  return {
+    deleteArtifact: mutation.mutate,
+    deleteArtifactAsync: mutation.mutateAsync,
     isDeleting: mutation.isPending,
     isError: mutation.isError,
     error: mutation.error,

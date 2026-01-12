@@ -31,47 +31,47 @@ interface UploadedFile {
  * Basic HTML sanitization to prevent dangerous patterns
  */
 function sanitizeHtml(html: string): string {
-    let sanitized = html
+  let sanitized = html
 
-    // Remove external script sources (only allow inline scripts)
-    sanitized = sanitized.replace(/<script[^>]*src\s*=\s*["']https?:\/\/[^"']*["'][^>]*>/gi, '')
-    
-    // Remove javascript: protocol URLs
-    sanitized = sanitized.replace(/javascript:/gi, 'blocked:')
-    
-    // Remove data: URLs in script contexts
-    sanitized = sanitized.replace(/<script[^>]*src\s*=\s*["']data:[^"']*["'][^>]*>/gi, '')
-    
-    // Remove event handlers
-    sanitized = sanitized.replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
-    
-    // Remove dangerous meta tags
-    sanitized = sanitized.replace(/<meta[^>]*http-equiv\s*=\s*["']refresh["'][^>]*>/gi, '')
-    
-    return sanitized
+  // Remove external script sources (only allow inline scripts)
+  sanitized = sanitized.replace(/<script[^>]*src\s*=\s*["']https?:\/\/[^"']*["'][^>]*>/gi, '')
+
+  // Remove javascript: protocol URLs
+  sanitized = sanitized.replace(/javascript:/gi, 'blocked:')
+
+  // Remove data: URLs in script contexts
+  sanitized = sanitized.replace(/<script[^>]*src\s*=\s*["']data:[^"']*["'][^>]*>/gi, '')
+
+  // Remove event handlers
+  sanitized = sanitized.replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+
+  // Remove dangerous meta tags
+  sanitized = sanitized.replace(/<meta[^>]*http-equiv\s*=\s*["']refresh["'][^>]*>/gi, '')
+
+  return sanitized
 }
 
 /**
  * Build conversation context for AI
  */
 function buildConversationContext(chatHistory: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: Date }>): string {
-    if (!chatHistory || chatHistory.length === 0) {
-        return "No previous conversation history."
-    }
+  if (!chatHistory || chatHistory.length === 0) {
+    return "No previous conversation history."
+  }
 
-    let context = "=== CONVERSATION HISTORY ===\n\n"
-    
-    chatHistory.forEach((message, index) => {
-        const timestamp = message.timestamp 
-            ? new Date(message.timestamp).toLocaleString() 
-            : `Message ${index + 1}`
-        
-        context += `[${timestamp}] ${message.role.toUpperCase()}:\n${message.content}\n\n`
-    })
-    
-    context += "=== END CONVERSATION HISTORY ===\n"
-    
-    return context
+  let context = "=== CONVERSATION HISTORY ===\n\n"
+
+  chatHistory.forEach((message, index) => {
+    const timestamp = message.timestamp
+      ? new Date(message.timestamp).toLocaleString()
+      : `Message ${index + 1}`
+
+    context += `[${timestamp}] ${message.role.toUpperCase()}:\n${message.content}\n\n`
+  })
+
+  context += "=== END CONVERSATION HISTORY ===\n"
+
+  return context
 }
 
 /**
@@ -267,7 +267,10 @@ ${userPrompt || "Update the artifact using the available files."}
 
 Please update the artifact code based on the user's request while considering the entire conversation history${artifactChatContext ? ', the artifact chat context' : ''}${allFiles.length > 0 ? ', and the available files' : ''}.
 
-${allFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are provided, embed them in the HTML using <img> tags with the provided URLs.\n- If documents are provided, use the extracted text/html content to enhance the artifact.\n- Make sure all image URLs are properly used in src attributes.\n- The files context includes both previously uploaded files and any newly uploaded files.\n\n' : ''}Generate the complete updated HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.`
+${currentHtmlCode}
+This is the current HTML code of the artifact. Please update the artifact code based on the user's request while considering the entire conversation history${artifactChatContext ? ', the artifact chat context' : ''}${allFiles.length > 0 ? ', and the available files' : ''}.
+
+${allFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are provided, embed them in the HTML using <img> tags with the provided URLs.\n- If documents are provided, use the extracted text/html content to enhance the artifact. and use there urls in the code if needed.\n- Make sure all image URLs are properly used in src attributes.\n- The files context includes both previously uploaded files and any newly uploaded files.\n\n' : ''}Generate the complete updated HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.`
 
     const vectorStoreId = artifact.assistant?.vectorStoreId
 

@@ -34,7 +34,8 @@ export interface SelectedUser {
 }
 
 export interface Contact {
-  id: string
+  id: string // Contact record ID
+  userId?: string // User ID from the users table (needed for artifact permissions)
   name: string
   email: string
   image?: string | null
