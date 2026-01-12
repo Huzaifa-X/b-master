@@ -1382,19 +1382,46 @@ export async function POST(req: NextRequest) {
                         })}\n\n`)
                       )
 
-                      // Format the result as a user-friendly message
-                      const resultMessage = `\n\nHere's the data from the API call:\n\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\`\n\n`
-                      assistantResponse += resultMessage
+                      console.log('[Stream] 🤖 Generating AI response for API result...')
 
-                      // Send the formatted result to the frontend
-                      controller.enqueue(
-                        encoder.encode(`data: ${JSON.stringify({
-                          type: "text",
-                          content: resultMessage
-                        })}\n\n`)
-                      )
+                      // Generate a natural language response based on the API result
+                      try {
+                        const aiResponseStream = await openai.responses.create({
+                          model: "gpt-5.2",
+                          input: `The user asked: "${enhancedUserMessage}"\n\nI called the API function "${functionName}" and got this result:\n\n${JSON.stringify(result, null, 2)}\n\nProvide a helpful, natural language summary of this data to answer the user's question.`,
+                          instructions: "You are a helpful assistant. Summarize the API response data in a clear, natural way. Extract the most relevant information and present it conversationally. If there are important details, mention them. Keep it concise but informative.",
+                          stream: true
+                        }) as any
 
-                      console.log('[Stream] ✅ API result sent to frontend')
+                        // Stream the AI response
+                        for await (const event of aiResponseStream) {
+                          if (event.type === "response.output_text.delta") {
+                            const delta = event.delta || ""
+                            if (delta) {
+                              assistantResponse += delta
+                              controller.enqueue(
+                                encoder.encode(`data: ${JSON.stringify({
+                                  type: "text",
+                                  content: delta
+                                })}\n\n`)
+                              )
+                            }
+                          }
+                        }
+
+                        console.log('[Stream] ✅ AI response generated successfully')
+                      } catch (aiError: any) {
+                        console.error('[Stream] ❌ Failed to generate AI response:', aiError)
+                        // Fallback to showing raw JSON if AI response generation fails
+                        const fallbackMessage = `\n\nHere's the data from the API:\n\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\`\n\n`
+                        assistantResponse += fallbackMessage
+                        controller.enqueue(
+                          encoder.encode(`data: ${JSON.stringify({
+                            type: "text",
+                            content: fallbackMessage
+                          })}\n\n`)
+                        )
+                      }
                     } catch (apiError: any) {
                       console.error(`[Stream] ❌ API tool error:`, apiError)
                       const errorText = `API call failed: ${apiError.message}`
