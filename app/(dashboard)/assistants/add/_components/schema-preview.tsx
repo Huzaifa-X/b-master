@@ -681,7 +681,7 @@ function ActionRow({ endpoint, baseUrl, authConfig, securitySchemes, globalSecur
       // Validate absolute URL
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         throw new Error(
-          "Invalid API URL. Your OpenAPI schema must include a 'servers' field with a valid base URL."
+          `Invalid API URL: "${url}". Your OpenAPI schema must include a 'servers' field with a valid base URL (e.g., https://api.example.com).`
         )
       }
 
@@ -701,6 +701,15 @@ function ActionRow({ endpoint, baseUrl, authConfig, securitySchemes, globalSecur
         headers: { ...headers, Authorization: headers.Authorization ? '***' : undefined },
         hasBody: !!parsedRequestBody
       })
+
+      // Log the exact payload being sent to proxy
+      const payload = {
+        url,
+        method: endpoint.method,
+        headers,
+        requestBody: parsedRequestBody
+      }
+      console.log('📤 Payload sent to proxy:', payload)
 
       // Call proxy with the correct method
       const response = await fetch('/api/proxy-openapi', {

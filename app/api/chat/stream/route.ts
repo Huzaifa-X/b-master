@@ -1023,7 +1023,12 @@ export async function POST(req: NextRequest) {
               }
             })
 
-            const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/oauth/callback`
+            // Get origin from request headers to ensure redirect URI matches
+            const origin = req.headers.get('origin') || req.headers.get('referer')?.split('/').slice(0, 3).join('/') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+            const redirectUri = `${origin}/api/oauth/callback`
+
+            console.log('[Stream] OAuth redirect URI:', redirectUri)
+
             const authUrl = buildAuthorizationUrl(
               oauthConfig.authorizationUrl,
               oauthConfig.clientId,
