@@ -1382,9 +1382,19 @@ export async function POST(req: NextRequest) {
                         })}\n\n`)
                       )
 
-                      // NOTE: We don't manually append the result to assistantResponse here.
-                      // The OpenAI Responses API will automatically feed the result back to the AI,
-                      // and the AI will generate a natural language explanation in the next text delta.
+                      // Format the result as a user-friendly message
+                      const resultMessage = `\n\nHere's the data from the API call:\n\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\`\n\n`
+                      assistantResponse += resultMessage
+
+                      // Send the formatted result to the frontend
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "text",
+                          content: resultMessage
+                        })}\n\n`)
+                      )
+
+                      console.log('[Stream] ✅ API result sent to frontend')
                     } catch (apiError: any) {
                       console.error(`[Stream] ❌ API tool error:`, apiError)
                       const errorText = `API call failed: ${apiError.message}`
