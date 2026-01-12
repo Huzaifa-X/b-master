@@ -14,12 +14,15 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json()
+        console.log('📥 Proxy received body:', { ...body, headers: body.headers ? '***' : undefined })
+
         const { url, method = 'GET', headers = {}, requestBody } = body
 
         // Validate URL is absolute
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            console.error('❌ Invalid URL:', url)
             return NextResponse.json(
-                { error: 'Invalid URL. Must be absolute URL.' },
+                { error: `Invalid URL. Must be absolute URL. Received: ${url}` },
                 { status: 400 }
             )
         }
@@ -27,8 +30,9 @@ export async function POST(request: NextRequest) {
         // Validate method
         const validMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
         if (!validMethods.includes(method.toUpperCase())) {
+            console.error('❌ Invalid method:', method)
             return NextResponse.json(
-                { error: `Invalid HTTP method: ${method}` },
+                { error: `Invalid HTTP method: ${method}. Valid methods: ${validMethods.join(', ')}` },
                 { status: 400 }
             )
         }
