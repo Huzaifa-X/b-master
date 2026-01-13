@@ -12,20 +12,20 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 // ============================================
 
 const s3Client = new S3Client({
-  region: process.env.S3_AWS_S3_REGION_NAME!,
+  region: process.env.AWS_S3_REGION_NAME!,
   credentials: {
-    accessKeyId: process.env.S3_AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.S3_AWS_SECRET_ACCESS_KEY!,
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   },
   maxAttempts: 3, // Auto-retry on network errors
   // Optional: Custom endpoint for S3-compatible services (DigitalOcean Spaces, MinIO, etc.)
-  ...(process.env.S3_AWS_S3_ENDPOINT && {
-    endpoint: process.env.S3_AWS_S3_ENDPOINT,
+  ...(process.env.AWS_S3_ENDPOINT && {
+    endpoint: process.env.AWS_S3_ENDPOINT,
     forcePathStyle: true, // Required for some S3-compatible services
   }),
 })
 
-const BUCKET_NAME = process.env.S3_AWS_STORAGE_BUCKET_NAME!
+const BUCKET_NAME = process.env.AWS_STORAGE_BUCKET_NAME!
 
 // ============================================
 // UPLOAD FILE TO S3
@@ -50,13 +50,13 @@ export async function uploadToS3(
     if (!BUCKET_NAME) {
       throw new Error("AWS_STORAGE_BUCKET_NAME environment variable is not configured")
     }
-    if (!process.env.S3_AWS_ACCESS_KEY_ID) {
+    if (!process.env.AWS_ACCESS_KEY_ID) {
       throw new Error("AWS_ACCESS_KEY_ID environment variable is not configured")
     }
-    if (!process.env.S3_AWS_SECRET_ACCESS_KEY) {
+    if (!process.env.AWS_SECRET_ACCESS_KEY) {
       throw new Error("AWS_SECRET_ACCESS_KEY environment variable is not configured")
     }
-    if (!process.env.S3_AWS_S3_REGION_NAME) {
+    if (!process.env.AWS_S3_REGION_NAME) {
       throw new Error("AWS_S3_REGION_NAME environment variable is not configured")
     }
 
@@ -103,7 +103,7 @@ export async function uploadToS3(
       statusCode: error.$metadata?.httpStatusCode,
       requestId: error.$metadata?.requestId,
       bucket: BUCKET_NAME,
-      region: process.env.S3_AWS_S3_REGION_NAME,
+      region: process.env.AWS_S3_REGION_NAME,
       fileName: fileName,
       folder: folder
     }
@@ -274,9 +274,9 @@ function getPublicUrl(key: string): string {
 
   // Standard AWS S3 URL format
   // Use AWS_S3_REGION_NAME to match the S3Client configuration
-  const region = process.env.S3_AWS_S3_REGION_NAME || process.env.S3_AWS_REGION
+  const region = process.env.AWS_S3_REGION_NAME || process.env.AWS_REGION
   if (!region) {
-    throw new Error('AWS region is not configured. Please set S3_AWS_S3_REGION_NAME or AWS_REGION environment variable.')
+    throw new Error('AWS region is not configured. Please set AWS_S3_REGION_NAME or AWS_REGION environment variable.')
   }
 
   return `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${key}`
