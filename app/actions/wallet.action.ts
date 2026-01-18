@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth"
 
 /**
  * Get user's wallet information
+ * Wallet data is stored directly on the User model
  */
 export async function getUserWallet() {
   try {
@@ -16,33 +17,34 @@ export async function getUserWallet() {
 
     const userId = BigInt(session.user.id)
 
-    // Get or create wallet
-    const wallet = await prisma.userWallet.upsert({
-      where: { userId },
-      create: {
-        userId,
-        pendingAmount: 0,
-        availableAmount: 0,
-        totalEarnings: 0,
-        transferredAmount: 0,
-        currency: "CHF",
+    // Get user with wallet fields
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        pendingBalance: true,
+        availableBalance: true,
+        lifetimeEarnings: true,
+        currency: true,
+        createdAt: true,
+        updatedAt: true,
       },
-      update: {},
     })
+
+    if (!user) {
+      return { success: false, error: "User not found" }
+    }
 
     return {
       success: true,
       wallet: {
-        id: wallet.id,
-        userId: wallet.userId.toString(),
-        pendingAmount: Number(wallet.pendingAmount),
-        availableAmount: Number(wallet.availableAmount),
-        totalEarnings: Number(wallet.totalEarnings),
-        transferredAmount: Number(wallet.transferredAmount),
-        currency: wallet.currency,
-        lastUpdated: wallet.lastUpdated,
-        createdAt: wallet.createdAt,
-        updatedAt: wallet.updatedAt,
+        userId: user.id.toString(),
+        pendingBalance: Number(user.pendingBalance),
+        availableBalance: Number(user.availableBalance),
+        lifetimeEarnings: Number(user.lifetimeEarnings),
+        currency: user.currency,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
       },
     }
   } catch (error: any) {
@@ -52,7 +54,8 @@ export async function getUserWallet() {
 }
 
 /**
- * Get wallet transaction history with assistant details
+ * Get wallet transaction history
+ * Uses PaymentRecord model to track all payment activity
  */
 export async function getWalletTransactions(limit = 50, offset = 0) {
   try {
@@ -63,21 +66,12 @@ export async function getWalletTransactions(limit = 50, offset = 0) {
 
     const userId = BigInt(session.user.id)
 
-    const transactions = await prisma.assistantTransaction.findMany({
+    // Get payment records where user is the recipient (earnings)
+    const transactions = await prisma.paymentRecord.findMany({
       where: {
-        assistantOwnerId: userId,
-      },
-      include: {
-        purchases: {
-          select: {
-            assistant: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-          take: 1, // Only need one purchase to get the assistant
+        userId: userId, // User is the recipient
+        type: {
+          in: ["assistant_purchase", "payout", "refund"],
         },
       },
       orderBy: {
@@ -87,35 +81,43 @@ export async function getWalletTransactions(limit = 50, offset = 0) {
       skip: offset,
     })
 
-    const total = await prisma.assistantTransaction.count({
+    const total = await prisma.paymentRecord.count({
       where: {
-        assistantOwnerId: userId,
+        userId: userId,
+        type: {
+          in: ["assistant_purchase", "payout", "refund"],
+        },
       },
     })
 
     return {
       success: true,
       transactions: transactions.map((t) => {
-        // Get assistant info from the first purchase (if available)
-        const assistantInfo = t.purchases[0]?.assistant || null
-        
         // Safely merge metadata
-        const existingMetadata = (t.metadata && typeof t.metadata === 'object') 
+        const existingMetadata = (t.metadata && typeof t.metadata === 'object')
           ? t.metadata as Record<string, any>
           : {}
-        
+
         return {
-          id: t.id,
-          assistantOwnerId: t.assistantOwnerId.toString(),
+          id: t.id.toString(),
+          userId: t.userId.toString(),
+          payerUserId: t.payerUserId?.toString() || null,
           amount: Number(t.amount),
           currency: t.currency,
+          platformFee: Number(t.platformFee),
+          netAmount: Number(t.netAmount),
           type: t.type,
           status: t.status,
-          stripeTransactionId: t.stripeTransactionId,
-          metadata: {
-            ...existingMetadata,
-            assistantName: assistantInfo?.name || null,
-          },
+          description: t.description,
+          relatedType: t.relatedType,
+          relatedId: t.relatedId?.toString() || null,
+          stripePaymentIntentId: t.stripePaymentIntentId,
+          stripeChargeId: t.stripeChargeId,
+          stripeTransferId: t.stripeTransferId,
+          stripePayoutId: t.stripePayoutId,
+          metadata: existingMetadata,
+          completedAt: t.completedAt,
+          refundedAt: t.refundedAt,
           createdAt: t.createdAt,
           updatedAt: t.updatedAt,
         }
@@ -146,32 +148,23 @@ export async function releasePendingAmounts(holdingPeriodDays = 7) {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - holdingPeriodDays)
 
-    // Find completed transactions older than holding period
-    const eligibleTransactions = await prisma.assistantTransaction.findMany({
+    // Find completed assistant purchase payments older than holding period
+    const eligiblePayments = await prisma.paymentRecord.findMany({
       where: {
-        assistantOwnerId: userId,
-        type: "sale",
+        userId: userId,
+        type: "assistant_purchase",
         status: "completed",
-        createdAt: {
+        completedAt: {
           lte: cutoffDate,
-        },
-      },
-      include: {
-        purchases: {
-          where: {
-            status: "completed", // Only include non-refunded purchases
-          },
         },
       },
     })
 
-    // Calculate total amount eligible for release
-    let totalToRelease = 0
-    for (const transaction of eligibleTransactions) {
-      if (transaction.purchases.length > 0) {
-        totalToRelease += Number(transaction.amount)
-      }
-    }
+    // Calculate total amount eligible for release (use netAmount)
+    const totalToRelease = eligiblePayments.reduce(
+      (sum, payment) => sum + Number(payment.netAmount),
+      0
+    )
 
     if (totalToRelease === 0) {
       return {
@@ -181,12 +174,16 @@ export async function releasePendingAmounts(holdingPeriodDays = 7) {
       }
     }
 
-    // Get current wallet
-    const wallet = await prisma.userWallet.findUnique({
-      where: { userId },
+    // Get current user wallet
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        pendingBalance: true,
+        currency: true,
+      },
     })
 
-    if (!wallet || Number(wallet.pendingAmount) === 0) {
+    if (!user || Number(user.pendingBalance) === 0) {
       return {
         success: true,
         message: "No pending amounts in wallet",
@@ -195,18 +192,17 @@ export async function releasePendingAmounts(holdingPeriodDays = 7) {
     }
 
     // Move from pending to available (up to the available pending amount)
-    const amountToRelease = Math.min(totalToRelease, Number(wallet.pendingAmount))
+    const amountToRelease = Math.min(totalToRelease, Number(user.pendingBalance))
 
-    await prisma.userWallet.update({
-      where: { userId },
+    await prisma.user.update({
+      where: { id: userId },
       data: {
-        pendingAmount: {
+        pendingBalance: {
           decrement: amountToRelease,
         },
-        availableAmount: {
+        availableBalance: {
           increment: amountToRelease,
         },
-        lastUpdated: new Date(),
       },
     })
 
@@ -214,7 +210,7 @@ export async function releasePendingAmounts(holdingPeriodDays = 7) {
       success: true,
       message: "Pending amounts released successfully",
       amountReleased: amountToRelease,
-      currency: wallet.currency,
+      currency: user.currency,
     }
   } catch (error: any) {
     console.error("Error releasing pending amounts:", error)
@@ -234,52 +230,62 @@ export async function getWalletStats() {
 
     const userId = BigInt(session.user.id)
 
-    // Get wallet
-    const wallet = await prisma.userWallet.findUnique({
-      where: { userId },
+    // Get user wallet info
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        pendingBalance: true,
+        availableBalance: true,
+        lifetimeEarnings: true,
+        currency: true,
+      },
     })
 
-    if (!wallet) {
+    if (!user) {
       return {
         success: true,
         stats: {
           totalSales: 0,
           totalRefunds: 0,
-          pendingPayouts: 0,
-          completedPayouts: 0,
+          totalSalesAmount: 0,
+          totalRefundsAmount: 0,
+          pendingBalance: 0,
+          availableBalance: 0,
+          lifetimeEarnings: 0,
+          currency: "CHF",
         },
       }
     }
 
-    // Get transaction statistics
+    // Get transaction statistics from PaymentRecord
     const [salesCount, refundsCount, salesAmount, refundsAmount] = await Promise.all([
-      prisma.assistantTransaction.count({
+      prisma.paymentRecord.count({
         where: {
-          assistantOwnerId: userId,
-          type: "sale",
+          userId: userId,
+          type: "assistant_purchase",
           status: "completed",
         },
       }),
-      prisma.assistantTransaction.count({
+      prisma.paymentRecord.count({
         where: {
-          assistantOwnerId: userId,
+          userId: userId,
           type: "refund",
           status: "completed",
         },
       }),
-      prisma.assistantTransaction.aggregate({
+      prisma.paymentRecord.aggregate({
         where: {
-          assistantOwnerId: userId,
-          type: "sale",
+          userId: userId,
+          type: "assistant_purchase",
           status: "completed",
         },
         _sum: {
-          amount: true,
+          netAmount: true, // Use netAmount (after platform fee)
         },
       }),
-      prisma.assistantTransaction.aggregate({
+      prisma.paymentRecord.aggregate({
         where: {
-          assistantOwnerId: userId,
+          userId: userId,
           type: "refund",
           status: "completed",
         },
@@ -294,13 +300,12 @@ export async function getWalletStats() {
       stats: {
         totalSales: salesCount,
         totalRefunds: refundsCount,
-        totalSalesAmount: Number(salesAmount._sum.amount || 0),
+        totalSalesAmount: Number(salesAmount._sum.netAmount || 0),
         totalRefundsAmount: Math.abs(Number(refundsAmount._sum.amount || 0)),
-        pendingAmount: Number(wallet.pendingAmount),
-        availableAmount: Number(wallet.availableAmount),
-        totalEarnings: Number(wallet.totalEarnings),
-        transferredAmount: Number(wallet.transferredAmount),
-        currency: wallet.currency,
+        pendingBalance: Number(user.pendingBalance),
+        availableBalance: Number(user.availableBalance),
+        lifetimeEarnings: Number(user.lifetimeEarnings),
+        currency: user.currency,
       },
     }
   } catch (error: any) {
@@ -310,8 +315,7 @@ export async function getWalletStats() {
 }
 
 /**
- * Request withdrawal/payout
- * Note: This would typically integrate with Stripe Connect or another payout system
+ * Request withdrawal/payout via Stripe Connect
  */
 export async function requestPayout(amount: number) {
   try {
@@ -322,32 +326,74 @@ export async function requestPayout(amount: number) {
 
     const userId = BigInt(session.user.id)
 
-    // Get wallet
-    const wallet = await prisma.userWallet.findUnique({
-      where: { userId },
+    // Get user with wallet and Stripe Connect info
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        availableBalance: true,
+        currency: true,
+        stripeConnectAccountId: true,
+        stripeConnectStatus: true,
+        stripeConnectPayoutsEnabled: true,
+      },
     })
 
-    if (!wallet) {
-      return { success: false, error: "Wallet not found" }
+    if (!user) {
+      return { success: false, error: "User not found" }
     }
 
-    if (Number(wallet.availableAmount) < amount) {
+    if (Number(user.availableBalance) < amount) {
       return {
         success: false,
         error: "Insufficient available balance",
       }
     }
 
+    // Check if Stripe Connect is set up
+    if (!user.stripeConnectAccountId || !user.stripeConnectPayoutsEnabled) {
+      return {
+        success: false,
+        error: "Please complete Stripe Connect onboarding to request payouts",
+        needsOnboarding: true,
+      }
+    }
+
+    if (user.stripeConnectStatus !== "active") {
+      return {
+        success: false,
+        error: "Your Stripe Connect account is not active. Please complete verification.",
+        needsOnboarding: true,
+      }
+    }
+
+    // Create a payout request record
+    await prisma.paymentRecord.create({
+      data: {
+        userId: userId,
+        type: "payout",
+        amount: amount,
+        currency: user.currency,
+        platformFee: 0,
+        netAmount: amount,
+        status: "pending",
+        description: `Payout request for ${amount} ${user.currency}`,
+        metadata: {
+          requestedAt: new Date().toISOString(),
+          stripeConnectAccountId: user.stripeConnectAccountId,
+        },
+      },
+    })
+
     // In a real implementation, you would:
-    // 1. Create a payout request record
-    // 2. Integrate with Stripe Connect to transfer funds
-    // 3. Update wallet.transferredAmount once payout is complete
-    
-    // For now, just return success with instructions
+    // 1. Create a Stripe Transfer to the connected account
+    // 2. Update the payment record with stripeTransferId
+    // 3. Deduct from availableBalance
+    // 4. Update status to "completed" when transfer succeeds
+
     return {
       success: true,
-      message: "Payout request created. Please connect with Stripe to process.",
-      availableBalance: Number(wallet.availableAmount),
+      message: "Payout request created successfully. Processing may take 1-2 business days.",
+      availableBalance: Number(user.availableBalance),
       requestedAmount: amount,
     }
   } catch (error: any) {

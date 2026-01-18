@@ -582,7 +582,9 @@ export async function getArtifacts(assistantId: string) {
                         purchases: {
                             some: {
                                 buyerId: userId,
-                                status: 'completed'
+                                paymentRecord: {
+                                    status: 'completed'
+                                }
                             }
                         }
                     },
@@ -757,7 +759,9 @@ export async function getArtifactById(artifactId: string) {
                         purchases: {
                             some: {
                                 buyerId: userId,
-                                status: 'completed'
+                                paymentRecord: {
+                                    status: 'completed'
+                                }
                             }
                         }
                     },
@@ -1153,7 +1157,7 @@ export async function shareArtifact(data: {
             shareableId = artifact.shareableId
         } else {
             shareableId = Math.random().toString(36).substring(2, 10)
-            
+
             await prisma.assistantArtifact.update({
                 where: { id: artifactIdInt },
                 data: { shareableId }
@@ -1332,206 +1336,206 @@ export async function shareArtifact(data: {
  * Delete artifact with cascade deletion of all related data
  */
 export async function deleteArtifact(artifactId: string) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return {
-        success: false,
-        error: 'Authentication required'
-      }
-    }
-
-    const userId = BigInt(session.user.id)
-    const artifactIdInt = parseInt(artifactId)
-
-    console.log('[Delete Artifact] Starting deletion for artifact:', artifactId)
-
-    // Verify user has permission to delete (must be owner or admin)
-    const artifact = await prisma.assistantArtifact.findFirst({
-      where: {
-        id: artifactIdInt,
-        deletedAt: null,
-        OR: [
-          { userId: userId }, // User is the owner
-          {
-            permissions: {
-              some: {
-                userId: userId,
-                access: 'ADMIN' // Only admins can delete
-              }
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: 'Authentication required'
             }
-          }
-        ]
-      },
-      include: {
-        assistant: true,
-        permissions: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true
-              }
+        }
+
+        const userId = BigInt(session.user.id)
+        const artifactIdInt = parseInt(artifactId)
+
+        console.log('[Delete Artifact] Starting deletion for artifact:', artifactId)
+
+        // Verify user has permission to delete (must be owner or admin)
+        const artifact = await prisma.assistantArtifact.findFirst({
+            where: {
+                id: artifactIdInt,
+                deletedAt: null,
+                OR: [
+                    { userId: userId }, // User is the owner
+                    {
+                        permissions: {
+                            some: {
+                                userId: userId,
+                                access: 'ADMIN' // Only admins can delete
+                            }
+                        }
+                    }
+                ]
+            },
+            include: {
+                assistant: true,
+                permissions: {
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                name: true,
+                                email: true
+                            }
+                        }
+                    }
+                }
             }
-          }
-        }
-      }
-    })
-
-    if (!artifact) {
-      return {
-        success: false,
-        error: 'Artifact not found or you do not have permission to delete it'
-      }
-    }
-
-    console.log('[Delete Artifact] Artifact found:', artifact.name)
-
-    // Get all file URLs from artifact before deletion (for S3 cleanup)
-    const fileUrls: string[] = []
-    const imageUrls: string[] = []
-
-    if (artifact.files) {
-      try {
-        const filesData = Array.isArray(artifact.files)
-          ? artifact.files
-          : (typeof artifact.files === 'string' ? JSON.parse(artifact.files) : artifact.files)
-
-        if (Array.isArray(filesData)) {
-          filesData.forEach((file: any) => {
-            if (file.url) fileUrls.push(file.url)
-          })
-        }
-      } catch (error) {
-        console.error('[Delete Artifact] Error parsing files:', error)
-      }
-    }
-
-    if (artifact.images) {
-      try {
-        const imagesData = Array.isArray(artifact.images)
-          ? artifact.images
-          : (typeof artifact.images === 'string' ? JSON.parse(artifact.images) : artifact.images)
-
-        if (Array.isArray(imagesData)) {
-          imagesData.forEach((image: any) => {
-            if (image.url) imageUrls.push(image.url)
-          })
-        }
-      } catch (error) {
-        console.error('[Delete Artifact] Error parsing images:', error)
-      }
-    }
-
-    // Perform cascade deletion in a transaction
-    await prisma.$transaction(async (tx) => {
-      // 1. Delete all artifact permissions
-      const deletedPermissions = await tx.artifactPermission.deleteMany({
-        where: { artifactId: artifactIdInt }
-      })
-      console.log('[Delete Artifact] Deleted permissions:', deletedPermissions.count)
-
-      // 2. Delete all artifact versions
-      const deletedVersions = await tx.artifactVersion.deleteMany({
-        where: { artifactId: artifactIdInt }
-      })
-      console.log('[Delete Artifact] Deleted versions:', deletedVersions.count)
-
-      // 3. Delete artifact generation jobs (if any)
-      const deletedJobs = await tx.artifactGenerationJob.deleteMany({
-        where: { artifactId: artifactIdInt }
-      })
-      console.log('[Delete Artifact] Deleted generation jobs:', deletedJobs.count)
-
-      // 4. Delete the artifact itself (soft delete)
-      await tx.assistantArtifact.update({
-        where: { id: artifactIdInt },
-        data: {
-          deletedAt: new Date()
-        }
-      })
-      console.log('[Delete Artifact] Artifact soft deleted')
-    })
-
-    // Clean up S3 files (do this after DB deletion to avoid orphaned DB records)
-    console.log('[Delete Artifact] Cleaning up S3 files:', fileUrls.length + imageUrls.length, 'files')
-
-    const allUrls = [...fileUrls, ...imageUrls]
-    for (const url of allUrls) {
-      try {
-        await deleteFromS3(url)
-        console.log('[Delete Artifact] Deleted from S3:', url)
-      } catch (s3Error) {
-        console.error('[Delete Artifact] Failed to delete from S3:', url, s3Error)
-        // Don't fail the entire operation if S3 cleanup fails
-      }
-    }
-
-    // Notify all users who had access to this artifact
-    const usersToNotify = artifact.permissions
-      .filter(perm => perm.user.id !== userId) // Don't notify the deleter
-      .map(perm => perm.user)
-
-    if (usersToNotify.length > 0) {
-      console.log('[Delete Artifact] Notifying', usersToNotify.length, 'users about deletion')
-
-      const deleter = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { name: true, email: true }
-      })
-
-      for (const user of usersToNotify) {
-        try {
-          await notificationService.createNotification({
-            userId: user.id.toString(),
-            title: '🗑️ Artifact Deleted',
-            message: `${deleter?.name || 'Someone'} deleted "${artifact.name || 'Untitled Artifact'}"`,
-            type: 'artifact_deleted',
-            relatedId: artifact.id.toString(),
-            relatedType: 'artifact',
-            data: {
-              artifactId: artifact.id.toString(),
-              artifactName: artifact.name || 'Untitled Artifact',
-              deleterId: userId.toString(),
-              deleterName: deleter?.name,
-              assistantId: artifact.assistantId.toString()
-            }
-          })
-        } catch (notificationError) {
-          console.error('[Delete Artifact] Failed to send notification:', notificationError)
-        }
-      }
-
-      // Trigger Pusher event for real-time updates
-      try {
-        await pusher.trigger('global-artifact-updates', 'artifact-deleted', {
-          artifactId: artifact.id.toString(),
-          artifactName: artifact.name || 'Untitled Artifact',
-          deleterId: userId.toString(),
-          deleterName: deleter?.name,
-          assistantId: artifact.assistantId.toString(),
-          timestamp: new Date().toISOString(),
-          notifiedUserIds: usersToNotify.map(u => u.id.toString())
         })
-        console.log('[Delete Artifact] Pusher event triggered')
-      } catch (pusherError) {
-        console.error('[Delete Artifact] Pusher error:', pusherError)
-      }
-    }
 
-    console.log('[Delete Artifact] ✅ Artifact deleted successfully')
+        if (!artifact) {
+            return {
+                success: false,
+                error: 'Artifact not found or you do not have permission to delete it'
+            }
+        }
 
-    return {
-      success: true,
-      message: 'Artifact deleted successfully'
-    }
+        console.log('[Delete Artifact] Artifact found:', artifact.name)
 
-  } catch (error) {
-    console.error('[Delete Artifact] Error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to delete artifact'
+        // Get all file URLs from artifact before deletion (for S3 cleanup)
+        const fileUrls: string[] = []
+        const imageUrls: string[] = []
+
+        if (artifact.files) {
+            try {
+                const filesData = Array.isArray(artifact.files)
+                    ? artifact.files
+                    : (typeof artifact.files === 'string' ? JSON.parse(artifact.files) : artifact.files)
+
+                if (Array.isArray(filesData)) {
+                    filesData.forEach((file: any) => {
+                        if (file.url) fileUrls.push(file.url)
+                    })
+                }
+            } catch (error) {
+                console.error('[Delete Artifact] Error parsing files:', error)
+            }
+        }
+
+        if (artifact.images) {
+            try {
+                const imagesData = Array.isArray(artifact.images)
+                    ? artifact.images
+                    : (typeof artifact.images === 'string' ? JSON.parse(artifact.images) : artifact.images)
+
+                if (Array.isArray(imagesData)) {
+                    imagesData.forEach((image: any) => {
+                        if (image.url) imageUrls.push(image.url)
+                    })
+                }
+            } catch (error) {
+                console.error('[Delete Artifact] Error parsing images:', error)
+            }
+        }
+
+        // Perform cascade deletion in a transaction
+        await prisma.$transaction(async (tx) => {
+            // 1. Delete all artifact permissions
+            const deletedPermissions = await tx.artifactPermission.deleteMany({
+                where: { artifactId: artifactIdInt }
+            })
+            console.log('[Delete Artifact] Deleted permissions:', deletedPermissions.count)
+
+            // 2. Delete all artifact versions
+            const deletedVersions = await tx.artifactVersion.deleteMany({
+                where: { artifactId: artifactIdInt }
+            })
+            console.log('[Delete Artifact] Deleted versions:', deletedVersions.count)
+
+            // 3. Delete artifact generation jobs (if any)
+            const deletedJobs = await tx.artifactGenerationJob.deleteMany({
+                where: { artifactId: artifactIdInt }
+            })
+            console.log('[Delete Artifact] Deleted generation jobs:', deletedJobs.count)
+
+            // 4. Delete the artifact itself (soft delete)
+            await tx.assistantArtifact.update({
+                where: { id: artifactIdInt },
+                data: {
+                    deletedAt: new Date()
+                }
+            })
+            console.log('[Delete Artifact] Artifact soft deleted')
+        })
+
+        // Clean up S3 files (do this after DB deletion to avoid orphaned DB records)
+        console.log('[Delete Artifact] Cleaning up S3 files:', fileUrls.length + imageUrls.length, 'files')
+
+        const allUrls = [...fileUrls, ...imageUrls]
+        for (const url of allUrls) {
+            try {
+                await deleteFromS3(url)
+                console.log('[Delete Artifact] Deleted from S3:', url)
+            } catch (s3Error) {
+                console.error('[Delete Artifact] Failed to delete from S3:', url, s3Error)
+                // Don't fail the entire operation if S3 cleanup fails
+            }
+        }
+
+        // Notify all users who had access to this artifact
+        const usersToNotify = artifact.permissions
+            .filter(perm => perm.user.id !== userId) // Don't notify the deleter
+            .map(perm => perm.user)
+
+        if (usersToNotify.length > 0) {
+            console.log('[Delete Artifact] Notifying', usersToNotify.length, 'users about deletion')
+
+            const deleter = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { name: true, email: true }
+            })
+
+            for (const user of usersToNotify) {
+                try {
+                    await notificationService.createNotification({
+                        userId: user.id.toString(),
+                        title: '🗑️ Artifact Deleted',
+                        message: `${deleter?.name || 'Someone'} deleted "${artifact.name || 'Untitled Artifact'}"`,
+                        type: 'artifact_deleted',
+                        relatedId: artifact.id.toString(),
+                        relatedType: 'artifact',
+                        data: {
+                            artifactId: artifact.id.toString(),
+                            artifactName: artifact.name || 'Untitled Artifact',
+                            deleterId: userId.toString(),
+                            deleterName: deleter?.name,
+                            assistantId: artifact.assistantId.toString()
+                        }
+                    })
+                } catch (notificationError) {
+                    console.error('[Delete Artifact] Failed to send notification:', notificationError)
+                }
+            }
+
+            // Trigger Pusher event for real-time updates
+            try {
+                await pusher.trigger('global-artifact-updates', 'artifact-deleted', {
+                    artifactId: artifact.id.toString(),
+                    artifactName: artifact.name || 'Untitled Artifact',
+                    deleterId: userId.toString(),
+                    deleterName: deleter?.name,
+                    assistantId: artifact.assistantId.toString(),
+                    timestamp: new Date().toISOString(),
+                    notifiedUserIds: usersToNotify.map(u => u.id.toString())
+                })
+                console.log('[Delete Artifact] Pusher event triggered')
+            } catch (pusherError) {
+                console.error('[Delete Artifact] Pusher error:', pusherError)
+            }
+        }
+
+        console.log('[Delete Artifact] ✅ Artifact deleted successfully')
+
+        return {
+            success: true,
+            message: 'Artifact deleted successfully'
+        }
+
+    } catch (error) {
+        console.error('[Delete Artifact] Error:', error)
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to delete artifact'
+        }
     }
-  }
 }

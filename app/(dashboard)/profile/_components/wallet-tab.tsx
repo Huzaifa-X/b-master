@@ -2,11 +2,84 @@
 
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Wallet, TrendingUp, Clock, ArrowDownToLine, ArrowUpRight, Loader2, DollarSign } from "lucide-react"
+import { Wallet, TrendingUp, Clock, ArrowDownToLine, ArrowUpRight, ExternalLink, CheckCircle, AlertCircle, DollarSign, Loader2 } from "lucide-react"
 import { useWallet } from "@/hooks/useWallet"
+import { useState, useEffect } from 'react';
+import { Button } from "@/components/ui/button";
+import { toast } from 'sonner';
 
 export default function WalletTab() {
   const { wallet, transactions, stats, loading, transactionsLoading, statsLoading } = useWallet()
+  const [connectStatus, setConnectStatus] = useState<any>(null);
+  const [connectLoading, setConnectLoading] = useState(false);
+
+  useEffect(() => {
+    refreshConnectStatus();
+  }, []);
+  const refreshConnectStatus = async () => {
+    try {
+      const response = await fetch('/api/stripe/connect/refresh-status');
+      if (response.ok) {
+        const data = await response.json();
+        setConnectStatus(data);
+      } else {
+        setConnectStatus({ status: 'not_connected' });
+      }
+    } catch (error) {
+      console.error('Failed to refresh Connect status:', error);
+      setConnectStatus({ status: 'not_connected' });
+    }
+  };
+  const handleConnectStripe = async () => {
+    setConnectLoading(true);
+    try {
+      const response = await fetch('/api/stripe/connect/onboard', {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error);
+      }
+      // Redirect to Stripe
+      window.location.href = data.url;
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to start onboarding');
+      setConnectLoading(false);
+    }
+  };
+  const getConnectStatusBadge = () => {
+    if (!connectStatus) return null;
+    const statusConfig: any = {
+      active: {
+        icon: CheckCircle,
+        color: 'text-green-500 bg-green-50 border-green-200',
+        text: 'Connected'
+      },
+      pending: {
+        icon: Clock,
+        color: 'text-yellow-500 bg-yellow-50 border-yellow-200',
+        text: 'Pending Setup'
+      },
+      restricted: {
+        icon: AlertCircle,
+        color: 'text-red-500 bg-red-50 border-red-200',
+        text: 'Restricted'
+      },
+      not_connected: {
+        icon: AlertCircle,
+        color: 'text-gray-500 bg-gray-50 border-gray-200',
+        text: 'Not Connected'
+      },
+    };
+    const config = statusConfig[connectStatus.status] || statusConfig.not_connected;
+    const Icon = config.icon;
+    return (
+      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${config.color}`}>
+        <Icon className="w-4 h-4" />
+        <span className="text-sm font-medium">{config.text}</span>
+      </div>
+    );
+  };
 
   const formatCurrency = (amount: number, currency: string = "CHF") => {
     return new Intl.NumberFormat("en-US", {
@@ -49,6 +122,73 @@ export default function WalletTab() {
       </div>
 
       <div className="space-y-6">
+        <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Wallet className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Stripe Connect</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Required to receive payments from assistant sales
+                  </p>
+                </div>
+              </div>
+              {getConnectStatusBadge()}
+            </div>
+            {connectStatus?.status === 'active' ? (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <p className="text-sm text-green-800">
+                  ✅ Your account is active and ready to receive payments!
+                </p>
+              </div>
+            ) : connectStatus?.status === 'pending' ? (
+              <div className="space-y-3">
+                <Button
+                  onClick={handleConnectStripe}
+                  disabled={connectLoading}
+                  className="w-full"
+                  variant="default"
+                >
+                  {connectLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Redirecting...
+                    </>
+                  ) : (
+                    <>
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Complete Stripe Setup
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Button
+                  onClick={handleConnectStripe}
+                  disabled={connectLoading}
+                  className="w-full"
+                  variant="default"
+                >
+                  {connectLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Redirecting...
+                    </>
+                  ) : (
+                    <>
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Connect Stripe Account
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
         {/* Wallet Overview Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Pending Amount */}

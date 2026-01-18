@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { getInvoices } from "@/app/actions/subscription.action"
 
 export interface Invoice {
-  id: number
+  id: string
   invoiceNumber: string
   status: string
   amount: number
@@ -13,12 +13,13 @@ export interface Invoice {
   invoiceDate: Date
   paidAt: Date | null
   description: string | null
-  subscription: {
+  stripeInvoiceId: string | null
+  stripeSubscriptionId: string | null
+  plan: {
     id: number
-    plan: {
-      id: number
-      title: string
-    } | null
+    title: string
+    period: string
+    amount: number
   } | null
 }
 

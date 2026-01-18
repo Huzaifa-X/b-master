@@ -340,7 +340,9 @@ export async function getAssistantChats(assistantId: string) {
             purchases: {
               some: {
                 buyerId: userId,
-                status: "completed"
+                paymentRecord: {
+                  status: "completed"
+                }
               }
             }
           } // Purchased

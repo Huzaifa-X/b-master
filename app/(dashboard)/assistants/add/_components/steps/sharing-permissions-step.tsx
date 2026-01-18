@@ -1,19 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { SharingPermissionsStepProps, SharedUser, PermissionType } from "@/types/assistant"
 import { cn } from "@/lib/utils"
-import { Lock, Globe, Check, Plus, X, User } from "lucide-react"
+import { Lock, Globe, Check, X, User, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -23,10 +16,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
-import { getAvailableContacts } from "@/app/actions/user.action"
-import { UserContact } from "@/types/user"
-
-
+import { verifyUserByEmail } from "@/app/actions/user.action"
+import {
+  TagsInput,
+  TagsInputInput,
+  TagsInputItem,
+  TagsInputList,
+} from "@/components/ui/tags-input"
 
 const PERMISSION_OPTIONS = [
   {
@@ -43,59 +39,100 @@ const PERMISSION_OPTIONS = [
   },
 ]
 
-// Mock contacts list - replace with actual data from your system
-const AVAILABLE_CONTACTS = [
-  { id: "1", name: "John Doe", email: "john@example.com" },
-  { id: "2", name: "Jane Smith", email: "jane@example.com" },
-  { id: "3", name: "Mike Johnson", email: "mike@example.com" },
-  { id: "4", name: "Sarah Williams", email: "sarah@example.com" },
-  { id: "5", name: "David Brown", email: "david@example.com" },
-]
-
 export function SharingPermissionsStep({
   formData,
   updateFormData,
 }: SharingPermissionsStepProps) {
-  const [availableContacts, setAvailableContacts] = useState<UserContact[]>([])
+  const [isVerifying, setIsVerifying] = useState(false)
+  // Derive email tags from sharedUsers for display in TagsInput
+  const emailTags = formData.sharedUsers.map((u: SharedUser) => u.email)
 
-  useEffect(() => {
-    getAvailableContacts().then(setAvailableContacts)
-  }, [])
+  const handleAddEmails = async (newEmails: string[]) => {
+    // Find the newly added email (diff between new and current)
+    const currentEmails = formData.sharedUsers.map((u: SharedUser) => u.email.toLowerCase())
+    const addedEmails = newEmails.filter(
+      (email) => !currentEmails.includes(email.toLowerCase())
+    )
 
-  const availableContactsNotAdded = availableContacts.filter(
-    (contact) => !formData.sharedUsers.some((user: SharedUser) => user.id === contact.id)
-  )
+    if (addedEmails.length === 0) return
 
-  const handleSelectContact = (contactId: string) => {
-    if (!contactId || contactId === "none") return
+    // Process each new email
+    for (const rawEmail of addedEmails) {
+      const email = rawEmail.trim().toLowerCase()
 
-    const contact = availableContacts.find((c) => c.id === contactId)
-    if (!contact) return
+      if (!email) continue
 
-    // Check if user already added
-    if (formData.sharedUsers.some((u: SharedUser) => u.id === contact.id)) {
-      toast.error("This user is already added")
-      return
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(email)) {
+        toast.error(`Invalid email format: ${rawEmail}`)
+        continue
+      }
+
+      // Check if already added
+      if (formData.sharedUsers.some((u: SharedUser) => u.email.toLowerCase() === email)) {
+        toast.error("This user is already added")
+        continue
+      }
+
+      setIsVerifying(true)
+      try {
+        const result = await verifyUserByEmail(email)
+
+        if (!result.success || !result.user) {
+          toast.error(result.error || `User not found: ${email}`)
+          continue
+        }
+
+        const newUser: SharedUser = {
+          id: result.user.id,
+          name: result.user.name || "",
+          email: result.user.email,
+          permissions: {
+            chat: true,
+            contact: true,
+            messenger: true,
+            artifact: true,
+            newsFeed: true,
+          },
+        }
+
+        updateFormData({
+          sharedUsers: [...formData.sharedUsers, newUser],
+        })
+
+        toast.success(`${result.user.name || result.user.email} added successfully`)
+      } catch {
+        toast.error(`Failed to verify user: ${email}`)
+      } finally {
+        setIsVerifying(false)
+      }
     }
+  }
 
-    const newUser = {
-      id: contact.id,
-      name: contact.name || "",
-      email: contact.email,
-      permissions: {
-        chat: true,
-        contact: true,
-        messenger: true,
-        artifact: true,
-        newsFeed: true,
-      },
+  const handleRemoveEmail = (removedEmails: string[]) => {
+    // Find which email was removed
+    const removedEmail = emailTags.find(
+      (email: string) => !removedEmails.includes(email)
+    )
+    if (removedEmail) {
+      updateFormData({
+        sharedUsers: formData.sharedUsers.filter(
+          (user: SharedUser) => user.email.toLowerCase() !== removedEmail.toLowerCase()
+        ),
+      })
+      toast.success("User removed")
     }
+  }
 
-    updateFormData({
-      sharedUsers: [...formData.sharedUsers, newUser as SharedUser],
-    })
-
-    toast.success("User added successfully")
+  const handleTagsChange = (newEmails: string[]) => {
+    if (newEmails.length > emailTags.length) {
+      // Email added
+      handleAddEmails(newEmails)
+    } else if (newEmails.length < emailTags.length) {
+      // Email removed
+      handleRemoveEmail(newEmails)
+    }
   }
 
   const removeUser = (userId: string) => {
@@ -114,9 +151,9 @@ export function SharingPermissionsStep({
       sharedUsers: formData.sharedUsers.map((user: SharedUser) =>
         user.id === userId
           ? {
-              ...user,
-              permissions: { ...user.permissions, [permission]: value },
-            }
+            ...user,
+            permissions: { ...user.permissions, [permission]: value },
+          }
           : user
       ),
     })
@@ -192,37 +229,27 @@ export function SharingPermissionsStep({
         {/* User Management - Only show for Private */}
         {formData.permissionLevel === "private" && (
           <div className="space-y-4">
-            <Label>Select Users</Label>
-            
-            {/* Select Contact Dropdown */}
-            <Select value="" onValueChange={handleSelectContact}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a contact to add..." />
-              </SelectTrigger>
-              <SelectContent>
-                {availableContactsNotAdded.length > 0 ? (
-                  availableContactsNotAdded.map((contact) => (
-                    <SelectItem 
-                      key={contact.id} 
-                      value={contact.id}
-                      className="focus:bg-muted focus:text-foreground"
-                    >
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-primary" />
-                        <div>
-                          <p className="font-medium">{contact.name}</p>
-                          <p className="text-xs text-muted-foreground">{contact.email}</p>
-                        </div>
-                      </div>
-                    </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="none" disabled>
-                    All contacts have been added
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+            <Label>Add Users by Email</Label>
+
+            {/* Email Tags Input */}
+            <TagsInput
+              value={emailTags}
+              onValueChange={handleTagsChange}
+              className="w-full"
+            >
+              <TagsInputList className="w-full">
+                {emailTags.map((email: string) => (
+                  <TagsInputItem key={email} value={email}>
+                    {email}
+                  </TagsInputItem>
+                ))}
+                <TagsInputInput
+                  placeholder={isVerifying ? "Verifying..." : "Type email and press Enter..."}
+                  disabled={isVerifying}
+                  className="min-w-[200px]"
+                />
+              </TagsInputList>
+            </TagsInput>
 
             {/* Permissions Table */}
             {formData.sharedUsers.length > 0 ? (
@@ -325,7 +352,7 @@ export function SharingPermissionsStep({
                 <User className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
                 <p className="text-sm font-medium mb-1">No users added yet</p>
                 <p className="text-xs text-muted-foreground">
-                  Select a contact from the dropdown above
+                  Add the User's email above
                 </p>
               </div>
             )}
@@ -336,21 +363,21 @@ export function SharingPermissionsStep({
         {formData.permissionLevel === "public" && (
           <div className="border rounded-lg p-6 bg-primary/5 border-primary/20">
             <div className="space-y-4">
-            <div className="flex gap-3">
-              <Globe className="h-6 w-6 text-primary shrink-0 mt-0.5" />
+              <div className="flex gap-3">
+                <Globe className="h-6 w-6 text-primary shrink-0 mt-0.5" />
                 <div className="flex-1">
-                <h4 className="font-medium mb-1">Public Assistant</h4>
+                  <h4 className="font-medium mb-1">Public Assistant</h4>
                   <p className="text-sm text-muted-foreground">
-                  This assistant will be available to all users in the BMaster Store.
-                </p>
+                    This assistant will be available to all users in the BMaster Store.
+                  </p>
                 </div>
               </div>
-              
+
               <div className="space-y-3">
                 <Label className="text-sm font-medium">
                   Select permissions for buyers/users:
                 </Label>
-                
+
                 <div className="space-y-2 bg-background rounded-lg p-4 border">
                   {/* Chat Permission */}
                   <div className="flex items-center justify-between py-2">
@@ -366,7 +393,7 @@ export function SharingPermissionsStep({
                         htmlFor="buyer-chat"
                         className="text-sm font-medium leading-none cursor-pointer"
                       >
-                      Chat
+                        Chat
                       </label>
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -410,7 +437,7 @@ export function SharingPermissionsStep({
                         htmlFor="buyer-newsfeed"
                         className="text-sm font-medium leading-none cursor-pointer"
                       >
-                      News Feed
+                        News Feed
                       </label>
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -432,7 +459,7 @@ export function SharingPermissionsStep({
                         htmlFor="buyer-messenger"
                         className="text-sm font-medium leading-none cursor-pointer"
                       >
-                      Messenger
+                        Messenger
                       </label>
                     </div>
                     <p className="text-xs text-muted-foreground">

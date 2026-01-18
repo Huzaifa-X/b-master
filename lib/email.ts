@@ -1,45 +1,53 @@
 import nodemailer from 'nodemailer'
+import type { Transporter } from 'nodemailer'
 
-const createTransporter = () => {
-  // Decode base64 password
-  const password = Buffer.from(process.env.SMTP_PASSWORD!, 'base64').toString('utf-8')
-  console.log('   Password decoded successfully')
+// Lazy initialization - transporter is created only once on first use
+let transporter: Transporter | null = null
 
-  return nodemailer.createTransport({
+const getTransporter = () => {
+  if (!transporter) {
+    // Decode base64 password
+    // const password = Buffer.from(process.env.SMTP_PASSWORD!, 'base64').toString('utf-8')
+    console.log('📧 Initializing email transporter...')
+
+    transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
-          user: process.env.SMTP_USER,
-          pass: password, // Decoded password
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD, // Decoded password
       },
       tls: {
-          rejectUnauthorized: false,
-          minVersion: 'TLSv1.2'
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2'
       },
       connectionTimeout: 10000,
       greetingTimeout: 10000,
       socketTimeout: 10000,
       debug: process.env.NODE_ENV === 'development',
       logger: process.env.NODE_ENV === 'development'
-  })
+    })
+
+    console.log('✅ Email transporter initialized successfully')
+  }
+
+  return transporter
 }
 
-const transporter = createTransporter()
-
 interface SendOTPEmailParams {
-    email: string
-    name: string
-    otp: string
+  email: string
+  name: string
+  otp: string
 }
 
 export async function sendOTPEmail({ email, name, otp }: SendOTPEmailParams) {
-    try {
-        const info = await transporter.sendMail({
-            from: `"B-Master" <${process.env.SMTP_FROM}>`,
-            to: email,
-            subject: 'Verify Your Email - B-Master',
-            html: `
+  try {
+    const info = await getTransporter().sendMail({
+      from: `"B-Master" <${process.env.SMTP_FROM}>`,
+      to: email,
+      subject: 'Verify Your Email - B-Master',
+      html: `
         <!DOCTYPE html>
         <html>
           <head>
@@ -112,42 +120,42 @@ export async function sendOTPEmail({ email, name, otp }: SendOTPEmailParams) {
           </body>
         </html>
       `,
-        })
+    })
 
-        return { success: true, messageId: info.messageId }
-    } catch (error) {
-        console.error('Email sending error:', error)
-        return { success: false, error }
-    }
+    return { success: true, messageId: info.messageId }
+  } catch (error) {
+    console.error('Email sending error:', error)
+    return { success: false, error }
+  }
 }
 
 interface SendArtifactUpdateEmailParams {
-    recipientEmail: string
-    recipientName: string
-    updaterName: string
-    artifactName: string
-    versionNumber: number
-    artifactId: string
-    assistantId: string
+  recipientEmail: string
+  recipientName: string
+  updaterName: string
+  artifactName: string
+  versionNumber: number
+  artifactId: string
+  assistantId: string
 }
 
 export async function sendArtifactUpdateEmail({
-    recipientEmail,
-    recipientName,
-    updaterName,
-    artifactName,
-    versionNumber,
-    artifactId,
-    assistantId
+  recipientEmail,
+  recipientName,
+  updaterName,
+  artifactName,
+  versionNumber,
+  artifactId,
+  assistantId
 }: SendArtifactUpdateEmailParams) {
-    try {
-        const artifactUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/assistants/${assistantId}/artifacts/${artifactId}`
+  try {
+    const artifactUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/assistants/${assistantId}/artifacts/${artifactId}`
 
-        const info = await transporter.sendMail({
-            from: `"B-Master" <${process.env.SMTP_FROM}>`,
-            to: recipientEmail,
-            subject: `🔄 Artifact Updated: ${artifactName}`,
-            html: `
+    const info = await getTransporter().sendMail({
+      from: `"B-Master" <${process.env.SMTP_FROM}>`,
+      to: recipientEmail,
+      subject: `🔄 Artifact Updated: ${artifactName}`,
+      html: `
         <!DOCTYPE html>
         <html>
           <head>
@@ -252,15 +260,15 @@ export async function sendArtifactUpdateEmail({
           </body>
         </html>
       `,
-        })
+    })
 
-        return { success: true, messageId: info.messageId }
-    } catch (error) {
-        console.error('Artifact update email sending error:', error)
-        return { success: false, error }
-    }
+    return { success: true, messageId: info.messageId }
+  } catch (error) {
+    console.error('Artifact update email sending error:', error)
+    return { success: false, error }
+  }
 }
 
 export function generateOTP(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString()
+  return Math.floor(100000 + Math.random() * 900000).toString()
 }

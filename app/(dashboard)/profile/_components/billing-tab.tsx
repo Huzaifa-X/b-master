@@ -3,48 +3,36 @@
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { FileText, XCircle, Loader2 } from "lucide-react"
+import { FileText, Loader2 } from "lucide-react"
 import { useSubscription } from "@/hooks/useSubscription"
 import { useInvoices } from "@/hooks/useInvoices"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 
 export default function BillingTab() {
-  const router = useRouter()
   const {
     subscription,
     loading: subscriptionLoading,
-    cancelSubscription,
-    isCanceling
+    createPortal,
+    isCreatingPortal,
   } = useSubscription()
+
   const { invoices, loading: invoicesLoading } = useInvoices()
 
-  const handleAdjustPlan = () => {
-    router.push("/pricing")
-  }
-
-  const handleCancelSubscription = async () => {
+  /**
+   * Open Stripe Billing Portal - Following Guide 3
+   */
+  const handleManagePlan = async () => {
     try {
-      const result = await cancelSubscription()
+      const result = await createPortal()
 
-      if (result.success) {
-        toast.success(result.message || "Subscription canceled successfully")
+      if (result.success && result.url) {
+        // Redirect to Stripe portal
+        window.location.href = result.url
       } else {
-        toast.error(result.error || "Failed to cancel subscription")
+        toast.error(result.error || "Failed to open billing portal")
       }
     } catch (error: any) {
-      console.error("Error canceling subscription:", error)
+      console.error("Error opening portal:", error)
       toast.error(error.message || "Something went wrong")
     }
   }
@@ -65,16 +53,18 @@ export default function BillingTab() {
     }).format(amount)
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "paid":
-        return "text-green-500"
-      case "open":
-        return "text-yellow-500"
-      case "draft":
-        return "text-gray-500"
+  const getStatusBadge = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "active":
+        return <span className="px-2 py-1 text-xs rounded-full bg-green-500/10 text-green-500">Active</span>
+      case "trialing":
+        return <span className="px-2 py-1 text-xs rounded-full bg-blue-500/10 text-blue-500">Trial</span>
+      case "canceled":
+        return <span className="px-2 py-1 text-xs rounded-full bg-gray-500/10 text-gray-500">Canceled</span>
+      case "past_due":
+        return <span className="px-2 py-1 text-xs rounded-full bg-yellow-500/10 text-yellow-500">Past Due</span>
       default:
-        return "text-muted-foreground"
+        return <span className="px-2 py-1 text-xs rounded-full bg-gray-500/10 text-gray-500">{status}</span>
     }
   }
 
@@ -117,13 +107,11 @@ export default function BillingTab() {
                 <div>
                   <h3 className="text-lg font-semibold">{subscription.plan?.title || "Free"}</h3>
                   <p className="text-sm text-muted-foreground capitalize">
-                    {subscription.plan?.period || "Free"}
+                    {subscription.plan?.period || "Free"} • {formatCurrency(subscription.plan?.amount || 0)}
                   </p>
                   {subscription.currentPeriodEnd && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      {subscription.cancelAtPeriodEnd
-                        ? `Subscription will end on ${formatDate(subscription.currentPeriodEnd)}`
-                        : `Your subscription will auto renew on ${formatDate(subscription.currentPeriodEnd)}`}
+                      Renews on {formatDate(subscription.currentPeriodEnd)}
                     </p>
                   )}
                   {subscription.status === "trialing" && (
@@ -135,9 +123,17 @@ export default function BillingTab() {
                 variant="outline"
                 size="sm"
                 className="hover:text-primary hover:bg-transparent"
-                onClick={handleAdjustPlan}
+                onClick={handleManagePlan}
+                disabled={isCreatingPortal}
               >
-                Adjust plan
+                {isCreatingPortal ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Opening...
+                  </>
+                ) : (
+                  "Manage Plan"
+                )}
               </Button>
             </div>
           ) : (
@@ -157,7 +153,7 @@ export default function BillingTab() {
                 variant="outline"
                 size="sm"
                 className="hover:text-primary hover:bg-transparent"
-                onClick={handleAdjustPlan}
+                onClick={() => window.location.href = "/pricing"}
               >
                 Upgrade Plan
               </Button>
@@ -165,40 +161,14 @@ export default function BillingTab() {
           )}
         </Card>
 
-        {/* Payment Method Card - Commented out as requested */}
-        {/* <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <CreditCard className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">Payment</h3>
-                <div className="flex items-center gap-2 mt-1">
-                  <CreditCard className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Mastercard</span>
-                  <span className="text-sm text-muted-foreground">•••• 6458</span>
-                </div>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="hover:text-primary hover:bg-transparent"
-            >
-              Update
-            </Button>
-          </div>
-        </Card> */}
-
-        {/* Invoices Card */}
+        {/* Subscription History Card */}
         <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50">
           <div className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
                 <FileText className="w-6 h-6 text-primary" />
               </div>
-              <h3 className="text-lg font-semibold">Invoices</h3>
+              <h3 className="text-lg font-semibold">Subscription History</h3>
             </div>
 
             {invoicesLoading ? (
@@ -212,112 +182,37 @@ export default function BillingTab() {
                   </div>
                 ))}
               </div>
-            ) : invoices.length > 0 ? (
+            ) : invoices && invoices.length > 0 ? (
               <div className="overflow-hidden">
                 <div className="grid grid-cols-4 gap-4 text-sm font-medium text-muted-foreground border-b border-border pb-2">
                   <div>Date</div>
-                  <div>Invoice #</div>
-                  <div>Total</div>
+                  <div>Plan</div>
+                  <div>Amount</div>
                   <div>Status</div>
                 </div>
 
                 <div className="space-y-3 mt-3">
                   {invoices.map((invoice) => (
                     <div key={invoice.id} className="grid grid-cols-4 gap-4 text-sm">
-                      <div>{formatDate(invoice.invoiceDate)}</div>
-                      <div className="text-muted-foreground">{invoice.invoiceNumber}</div>
-                      <div>{formatCurrency(invoice.totalAmount, invoice.currency)}</div>
-                      <div className={getStatusColor(invoice.status)}>
-                        {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                      <div className="text-muted-foreground">
+                        {formatDate(invoice.invoiceDate)}
                       </div>
+                      <div className="font-medium">
+                        {invoice.plan?.title || "Subscription"}
+                      </div>
+                      <div>{formatCurrency(invoice.amount, invoice.currency)}</div>
+                      <div>{getStatusBadge(invoice.status)}</div>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
               <div className="text-center py-8 text-sm text-muted-foreground">
-                No invoices found
+                No subscription history found
               </div>
             )}
           </div>
         </Card>
-
-        {/* Cancellation Card */}
-        {subscription && subscription.status === "active" && !subscription.cancelAtPeriodEnd && (
-          <Card className="p-6 bg-transparent backdrop-blur-sm border-border/50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-lg bg-destructive/10 flex items-center justify-center">
-                  <XCircle className="w-6 h-6 text-destructive" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">Cancellation</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Cancel your subscription at the end of the current period
-                  </p>
-                </div>
-              </div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" disabled={isCanceling}>
-                    {isCanceling ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Canceling...
-                      </>
-                    ) : (
-                      "Cancel"
-                    )}
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Cancel Subscription?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Are you sure you want to cancel your subscription? Your subscription will
-                      remain active until the end of the current billing period (
-                      {subscription.currentPeriodEnd
-                        ? formatDate(subscription.currentPeriodEnd)
-                        : "N/A"}
-                      ). You will continue to have access to all features until then.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Keep Subscription</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleCancelSubscription}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      Yes, Cancel Subscription
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          </Card>
-        )}
-
-        {/* Already Canceled Card */}
-        {subscription && subscription.cancelAtPeriodEnd && (
-          <Card className="p-6 bg-transparent backdrop-blur-sm border-yellow-500/50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-                  <XCircle className="w-6 h-6 text-yellow-500" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">Subscription Canceled</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Your subscription will end on{" "}
-                    {subscription.currentPeriodEnd
-                      ? formatDate(subscription.currentPeriodEnd)
-                      : "N/A"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </Card>
-        )}
       </div>
     </div>
   )

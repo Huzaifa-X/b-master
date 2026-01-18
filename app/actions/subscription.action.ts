@@ -5,6 +5,10 @@ import prisma from "@/lib/prisma"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 
+// ============================================================
+// CHECKOUT SESSION TYPES
+// ============================================================
+
 export interface CreateCheckoutSessionResult {
   success: boolean
   url?: string
@@ -13,12 +17,15 @@ export interface CreateCheckoutSessionResult {
 
 /**
  * Create a Stripe Checkout Session for subscription
+ * Following Guide 1: Stripe Checkout API Implementation
  */
 export async function createCheckoutSession(
   planId: number
 ): Promise<CreateCheckoutSessionResult> {
   try {
-    // Get current user session
+    // ============================================
+    // 1. AUTHENTICATION & AUTHORIZATION
+    // ============================================
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return {
@@ -29,7 +36,9 @@ export async function createCheckoutSession(
 
     const userId = BigInt(session.user.id)
 
-    // Get the plan
+    // ============================================
+    // 2. PLAN VALIDATION
+    // ============================================
     const plan = await prisma.plan.findUnique({
       where: { id: planId },
     })
@@ -63,7 +72,9 @@ export async function createCheckoutSession(
       }
     }
 
-    // Get or create Stripe customer
+    // ============================================
+    // 3. USER VERIFICATION
+    // ============================================
     const user = await prisma.user.findUnique({
       where: { id: userId },
     })
@@ -75,10 +86,61 @@ export async function createCheckoutSession(
       }
     }
 
-    let stripeCustomerId = user.stripeAccountId
+    // ============================================
+    // 4. DUPLICATE SUBSCRIPTION PREVENTION (Backend)
+    // ============================================
+    if (user.stripeSubscriptionId) {
+      // Double-check with Stripe that subscription is actually active
+      try {
+        const subscription = await stripe.subscriptions.retrieve(
+          user.stripeSubscriptionId
+        )
+
+        if (subscription.status === "active" || subscription.status === "trialing") {
+          return {
+            success: false,
+            error: "You already have an active subscription. Please manage it from your dashboard.",
+          }
+        }
+
+        // If subscription is cancelled/expired, clean up old data
+        console.log(`[Checkout] Cleaning up expired subscription for user ${userId}`)
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            stripeSubscriptionId: null,
+            subscriptionStatus: null,
+            subscriptionPeriodEnd: null,
+            currentPlanId: null,
+          },
+        })
+      } catch (error: any) {
+        // Subscription doesn't exist in Stripe, clean up database
+        if (error.code === 'resource_missing') {
+          console.log(`[Checkout] Subscription not found in Stripe, cleaning up database`)
+          await prisma.user.update({
+            where: { id: userId },
+            data: {
+              stripeSubscriptionId: null,
+              subscriptionStatus: null,
+              subscriptionPeriodEnd: null,
+              currentPlanId: null,
+            },
+          })
+        } else {
+          throw error
+        }
+      }
+    }
+
+    // ============================================
+    // 5. STRIPE CUSTOMER MANAGEMENT
+    // ============================================
+    let stripeCustomerId = user.stripeCustomerId
 
     // Create Stripe customer if doesn't exist
     if (!stripeCustomerId) {
+      console.log(`[Checkout] Creating new Stripe customer for user ${userId}`)
       const customer = await stripe.customers.create({
         email: user.email,
         name: user.name || undefined,
@@ -90,16 +152,17 @@ export async function createCheckoutSession(
       // Save Stripe customer ID to database
       await prisma.user.update({
         where: { id: userId },
-        data: { stripeAccountId: customer.id },
+        data: { stripeCustomerId: customer.id },
       })
 
       stripeCustomerId = customer.id
     }
 
-    // Get base URL for redirects
+    // ============================================
+    // 6. CHECKOUT SESSION CREATION
+    // ============================================
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000"
 
-    // Create Stripe Checkout Session
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       payment_method_types: ["card"],
@@ -124,12 +187,30 @@ export async function createCheckoutSession(
       },
     })
 
+    console.log(`[Checkout] Created checkout session ${checkoutSession.id} for user ${userId}`)
+
     return {
       success: true,
       url: checkoutSession.url || undefined,
     }
   } catch (error: any) {
     console.error("Error creating checkout session:", error)
+
+    // Provide more specific error messages for Stripe errors
+    if (error.type === 'StripeInvalidRequestError') {
+      return {
+        success: false,
+        error: error.message || "Invalid request to Stripe",
+      }
+    }
+
+    if (error.type === 'StripeAPIError') {
+      return {
+        success: false,
+        error: "Payment service is temporarily unavailable. Please try again later.",
+      }
+    }
+
     return {
       success: false,
       error: error.message || "Failed to create checkout session",
@@ -139,6 +220,7 @@ export async function createCheckoutSession(
 
 /**
  * Get user's current subscription
+ * NOTE: Subscription data is now stored directly on the User model
  */
 export async function getCurrentSubscription() {
   try {
@@ -149,42 +231,159 @@ export async function getCurrentSubscription() {
 
     const userId = BigInt(session.user.id)
 
-    const subscription = await prisma.subscription.findFirst({
-      where: {
-        userId,
-        status: {
-          in: ["active", "trialing"],
-        },
-        deletedAt: null,
-      },
-      include: {
-        plan: true,
-      },
-      orderBy: {
-        createdAt: "desc",
+    // Query User model with subscription fields
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        stripeCustomerId: true,
+        stripeSubscriptionId: true,
+        subscriptionStatus: true,
+        subscriptionPeriodEnd: true,
+        currentPlanId: true,
+        currentPlan: true, // Include the related Plan
+        cancelAtPeriodEnd: true, // ✅ NEW: Track cancellation
+        scheduledPlanChangeId: true, // ✅ NEW: Track scheduled downgrade
+        scheduledPlanChange: true, // ✅ NEW: Include scheduled plan details
+        createdAt: true,
       },
     })
 
-    if (!subscription) {
+    if (!user) {
       return null
     }
 
-    // Convert Decimal objects to numbers for client component serialization
+    // Check if user has an active subscription
+    if (!user.subscriptionStatus ||
+      !["active", "trialing"].includes(user.subscriptionStatus) ||
+      !user.currentPlan) {
+      return null
+    }
+
+    // Return subscription data in the expected format
     return {
-      ...subscription,
-      id: Number(subscription.id),
-      userId: subscription.userId.toString(),
-      planId: Number(subscription.planId),
-      amount: Number(subscription.amount),
+      id: user.stripeSubscriptionId || "",
+      userId: user.id.toString(),
+      planId: user.currentPlanId,
+      status: user.subscriptionStatus,
+      periodEnd: user.subscriptionPeriodEnd,
+      stripeSubscriptionId: user.stripeSubscriptionId,
+      stripeCustomerId: user.stripeCustomerId,
+      createdAt: user.createdAt,
+      cancelAtPeriodEnd: user.cancelAtPeriodEnd || false, // ✅ NEW
+      scheduledPlanChangeId: user.scheduledPlanChangeId, // ✅ NEW
       plan: {
-        ...subscription.plan,
-        id: Number(subscription.plan.id),
-        amount: Number(subscription.plan.amount),
+        id: user.currentPlan.id,
+        title: user.currentPlan.title,
+        description: user.currentPlan.description,
+        period: user.currentPlan.period,
+        amount: Number(user.currentPlan.amount),
+        features: user.currentPlan.features,
+        assistantLimit: user.currentPlan.assistantLimit,
       },
+      scheduledPlan: user.scheduledPlanChange ? { // ✅ NEW
+        id: user.scheduledPlanChange.id,
+        title: user.scheduledPlanChange.title,
+        amount: Number(user.scheduledPlanChange.amount),
+      } : null,
     }
   } catch (error) {
     console.error("Error getting subscription:", error)
     return null
+  }
+}
+
+// ============================================================
+// BILLING PORTAL
+// ============================================================
+
+export interface CreatePortalSessionResult {
+  success: boolean
+  url?: string
+  error?: string
+}
+
+/**
+ * Create a Stripe Billing Portal session
+ * Following Guide 3: Billing Portal Integration
+ */
+export async function createPortalSession(): Promise<CreatePortalSessionResult> {
+  try {
+    // ============================================
+    // 1. AUTHENTICATION CHECK
+    // ============================================
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.id) {
+      return {
+        success: false,
+        error: "You must be logged in to access the billing portal",
+      }
+    }
+
+    const userId = BigInt(session.user.id)
+
+    // ============================================
+    // 2. USER & SUBSCRIPTION VERIFICATION
+    // ============================================
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    })
+
+    if (!user) {
+      return {
+        success: false,
+        error: "User not found",
+      }
+    }
+
+    if (!user.stripeCustomerId) {
+      return {
+        success: false,
+        error: "No subscription found. Please subscribe to a plan first.",
+      }
+    }
+
+    // Optional: Check if user has active subscription
+    if (!user.stripeSubscriptionId) {
+      return {
+        success: false,
+        error: "No active subscription found.",
+      }
+    }
+
+    // ============================================
+    // 3. PORTAL SESSION CREATION
+    // ============================================
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000"
+
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: user.stripeCustomerId,
+      return_url: `${baseUrl}/home`,
+    })
+
+    console.log(`[Portal] Created portal session for user ${userId}`)
+
+    return {
+      success: true,
+      url: portalSession.url || undefined,
+    }
+
+  } catch (error: any) {
+    console.error("[Portal] Error creating portal session:", error)
+
+    // Handle Stripe-specific errors
+    if (error.type === 'StripeInvalidRequestError') {
+      return {
+        success: false,
+        error: "Customer not found. Please contact support.",
+      }
+    }
+
+    return {
+      success: false,
+      error: error.message || "Failed to create portal session",
+    }
   }
 }
 
@@ -217,7 +416,7 @@ export async function getPlans() {
 }
 
 /**
- * Get user's invoices
+ * Get user's subscription payment history from PaymentRecord table
  */
 export async function getInvoices() {
   try {
@@ -228,114 +427,52 @@ export async function getInvoices() {
 
     const userId = BigInt(session.user.id)
 
-    const invoices = await prisma.invoice.findMany({
+    // Fetch subscription payment records for this user
+    const paymentRecords = await prisma.paymentRecord.findMany({
       where: {
         userId,
-        deletedAt: null,
-      },
-      include: {
-        subscription: {
-          include: {
-            plan: true,
-          },
+        type: {
+          in: ["subscription", "plan_change", "downgrade", "upgrade"], // Only subscription payments
+        },
+        status: {
+          in: ["completed", "processing", "pending"], // Include relevant statuses
         },
       },
       orderBy: {
-        invoiceDate: "desc",
+        createdAt: "desc",
       },
     })
 
-    return invoices.map((invoice) => ({
-      id: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
-      status: invoice.status,
-      amount: Number(invoice.amount),
-      currency: invoice.currency,
-      totalAmount: Number(invoice.totalAmount),
-      invoiceDate: invoice.invoiceDate,
-      paidAt: invoice.paidAt,
-      description: invoice.description,
-      subscription: invoice.subscription
-        ? {
-            id: invoice.subscription.id,
-            plan: invoice.subscription.plan
-              ? {
-                  id: invoice.subscription.plan.id,
-                  title: invoice.subscription.plan.title,
-                }
-              : null,
+    // Transform payment records into invoice format
+    return paymentRecords.map((record) => {
+      // Extract plan info from metadata if available
+      const metadata = record.metadata as any
+      const planInfo = metadata?.plan || null
+
+      return {
+        id: record.id.toString(),
+        invoiceNumber: record.stripeInvoiceId || `INV-${record.id}`,
+        status: record.status,
+        amount: Number(record.amount),
+        currency: record.currency,
+        totalAmount: Number(record.amount), // For subscriptions, amount = totalAmount
+        invoiceDate: record.createdAt,
+        paidAt: record.completedAt,
+        description: record.description || `Subscription payment`,
+        stripeInvoiceId: record.stripeInvoiceId,
+        stripeSubscriptionId: record.stripeSubscriptionId,
+        plan: planInfo
+          ? {
+            id: planInfo.id,
+            title: planInfo.title || planInfo.name,
+            period: planInfo.period,
+            amount: planInfo.amount,
           }
-        : null,
-    }))
+          : null,
+      }
+    })
   } catch (error) {
-    console.error("Error getting invoices:", error)
+    console.error("Error getting subscription payment history:", error)
     return []
   }
 }
-
-/**
- * Cancel subscription
- */
-export async function cancelSubscription() {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return {
-        success: false,
-        error: "You must be logged in to cancel your subscription",
-      }
-    }
-
-    const userId = BigInt(session.user.id)
-
-    // Get current active subscription
-    const subscription = await prisma.subscription.findFirst({
-      where: {
-        userId,
-        status: {
-          in: ["active", "trialing"],
-        },
-        deletedAt: null,
-      },
-    })
-
-    if (!subscription) {
-      return {
-        success: false,
-        error: "No active subscription found",
-      }
-    }
-
-    if (!subscription.stripeSubscriptionId) {
-      return {
-        success: false,
-        error: "Subscription is not linked to Stripe",
-      }
-    }
-
-    // Cancel subscription in Stripe
-    await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
-      cancel_at_period_end: true,
-    })
-
-    // Update subscription in database
-    await prisma.subscription.update({
-      where: { id: subscription.id },
-      data: {
-        cancelAtPeriodEnd: true,
-      },
-    })
-
-    return {
-      success: true,
-      message: "Subscription will be canceled at the end of the current period",
-    }
-  } catch (error: any) {
-    console.error("Error canceling subscription:", error)
-    return {
-      success: false,
-      error: error.message || "Failed to cancel subscription",
-    }
-  }
-}
-
