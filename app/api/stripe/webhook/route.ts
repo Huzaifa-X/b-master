@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
                         const amount = assistant.price.toNumber();
                         const platformFee = amount * 0.15; // 15%
                         const netAmount = amount - platformFee;
-                        // Update payment record to completed
+                        // Update payment record to completed with assistant name in metadata
                         await prisma.paymentRecord.updateMany({
                             where: {
                                 stripeCheckoutSessionId: session.id,
@@ -117,6 +117,12 @@ export async function POST(req: NextRequest) {
                                 status: "completed",
                                 stripePaymentIntentId: paymentIntent.id,
                                 completedAt: new Date(),
+                                metadata: {
+                                    assistantId: assistantId,
+                                    assistantName: assistant.name,
+                                    buyerId: userId.toString(),
+                                    creatorId: assistant.userId.toString(),
+                                },
                             },
                         });
                         // Update creator's wallet
@@ -472,8 +478,10 @@ export async function POST(req: NextRequest) {
 
             case "account.updated": {
                 const account = event.data.object as Stripe.Account;
+
+                // Determine status - check all three critical properties
                 let status = 'pending';
-                if (account.charges_enabled && account.payouts_enabled) {
+                if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
                     status = 'active';
                 } else if (account.requirements?.disabled_reason) {
                     status = 'restricted';

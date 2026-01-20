@@ -10,8 +10,7 @@ import { safeUploadToS3 } from "@/lib/aws-s3"
 import { OpenAPITool } from "@/lib/openapi-tool-converter"
 import { executeAPITool, loadAPITools, toOpenAIToolDefinitions } from "@/lib/api-tools-loader"
 import { decrypt } from "@/lib/encryption"
-import { generateInvoicePDFFromData } from "@/lib/services/invoice-pdf-service"
-import { generatePDFFromHTML } from "@/lib/services/pdf-generator"
+import { createStripeConnectInvoice } from "@/lib/services/stripe-connect-invoice.service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -56,7 +55,6 @@ async function saveImageToS3(
  */
 export async function POST(req: NextRequest) {
   const encoder = new TextEncoder()
-  let isArtifactRequest = false;
 
   try {
     // Check authentication
@@ -148,287 +146,31 @@ export async function POST(req: NextRequest) {
       systemPrompt += `\n\nIMPORTANT: The user has enabled Dropbox integration. You can access their Dropbox files and perform file operations.`
     }
 
-    // ==========================================
-    // FINAL PRODUCTION-READY STRIPE INVOICE PROMPT
-    // Replace lines 132-195 in app/api/chat/stream/route.ts
-    // ==========================================
 
-    // Add Stripe invoice creation instructions
-    systemPrompt += `\n\n## Stripe Invoice Creation Workflow
+    // STRIPE CONNECT OVERRIDE - Use custom function instead of MCP
+    systemPrompt += `\n\n## 💳 IMPORTANT: Stripe Connect Invoice Creation
 
-      When the user requests invoice creation, you MUST gather all required information BEFORE creating the invoice.
+      **CRITICAL: Use the create_stripe_connect_invoice FUNCTION to create invoices (NOT Stripe MCP).**
 
-      ### Step 0: Information Gathering (MANDATORY FIRST STEP)
+      When creating invoices, call the create_stripe_connect_invoice function with:
+      - customerName (required)
+      - customerEmail (required)
+      - amount (required - in dollars, e.g., 100.50)
+      - description (required - what the invoice is for)
+      - currency (optional - defaults to "chf")
+      - daysUntilDue (optional - defaults to 7)
 
-      **Before calling ANY Stripe tools, verify you have ALL required information:**
+      **What happens:**
+      1. Checks if user has a connected Stripe account (stripeConnectAccountId)
+      2. If NO: Returns error asking them to connect Stripe in profile settings
+      3. If YES: Creates invoice on THEIR connected account + generates PDF
+      4. Returns both Stripe payment link AND PDF download link
 
-      1. **Customer Information:**
-         - Full name (from @mention or user input)
-         - Email address (from @mention or user input)
-         - ✅ If mentioned user provided (@mention), you already have name and email - don't ask again!
-
-      2. **Invoice Details:**
-         - ⚠️ **Description of service/product** (REQUIRED - NEVER generate without this!)
-         - Amount/price (from user message)
-         - Currency (default to CHF if not specified, or ask)
-
-      3. **Optional Information (ask if relevant to context):**
-         - Invoice due date / payment terms (e.g., "Net 7", "Net 30")
-         - Invoice date (default to today if not specified)
-         - Additional line items or details
-
-      **CRITICAL RULES:**
-      - ❌ NEVER generate an invoice with missing description - always ask!
-      - ❌ NEVER assume invoice details - ask for clarification
-      - ❌ NEVER proceed to Stripe MCP calls if description is missing
-      - ✅ If user mentions someone (@mention), you already have their email - use it!
-      - ✅ Ask ONE question with ALL missing fields at once (don't ask multiple times)
-      - ✅ Use a natural, conversational tone when asking
-      - ✅ Only proceed to Step 1 after ALL required information is confirmed
-
-      **Example Clarification Questions:**
-
-      If description is missing:
-      "I'll create an invoice for [Name] at [Amount] CHF. Before I proceed, could you please provide:
-      - **Description** of the service/product (what is this invoice for?)
-      - Payment terms (e.g., due in 7 days, 30 days, etc.) - optional
-      - Any additional details for the invoice"
-
-      If both description and amount are missing:
-      "I'd be happy to create an invoice for [Name]. Could you please provide:
-      - **Amount** to charge
-      - **Description** of the service/product
-      - Payment terms (optional)"
-
-      ### 🎯 Complete Invoice Flow (6 Steps - ONLY after Step 0 is complete)
-
-      **Step 1: Get or Create Customer**
-      - Tool: \`create_customer\` or search with \`search_stripe_resources\`
-      - Required: email, name
-      - Returns: \`customer_id\` (e.g., "cus_...")
-
-      **Step 2: Create Product**
-      - Tool: \`create_product\`
-      - Required: name (e.g., "SEO Career Support - Basic Package")
-      - Optional: description
-      - Returns: \`product_id\` (e.g., "prod_...")
-
-      **Step 3: Create ONE-TIME Price**
-      - Tool: \`create_price\`
-      - Required parameters ONLY:
-        - \`product\`: "prod_..." (from Step 2)
-        - \`unit_amount\`: amount in cents (e.g., 2000 = 20.00 CHF)
-        - \`currency\`: lowercase code (e.g., "chf", "usd", "eur")
-      - **CRITICAL:** Do NOT include \`recurring\` parameter - omitting it creates a one-time price
-      - **WRONG:** \`{product, unit_amount, currency, recurring: {interval: "month"}}\` ❌
-      - **CORRECT:** \`{product, unit_amount, currency}\` ✅ (no recurring field!)
-      - Returns: \`price_id\` (e.g., "price_...")
-
-      **Step 4: Create Draft Invoice**
-      - Tool: \`create_invoice\`
-      - Required: \`customer\` (customer_id from Step 1)
-      - Optional: \`days_until_due\` (e.g., 7 for Net 7 terms), \`description\`
-      - Returns: \`invoice_id\` (e.g., "in_...")
-
-      **Step 5: Add Line Item to Invoice**
-      - Tool: \`create_invoice_item\`
-      - Required:
-        - \`invoice\`: invoice_id from Step 4
-        - \`price\`: price_id from Step 3
-      - Optional: \`quantity\` (default: 1)
-      - Returns: Line item added to draft invoice
-
-      **Step 6: Finalize Invoice**
-      - Tool: \`finalize_invoice\`
-      - Required: \`invoice\` (invoice_id from Step 4)
-      - Returns: Finalized invoice with status "open" and \`hosted_invoice_url\` for payment
-
-      ### ✅ Correct MCP Tool Call Example
-
-      \`\`\`json
-      // Step 3: Create ONE-TIME Price (CORRECT)
-      {
-        "name": "create_price",
-        "arguments": {
-          "product": "prod_Th1bJ3LBv7PTiQ",
-          "unit_amount": 2000,
-          "currency": "chf"
-        }
-      }
-      // ✅ This creates a one-time price because "recurring" is omitted
-      \`\`\`
-
-      ### ❌ Common Mistakes to AVOID
-
-      \`\`\`json
-      // ❌ WRONG - Don't add "type" parameter
-      {
-        "name": "create_price",
-        "arguments": {
-          "product": "prod_...",
-          "unit_amount": 2000,
-          "currency": "chf",
-          "type": "one_time"  // ❌ This parameter doesn't exist in Stripe API!
-        }
-      }
-
-      // ❌ WRONG - Don't add "recurring" for invoices
-      {
-        "name": "create_price",
-        "arguments": {
-          "product": "prod_...",
-          "unit_amount": 2000,
-          "currency": "chf",
-          "recurring": { "interval": "month" }  // ❌ This creates a subscription price!
-        }
-      }
-      \`\`\`
-
-      ### 📋 Complete Real-World Example
-
-      **User Request:** "Create invoice for Hassan (hassanmuzaffar100@gmail.com) for 20 CHF for SEO career support"
-
-      **Correct MCP Call Sequence:**
-
-      \`\`\`json
-      // 1. Create customer (or retrieve if exists)
-      {
-        "name": "create_customer",
-        "arguments": {
-          "email": "hassanmuzaffar100@gmail.com",
-          "name": "M Hassan Muzaffar"
-        }
-      }
-      // → Returns: { "id": "cus_Tfi1ZIvpa60tGx", ... }
-
-      // 2. Create product
-      {
-        "name": "create_product",
-        "arguments": {
-          "name": "SEO Career Support - Basic Package"
-        }
-      }
-      // → Returns: { "id": "prod_Th1bJ3LBv7PTiQ", ... }
-
-      // 3. Create one-time price (NO recurring field!)
-      {
-        "name": "create_price",
-        "arguments": {
-          "product": "prod_Th1bJ3LBv7PTiQ",
-          "unit_amount": 2000,
-          "currency": "chf"
-        }
-      }
-      // → Returns: { "id": "price_...", "type": "one_time", ... }
-
-      // 4. Create draft invoice
-      {
-        "name": "create_invoice",
-        "arguments": {
-          "customer": "cus_Tfi1ZIvpa60tGx",
-          "days_until_due": 7,
-          "description": "Invoice for SEO Career Support - Basic Package"
-        }
-      }
-      // → Returns: { "id": "in_1SjdYqGwVMSCaO58lIzPCRA4", "status": "draft", ... }
-
-      // 5. Add line item
-      {
-        "name": "create_invoice_item",
-        "arguments": {
-          "invoice": "in_1SjdYqGwVMSCaO58lIzPCRA4",
-          "price": "price_...",
-          "quantity": 1
-        }
-      }
-      // → Returns: { "invoice": "in_...", "amount": 2000, ... }
-
-      // 6. Finalize invoice
-      {
-        "name": "finalize_invoice",
-        "arguments": {
-          "invoice": "in_1SjdYqGwVMSCaO58lIzPCRA4"
-        }
-      }
-      // → Returns: {
-      //   "id": "in_1SjdYqGwVMSCaO58lIzPCRA4",
-      //   "amount_due": 2000,
-      //   "currency": "chf",
-      //   "hosted_invoice_url": "https://invoice.stripe.com/i/...",
-      //   "status": "open"
-      // }
-      \`\`\`
-
-      ### 💡 Important Notes
-
-      **Amount Format:**
-      - Always in cents (smallest currency unit)
-      - 2000 = 20.00 CHF
-      - 150000 = 1,500.00 USD
-      - Formula: amount_in_dollars × 100
-
-      **Currency Codes:**
-      - Must be lowercase 3-letter ISO code
-      - Examples: "chf", "usd", "eur", "gbp", "cad"
-
-      **Invoice Status Flow:**
-      - "draft" → Created but not finalized
-      - "open" → Finalized and ready for payment
-      - "paid" → Customer paid
-      - "void" → Canceled
-
-      **Why Finalization is Critical:**
-      - Draft invoices have \`amount_due: null\`
-      - Finalization calculates totals, taxes, discounts
-      - Only finalized invoices get \`hosted_invoice_url\`
-      - Only finalized invoices can be paid
-      - Always finalize invoices before sharing with customers
-
-      **Multi-Line Invoices:**
-      For multiple line items, repeat Steps 2-3 for each item, then add all items in Step 5:
-      \`\`\`json
-      // Add first item
-      { "name": "create_invoice_item", "arguments": { "invoice": "in_...", "price": "price_1", "quantity": 1 }}
-
-      // Add second item
-      { "name": "create_invoice_item", "arguments": { "invoice": "in_...", "price": "price_2", "quantity": 1 }}
-
-      // Then finalize
-      { "name": "finalize_invoice", "arguments": { "invoice": "in_..." }}
-      \`\`\`
-
-      After finalizing, share the \`hosted_invoice_url\` with the customer for payment! 🎉
-
-      ### 🔄 Modifying or Regenerating Invoices
-
-      **If the user asks to change an invoice AFTER it's been generated:**
-
-      ❌ **NEVER say:** "It's not possible to change an existing invoice" or "Invoices cannot be modified"
-
-      ✅ **ALWAYS do this instead:**
-
-      1. **For Draft Invoices (status: "draft"):**
-         - Draft invoices CAN be modified before finalization
-         - Use \`update_invoice\` or add/remove line items
-         - Example: "I'll update the draft invoice with the new details..."
-
-      2. **For Finalized/Open Invoices (status: "open"):**
-         - Finalized invoices cannot be directly edited
-         - ✅ **Solution:** Create a NEW invoice with the corrected details
-         - Void the old invoice if needed (use \`void_invoice\`)
-         - Example response: "Since the invoice is already finalized, I'll create a new invoice with the updated information (including the correct date, description, etc.) and void the old one if you'd like."
-
-      3. **Be Proactive:**
-         - If user wants to add missing fields (date, description, etc.), create a new invoice with ALL details
-         - Always confirm what changes they want before regenerating
-         - Use the corrected information from the conversation history
-
-      **Example User Request:** "Please update the invoice with today's date"
-      **Correct Response:** "I'll create a new invoice with today's date ([date]), the description you provided earlier, and all the correct details. Would you also like me to void the previous invoice?"`
-
-    // ==========================================
-    // END OF STRIPE INVOICE PROMPT
-    // ==========================================
+      **Key Points:**
+      - Invoices are created on the USER's Stripe Connect account (they receive payments)
+      - If user lacks Stripe Connect, they'll be prompted to connect
+      - Always gather ALL required info (name, email, amount, description) before calling
+      - Amount is in dollars (not cents): 100.50 = $100.50`
 
     if (chatType === "ASSISTANT" && chat.assistant?.instructions) {
       systemPrompt += `\n\n## Assistant-Specific Instructions\n${chat.assistant.instructions}`
@@ -556,202 +298,10 @@ export async function POST(req: NextRequest) {
       ? `${conversationContext}\n\nUser: ${enhancedUserMessage}`
       : `User: ${enhancedUserMessage}`
 
-    const invoicePdfResponse = await openai.responses.create({
-      model: "gpt-5.2",
-      tools: [
-        {
-          "type": "function",
-          "name": "analyze_invoice_request",
-          "description": "Analyze a user message and determine whether they are requesting an invoice to be generated WITH ALL REQUIRED INFORMATION. Only return is_invoice_request as true if ALL fields (name, email, price, description) are present in the message. If ANY field is missing, return is_invoice_request as false.",
-          "strict": true,
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "is_invoice_request": {
-                "type": "boolean",
-                "description": "True ONLY if the user is requesting invoice generation AND all required fields (name, email, price, description) are present. False if any field is missing or if this is not an invoice request."
-              },
-              "name": {
-                "type": ["string", "null"],
-                "description": "Customer full name for the invoice. Extract from @mention or message text. Set to null if not present."
-              },
-              "email": {
-                "type": ["string", "null"],
-                "description": "Customer email address for the invoice. Extract from @mention or message text. Set to null if not present."
-              },
-              "price": {
-                "type": ["number", "null"],
-                "description": "Invoice total amount as a number (not string). Extract from message. Set to null if not present."
-              },
-              "description": {
-                "type": ["string", "null"],
-                "description": "Description of what the invoice is for (services or products). This is CRITICAL - set to null if not explicitly provided in the message."
-              }
-            },
-            "required": [
-              "is_invoice_request",
-              "name",
-              "email",
-              "price",
-              "description"
-            ],
-            "additionalProperties": false
-          }
-        }
-      ],
-      input: [
-        {
-          role: "system",
-          content: `You are an assistant that analyzes user messages for invoice generation requests.
 
-          **CRITICAL RULE:** Only set is_invoice_request to TRUE if ALL of the following are present:
-          1. Customer name (from @mention or explicit name in message)
-          2. Customer email (from @mention or explicit email in message)
-          3. Invoice amount/price
-          4. Description of service/product (what the invoice is for)
 
-          If ANY of these fields are missing, set is_invoice_request to FALSE.
-
-          **Examples:**
-
-          ✅ Valid (all fields present):
-          "Generate invoice for @John (john@example.com) at 100 CHF for web design services"
-          → is_invoice_request: true
-
-          ❌ Invalid (missing description):
-          "Generate invoice for @John at 100 CHF"
-          → is_invoice_request: false (description missing)
-
-          ❌ Invalid (missing amount):
-          "Generate invoice for @John for consulting"
-          → is_invoice_request: false (price missing)
-
-          ❌ Invalid (missing customer info):
-          "Generate an invoice for 100 CHF for consulting"
-          → is_invoice_request: false (name/email missing)
-
-          Call the analyze_invoice_request tool with extracted data.
-          Do not generate explanations or text.
-          Only use the tool.
-          `
-        },
-        {
-          role: "user",
-          content: enhancedUserMessage
-        }
-      ],
-    })
-
-    const toolCall = invoicePdfResponse.output.find(
-      (item) =>
-        item.type === "function_call" &&
-        item.name === "analyze_invoice_request"
-    );
-
-    if (toolCall && toolCall.type === "function_call") {
-      const {
-        is_invoice_request,
-        name,
-        email,
-        price,
-        description,
-      } = JSON.parse(toolCall.arguments as string);
-
-      if (is_invoice_request && artifact && artifact.htmlContent) {
-        const updatedHtmlResponse = await openai.responses.create({
-          model: "gpt-4.1",
-          input: `Update the provided invoice HTML template with the following customer details:
-            - Customer Name: ${name}
-            - Customer Email: ${email}
-            - Invoice Amount: ${price}
-            - Description: ${description}
-            - Currency: USD (or extract from context)
-            - Invoice Date: ${new Date().toLocaleDateString()}
-            - User Input: ${enhancedUserMessage}
-
-            ## Invoice Template HTML
-            \`\`\`html
-            ${artifact.htmlContent}
-            \`\`\`
-
-            ## Instructions
-            1. Find the customer name field in the HTML and update it with "${name}"
-            2. Find the customer email field and update it with "${email}"
-            3. Find the invoice amount/price field and update it with "${price}"
-            4. Find the description/items field and update it with "${description}"
-            5. Find the date field and update it with today's date
-            6. Update any totals, subtotals, or calculated fields
-            7. Preserve ALL existing HTML structure, styles, and classes
-            8. Return ONLY the complete updated HTML (no explanations, no markdown)
-
-            ## Important Rules
-            - Do NOT add explanations before or after the HTML
-            - Do NOT wrap the HTML in markdown code blocks
-            - Return the raw HTML ready for PDF generation
-            - Ensure all HTML tags are properly closed
-            - Preserve all CSS styles and JavaScript if present`
-        });
-
-        console.log("updatedHtmlResponse", updatedHtmlResponse.output_text);
-
-        const { pdfUrl } = await generatePDFFromHTML({
-          html: updatedHtmlResponse.output_text || "",
-          filename: `invoice-${Date.now()}.pdf`,
-          s3Folder: "invoices",
-        });
-
-        systemPrompt += `
-        ## Invoice PDF Generated Successfully
-        An invoice PDF has been generated from the artifact template and uploaded to S3.
-
-        **PDF URL**: ${pdfUrl}
-
-        **CRITICAL INSTRUCTION**: You MUST respond to the user acknowledging the invoice generation. Your response should:
-        1. Confirm the invoice was generated successfully
-        2. Include the PDF URL as a clickable markdown link: [View Invoice PDF](${pdfUrl})
-        3. Mention the customer name: ${name}
-        4. Do NOT call update_artifact function - the template remains unchanged
-        5. Use the Stripe MCP for the invoice generation and also include the stripe link along with the generated invoice pdf.
-
-        Example response: "I've generated the invoice PDF for ${name}. You can view and download it here: [View Invoice PDF](${pdfUrl})"
-      `;
-      }
-      else if (is_invoice_request) {
-        const pdfUrl = await generateInvoicePDFFromData({
-          customerName: name!,
-          customerEmail: email!,
-          amount: price!,
-          description: description!,
-        });
-
-        systemPrompt += `
-        ## Invoice PDF Generated Successfully
-        An invoice PDF has been generated and uploaded to S3.
-
-        **PDF URL**: ${pdfUrl}
-
-        **CRITICAL INSTRUCTION**: You MUST respond to the user acknowledging the invoice generation. Your response should:
-        1. Confirm the invoice was generated successfully
-        2. Include the PDF URL as a clickable markdown link: [View Invoice PDF](${pdfUrl})
-        3. Mention the customer name: ${name}
-        4. Do NOT call update_artifact function - the template remains unchanged
-        5. Use the Stripe MCP for the invoice generation and also include the stripe link along with the generated invoice pdf.
-
-        Example response: "I've generated the invoice PDF for ${name}. You can view and download it here: [View Invoice PDF](${pdfUrl})"
-      `;
-      }
-      else {
-        isArtifactRequest = true;
-      }
-    }
-
-    if (isArtifactRequest) {
-      // Add artifact information if provided
-      console.log("======================")
-      console.log("No Invoice Request Found")
-      console.log("======================")
-      if (artifact) {
-        systemPrompt += `\n\n## 🎨 Artifact Context & Update Capability
+    if (artifact) {
+      systemPrompt += `\n\n## 🎨 Artifact Context & Update Capability
 
       **The user has shared an artifact named "${artifact.name}" in this conversation.**
 
@@ -803,7 +353,6 @@ export async function POST(req: NextRequest) {
       - **Preserve functionality**: When updating, maintain existing features unless told to remove them
 
       ${await getArtifactCodingPrompt()}`
-      }
     }
 
     // Load API tools if needed
@@ -864,13 +413,41 @@ export async function POST(req: NextRequest) {
       tools.push({ type: "web_search" })
       tools.push({ type: "image_generation" })
 
-      // Add Stripe MCP tool
+      // Add custom Stripe Connect invoice function
       tools.push({
-        type: "mcp",
-        server_label: "stripe",
-        server_url: "https://mcp.stripe.com",
-        authorization: process.env.STRIPE_SECRET_KEY,
-        require_approval: "never",
+        type: "function",
+        name: "create_stripe_connect_invoice",
+        description: "Create an invoice on the user's connected Stripe account and generate a PDF. The invoice will be created on the user's Stripe Connect account so they receive payments directly. If the user doesn't have a connected Stripe account, this will return an error asking them to connect.",
+        parameters: {
+          type: "object",
+          properties: {
+            customerName: {
+              type: "string",
+              description: "Customer's full name for the invoice"
+            },
+            customerEmail: {
+              type: "string",
+              description: "Customer's email address"
+            },
+            amount: {
+              type: "number",
+              description: "Invoice amount in dollars (e.g., 100.50 for $100.50)"
+            },
+            description: {
+              type: "string",
+              description: "Description of the service or product being invoiced"
+            },
+            currency: {
+              type: "string",
+              description: "Currency code (e.g., 'chf', 'usd', 'eur'). Defaults to 'chf' if not specified."
+            },
+            daysUntilDue: {
+              type: "number",
+              description: "Number of days until payment is due (e.g., 7 for Net 7). Defaults to 7 if not specified."
+            }
+          },
+          required: ["customerName", "customerEmail", "amount", "description"]
+        }
       })
 
       // Add Dropbox MCP tool if enabled
@@ -925,7 +502,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Add artifact update tool
-      if (artifact && isArtifactRequest) {
+      if (artifact) {
         tools.push({
           type: "function",
           name: "update_artifact",
@@ -1274,6 +851,114 @@ export async function POST(req: NextRequest) {
                     : {}
 
                   console.log(`[Stream] Function call detected: ${functionName}`)
+
+                  // Stripe Connect Invoice Creation
+                  if (functionName === "create_stripe_connect_invoice") {
+                    console.log(`[Stream] 💳 Creating Stripe Connect invoice`)
+
+                    try {
+                      const { customerName, customerEmail, amount, description, currency, daysUntilDue } = functionArgs
+
+                      if (!customerName || !customerEmail || !amount || !description) {
+                        throw new Error("Missing required parameters for invoice creation")
+                      }
+
+                      // Call the Stripe Connect invoice service
+                      const result = await createStripeConnectInvoice({
+                        userId: BigInt(session.user.id),
+                        customerName,
+                        customerEmail,
+                        amount,
+                        description,
+                        currency: currency || "chf",
+                        daysUntilDue: daysUntilDue || 7,
+                        artifactHtml: artifact?.htmlContent // Use artifact template if available
+                      })
+
+                      if (!result.success) {
+                        // User doesn't have Stripe Connect - show friendly error
+                        const errorMessage = `\n\n⚠️ **Stripe Account Required**\n\n` +
+                          `${result.error}\n\n` +
+                          `To create invoices and receive payments, please:\n` +
+                          `1. Go to your profile settings\n` +
+                          `2. Navigate to the Billing or Payments section\n` +
+                          `3. Connect your Stripe account\n\n`
+
+                        assistantResponse += errorMessage
+
+                        controller.enqueue(
+                          encoder.encode(`data: ${JSON.stringify({
+                            type: "stripe_connect_required",
+                            error: result.error
+                          })}\n\n`)
+                        )
+
+                        controller.enqueue(
+                          encoder.encode(`data: ${JSON.stringify({
+                            type: "text",
+                            content: errorMessage
+                          })}\n\n`)
+                        )
+                      } else {
+                        // Success! Invoice created
+                        console.log(`[Stream] ✅ Invoice created successfully: ${result.invoiceId}`)
+
+                        if (!usedTools.includes("stripe_connect_invoice")) {
+                          usedTools.push("stripe_connect_invoice")
+                        }
+
+                        const successMessage = `\n\n✅ **Invoice Created Successfully**\n\n` +
+                          `**Customer:** ${customerName} (${customerEmail})\n` +
+                          `**Amount:** ${result.amountDue} ${result.currency?.toUpperCase()}\n` +
+                          `**Description:** ${description}\n\n` +
+                          `**Payment Link:** [Pay Invoice](${result.stripeInvoiceUrl})\n` +
+                          `**PDF Invoice:** [Download PDF](${result.pdfUrl})\n\n` +
+                          `The invoice has been created on your Stripe account. Share the payment link with ${customerName} to receive payment.\n\n`
+
+                        assistantResponse += successMessage
+
+                        controller.enqueue(
+                          encoder.encode(`data: ${JSON.stringify({
+                            type: "invoice_created",
+                            invoiceId: result.invoiceId,
+                            stripeUrl: result.stripeInvoiceUrl,
+                            pdfUrl: result.pdfUrl,
+                            amount: result.amountDue,
+                            currency: result.currency
+                          })}\n\n`)
+                        )
+
+                        controller.enqueue(
+                          encoder.encode(`data: ${JSON.stringify({
+                            type: "text",
+                            content: successMessage
+                          })}\n\n`)
+                        )
+                      }
+                    } catch (invoiceError: any) {
+                      console.error(`[Stream] ❌ Invoice creation error:`, invoiceError)
+
+                      const errorMessage = `\n\n⚠️ **Failed to Create Invoice**\n\n` +
+                        `Error: ${invoiceError.message}\n\n` +
+                        `Please try again or contact support if the issue persists.\n\n`
+
+                      assistantResponse += errorMessage
+
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "invoice_error",
+                          error: invoiceError.message
+                        })}\n\n`)
+                      )
+
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({
+                          type: "text",
+                          content: errorMessage
+                        })}\n\n`)
+                      )
+                    }
+                  }
 
                   // Artifact Update
                   if (functionName === "update_artifact" && artifact) {

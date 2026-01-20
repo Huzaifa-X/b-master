@@ -68,7 +68,13 @@ export async function getUserAssistantPermissions(
     where: {
       assistantId,
       buyerId: userId,
-      status: 'completed',
+      deletedAt: null, // Exclude soft-deleted purchases
+      paymentRecord: {
+        status: 'completed', // Access status through the relationship
+      },
+    },
+    include: {
+      paymentRecord: true, // Include the payment record
     },
   });
 
@@ -163,7 +169,7 @@ export async function hasAssistantPermission(
   requiredPermission: AssistantPermission
 ): Promise<boolean> {
   const result = await getUserAssistantPermissions(assistantId, userId);
-  
+
   if (!result.hasAccess) {
     return false;
   }
@@ -198,7 +204,7 @@ export async function canAddContacts(
   userId: bigint
 ): Promise<boolean> {
   const result = await getUserAssistantPermissions(assistantId, userId);
-  
+
   // Only owners can add contacts
   return result.isOwner;
 }
@@ -212,7 +218,7 @@ export async function canCreateArtifacts(
   userId: bigint
 ): Promise<boolean> {
   const result = await getUserAssistantPermissions(assistantId, userId);
-  
+
   // Only owners can create artifacts
   return result.isOwner;
 }
@@ -225,7 +231,7 @@ export async function canCreateNewsfeedPosts(
   userId: bigint
 ): Promise<boolean> {
   const result = await getUserAssistantPermissions(assistantId, userId);
-  
+
   if (!result.hasAccess) {
     return false;
   }
@@ -247,7 +253,7 @@ export async function canUseChat(
   userId: bigint
 ): Promise<boolean> {
   const result = await getUserAssistantPermissions(assistantId, userId);
-  
+
   if (!result.hasAccess) {
     return false;
   }
@@ -269,7 +275,7 @@ export async function canUseMessenger(
   userId: bigint
 ): Promise<boolean> {
   const result = await getUserAssistantPermissions(assistantId, userId);
-  
+
   if (!result.hasAccess) {
     return false;
   }
@@ -291,7 +297,7 @@ export async function canManageContacts(
   userId: bigint
 ): Promise<boolean> {
   const result = await getUserAssistantPermissions(assistantId, userId);
-  
+
   if (!result.hasAccess) {
     return false;
   }

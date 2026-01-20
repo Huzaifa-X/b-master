@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
         if (!accountId) {
             const account = await stripe.accounts.create({
                 type: 'express',
-                country: 'CH', // Switzerland
+                country: 'CH',
                 email: user.email,
                 capabilities: {
                     card_payments: { requested: true },

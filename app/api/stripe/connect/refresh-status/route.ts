@@ -28,8 +28,9 @@ export async function GET(req: NextRequest) {
         const account = await stripe.accounts.retrieve(user.stripeConnectAccountId);
 
         // Determine status
+        // Check all three critical properties for full account readiness
         let status = 'pending';
-        if (account.charges_enabled && account.payouts_enabled) {
+        if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
             status = 'active';
         } else if (account.requirements?.disabled_reason) {
             status = 'restricted';
