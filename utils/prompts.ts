@@ -38,3 +38,7 @@ export async function getArtifactCodingPrompt() {
 export async function getAssistantGptPromptGeneratorPrompt() {
   return await getPromptFromDB('Assistant-gpt-prompt-generator');
 }
+
+export async function getArtifactUpdateCodingPrompt() {
+  return await getPromptFromDB('artifact-update-coding-prompt');
+}

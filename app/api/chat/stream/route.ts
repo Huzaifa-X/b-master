@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { openai } from "@/lib/openai"
 import upstageService from "@/lib/services/upstageService"
-import { getArtifactCodingPrompt, getSystemPrompt } from "@/utils/prompts"
+import { getArtifactCodingPrompt, getSystemPrompt, getArtifactUpdateCodingPrompt } from "@/utils/prompts"
 import { safeUploadToS3 } from "@/lib/aws-s3"
 import { OpenAPITool } from "@/lib/openapi-tool-converter"
 import { executeAPITool, loadAPITools, toOpenAIToolDefinitions } from "@/lib/api-tools-loader"
@@ -352,7 +352,7 @@ export async function POST(req: NextRequest) {
       - **Confirm uncertain requests**: If unclear whether to modify, ask for confirmation
       - **Preserve functionality**: When updating, maintain existing features unless told to remove them
 
-      ${await getArtifactCodingPrompt()}`
+      ${await getArtifactUpdateCodingPrompt()}`
     }
 
     // Load API tools if needed
