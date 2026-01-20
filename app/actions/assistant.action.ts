@@ -45,7 +45,7 @@ export async function generateAssistantInstructions({
             }
         }
 
-        const model = 'gpt-5.2'
+        const model = 'gpt-4.1-mini'
 
         const response = await openai.responses.create({
             model: model,
