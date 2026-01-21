@@ -145,7 +145,7 @@ async function generateChatTopic(chatId: string, firstMessage: string) {
 
     // Call OpenAI to generate a short topic
     const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
+      model: "gpt-5-mini",
       input: `Generate a concise 3-5 word topic/title for the following user message. Return ONLY the topic, no quotes, no explanation.\n\nUser message: ${firstMessage}`
     })
 

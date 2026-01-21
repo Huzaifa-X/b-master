@@ -37,7 +37,7 @@ export async function generateArtifactInstructions({
         }
 
         // Generate instructions using OpenAI Responses API
-        const model = 'gpt-4.1-mini'
+        const model = 'gpt-5-mini'
 
         const response = await openai.responses.create({
             model: model,
