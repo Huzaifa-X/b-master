@@ -145,7 +145,7 @@ async function generateChatTopic(chatId: string, firstMessage: string) {
 
     // Call OpenAI to generate a short topic
     const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
+      model: "gpt-5-mini",
       input: `Generate a concise 3-5 word topic/title for the following user message. Return ONLY the topic, no quotes, no explanation.\n\nUser message: ${firstMessage}`
     })
 
@@ -340,7 +340,9 @@ export async function getAssistantChats(assistantId: string) {
             purchases: {
               some: {
                 buyerId: userId,
-                status: "completed"
+                paymentRecord: {
+                  status: "completed"
+                }
               }
             }
           } // Purchased
@@ -499,7 +501,7 @@ export async function getChatMessages(chatId: string, limit?: number) {
 
         return {
           id: msg.id.toString(),
-          role: msg.role as "user" | "assistant",
+          role: msg.role as "user" | "assistant" | "system",
           content: msg.message || "",
           createdAt: msg.createdAt,
           attachments: attachments.length > 0 ? attachments : undefined,

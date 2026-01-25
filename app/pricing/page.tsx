@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { ArrowRight, BadgeCheck, X, Loader2 } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -24,7 +24,7 @@ export default function PricingPage() {
   const router = useRouter()
   const { subscription, loading: subscriptionLoading } = useSubscription()
   const { plans: allPlans, loading: plansLoading } = usePlans()
-  const { createCheckout, isCreatingCheckout } = useSubscription()
+  const { createCheckout } = useSubscription()
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly")
   const [subscribingPlanId, setSubscribingPlanId] = useState<number | null>(null)
 
@@ -36,16 +36,42 @@ export default function PricingPage() {
     }
   })
 
-  const handleSubscribe = async (planId: number) => {
+  /**
+   * Handle subscription - Following Guide 1 & 4 pattern
+   * Frontend duplicate subscription check before calling createCheckout
+   */
+  const handleSubscribe = async (planId: number, planName: string) => {
     try {
       setSubscribingPlanId(planId)
 
+      // ============================================
+      // FRONTEND DUPLICATE SUBSCRIPTION CHECK (Guide 4)
+      // ============================================
+      if (subscription && subscription.planId) {
+        // User already has an active subscription
+        toast.error(
+          `You already have an active subscription. Please visit your profile to manage your subscription.`,
+          {
+            action: {
+              label: "Manage",
+              onClick: () => router.push("/profile"),
+            },
+          }
+        )
+        setSubscribingPlanId(null)
+        return
+      }
+
+      // ============================================
+      // CREATE CHECKOUT SESSION (Guide 1)
+      // ============================================
       const result = await createCheckout(planId)
 
       if (result.success && 'url' in result && result.url) {
         // Redirect to Stripe Checkout
         window.location.href = result.url
       } else {
+        // Show error
         toast.error('error' in result ? result.error : "Failed to create checkout session")
         setSubscribingPlanId(null)
       }
@@ -55,6 +81,7 @@ export default function PricingPage() {
       setSubscribingPlanId(null)
     }
   }
+
 
   const handleClose = () => {
     router.back()
@@ -192,7 +219,7 @@ export default function PricingPage() {
                         isCurrentPlan && "bg-green-600 hover:bg-green-600 text-white"
                       )}
                       variant={isPopular && !isCurrentPlan ? "default" : isCurrentPlan ? "default" : "secondary"}
-                      onClick={() => handleSubscribe(plan.id)}
+                      onClick={() => handleSubscribe(plan.id, plan.title)}
                       disabled={isSubscribing || isFree || isCurrentPlan}
                     >
                       {isSubscribing ? (
@@ -224,4 +251,3 @@ export default function PricingPage() {
     </div>
   )
 }
-

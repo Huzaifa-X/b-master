@@ -1,7 +1,13 @@
 "use client"
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { getCurrentSubscription, cancelSubscription, getPlans, createCheckoutSession } from "@/app/actions/subscription.action"
+import {
+  getCurrentSubscription,
+  getPlans,
+  createCheckoutSession,
+  createPortalSession,
+  CreatePortalSessionResult
+} from "@/app/actions/subscription.action"
 
 export interface SubscriptionWithPlan {
   id: number
@@ -96,21 +102,6 @@ export function useSubscription() {
     refetchOnWindowFocus: false,
   })
 
-  // Mutation for canceling subscription
-  const cancelSubscriptionMutation = useMutation({
-    mutationFn: async () => {
-      const result = await cancelSubscription()
-      if (!result.success) {
-        throw new Error(result.error || "Failed to cancel subscription")
-      }
-      return result
-    },
-    onSuccess: () => {
-      // Invalidate and refetch subscription queries
-      queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEYS.current() })
-    },
-  })
-
   // Mutation for creating checkout session
   const createCheckoutMutation = useMutation({
     mutationFn: async (planId: number) => {
@@ -126,25 +117,23 @@ export function useSubscription() {
     },
   })
 
+  // Mutation for creating portal session
+  const createPortalMutation = useMutation({
+    mutationFn: async () => {
+      const result = await createPortalSession()
+      if (!result.success) {
+        throw new Error(result.error || "Failed to create portal session")
+      }
+      return result
+    },
+  })
+
   return {
     subscription: subscription || null,
     loading,
     isError,
     error: error instanceof Error ? error.message : null,
     refetch,
-
-    // Mutation for canceling subscription
-    cancelSubscription: async () => {
-      try {
-        const result = await cancelSubscriptionMutation.mutateAsync()
-        return result
-      } catch (err: any) {
-        return { success: false, error: err.message }
-      }
-    },
-
-    // Mutation state for cancel
-    isCanceling: cancelSubscriptionMutation.isPending,
 
     // Mutation for creating checkout session
     createCheckout: async (planId: number) => {
@@ -158,5 +147,18 @@ export function useSubscription() {
 
     // Mutation state for checkout
     isCreatingCheckout: createCheckoutMutation.isPending,
+
+    // Mutation for creating portal session
+    createPortal: async (): Promise<CreatePortalSessionResult> => {
+      try {
+        const result = await createPortalMutation.mutateAsync()
+        return result
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    },
+
+    // Mutation state for portal
+    isCreatingPortal: createPortalMutation.isPending,
   }
 }

@@ -5,29 +5,34 @@ import { getUserWallet, getWalletTransactions, getWalletStats, releasePendingAmo
 
 export interface WalletData {
   userId: string
-  pendingAmount: number
-  availableAmount: number
-  totalEarnings: number
-  transferredAmount: number
+  pendingBalance: number
+  availableBalance: number
+  lifetimeEarnings: number
   currency: string
-  lastUpdated: Date
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface WalletTransaction {
-  id: number
-  assistantOwnerId: string
+  id: string
+  userId: string
+  payerUserId: string | null
   amount: number
   currency: string
+  platformFee: number
+  netAmount: number
   type: string
   status: string
-  stripeTransactionId: string | null
-  metadata: {
-    assistantId?: string
-    assistantName?: string | null
-    buyerId?: string
-    purchaseId?: number
-    [key: string]: any
-  }
+  description: string | null
+  relatedType: string | null
+  relatedId: string | null
+  stripePaymentIntentId: string | null
+  stripeChargeId: string | null
+  stripeTransferId: string | null
+  stripePayoutId: string | null
+  metadata: Record<string, any>
+  completedAt: Date | null
+  refundedAt: Date | null
   createdAt: Date
   updatedAt: Date
 }
@@ -37,10 +42,9 @@ export interface WalletStats {
   totalRefunds: number
   totalSalesAmount: number
   totalRefundsAmount: number
-  pendingAmount: number
-  availableAmount: number
-  totalEarnings: number
-  transferredAmount: number
+  pendingBalance: number
+  availableBalance: number
+  lifetimeEarnings: number
   currency: string
 }
 
@@ -48,7 +52,7 @@ export interface WalletStats {
 const WALLET_KEYS = {
   all: ["wallet"] as const,
   details: () => [...WALLET_KEYS.all, "details"] as const,
-  transactions: (limit?: number, offset?: number) => 
+  transactions: (limit?: number, offset?: number) =>
     [...WALLET_KEYS.all, "transactions", { limit, offset }] as const,
   stats: () => [...WALLET_KEYS.all, "stats"] as const,
 }
@@ -147,20 +151,20 @@ export function useWallet(limit = 50, offset = 0) {
     wallet: walletData ?? null,
     transactions: transactionsData ?? [],
     stats: statsData ?? null,
-    
+
     // Loading states
     loading,
     transactionsLoading,
     statsLoading,
-    
+
     // Error
     error: walletError?.message ?? null,
-    
+
     // Refetch functions
     refetch: refetchWallet,
     refetchTransactions,
     refetchStats,
-    
+
     // Mutations
     releaseEarnings: async (holdingPeriodDays = 7) => {
       try {
@@ -178,7 +182,7 @@ export function useWallet(limit = 50, offset = 0) {
         return { success: false, error: err.message }
       }
     },
-    
+
     // Mutation states
     isReleasingEarnings: releaseEarningsMutation.isPending,
     isRequestingPayout: requestPayoutMutation.isPending,

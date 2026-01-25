@@ -3,7 +3,8 @@
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { openai } from "@/lib/openai";
+import { generateText } from "ai";
+import { ai_sdk_openai } from "@/lib/ai-sdk";
 import { GenerateInstructionsParams, GenerateInstructionsResponse } from "@/types/ai-instruction"
 import { AssistantCategory } from "@/types/assistant"
 import { revalidatePath } from "next/cache"
@@ -22,7 +23,6 @@ import { getAssistantGptPromptGeneratorPrompt } from "@/utils/prompts"
 import { encrypt, decrypt } from "@/lib/encryption"
 import { parseOpenAPISchema } from "@/lib/openapi-parser"
 import { convertToOpenAITools, AuthConfig } from "@/lib/openapi-tool-converter"
-
 
 export async function generateAssistantInstructions({
     prompt,
@@ -46,16 +46,15 @@ export async function generateAssistantInstructions({
             }
         }
 
-        const model = 'gpt-5.2'
+        const model = 'gpt-5-mini'
 
-        const response = await openai.responses.create({
-            model: model,
-            reasoning: { effort: "low" },
-            instructions: await getAssistantGptPromptGeneratorPrompt(),
-            input: prompt,
+        const result = await generateText({
+            model: ai_sdk_openai(model),
+            system: await getAssistantGptPromptGeneratorPrompt(),
+            prompt,
         });
 
-        if (!response.output_text) {
+        if (!result.text) {
             return {
                 success: false,
                 error: 'No instructions were generated',
@@ -64,9 +63,9 @@ export async function generateAssistantInstructions({
 
         // Track usage metrics
         try {
-            const inputToken = response.usage?.input_tokens || 0
-            const outputToken = response.usage?.output_tokens || 0
-            const totalToken = inputToken + outputToken
+            const inputToken = result.totalUsage.inputTokens || 0
+            const outputToken = result.totalUsage.outputTokens || 0
+            const totalToken = result.totalUsage.totalTokens || 0
 
             // Calculate cost based on pricing per 1K tokens
             const cost_per_1k_input = 0.002
@@ -93,7 +92,7 @@ export async function generateAssistantInstructions({
 
         return {
             success: true,
-            instructions: response.output_text
+            instructions: result.text
         }
     } catch (error) {
         console.error('Error generating instructions:', error)
@@ -202,7 +201,7 @@ export async function createCompleteAssistant(
         // ============================================
         // STEP 1: CREATE ASSISTANT WITH BASIC INFO
         // ============================================
-        
+
         // Validate required fields
         if (!params.name?.trim() || !params.price?.trim() || !params.description?.trim()) {
             return {
@@ -296,38 +295,38 @@ export async function createCompleteAssistant(
         // ============================================
         // STEP 3: CREATE VECTOR STORE & KNOWLEDGE BASE
         // ============================================
-        
+
         let vectorStoreId: string | null = null
-        
+
         // Only create vector store if there's content to add
         if (params.notes.length > 0 || params.urls.length > 0 || params.fileURLs.length > 0) {
             try {
                 // Create OpenAI vector store
                 const vectorStoreName = `${params.name}_${randomUUID()}`
                 vectorStoreId = await createVectorStore(vectorStoreName)
-                
+
                 // Update assistant with vector store ID
                 await prisma.assistant.update({
                     where: { id: assistant.id },
                     data: { vectorStoreId }
                 })
-                
+
                 console.log(`✅ Vector store created: ${vectorStoreId}`)
-                
+
                 // Process notes
                 for (const note of params.notes) {
                     if (note.trim()) {
                         try {
                             const noteIndex = params.notes.indexOf(note)
                             const noteName = `note_${noteIndex + 1}_${Date.now()}`
-                            
+
                             // Add note to OpenAI vector store
                             const vectorFileId = await addNoteToVectorStore(
                                 vectorStoreId,
                                 note.trim(),
                                 noteName
                             )
-                            
+
                             // Save to database
                             await prisma.assistantKnowledgebase.create({
                                 data: {
@@ -337,14 +336,14 @@ export async function createCompleteAssistant(
                                     type: 'text',
                                 }
                             })
-                            
+
                             console.log(`✅ Note ${noteIndex + 1} added`)
                         } catch (noteError) {
                             console.error(`Error processing note:`, noteError)
                         }
                     }
                 }
-                
+
                 // Process URLs
                 for (const url of params.urls) {
                     if (url.trim()) {
@@ -358,7 +357,7 @@ export async function createCompleteAssistant(
                                     type: 'url',
                                 }
                             })
-                            
+
                             // Trigger async web scraping
                             triggerWebScraping({
                                 url: url.trim(),
@@ -367,14 +366,14 @@ export async function createCompleteAssistant(
                             }).catch((err) => {
                                 console.error(`Error triggering scraping for ${url}:`, err)
                             })
-                            
+
                             console.log(`✅ URL queued: ${url}`)
                         } catch (urlError) {
                             console.error(`Error processing URL ${url}:`, urlError)
                         }
                     }
                 }
-                
+
                 // Process files (already uploaded to S3, now add to OpenAI vector store)
                 for (const fileData of params.fileURLs) {
                     try {
@@ -422,7 +421,7 @@ export async function createCompleteAssistant(
         // ============================================
         // STEP 5: CREATE API CONFIGURATION
         // ============================================
-        
+
         // Create API configuration if schema exists OR authentication type is not 'none'
         if (params.schema || (params.authenticationType && params.authenticationType !== 'none')) {
             try {
@@ -443,7 +442,7 @@ export async function createCompleteAssistant(
                     try {
                         const parsedSchema = parseOpenAPISchema(params.schema)
                         const openAITools = convertToOpenAITools(parsedSchema, authConfigForTools)
-                        
+
                         // Store tools in format: { openaiTool: {...}, metadata: {...} }
                         // This allows us to reconstruct executors later
                         tools = openAITools.map(tool => ({
@@ -460,7 +459,7 @@ export async function createCompleteAssistant(
                                 parameterDefinitions: tool.metadata.parameterDefinitions || []
                             }
                         }))
-                        
+
                         console.log(`✅ Generated ${tools.length} tools from schema`)
                     } catch (toolError) {
                         console.error('Error generating tools from schema:', toolError)
@@ -503,7 +502,7 @@ export async function createCompleteAssistant(
                         ...apiConfigData
                     }
                 })
-                
+
                 console.log(`✅ API configuration created${tools ? ` with ${tools.length} tools` : ''}`)
             } catch (apiConfigError) {
                 console.error('Error creating API configuration:', apiConfigError)
@@ -517,7 +516,7 @@ export async function createCompleteAssistant(
         // ============================================
         // STEP 6: SET UP PERMISSIONS & SHARING
         // ============================================
-        
+
         // Automatically create AssistantContact record for the owner
         try {
             await prisma.assistantContact.create({
@@ -533,19 +532,19 @@ export async function createCompleteAssistant(
             // If owner contact already exists (shouldn't happen, but handle gracefully)
             console.error('Error creating owner contact (may already exist):', ownerContactError)
         }
-        
+
         // Add shared users (filter out owner if accidentally included)
         if (params.sharedUsers.length > 0) {
             try {
                 for (const sharedUser of params.sharedUsers) {
                     const sharedUserId = BigInt(sharedUser.id)
-                    
+
                     // Skip if trying to add the owner (owner is already added above)
                     if (sharedUserId === userId) {
                         console.log('⚠️ Skipping owner in shared users list (already added automatically)')
                         continue
                     }
-                    
+
                     // Check if contact already exists (prevent duplicates)
                     const existingContact = await prisma.assistantContact.findFirst({
                         where: {
@@ -553,12 +552,12 @@ export async function createCompleteAssistant(
                             userId: sharedUserId,
                         }
                     })
-                    
+
                     if (existingContact) {
                         console.log(`⚠️ Skipping duplicate contact for user ${sharedUser.id}`)
                         continue
                     }
-                    
+
                     // Create contact record with permissions
                     // Convert permission object to array format
                     const permissionArray: string[] = []
@@ -567,7 +566,7 @@ export async function createCompleteAssistant(
                     if (sharedUser.permissions.messenger) permissionArray.push('messenger')
                     if (sharedUser.permissions.newsFeed) permissionArray.push('newsfeed')
                     if (sharedUser.permissions.artifact) permissionArray.push('artifacts')
-                    
+
                     await prisma.assistantContact.create({
                         data: {
                             assistantId: assistant.id,
@@ -590,7 +589,7 @@ export async function createCompleteAssistant(
                         // Don't fail the operation if notification fails
                     }
                 }
-                
+
                 console.log(`✅ Permissions set for shared users`)
             } catch (permissionsError) {
                 console.error('Error setting permissions:', permissionsError)
@@ -1081,8 +1080,6 @@ export async function getAssistants({
                     prisma.assistantPurchase.findMany({
                         where: {
                             buyerId: userId,
-                            status: 'completed',
-                            deletedAt: null,
                             assistant: {
                                 deletedAt: null,
                                 ...searchFilter
@@ -1116,8 +1113,6 @@ export async function getAssistants({
                     prisma.assistantPurchase.count({
                         where: {
                             buyerId: userId,
-                            status: 'completed',
-                            deletedAt: null,
                             assistant: {
                                 deletedAt: null,
                                 ...searchFilter
@@ -1190,9 +1185,7 @@ export async function getAssistants({
                 // First, get IDs of assistants the user has already purchased
                 const purchasedAssistantIds = await prisma.assistantPurchase.findMany({
                     where: {
-                        buyerId: userId,
-                        status: 'completed',
-                        deletedAt: null
+                        buyerId: userId
                     },
                     select: {
                         assistantId: true
@@ -1413,7 +1406,7 @@ export async function getAssistantForEdit(assistantId: string) {
         const notes: string[] = []
         const urls: string[] = []
         const files: Array<{ url: string; name: string }> = []
-        
+
         assistant.knowledgebases.forEach((kb: any) => {
             if (kb.type === 'text' && kb.note) {
                 notes.push(kb.note)
@@ -1444,7 +1437,7 @@ export async function getAssistantForEdit(assistantId: string) {
         })
 
         // Process buyer permissions
-        const buyerPermissionsArray = assistant.buyerPermissions 
+        const buyerPermissionsArray = assistant.buyerPermissions
             ? JSON.parse(assistant.buyerPermissions as string || '[]')
             : []
         const buyerPermissions = {
@@ -1490,7 +1483,7 @@ export async function getAssistantForEdit(assistantId: string) {
                     }
 
                     const config = assistant.apiConfiguration
-                    
+
                     // Helper function to safely decrypt
                     const safeDecrypt = (encryptedValue: string | null | undefined): string => {
                         if (!encryptedValue) return ""
@@ -1624,7 +1617,7 @@ export async function updateCompleteAssistant(
         // ========================================
         // OPTIMIZED KNOWLEDGEBASE UPDATE
         // ========================================
-        
+
         let vectorStoreId = existingAssistant.vectorStoreId
 
         // Create vector store if needed
@@ -1632,7 +1625,7 @@ export async function updateCompleteAssistant(
             try {
                 const vectorStoreName = `${params.name}_${randomUUID()}`
                 vectorStoreId = await createVectorStore(vectorStoreName)
-                
+
                 await prisma.assistant.update({
                     where: { id: assistantBigInt },
                     data: { vectorStoreId }
@@ -1673,13 +1666,13 @@ export async function updateCompleteAssistant(
                 try {
                     const noteIndex = params.notes.indexOf(note)
                     const noteName = `note_${noteIndex + 1}_${Date.now()}`
-                    
+
                     const vectorFileId = await addNoteToVectorStore(
                         vectorStoreId,
                         note,
                         noteName
                     )
-                    
+
                     await prisma.assistantKnowledgebase.create({
                         data: {
                             assistantId: assistantBigInt,
@@ -1728,7 +1721,7 @@ export async function updateCompleteAssistant(
                             type: 'url',
                         }
                     })
-                    
+
                     // Trigger web scraping asynchronously
                     // The scraper will update vectorFileId and isCrawled when done
                     triggerWebScraping({
@@ -1736,23 +1729,23 @@ export async function updateCompleteAssistant(
                         vectorStoreId: vectorStoreId,
                         maxPages: 20,
                     })
-                    .then(async (result) => {
-                        if (result.success && result.vectorFileId) {
-                            // Update the entry with vectorFileId once scraping completes
-                            await prisma.assistantKnowledgebase.update({
-                                where: { id: kbEntry.id },
-                                data: {
-                                    vectorFileId: result.vectorFileId,
-                                    isCrawled: true,
-                                    updatedAt: new Date()
-                                }
-                            })
-                            console.log(`✅ Successfully scraped and stored: ${url}`)
-                        }
-                    })
-                    .catch((err) => {
-                        console.error(`❌ Error triggering scraping for ${url}:`, err)
-                    })
+                        .then(async (result) => {
+                            if (result.success && result.vectorFileId) {
+                                // Update the entry with vectorFileId once scraping completes
+                                await prisma.assistantKnowledgebase.update({
+                                    where: { id: kbEntry.id },
+                                    data: {
+                                        vectorFileId: result.vectorFileId,
+                                        isCrawled: true,
+                                        updatedAt: new Date()
+                                    }
+                                })
+                                console.log(`✅ Successfully scraped and stored: ${url}`)
+                            }
+                        })
+                        .catch((err) => {
+                            console.error(`❌ Error triggering scraping for ${url}:`, err)
+                        })
                 } catch (err) {
                     console.error('Error adding URL:', err)
                 }
@@ -1829,7 +1822,7 @@ export async function updateCompleteAssistant(
         // ========================================
         // API Configuration Update
         // ========================================
-        
+
         // Create/update API configuration if schema exists OR authentication type is not 'none'
         if (params.schema || (params.authenticationType && params.authenticationType !== 'none')) {
             try {
@@ -1854,7 +1847,7 @@ export async function updateCompleteAssistant(
                     try {
                         const parsedSchema = parseOpenAPISchema(params.schema)
                         const openAITools = convertToOpenAITools(parsedSchema, authConfigForTools)
-                        
+
                         // Store tools in format: { openaiTool: {...}, metadata: {...} }
                         tools = openAITools.map(tool => ({
                             type: tool.openaiTool.type,
@@ -1870,7 +1863,7 @@ export async function updateCompleteAssistant(
                                 parameterDefinitions: tool.metadata.parameterDefinitions || []
                             }
                         }))
-                        
+
                         console.log(`✅ Generated ${tools.length} tools from schema`)
                     } catch (toolError) {
                         console.error('Error generating tools from schema:', toolError)
@@ -1920,7 +1913,7 @@ export async function updateCompleteAssistant(
                         }
                     })
                 }
-                
+
                 console.log(`✅ API configuration updated${tools ? ` with ${tools.length} tools` : ''}`)
             } catch (apiConfigError) {
                 console.error('Error updating API configuration:', apiConfigError)
@@ -1934,7 +1927,7 @@ export async function updateCompleteAssistant(
         // ========================================
         // OPTIMIZED SHARED USERS UPDATE
         // ========================================
-        
+
         const existingSharedUsers = await prisma.assistantContact.findMany({
             where: {
                 assistantId: assistantBigInt,
@@ -1954,23 +1947,23 @@ export async function updateCompleteAssistant(
         // Add or update shared users
         for (const sharedUser of params.sharedUsers) {
             const sharedUserId = BigInt(sharedUser.id)
-            
+
             if (sharedUserId === userId) continue
-            
+
             const permissionArray: string[] = []
             if (sharedUser.permissions.chat) permissionArray.push('chat')
             if (sharedUser.permissions.contact) permissionArray.push('contacts')
             if (sharedUser.permissions.messenger) permissionArray.push('messenger')
             if (sharedUser.permissions.newsFeed) permissionArray.push('newsfeed')
             if (sharedUser.permissions.artifact) permissionArray.push('artifacts')
-            
+
             const existingUser = existingSharedUsers.find(u => u.userId === sharedUserId)
-            
+
             if (existingUser) {
                 // Update existing - check if permissions actually changed
                 const oldPermissions = existingUser.permissions as string
                 const newPermissions = JSON.stringify(permissionArray)
-                
+
                 if (oldPermissions !== newPermissions) {
                     await prisma.assistantContact.update({
                         where: { id: existingUser.id },
@@ -2008,9 +2001,6 @@ export async function updateCompleteAssistant(
     }
 }
 
-/**
- * Purchase an assistant - creates Stripe checkout session
- */
 export async function purchaseAssistant(assistantId: string) {
     try {
         const session = await getServerSession(authOptions)
@@ -2021,18 +2011,18 @@ export async function purchaseAssistant(assistantId: string) {
                 url: undefined,
             }
         }
-
         const userId = BigInt(session.user.id)
         const assistantIdBigInt = BigInt(assistantId)
-
-        // Get the assistant
+        // Get the assistant with owner info
         const assistant = await prisma.assistant.findUnique({
             where: {
                 id: assistantIdBigInt,
                 deletedAt: null,
             },
+            include: {
+                owner: true, // Include owner to check Connect status
+            },
         })
-
         if (!assistant) {
             return {
                 success: false,
@@ -2040,7 +2030,6 @@ export async function purchaseAssistant(assistantId: string) {
                 url: undefined,
             }
         }
-
         // Check if assistant is public
         if (!assistant.public) {
             return {
@@ -2049,36 +2038,48 @@ export async function purchaseAssistant(assistantId: string) {
                 url: undefined,
             }
         }
-
-        // Check if user already purchased this assistant (completed or pending)
+        // ✅ CHECK CREATOR'S STRIPE CONNECT STATUS
+        if (!assistant.owner.stripeConnectAccountId || !assistant.owner.stripeConnectPayoutsEnabled) {
+            return {
+                success: false,
+                error: "The creator has not completed Stripe Connect setup yet. Please try again later.",
+                url: undefined,
+            }
+        }
+        // Check if user already purchased this assistant
         const existingPurchase = await prisma.assistantPurchase.findFirst({
             where: {
                 buyerId: userId,
                 assistantId: assistantIdBigInt,
-                deletedAt: null,
+                deletedAt: null, // Only check non-deleted purchases
             },
+            include: {
+                paymentRecord: true
+            }
         })
-
         if (existingPurchase) {
-            // If already completed, return error
-            if (existingPurchase.status === "completed") {
+            // If a purchase record exists, check the payment status
+            if (existingPurchase.paymentRecord?.status === "completed") {
                 return {
                     success: false,
                     error: "You have already purchased this assistant",
                     url: undefined,
                 }
             }
-
-            // If pending, delete the old pending purchase and create a new one
-            // This handles abandoned checkout sessions
-            if (existingPurchase.status === "pending") {
-                console.log(`[Purchase] Found existing pending purchase ${existingPurchase.id}, deleting it to create a new checkout session`)
+            // If payment is pending or failed, delete the old purchase and create a new one
+            if (existingPurchase.paymentRecord?.status === "pending" || existingPurchase.paymentRecord?.status === "failed") {
+                console.log(`[Purchase] Found existing ${existingPurchase.paymentRecord.status} purchase ${existingPurchase.id}, deleting it`)
                 await prisma.assistantPurchase.delete({
                     where: { id: existingPurchase.id }
                 })
+            } else if (!existingPurchase.paymentRecord) {
+                return {
+                    success: false,
+                    error: "You have already purchased this assistant",
+                    url: undefined,
+                }
             }
         }
-
         // Check if user is trying to purchase their own assistant
         if (assistant.userId === userId) {
             return {
@@ -2087,7 +2088,6 @@ export async function purchaseAssistant(assistantId: string) {
                 url: undefined,
             }
         }
-
         // Check if assistant has already been shared with this user
         const existingContact = await prisma.assistantContact.findFirst({
             where: {
@@ -2095,7 +2095,6 @@ export async function purchaseAssistant(assistantId: string) {
                 userId: userId,
             },
         })
-
         if (existingContact) {
             return {
                 success: false,
@@ -2103,12 +2102,10 @@ export async function purchaseAssistant(assistantId: string) {
                 url: undefined,
             }
         }
-
         // Get or create Stripe customer
         const user = await prisma.user.findUnique({
             where: { id: userId },
         })
-
         if (!user) {
             return {
                 success: false,
@@ -2116,10 +2113,7 @@ export async function purchaseAssistant(assistantId: string) {
                 url: undefined,
             }
         }
-
-        let stripeCustomerId = user.stripeAccountId
-
-        // Create Stripe customer if doesn't exist
+        let stripeCustomerId = user.stripeCustomerId
         if (!stripeCustomerId) {
             const customer = await stripe.customers.create({
                 email: user.email,
@@ -2128,23 +2122,22 @@ export async function purchaseAssistant(assistantId: string) {
                     userId: userId.toString(),
                 },
             })
-
-            // Save Stripe customer ID to database
             await prisma.user.update({
                 where: { id: userId },
-                data: { stripeAccountId: customer.id },
+                data: { stripeCustomerId: customer.id },
             })
-
             stripeCustomerId = customer.id
         }
-
-        // Get base URL for redirects
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000"
-
-        // Convert price to cents for Stripe
-        const amountInCents = Math.round(Number(assistant.price) * 100)
-
-        // Create Stripe Checkout Session for one-time payment
+        // ✅ CALCULATE PLATFORM FEE (15%)
+        const amount = Number(assistant.price)
+        const platformFeePercentage = 0.15 // 15%
+        const platformFee = amount * platformFeePercentage
+        const netAmount = amount - platformFee
+        // Convert to cents
+        const amountInCents = Math.round(amount * 100)
+        const platformFeeInCents = Math.round(platformFee * 100)
+        // ✅ CREATE STRIPE CHECKOUT WITH CONNECT
         const checkoutSession = await stripe.checkout.sessions.create({
             customer: stripeCustomerId,
             payment_method_types: ["card"],
@@ -2155,13 +2148,25 @@ export async function purchaseAssistant(assistantId: string) {
                         product_data: {
                             name: assistant.name,
                             description: assistant.description || undefined,
+                            images: assistant.image ? [assistant.image] : undefined,
                         },
                         unit_amount: amountInCents,
                     },
                     quantity: 1,
                 },
             ],
-            mode: "payment",
+            mode: "payment", // One-time payment
+            payment_intent_data: {
+                application_fee_amount: platformFeeInCents, // Platform takes 15%
+                transfer_data: {
+                    destination: assistant.owner.stripeConnectAccountId, // 85% goes to creator
+                },
+                metadata: {
+                    assistantId: assistantId,
+                    buyerId: userId.toString(),
+                    creatorId: assistant.userId.toString(),
+                },
+            },
             success_url: `${baseUrl}/store?purchase=success&session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${baseUrl}/store?purchase=cancelled`,
             metadata: {
@@ -2170,17 +2175,31 @@ export async function purchaseAssistant(assistantId: string) {
                 type: "assistant_purchase",
             },
         })
-
-        // Create pending purchase record
+        // ✅ CREATE PENDING PAYMENT RECORD WITH PLATFORM FEE
+        const paymentRecord = await prisma.paymentRecord.create({
+            data: {
+                userId: assistant.userId, // Creator receives money
+                payerUserId: userId, // Buyer pays
+                type: "assistant_purchase",
+                amount: amount,
+                currency: assistant.currency,
+                platformFee: platformFee, // 15% platform fee
+                netAmount: netAmount, // 85% to creator
+                status: "pending",
+                stripeCheckoutSessionId: checkoutSession.id,
+                relatedType: "Assistant",
+                relatedId: assistantIdBigInt,
+                description: `Purchase of assistant: ${assistant.name}`,
+            },
+        })
+        // Create purchase record
         await prisma.assistantPurchase.create({
             data: {
                 buyerId: userId,
                 assistantId: assistantIdBigInt,
-                status: "pending",
-                stripeCheckoutSessionId: checkoutSession.id,
+                paymentRecordId: paymentRecord.id,
             },
         })
-
         return {
             success: true,
             url: checkoutSession.url || undefined,
@@ -2213,7 +2232,7 @@ export async function getUserAssistantPermissions(assistantId: string) {
 
         // Import permission helper
         const { getUserAssistantPermissions: getPermissions } = await import("@/lib/permissions/assistant-permissions")
-        
+
         const result = await getPermissions(assistantIdBigInt, userId)
 
         return {
@@ -2242,8 +2261,8 @@ export async function getUserAssistantPermissions(assistantId: string) {
 // ================================================================
 
 interface DeleteAssistantResponse {
-  success: boolean
-  error?: string
+    success: boolean
+    error?: string
 }
 
 /**
@@ -2251,172 +2270,462 @@ interface DeleteAssistantResponse {
  * Only the owner can delete their assistant
  */
 export async function hardDeleteAssistant(
-  assistantId: string
+    assistantId: string
 ): Promise<DeleteAssistantResponse> {
-  try {
-    // 🔐 Auth check
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return { success: false, error: "Authentication required" }
-    }
-
-    const userId = BigInt(session.user.id)
-    const assistantBigInt = BigInt(assistantId)
-
-    // 🔎 Fetch assistant + ownership check
-    const assistant = await prisma.assistant.findUnique({
-      where: { id: assistantBigInt },
-      include: {
-        knowledgebases: {
-          select: { vectorFileId: true },
-        },
-      },
-    })
-
-    if (!assistant) {
-      return { success: false, error: "Assistant not found" }
-    }
-
-    if (assistant.userId !== userId) {
-      return {
-        success: false,
-        error: "You do not have permission to delete this assistant",
-      }
-    }
-
-    // 🧠 OpenAI Vector Store Cleanup (outside transaction)
-    if (assistant.vectorStoreId) {
-      for (const kb of assistant.knowledgebases) {
-        if (kb.vectorFileId) {
-          try {
-            await deleteFileFromVectorStore(
-              assistant.vectorStoreId,
-              kb.vectorFileId
-            )
-          } catch (err) {
-            console.error(
-              `Failed to delete vector file ${kb.vectorFileId}`,
-              err
-            )
-          }
+    try {
+        // 🔐 Auth check
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return { success: false, error: "Authentication required" }
         }
-      }
 
-      try {
-        await deleteVectorStore(assistant.vectorStoreId)
-      } catch (err) {
-        console.error(
-          `Failed to delete vector store ${assistant.vectorStoreId}`,
-          err
-        )
-      }
+        const userId = BigInt(session.user.id)
+        const assistantBigInt = BigInt(assistantId)
+
+        // 🔎 Fetch assistant + ownership check
+        const assistant = await prisma.assistant.findUnique({
+            where: { id: assistantBigInt },
+            include: {
+                knowledgebases: {
+                    select: { vectorFileId: true },
+                },
+            },
+        })
+
+        if (!assistant) {
+            return { success: false, error: "Assistant not found" }
+        }
+
+        if (assistant.userId !== userId) {
+            return {
+                success: false,
+                error: "You do not have permission to delete this assistant",
+            }
+        }
+
+        // 🧠 OpenAI Vector Store Cleanup (outside transaction)
+        if (assistant.vectorStoreId) {
+            for (const kb of assistant.knowledgebases) {
+                if (kb.vectorFileId) {
+                    try {
+                        await deleteFileFromVectorStore(
+                            assistant.vectorStoreId,
+                            kb.vectorFileId
+                        )
+                    } catch (err) {
+                        console.error(
+                            `Failed to delete vector file ${kb.vectorFileId}`,
+                            err
+                        )
+                    }
+                }
+            }
+
+            try {
+                await deleteVectorStore(assistant.vectorStoreId)
+            } catch (err) {
+                console.error(
+                    `Failed to delete vector store ${assistant.vectorStoreId}`,
+                    err
+                )
+            }
+        }
+
+        // 🧨 DATABASE HARD DELETE (ORDER MATTERS)
+        await prisma.$transaction([
+            // Chat systems
+            prisma.assistantUserChatMessage.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+            prisma.assistantUserChat.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+            prisma.assistantChatMessage.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+            prisma.assistantChat.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+
+            // Knowledge base
+            prisma.assistantKnowledgebase.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+
+            // Artifacts
+            prisma.artifactPermission.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+            prisma.artifactVersion.deleteMany({
+                where: {
+                    artifact: { assistantId: assistantBigInt },
+                },
+            }),
+            prisma.assistantArtifact.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+
+            // Social
+            prisma.assistantNewsFeedLike.deleteMany({
+                where: {
+                    newsFeed: { assistantId: assistantBigInt },
+                },
+            }),
+            prisma.assistantNewsFeedComment.deleteMany({
+                where: {
+                    newsFeed: { assistantId: assistantBigInt },
+                },
+            }),
+            prisma.newsFeedPermission.deleteMany({
+                where: {
+                    newsFeed: { assistantId: assistantBigInt },
+                },
+            }),
+            prisma.assistantNewsFeed.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+
+            // Marketplace & usage
+            prisma.assistantPurchase.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+            prisma.usageMetric.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+
+            // Permissions & pins
+            prisma.assistantContact.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+            prisma.assistantPin.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+
+            // API Config
+            prisma.assistantApiConfiguration.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+
+            // Connector integrations
+            prisma.connectorChatUsage.deleteMany({
+                where: {
+                    chat: { assistantId: assistantBigInt },
+                },
+            }),
+            prisma.connector.deleteMany({
+                where: { assistantId: assistantBigInt },
+            }),
+
+            // 🔥 Finally delete assistant
+            prisma.assistant.delete({
+                where: { id: assistantBigInt },
+            }),
+        ])
+
+        // 🔄 Revalidate UI
+        revalidatePath("/assistants")
+        revalidatePath("/dashboard")
+        revalidatePath("/store")
+
+        return { success: true }
+    } catch (error) {
+        console.error("Hard delete assistant failed:", error)
+        return {
+            success: false,
+            error: "Failed to permanently delete assistant",
+        }
     }
+}
 
-    // 🧨 DATABASE HARD DELETE (ORDER MATTERS)
-    await prisma.$transaction([
-      // Chat systems
-      prisma.assistantUserChatMessage.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
-      prisma.assistantUserChat.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
-      prisma.assistantChatMessage.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
-      prisma.assistantChat.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
+// ============================================================
+// DELETE EXCESS ASSISTANTS ON DOWNGRADE
+// ============================================================
 
-      // Knowledge base
-      prisma.assistantKnowledgebase.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
+interface DeleteExcessAssistantsResult {
+    success: boolean
+    error?: string
+    deletedCount?: number
+    deletedAssistants?: Array<{
+        id: string
+        name: string
+    }>
+    affectedBuyers?: number
+}
 
-      // Artifacts
-      prisma.artifactPermission.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
-      prisma.artifactVersion.deleteMany({
-        where: {
-          artifact: { assistantId: assistantBigInt },
-        },
-      }),
-      prisma.assistantArtifact.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
+/**
+ * Delete excess assistants when user downgrades to a plan with lower assistant limit
+ * This is called automatically by the webhook when a subscription is updated
+ * 
+ * @param userId - The user ID whose assistants to delete
+ * @param newLimit - The new assistant limit from the downgraded plan
+ * @returns Result with deleted assistant details
+ */
+export async function deleteExcessAssistants(
+    userId: bigint,
+    newLimit: number
+): Promise<DeleteExcessAssistantsResult> {
+    try {
+        console.log(`[DeleteExcess] Starting deletion for user ${userId}, new limit: ${newLimit}`)
 
-      // Social
-      prisma.assistantNewsFeedLike.deleteMany({
-        where: {
-          newsFeed: { assistantId: assistantBigInt },
-        },
-      }),
-      prisma.assistantNewsFeedComment.deleteMany({
-        where: {
-          newsFeed: { assistantId: assistantBigInt },
-        },
-      }),
-      prisma.newsFeedPermission.deleteMany({
-        where: {
-          newsFeed: { assistantId: assistantBigInt },
-        },
-      }),
-      prisma.assistantNewsFeed.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
+        // Count current active assistants
+        const currentCount = await prisma.assistant.count({
+            where: {
+                userId,
+                isDeleted: false,
+                deletedAt: null,
+            },
+        })
 
-      // Marketplace & usage
-      prisma.assistantPurchase.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
-      prisma.assistantTransaction.deleteMany({
-        where: { purchases: { some: { assistantId: assistantBigInt } } },
-      }),
-      prisma.usageMetric.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
+        console.log(`[DeleteExcess] Current assistant count: ${currentCount}`)
 
-      // Permissions & pins
-      prisma.assistantContact.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
-      prisma.assistantPin.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
+        // If within limit, no deletion needed
+        if (currentCount <= newLimit) {
+            console.log(`[DeleteExcess] No deletion needed (${currentCount} <= ${newLimit})`)
+            return {
+                success: true,
+                deletedCount: 0,
+                deletedAssistants: [],
+                affectedBuyers: 0,
+            }
+        }
 
-      // API Config
-      prisma.assistantApiConfiguration.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
+        const toDelete = currentCount - newLimit
+        console.log(`[DeleteExcess] Need to delete ${toDelete} assistants`)
 
-      // Connector integrations
-      prisma.connectorChatUsage.deleteMany({
-        where: {
-          chat: { assistantId: assistantBigInt },
-        },
-      }),
-      prisma.connector.deleteMany({
-        where: { assistantId: assistantBigInt },
-      }),
+        // Get assistants to delete (newest first - FIFO deletion)
+        const assistantsToDelete = await prisma.assistant.findMany({
+            where: {
+                userId,
+                isDeleted: false,
+                deletedAt: null,
+            },
+            orderBy: {
+                createdAt: 'desc', // Delete newest first
+            },
+            take: toDelete,
+            select: {
+                id: true,
+                name: true,
+            },
+        })
 
-      // 🔥 Finally delete assistant
-      prisma.assistant.delete({
-        where: { id: assistantBigInt },
-      }),
-    ])
+        const assistantIds = assistantsToDelete.map(a => a.id)
+        const now = new Date()
 
-    // 🔄 Revalidate UI
-    revalidatePath("/assistants")
-    revalidatePath("/dashboard")
-    revalidatePath("/store")
+        console.log(`[DeleteExcess] Deleting assistants:`, assistantsToDelete.map(a => a.name))
 
-    return { success: true }
-  } catch (error) {
-    console.error("Hard delete assistant failed:", error)
-    return {
-      success: false,
-      error: "Failed to permanently delete assistant",
+        let affectedBuyersCount = 0
+
+        // Perform cascading deletion in transaction
+        await prisma.$transaction(async (tx) => {
+            // ============================================================
+            // STEP 0: Handle buyers who purchased these assistants
+            // ============================================================
+            const affectedPurchases = await tx.assistantPurchase.findMany({
+                where: {
+                    assistantId: { in: assistantIds }
+                },
+                include: {
+                    buyer: {
+                        select: {
+                            id: true,
+                            email: true,
+                            name: true,
+                        },
+                    },
+                    assistant: {
+                        select: {
+                            id: true,
+                            name: true,
+                            price: true,
+                        },
+                    },
+                },
+            })
+
+            affectedBuyersCount = affectedPurchases.length
+            console.log(`[DeleteExcess] Found ${affectedBuyersCount} affected purchases`)
+
+            if (affectedPurchases.length > 0) {
+                // Soft-delete purchases
+                await tx.assistantPurchase.updateMany({
+                    where: {
+                        id: { in: affectedPurchases.map(p => p.id) },
+                    },
+                    data: {
+                        deletedAt: now,
+                    },
+                })
+
+                // Create notifications for buyers
+                const notifications = affectedPurchases.map(purchase => ({
+                    userId: purchase.buyerId,
+                    title: 'Assistant No Longer Available',
+                    message: `The assistant "${purchase.assistant.name}" that you purchased is no longer available. The owner has downgraded their subscription.`,
+                    type: 'assistant_deleted',
+                    relatedId: Number(purchase.assistant.id),
+                    relatedType: 'assistant',
+                    isRead: false,
+                    createdAt: now,
+                    updatedAt: now,
+                }))
+
+                await tx.notification.createMany({
+                    data: notifications,
+                })
+
+                console.log(`[DeleteExcess] Created ${notifications.length} buyer notifications`)
+            }
+
+            // ============================================================
+            // CASCADE 1: Delete Artifacts and their related data
+            // ============================================================
+            const artifacts = await tx.assistantArtifact.findMany({
+                where: { assistantId: { in: assistantIds }, deletedAt: null },
+                select: { id: true },
+            })
+            const artifactIds = artifacts.map(a => a.id)
+
+            if (artifactIds.length > 0) {
+                await tx.artifactVersion.updateMany({
+                    where: { artifactId: { in: artifactIds } },
+                    data: { deletedAt: now },
+                })
+                await tx.artifactPermission.deleteMany({
+                    where: { artifactId: { in: artifactIds } },
+                })
+                await tx.artifactGenerationJob.deleteMany({
+                    where: { artifactId: { in: artifactIds } },
+                })
+                await tx.assistantArtifact.updateMany({
+                    where: { id: { in: artifactIds } },
+                    data: { deletedAt: now },
+                })
+                console.log(`[DeleteExcess] Deleted ${artifactIds.length} artifacts`)
+            }
+
+            // CASCADE 2: Delete User Chats and Messages
+            const userChats = await tx.assistantUserChat.findMany({
+                where: { assistantId: { in: assistantIds }, deletedAt: null },
+                select: { id: true },
+            })
+            const chatIds = userChats.map(c => c.id)
+
+            if (chatIds.length > 0) {
+                await tx.assistantUserChatMessage.deleteMany({
+                    where: { assistantUserChatId: { in: chatIds } },
+                })
+                await tx.connectorChatUsage.deleteMany({
+                    where: { assistantUserChatId: { in: chatIds } },
+                })
+                await tx.assistantUserChat.updateMany({
+                    where: { id: { in: chatIds } },
+                    data: { deletedAt: now },
+                })
+                console.log(`[DeleteExcess] Deleted ${chatIds.length} user chats`)
+            }
+
+            // CASCADE 3: Delete Assistant Chats (Messenger)
+            const assistantChats = await tx.assistantChat.findMany({
+                where: { assistantId: { in: assistantIds }, deletedAt: null },
+                select: { id: true },
+            })
+            const assistantChatIds = assistantChats.map(c => c.id)
+
+            if (assistantChatIds.length > 0) {
+                await tx.assistantChatMessage.updateMany({
+                    where: { assistantChatId: { in: assistantChatIds } },
+                    data: { deletedAt: now },
+                })
+                await tx.assistantChat.updateMany({
+                    where: { id: { in: assistantChatIds } },
+                    data: { deletedAt: now },
+                })
+                console.log(`[DeleteExcess] Deleted ${assistantChatIds.length} assistant chats`)
+            }
+
+            // CASCADE 4: Delete Pins
+            await tx.assistantPin.deleteMany({
+                where: { assistantId: { in: assistantIds } },
+            })
+
+            // CASCADE 5: Delete Contacts
+            await tx.assistantContact.deleteMany({
+                where: { assistantId: { in: assistantIds } },
+            })
+
+            // CASCADE 6: Delete News Feeds
+            const newsFeeds = await tx.assistantNewsFeed.findMany({
+                where: { assistantId: { in: assistantIds } },
+                select: { id: true },
+            })
+            const newsFeedIds = newsFeeds.map(n => n.id)
+
+            if (newsFeedIds.length > 0) {
+                await tx.assistantNewsFeedLike.deleteMany({
+                    where: { newsFeedId: { in: newsFeedIds } },
+                })
+                await tx.assistantNewsFeedComment.deleteMany({
+                    where: { newsFeedId: { in: newsFeedIds } },
+                })
+                await tx.newsFeedPermission.deleteMany({
+                    where: { newsFeedId: { in: newsFeedIds } },
+                })
+                await tx.assistantNewsFeed.deleteMany({
+                    where: { id: { in: newsFeedIds } },
+                })
+                console.log(`[DeleteExcess] Deleted ${newsFeedIds.length} news feeds`)
+            }
+
+            // CASCADE 7: Delete Knowledge Base
+            await tx.assistantKnowledgebase.deleteMany({
+                where: { assistantId: { in: assistantIds } },
+            })
+
+            // CASCADE 8: Delete API Configuration
+            await tx.assistantApiConfiguration.deleteMany({
+                where: { assistantId: { in: assistantIds } },
+            })
+
+            // CASCADE 9: Delete Connectors
+            await tx.connector.updateMany({
+                where: { assistantId: { in: assistantIds } },
+                data: { deletedAt: now },
+            })
+
+            // CASCADE 10: Delete Usage Metrics
+            await tx.usageMetric.deleteMany({
+                where: { assistantId: { in: assistantIds } },
+            })
+
+            // FINALLY: Soft delete the assistants themselves
+            await tx.assistant.updateMany({
+                where: {
+                    id: { in: assistantIds },
+                },
+                data: {
+                    isDeleted: true,
+                    deletedAt: now,
+                },
+            })
+
+            console.log(`[DeleteExcess] ✅ Successfully deleted ${assistantIds.length} assistants`)
+        })
+
+        return {
+            success: true,
+            deletedCount: assistantsToDelete.length,
+            deletedAssistants: assistantsToDelete.map(a => ({
+                id: a.id.toString(),
+                name: a.name,
+            })),
+            affectedBuyers: affectedBuyersCount,
+        }
+    } catch (error) {
+        console.error('[DeleteExcess] Error deleting excess assistants:', error)
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to delete excess assistants',
+        }
     }
-  }
 }

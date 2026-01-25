@@ -48,16 +48,16 @@ export async function uploadToS3(
   try {
     // Validate AWS configuration before attempting upload
     if (!BUCKET_NAME) {
-      throw new Error("AWS_STORAGE_BUCKET_NAME environment variable is not configured")
+      throw new Error("S3_AWS_STORAGE_BUCKET_NAME environment variable is not configured")
     }
     if (!process.env.S3_AWS_ACCESS_KEY_ID) {
-      throw new Error("AWS_ACCESS_KEY_ID environment variable is not configured")
+      throw new Error("S3_AWS_ACCESS_KEY_ID environment variable is not configured")
     }
     if (!process.env.S3_AWS_SECRET_ACCESS_KEY) {
-      throw new Error("AWS_SECRET_ACCESS_KEY environment variable is not configured")
+      throw new Error("S3_AWS_SECRET_ACCESS_KEY environment variable is not configured")
     }
     if (!process.env.S3_AWS_S3_REGION_NAME) {
-      throw new Error("AWS_S3_REGION_NAME environment variable is not configured")
+      throw new Error("S3_AWS_S3_REGION_NAME environment variable is not configured")
     }
 
     // Generate unique key with timestamp to avoid collisions
@@ -276,7 +276,7 @@ function getPublicUrl(key: string): string {
   // Use AWS_S3_REGION_NAME to match the S3Client configuration
   const region = process.env.S3_AWS_S3_REGION_NAME || process.env.S3_AWS_REGION
   if (!region) {
-    throw new Error('AWS region is not configured. Please set AWS_S3_REGION_NAME or AWS_REGION environment variable.')
+    throw new Error('AWS region is not configured. Please set S3_AWS_S3_REGION_NAME or S3_AWS_REGION environment variable.')
   }
 
   return `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${key}`

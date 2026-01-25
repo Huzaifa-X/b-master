@@ -4,14 +4,14 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { openai } from "@/lib/openai"
-import { getArtifactCodingPrompt } from "@/utils/prompts"
+import { getArtifactUpdateCodingPrompt } from "@/utils/prompts"
 import { createArtifactVersion } from "@/app/actions/update-artifact.action"
 import { getChatMessages } from "@/app/actions/chat.action"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const ARTIFACT_UPDATE_PROMPT = await getArtifactCodingPrompt()
+const ARTIFACT_UPDATE_PROMPT = await getArtifactUpdateCodingPrompt()
 
 interface UploadedFile {
   name: string

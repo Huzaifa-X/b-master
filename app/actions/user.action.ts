@@ -236,6 +236,71 @@ export async function getAvailableContacts(): Promise<UserContact[]> {
 }
 
 // ============================================
+// VERIFY USER BY EMAIL
+// ============================================
+/**
+ * Verify if an email belongs to a valid user in the system
+ * Used for adding users without exposing all emails in a dropdown
+ */
+export async function verifyUserByEmail(email: string): Promise<{
+  success: boolean
+  user?: UserContact
+  error?: string
+}> {
+  try {
+    // Get current authenticated user
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return { success: false, error: "Authentication required" }
+    }
+
+    const currentUserId = BigInt(session.user.id)
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return { success: false, error: "Invalid email format" }
+    }
+
+    // Find user by email (case insensitive)
+    const user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: email.toLowerCase(),
+          mode: 'insensitive'
+        },
+        id: {
+          not: currentUserId // Can't add yourself
+        },
+        deletedAt: null,
+        status: "active"
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      }
+    })
+
+    if (!user) {
+      return { success: false, error: "No user found with this email" }
+    }
+
+    return {
+      success: true,
+      user: {
+        id: user.id.toString(),
+        name: user.name,
+        email: user.email,
+      }
+    }
+  } catch (error) {
+    console.error("Error verifying user by email:", error)
+    return { success: false, error: "Failed to verify user" }
+  }
+}
+
+// ============================================
 // SEARCH USERS FOR MENTIONS
 // ============================================
 /**
