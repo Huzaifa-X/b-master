@@ -1,13 +1,10 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
+const nextConfig = {
   // Disable TypeScript and ESLint checks during build to prevent memory issues
   // Run type checks separately with `tsc --noEmit` in CI/dev
   typescript: {
     ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
   // Experimental features configuration
   experimental: {
@@ -21,6 +18,6 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: process.env.NODE_ENV === 'development', // Disable optimization in dev to reduce preloading
   },
-};
+} satisfies NextConfig;
 
 export default nextConfig;
