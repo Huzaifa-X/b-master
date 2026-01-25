@@ -3,7 +3,8 @@
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { openai } from "@/lib/openai";
+import { generateText } from "ai";
+import { ai_sdk_openai } from "@/lib/ai-sdk";
 import { GenerateInstructionsParams, GenerateInstructionsResponse } from "@/types/ai-instruction"
 import { AssistantCategory } from "@/types/assistant"
 import { revalidatePath } from "next/cache"
@@ -47,14 +48,13 @@ export async function generateAssistantInstructions({
 
         const model = 'gpt-5-mini'
 
-        const response = await openai.responses.create({
-            model: model,
-            reasoning: { effort: "low" },
-            instructions: await getAssistantGptPromptGeneratorPrompt(),
-            input: prompt,
+        const result = await generateText({
+            model: ai_sdk_openai(model),
+            system: await getAssistantGptPromptGeneratorPrompt(),
+            prompt,
         });
 
-        if (!response.output_text) {
+        if (!result.text) {
             return {
                 success: false,
                 error: 'No instructions were generated',
@@ -63,9 +63,9 @@ export async function generateAssistantInstructions({
 
         // Track usage metrics
         try {
-            const inputToken = response.usage?.input_tokens || 0
-            const outputToken = response.usage?.output_tokens || 0
-            const totalToken = inputToken + outputToken
+            const inputToken = result.totalUsage.inputTokens || 0
+            const outputToken = result.totalUsage.outputTokens || 0
+            const totalToken = result.totalUsage.totalTokens || 0
 
             // Calculate cost based on pricing per 1K tokens
             const cost_per_1k_input = 0.002
@@ -92,7 +92,7 @@ export async function generateAssistantInstructions({
 
         return {
             success: true,
-            instructions: response.output_text
+            instructions: result.text
         }
     } catch (error) {
         console.error('Error generating instructions:', error)

@@ -501,7 +501,7 @@ export async function getChatMessages(chatId: string, limit?: number) {
 
         return {
           id: msg.id.toString(),
-          role: msg.role as "user" | "assistant",
+          role: msg.role as "user" | "assistant" | "system",
           content: msg.message || "",
           createdAt: msg.createdAt,
           attachments: attachments.length > 0 ? attachments : undefined,

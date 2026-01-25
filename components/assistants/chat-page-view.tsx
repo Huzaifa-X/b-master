@@ -1,8 +1,8 @@
 // components/assistants/chat-page-view.tsx
 "use client"
 
-import { useCustomChat } from "@/hooks/useCustomChat"
-import { ScrollArea } from "@/components/ui/scroll-area"
+// import { useCustomChat } from "@/hooks/useCustomChat"
+import { useAIChat as useCustomChat } from "@/hooks/useAssistantUserChat"
 import { UserMessage } from "@/components/assistants/message-components/user-message"
 import { AssistantMessage } from "@/components/assistants/message-components/assistant-message"
 import { ChatInput } from "@/components/assistants/chat-input"
@@ -317,6 +317,8 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
                     ) : (
                       <AssistantMessage
                         content={message.content}
+                        reasoning={message.reasoning}
+                        parts={message.parts}
                         timestamp={message.createdAt}
                         isLoading={message.isStreaming}
                       />
