@@ -485,9 +485,7 @@ export async function POST(req: NextRequest) {
         // CONFIGURE OPENAI PROVIDER OPTIONS
         // ============================================
 
-        const providerOptions: any = {
-            reasoningSummary: 'auto',
-        }
+        const providerOptions: any = {}
 
         // Web search tool
         if (chatType === "ASK_B" || webSearch || research) {
@@ -560,6 +558,7 @@ export async function POST(req: NextRequest) {
         // Store option
         providerOptions.openai = {
             ...providerOptions.openai,
+            reasoningSummary: 'auto',
             store: true,
             metadata: {
                 chatId: chatIdInt.toString(),
