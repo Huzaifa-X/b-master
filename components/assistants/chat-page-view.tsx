@@ -8,6 +8,7 @@ import { AssistantMessage } from "@/components/assistants/message-components/ass
 import { ChatInput } from "@/components/assistants/chat-input"
 import { ArtifactPanel } from "@/components/assistants/artifact-panel"
 import { OAuthConnectPrompt } from "@/components/assistants/oauth-connect-prompt"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { StopCircle, Loader2, ChevronDown } from "lucide-react"
@@ -268,25 +269,66 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
   // Check if there's an assistant message after the last user message
   const lastUserIndex = messages.findIndex(m => m.id === lastUserMessage?.id)
   const hasAssistantResponseAfter = lastUserIndex >= 0 &&
-    messages.slice(lastUserIndex + 1).some(m => m.role === "assistant" && m.content.trim())
+    messages.slice(lastUserIndex + 1).some(m => m.role === "assistant")
 
   // Show loading if:
   // 1. There's a user message
-  // 2. No assistant response with content after it
-  // 3. Not currently streaming (streaming will show its own loading indicator)
+  // 2. No assistant response logic has kicked in yet (message not in list)
+  // 3. We are currently expecting a response (streaming or creating)
   const hasUserMessageWithoutResponse =
     messages.length > 0 &&
     lastUserMessage &&
     !hasAssistantResponseAfter &&
-    !isStreaming
+    (isStreaming || isCreating)
 
   // Loading state
   if (isLoadingMessages || !isReady) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-sm text-muted-foreground">Loading conversation...</p>
+      <div className="flex h-full flex-col bg-background relative overflow-x-auto">
+        <div className="flex-1 relative overflow-auto">
+          <div className="mx-auto w-full max-w-[44rem] px-4 py-4 space-y-8">
+            {/* User Message Skeleton */}
+            <div className="flex gap-4 px-2">
+              <div className="flex-shrink-0 pt-1">
+                <Skeleton className="h-8 w-8 rounded-full" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className="inline-block rounded-2xl w-3/4">
+                  <Skeleton className="h-20 w-full rounded-2xl" />
+                </div>
+              </div>
+            </div>
+
+            {/* Assistant Message Skeleton */}
+            <div className="flex gap-4 px-2">
+              <div className="flex-shrink-0 pt-1">
+                <Skeleton className="h-8 w-8 rounded-full" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-5/6" />
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-32 w-full rounded-md mt-4" />
+              </div>
+            </div>
+
+            {/* User Message Skeleton */}
+            <div className="flex gap-4 px-2">
+              <div className="flex-shrink-0 pt-1">
+                <Skeleton className="h-8 w-8 rounded-full" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className="inline-block rounded-2xl w-1/2">
+                  <Skeleton className="h-10 w-full rounded-2xl theme-light" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="sticky bottom-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4">
+          <div className="mx-auto w-full max-w-[44rem]">
+            <Skeleton className="h-12 w-full rounded-md" />
+          </div>
         </div>
       </div>
     )
@@ -314,6 +356,7 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
                         attachments={message.attachments}
                         timestamp={message.createdAt}
                       />
+
                     ) : (
                       <AssistantMessage
                         content={message.content}
@@ -325,6 +368,17 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
                     )}
                   </div>
                 ))}
+
+                {/* Pending Response Loading State */}
+                {hasUserMessageWithoutResponse && (
+                  <div className="mb-4">
+                    <AssistantMessage
+                      content=""
+                      reasoning=""  // Empty reasoning triggers "thinking..." fallback in component
+                      isLoading={true}
+                    />
+                  </div>
+                )}
 
                 {/* OAuth Connection Prompt */}
                 {oauthPrompt?.show && (
@@ -340,41 +394,6 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
                     />
                   </div>
                 )}
-
-                {/* Loading indicator when waiting for AI response */}
-                {/* Only show if no streaming assistant message exists and OAuth is not required */}
-                {hasUserMessageWithoutResponse && !messages.some(m => m.role === "assistant" && m.isStreaming) && !oauthPrompt?.show && (
-                  <div className="mb-4">
-                    <div
-                      className="mx-auto w-full max-w-[44rem] animate-in py-4 duration-150 ease-out fade-in slide-in-from-bottom-1"
-                      data-role="assistant"
-                    >
-                      <div className="flex gap-4 px-2">
-                        <div className="flex-shrink-0 pt-1">
-                          <div className="flex size-8 items-center justify-center rounded-full">
-                            <Image
-                              src="/bmaster-icon.png"
-                              alt="Assistant"
-                              width={24}
-                              height={24}
-                              style={{ width: "auto", height: "24px" }}
-                              unoptimized
-                            />
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="inline-block rounded-2xl px-4 py-2.5 bg-muted">
-                            <div className="flex items-center gap-2">
-                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                              <span className="text-sm text-muted-foreground">Thinking...</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 <div className="min-h-8" />
               </>
             )}

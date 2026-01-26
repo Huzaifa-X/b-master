@@ -64,11 +64,11 @@ export const UserMessage: FC<UserMessageProps> = ({ content, attachments, timest
         >
             {/* Attachments - Display above message */}
             {attachments && attachments.length > 0 && (
-                <div className="mb-3 flex flex-wrap gap-2 px-2">
+                <div className="mb-3 flex flex-wrap gap-2 px-2 ml-12">
                     {attachments.map((attachment, index) => (
                         <div
                             key={index}
-                            className="flex items-center gap-2 rounded-lg border border-primary/30 bg-background/50 px-3 py-2 text-sm"
+                            className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm"
                         >
                             <span className="truncate max-w-[200px]">{attachment.name}</span>
                             {attachment.url && (
@@ -113,7 +113,7 @@ export const UserMessage: FC<UserMessageProps> = ({ content, attachments, timest
                                             {children}
                                         </pre>
                                     ),
-                                    
+
                                     // Simple code - no syntax highlighting, just plain text
                                     code: ({ children }) => (
                                         <code className="font-mono text-sm">

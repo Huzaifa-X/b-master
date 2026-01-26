@@ -1,6 +1,7 @@
 // app/actions/chat.action.ts
 "use server"
 
+import { after } from "next/server"
 import { randomUUID } from "crypto"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
@@ -54,7 +55,7 @@ export async function createChatWithMessage(data: {
         userId,
         assistantId: data.assistantId ? BigInt(data.assistantId) : null,
         chatType: data.mode === "ask-b" ? "ASK_B" : "ASSISTANT",
-        topic: "New Chat", // Temporary topic
+        topic: "Untitled", // Temporary topic (updated by AI in background)
         shareableId,
       }
     })
@@ -105,10 +106,11 @@ export async function createChatWithMessage(data: {
 
     console.log("[createChatWithMessage] Chat created:", chat.id)
 
-    // Trigger background topic generation (non-blocking)
-    generateChatTopic(chat.id.toString(), data.firstMessage).catch(err => {
-      console.error("[createChatWithMessage] Topic generation failed:", err)
-      // Don't fail the request if topic generation fails
+    // Trigger background topic generation (reliably in background)
+    after(() => {
+      generateChatTopic(chat.id.toString(), data.firstMessage).catch(err => {
+        console.error("[createChatWithMessage] Topic generation failed:", err)
+      })
     })
 
     return {
