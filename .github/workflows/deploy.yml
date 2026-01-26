@@ -1,0 +1,67 @@
+name: 🚀 Deploy B-Master
+
+on:
+  push:
+    branches:
+      - production
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔑 Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: 🚀 Deploy to Server
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+            echo "=========================================="
+            echo "🚀 B-Master Deployment Started"
+            echo "=========================================="
+            
+            cd /var/www/b-master
+            
+            # Load NVM
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            
+            echo "📥 Pulling latest code..."
+            git fetch origin
+            git reset --hard origin/production
+            
+            echo "📦 Installing dependencies..."
+            pnpm install --frozen-lockfile
+            
+            echo "🔨 Generating Prisma client..."
+            pnpm exec prisma generate
+            
+            echo "🗄️ Running migrations..."
+            pnpm exec prisma migrate deploy
+            
+            echo "🏗️ Building..."
+            pnpm build
+            
+            echo "🔄 Restarting PM2..."
+            pm2 restart b-master
+            
+            sleep 3
+            pm2 status
+            
+            echo "=========================================="
+            echo "✅ Deployment Complete!"
+            echo "=========================================="
+          ENDSSH
+
+      - name: ✅ Success
+        run: |
+          echo "🎉 Deployed to https://chat.bmaster.ai"
