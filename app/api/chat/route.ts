@@ -25,7 +25,7 @@ import { z } from "zod"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-export const maxDuration = 120
+export const maxDuration = 300
 
 /**
  * Save base64 image to S3 and return public URL
@@ -33,18 +33,20 @@ export const maxDuration = 120
 async function saveImageToS3(
     base64Image: string,
     chatId: number,
-    imageIndex: number
+    imageIndex: number,
+    mimeType: string = "image/webp"
 ): Promise<string | null> {
     try {
         const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "")
         const imageBuffer = Buffer.from(base64Data, "base64")
         const timestamp = Date.now()
-        const fileName = `image-${timestamp}-${imageIndex}.png`
+        const extension = mimeType.split('/')[1] || 'webp'
+        const fileName = `image-${timestamp}-${imageIndex}.${extension}`
 
         const uploadResult = await safeUploadToS3(
             imageBuffer,
             fileName,
-            "image/png",
+            mimeType,
             `chat-images/chat-${chatId}`
         )
 
@@ -85,18 +87,19 @@ export async function POST(req: NextRequest) {
             attachments,
             artifact,
             dropbox,
-            mentionedUsers
+            mentionedUsers,
+            messages: clientMessages, // Messages from AI SDK useChat
         } = body
 
         console.log("[Chat] Processing request for chatId:", chatId)
-        console.log("[Stream] mentionedUsers:", mentionedUsers)
+        console.log("[Chat] Received", clientMessages?.length || 0, "messages from client")
 
         chatIdInt = parseInt(chatId)
         if (isNaN(chatIdInt)) {
             return new Response(JSON.stringify({ error: "Invalid chatId" }), { status: 400 })
         }
 
-        // Get chat with context
+        // Get chat with context (without messages - we use client messages)
         const chat = await prisma.assistantUserChat.findFirst({
             where: { id: chatIdInt },
             include: {
@@ -112,18 +115,6 @@ export async function POST(req: NextRequest) {
                             select: { note: true }
                         }
                     }
-                },
-                messages: {
-                    orderBy: { createdAt: 'asc' },
-                    select: {
-                        id: true,
-                        role: true,
-                        message: true,
-                        documents: true,
-                        openaiResponseId: true,
-                        hasImages: true,
-                        createdAt: true,
-                    }
                 }
             }
         })
@@ -132,62 +123,147 @@ export async function POST(req: NextRequest) {
             return new Response(JSON.stringify({ error: "Chat not found" }), { status: 404 })
         }
 
-        // Update user message status to PROCESSING
-        const lastUserMessageRecord = await prisma.assistantUserChatMessage.findFirst({
-            where: {
-                assistantUserChatId: chatIdInt,
-                role: "user"
-            },
-            orderBy: { createdAt: 'desc' }
-        })
-
-        if (lastUserMessageRecord?.status === "PENDING") {
-            await prisma.assistantUserChatMessage.update({
-                where: { id: lastUserMessageRecord.id },
-                data: { status: "PROCESSING" }
-            })
-            console.log("[Chat] Updated user message status to PROCESSING")
-        }
+        // Extract the last user message from client messages
+        const lastClientUserMessage = clientMessages
+            ?.filter((m: any) => m.role === 'user')
+            .slice(-1)[0]
 
         let lastUserMessage = ""
-        const conversationMessages: UIMessage[] = chat.messages
-            .filter(msg => msg.message)
-            .map((msg) => {
-                let content = msg.message || ""
+        let lastUserMessageRecord: any = null
 
-                // Add mentioned users to message context
-                if (msg.role === "user" && msg.documents) {
-                    try {
-                        const documentsData = JSON.parse(msg.documents)
-                        if (documentsData.mentionedUsers?.length > 0) {
-                            const mentionsList = documentsData.mentionedUsers
-                                .map((u: { name: string; email: string }) => `${u.name} <${u.email}>`)
-                                .join(', ')
-                            content = `[This message mentions: ${mentionsList}]\n\n${content}`
-                        }
-                    } catch (e) {
-                        // Ignore parse errors
+        if (lastClientUserMessage) {
+            // Extract text content from the message
+            const messageContent = typeof lastClientUserMessage.content === 'string'
+                ? lastClientUserMessage.content
+                : lastClientUserMessage.parts?.find((p: any) => p.type === 'text')?.text || ""
+
+            lastUserMessage = messageContent
+
+            // Check if this message already exists in DB (by checking recent messages)
+            const existingMessage = await prisma.assistantUserChatMessage.findFirst({
+                where: {
+                    assistantUserChatId: chatIdInt,
+                    role: "user",
+                    message: messageContent,
+                    createdAt: { gte: new Date(Date.now() - 60000) } // Within last minute
+                },
+                orderBy: { createdAt: 'desc' }
+            })
+
+            if (existingMessage) {
+                // Message exists, update status to PROCESSING
+                lastUserMessageRecord = existingMessage
+                if (existingMessage.status === "PENDING") {
+                    await prisma.assistantUserChatMessage.update({
+                        where: { id: existingMessage.id },
+                        data: { status: "PROCESSING" }
+                    })
+                    console.log("[Chat] Updated existing user message status to PROCESSING")
+                }
+            } else {
+                // Save new user message to DB (server-side save)
+                const documentsData: any = {}
+                if (mentionedUsers?.length > 0) {
+                    documentsData.mentionedUsers = mentionedUsers
+                }
+                if (attachments?.length > 0) {
+                    documentsData.attachments = attachments
+                }
+                // Store options for potential retry
+                documentsData.options = { webSearch, research, chatWithAPI, dropbox, artifact }
+
+                lastUserMessageRecord = await prisma.assistantUserChatMessage.create({
+                    data: {
+                        assistantUserChatId: chatIdInt,
+                        role: "user",
+                        message: messageContent,
+                        userId: BigInt(session.user.id),
+                        assistantId: assistantId ? BigInt(assistantId) : null,
+                        status: "PROCESSING",
+                        documents: Object.keys(documentsData).length > 0 ? JSON.stringify(documentsData) : null,
+                    }
+                })
+                console.log("[Chat] Saved new user message to DB:", lastUserMessageRecord.id)
+            }
+        }
+
+        // Convert client messages to UIMessage format for AI SDK
+        // For the LAST user message, include attachments as image/file parts
+        const conversationMessages: UIMessage[] = (clientMessages || []).map((msg: any, msgIndex: number) => {
+            let textContent = ""
+            if (typeof msg.content === 'string') {
+                textContent = msg.content
+            } else if (msg.parts) {
+                const textPart = msg.parts.find((p: any) => p.type === 'text')
+                textContent = textPart?.text || ""
+            }
+
+            // Add mentioned users context for user messages
+            if (msg.role === "user" && mentionedUsers?.length > 0) {
+                const mentionsList = mentionedUsers
+                    .map((u: { name: string; email: string }) => `${u.name} <${u.email}>`)
+                    .join(', ')
+                textContent = `[This message mentions: ${mentionsList}]\n\n${textContent}`
+            }
+
+            // Build parts array
+            const parts: any[] = [
+                {
+                    type: "text" as const,
+                    text: textContent
+                }
+            ]
+
+            // For the LAST user message, add image and file attachments as native parts
+            const isLastMessage = msgIndex === (clientMessages || []).length - 1
+
+            if (msg.role === "user" && isLastMessage && attachments?.length > 0) {
+                console.log(`[Chat] Adding ${attachments.length} attachments to user message`)
+
+                for (const attachment of attachments) {
+                    const { url, type: mimeType, name } = attachment
+
+                    if (!url) continue
+
+                    // Handle images
+                    if (mimeType?.startsWith('image/')) {
+                        console.log(`[Chat] Adding image attachment: ${name}`)
+                        parts.push({
+                            type: "image" as const,
+                            image: url,
+                        })
+                    }
+                    // Handle PDFs
+                    else if (mimeType === 'application/pdf') {
+                        console.log(`[Chat] Adding PDF attachment: ${name}`)
+                        parts.push({
+                            type: "file" as const,
+                            data: url,
+                            mediaType: "application/pdf" as const,
+                            filename: name,
+                        })
+                    }
+                    // Handle other document types that might be viewable
+                    else if (mimeType?.includes('document') || mimeType?.includes('text')) {
+                        console.log(`[Chat] Adding document attachment: ${name} (${mimeType})`)
+                        // For other documents, we rely on Upstage extraction in system prompt
+                        // but we can still try to pass them if the model supports it
                     }
                 }
+            }
 
-                if (msg.role === "user") {
-                    lastUserMessage = content
-                }
-
-                return {
-                    id: msg.id.toString(),
-                    role: msg.role as "user" | "assistant",
-                    parts: [
-                        {
-                            type: "text" as const,
-                            text: content
-                        }
-                    ]
-                }
-            })
+            return {
+                id: msg.id || crypto.randomUUID(),
+                role: msg.role as "user" | "assistant",
+                parts
+            }
+        })
 
         // Build system prompt
         let systemPrompt = await getSystemPrompt()
+
+        // Force image generation tool usage
+        systemPrompt += `\n\n## IMAGE GENERATION CAPABILITIES\n**YOU HAVE THE CAPABILITY TO GENERATE IMAGES.**\n- If the user asks for an image, visual, or photo, you **MUST** use the \`image_generation\` tool.\n- **NEVER** say "I can't generate images" or "I can't render bitmap images". YOU CAN.\n- **NEVER** offer to generate an SVG or text description instead. JUST USE THE TOOL.\n- The tool will return a public S3 URL of the generated image.\n- **CRITICAL**: You MUST display the generated image using markdown syntax: \`![Generated Image](url)\` in your response so the user can see it.\n- Trust the tool.`
 
         // Add mentioned users context
         if (mentionedUsers?.length > 0) {
@@ -235,10 +311,19 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Check for image edit intent
-        const lastAssistantMessage = chat.messages
-            .filter(msg => msg.role === "assistant" && msg.openaiResponseId)
-            .slice(-1)[0]
+        // Check for image edit intent - query DB for last assistant message with response ID
+        const lastAssistantMessage = await prisma.assistantUserChatMessage.findFirst({
+            where: {
+                assistantUserChatId: chatIdInt,
+                role: "assistant",
+                openaiResponseId: { not: null }
+            },
+            orderBy: { createdAt: 'desc' },
+            select: {
+                openaiResponseId: true,
+                hasImages: true,
+            }
+        })
 
         const previousResponseId = lastAssistantMessage?.openaiResponseId || null
 
@@ -248,7 +333,7 @@ export async function POST(req: NextRequest) {
             input: [
                 {
                     role: "system",
-                    content: "You are a classifier. Respond ONLY with 'true' if the user wants to edit or modify an image. Otherwise respond ONLY with 'false'."
+                    content: "You are a classifier. Respond ONLY with 'true' if the user wants to edit or modify an image or create a new image. Otherwise respond ONLY with 'false'."
                 },
                 {
                     role: "user",
@@ -257,9 +342,9 @@ export async function POST(req: NextRequest) {
             ],
         })
 
-        const hasImageEditIntent = classifierResponse.output_text?.trim().toLowerCase() === "true"
+        const hasImageIntent = classifierResponse.output_text?.trim().toLowerCase() === "true"
         const hasImageAttachments = attachments?.some((att: { type: string }) => att.type.startsWith('image/'))
-        const shouldUseIterativeEditing = hasImageEditIntent && previousResponseId && lastAssistantMessage?.hasImages && !hasImageAttachments
+        const shouldUseIterativeEditing = hasImageIntent && previousResponseId && lastAssistantMessage?.hasImages && !hasImageAttachments
 
         // Add artifact context
         if (artifact) {
@@ -356,6 +441,7 @@ export async function POST(req: NextRequest) {
         // ============================================
 
         const tools: ToolSet = {}
+        let model = "gpt-5.2"
 
         // 1. Stripe Connect Invoice Tool (Custom Function)
         tools.create_stripe_connect_invoice = tool({
@@ -395,9 +481,48 @@ export async function POST(req: NextRequest) {
             }
         })
 
-        tools.image_generation = ai_sdk_openai.tools.imageGeneration({
-            outputFormat: 'webp',
-            quality: 'high',
+        console.log(hasImageIntent, hasImageAttachments, shouldUseIterativeEditing)
+        // ALWAYS enable image generation
+        // Switch to gpt-5 model if image editing intent is detected for better adherence
+        if (hasImageIntent || hasImageAttachments || shouldUseIterativeEditing) {
+            model = "gpt-5"
+        }
+
+        tools.image_generation = tool({
+            description: "Generate an image using DALL-E-3 based on a text prompt. Use this tool whenever the user asks for an image, visual, or drawing. adn editing the image.",
+            inputSchema: z.object({
+                prompt: z.string().describe("The descriptive prompt for the image generation"),
+            }),
+            execute: async ({ prompt }) => {
+                console.log(`[Chat] 🎨 Custom tool generating image: ${prompt}`)
+                try {
+                    const response = await openaiClient.images.generate({
+                        model: "dall-e-3",
+                        prompt,
+                        n: 1,
+                        size: "1024x1024",
+                        response_format: "b64_json"
+                    });
+
+                    const base64Image = response.data?.[0]?.b64_json;
+                    if (!base64Image) throw new Error("No image data returned from OpenAI");
+
+                    const imageUrl = await saveImageToS3(
+                        base64Image,
+                        chatIdInt || 0,
+                        0,
+                        'image/png'
+                    )
+
+                    if (!imageUrl) throw new Error("Failed to save image to S3");
+
+                    console.log(`[Chat] ✅ Custom tool generated and saved image: ${imageUrl}`)
+                    return { url: imageUrl };
+                } catch (error: any) {
+                    console.error(`[Chat] ❌ Custom tool image generation failed:`, error)
+                    return { error: error.message };
+                }
+            }
         })
 
         // 2. Artifact Update Tool (Custom Function)
@@ -559,6 +684,7 @@ export async function POST(req: NextRequest) {
         providerOptions.openai = {
             ...providerOptions.openai,
             reasoningSummary: 'auto',
+            reasoningEffort: 'medium',
             store: true,
             metadata: {
                 chatId: chatIdInt.toString(),
@@ -571,7 +697,7 @@ export async function POST(req: NextRequest) {
         // ============================================
 
         const result = streamText({
-            model: ai_sdk_openai("gpt-5.2"),
+            model: ai_sdk_openai(model),
             system: systemPrompt,
             messages: await convertToModelMessages(conversationMessages),
             tools,
@@ -584,6 +710,7 @@ export async function POST(req: NextRequest) {
         })
 
         const getUsage = async () => await result.usage
+        let generatedImageUrls: string[] = []
 
         // Convert to UI message stream with message metadata for usage tracking
         return result.toUIMessageStreamResponse({
@@ -595,16 +722,27 @@ export async function POST(req: NextRequest) {
                 let assistantContent = ""
                 let assistantReasoning = ""
                 const usedTools: string[] = []
-                const generatedImageUrls: string[] = []
                 let webSearchSources: any[] = []
 
-                // Capture web search sources from tool results
+                // Capture tool results (web search sources and generated images)
                 try {
                     const toolResults = await result.toolResults
+
+                    // Web search sources
                     const webSearchResults = toolResults.filter(tr => tr.toolName === 'web_search')
                     if (webSearchResults.length > 0) {
                         webSearchSources = webSearchResults.flatMap(tr => (tr.output as any).sources || [])
                         console.log(`[Chat] 🔍 Captured ${webSearchSources.length} web search sources`)
+                    }
+
+                    // Generated image URLs
+                    const imageToolResults = toolResults.filter(tr => tr.toolName === 'image_generation')
+                    if (imageToolResults.length > 0) {
+                        const urls = imageToolResults
+                            .map(tr => (tr.output as any).url)
+                            .filter(Boolean)
+                        generatedImageUrls.push(...urls)
+                        console.log(`[Chat] 🎨 Captured ${urls.length} image URLs from tool results`)
                     }
                 } catch (err) {
                     console.error("[Chat] Error capturing tool results:", err)
@@ -621,49 +759,30 @@ export async function POST(req: NextRequest) {
                             assistantReasoning += (part as any).reasoning || (part as any).text || ""
                         }
 
-                        // Check for tool calls/results in parts
+                        // Track used tools
                         if ('toolName' in part && typeof part.toolName === 'string') {
                             if (!usedTools.includes(part.toolName)) {
                                 usedTools.push(part.toolName)
-                            }
-
-                            // Handle image generation results
-                            if (part.toolName === 'image_generation' && 'output' in part) {
-                                console.log("[Chat] 🎨 Image generation completed")
-
-                                // The output contains the base64 image
-                                const imageOutput = part.output as any
-                                if (imageOutput && imageOutput.result) {
-                                    const base64Image = imageOutput.result
-
-                                    // Upload to S3
-                                    const imageUrl = await saveImageToS3(
-                                        base64Image,
-                                        chatIdInt || 0,
-                                        generatedImageUrls.length
-                                    )
-
-                                    if (imageUrl) {
-                                        generatedImageUrls.push(imageUrl)
-                                        console.log(`[Chat] ✅ Image uploaded to S3: ${imageUrl}`)
-                                    }
-                                }
                             }
                         }
                     }
                 }
 
-                // Add image markdown to response if images were generated
+                // Add image markdown to response if images were generated AND not already in content
                 if (generatedImageUrls.length > 0) {
-                    const imageMarkdown = generatedImageUrls
-                        .map((url, idx) => `![Generated Image ${idx + 1}](${url})`)
-                        .join('\n\n')
+                    const missingUrls = generatedImageUrls.filter(url => !assistantContent.includes(url))
 
-                    if (assistantContent) {
-                        assistantContent = `${assistantContent}\n\n${imageMarkdown}`
-                    } else {
-                        const imageWord = generatedImageUrls.length === 1 ? 'image' : 'images'
-                        assistantContent = `I've generated ${generatedImageUrls.length} ${imageWord} for you:\n\n${imageMarkdown}`
+                    if (missingUrls.length > 0) {
+                        const imageMarkdown = missingUrls
+                            .map((url, idx) => `![Generated Image ${idx + 1}](${url})`)
+                            .join('\n\n')
+
+                        if (assistantContent) {
+                            assistantContent = `${assistantContent}\n\n${imageMarkdown}`
+                        } else {
+                            const imageWord = generatedImageUrls.length === 1 ? 'image' : 'images'
+                            assistantContent = `I've generated ${generatedImageUrls.length} ${imageWord} for you:\n\n${imageMarkdown}`
+                        }
                     }
                 }
 
@@ -681,6 +800,8 @@ export async function POST(req: NextRequest) {
                     // Prepare documents field with image URLs and web search sources
                     const documentsData: any = {}
 
+                    console.log(generatedImageUrls)
+
                     if (generatedImageUrls.length > 0) {
                         documentsData.generatedImages = generatedImageUrls.map((url, idx) => ({
                             url,
@@ -691,10 +812,6 @@ export async function POST(req: NextRequest) {
 
                     if (webSearchSources.length > 0) {
                         documentsData.webSearchSources = webSearchSources
-                    }
-
-                    if (assistantReasoning) {
-                        documentsData.reasoning = assistantReasoning
                     }
 
                     const hasDocuments = Object.keys(documentsData).length > 0

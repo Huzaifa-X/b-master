@@ -1,6 +1,16 @@
 // hooks/useAIChat.ts
 "use client"
 
+/**
+ * AI SDK Standard Pattern Implementation
+ *
+ * This hook follows the official Vercel AI SDK patterns:
+ * 1. useChat manages message state via DefaultChatTransport
+ * 2. Server saves messages to DB (not client)
+ * 3. Custom fetch injects metadata into requests
+ * 4. No manual message syncing needed - AI SDK handles state
+ */
+
 import { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useChat } from "@ai-sdk/react"
@@ -8,7 +18,6 @@ import { DefaultChatTransport, type UIMessage } from "ai"
 import {
     getSpecificChat,
     getChatMessages,
-    sendChatMessage,
     cleanupChat,
 } from "@/app/actions/chat.action"
 import { Message, ChatContext, ChatType } from "@/types/chat"
@@ -23,7 +32,20 @@ export interface UseAIChatOptions {
 }
 
 // Define custom message type matching AI SDK structure
-export type AIChatMessage = UIMessage
+export type AIChatMessage = UIMessage & {
+    attachments?: { name: string; url: string; type: string; size: number }[]
+}
+
+// Message options for each request
+interface MessageOptions {
+    webSearch?: boolean
+    research?: boolean
+    chatWithAPI?: boolean
+    dropbox?: boolean
+    attachments?: { name: string; url: string; type: string; size: number }[]
+    artifact?: { id: string; name: string; instructions: string; htmlContent: string }
+    mentionedUsers?: Array<{ id: string; name: string; email: string }>
+}
 
 export function useAIChat(options: UseAIChatOptions) {
     const { mode, assistantId, chatId } = options
@@ -31,6 +53,16 @@ export function useAIChat(options: UseAIChatOptions) {
 
     const [context, setContext] = useState<ChatContext | null>(null)
     const [isInitializing, setIsInitializing] = useState(true)
+
+    // Current message options - stored in ref for access in transport fetch
+    const currentOptionsRef = useRef<MessageOptions>({})
+
+    // Track pending attachments with the message content they belong to (for immediate UI display)
+    // We use content matching since AI SDK generates message IDs internally
+    const pendingAttachmentsRef = useRef<{
+        messageContent: string
+        attachments: { name: string; url: string; type: string; size: number }[]
+    } | null>(null)
 
     // OAuth state
     const [oauthPrompt, setOAuthPrompt] = useState<{
@@ -42,10 +74,6 @@ export function useAIChat(options: UseAIChatOptions) {
 
     // Track if initial cleanup has run
     const hasRunInitialCleanup = useRef(false)
-    const hasStartedAutoStream = useRef(false)
-
-    // Pending message options (for auto-stream)
-    const pendingMessageOptionsRef = useRef<any>(null)
 
     // Load specific chat
     const {
@@ -68,9 +96,9 @@ export function useAIChat(options: UseAIChatOptions) {
         retry: 2,
     })
 
-    // Load messages for the chat
+    // Load initial messages from DB (for history on page load)
     const {
-        data: dbMessages = [],
+        data: initialDbMessages = [],
         isLoading: isLoadingMessages,
         refetch: refetchMessages
     } = useQuery({
@@ -80,7 +108,7 @@ export function useAIChat(options: UseAIChatOptions) {
 
             // Only run cleanup on INITIAL load
             if (!hasRunInitialCleanup.current) {
-                console.log("[useAIChat] Running initial cleanup with 2 minute grace period...")
+                console.log("[useAIChat] Running initial cleanup...")
                 try {
                     const cleanupResult = await cleanupChat(chatId, 2)
                     if (cleanupResult.success && cleanupResult.deleted > 0) {
@@ -102,39 +130,12 @@ export function useAIChat(options: UseAIChatOptions) {
             return result.messages
         },
         enabled: !!chatId,
-        staleTime: 1000 * 10,
-        refetchInterval: (query) => {
-            const msgs = query.state.data || []
-            if (msgs.length === 0) return 30000
-
-            const userMessages = msgs.filter((msg: Message) => msg.role === "user")
-            if (userMessages.length === 0) return 30000
-
-            const lastUserMsg = userMessages[userMessages.length - 1]
-            const lastUserMsgTime = new Date(lastUserMsg.createdAt).getTime()
-
-            const assistantMessages = msgs.filter((msg: Message) =>
-                msg.role === "assistant" &&
-                msg.content &&
-                msg.content.trim().length > 0
-            )
-
-            const hasResponseAfterLastUser = assistantMessages.some((msg: Message) =>
-                new Date(msg.createdAt).getTime() > lastUserMsgTime
-            )
-
-            if (!hasResponseAfterLastUser) {
-                console.log("[useAIChat] Waiting for assistant response, polling every 2s")
-                return 2000
-            }
-
-            return 30000
-        },
+        staleTime: 1000 * 60 * 5, // Cache for 5 minutes - AI SDK manages live state
     })
 
-    // Convert DB messages to AI SDK format
-    const convertedMessages = useMemo<AIChatMessage[]>(() => {
-        return dbMessages.map((msg) => {
+    // Convert DB messages to AI SDK format for initial load
+    const initialMessages = useMemo<AIChatMessage[]>(() => {
+        return initialDbMessages.map((msg) => {
             let content = msg.content || ""
 
             // Add mentioned users to message context
@@ -152,12 +153,26 @@ export function useAIChat(options: UseAIChatOptions) {
                 }
             }
 
+            // Extract reasoning from assistant messages
             let reasoning = ""
             if (msg.role === "assistant" && msg.documents) {
                 try {
                     const documentsData = JSON.parse(msg.documents)
                     if (documentsData.reasoning) {
                         reasoning = documentsData.reasoning
+                    }
+                } catch (e) {
+                    // Ignore parse errors
+                }
+            }
+
+            // Extract attachments from any message
+            let attachments: { name: string; url: string; type: string; size: number }[] = []
+            if (msg.documents) {
+                try {
+                    const documentsData = JSON.parse(msg.documents)
+                    if (documentsData.attachments) {
+                        attachments = documentsData.attachments
                     }
                 } catch (e) {
                     // Ignore parse errors
@@ -171,55 +186,61 @@ export function useAIChat(options: UseAIChatOptions) {
                 }
             ]
 
+            // Add reasoning part if present (before text)
             if (reasoning) {
-                parts.push({
+                parts.unshift({
                     type: "reasoning" as const,
                     text: reasoning
                 })
             }
 
+            const roleStr = msg.role as string
+
             return {
                 id: msg.id.toString(),
-                role: (msg.role === "system" ? "assistant" : msg.role) as "user" | "assistant" | "system",
-                parts
+                role: (roleStr === "system" ? "assistant" : msg.role) as "user" | "assistant",
+                parts,
+                attachments
             }
         })
-    }, [dbMessages]);
+    }, [initialDbMessages])
 
-    // Initialize AI SDK useChat
+    // Initialize AI SDK useChat with DefaultChatTransport
     const {
         messages: aiMessages,
         sendMessage: aiSendMessage,
         status,
         stop: aiStop,
-        setMessages: setAIMessages,
+        setMessages,
     } = useChat<AIChatMessage>({
         transport: new DefaultChatTransport({
             api: '/api/chat',
 
-            async fetch(input: string | URL | Request, init?: RequestInit) {
-                const options = pendingMessageOptionsRef.current || {}
+            // Custom fetch to inject metadata into request body
+            async fetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
+                const opts = currentOptionsRef.current
 
-                // Inject metadata into the request body
-                let body = {}
+                // Parse existing body
+                let body: Record<string, unknown> = {}
                 try {
                     body = JSON.parse(init?.body as string || '{}')
                 } catch (e) {
                     console.error("[useAIChat] Error parsing request body:", e)
                 }
 
+                // Inject metadata
                 const customBody = {
                     ...body,
                     chatId,
                     assistantId,
-                    chatType: context?.chatType || (mode === "ask-b" ? "ASK_B" : "ASSISTANT"),
-                    webSearch: options.webSearch || false,
-                    research: options.research || false,
-                    chatWithAPI: options.chatWithAPI || false,
-                    dropbox: options.dropbox || false,
-                    attachments: options.attachments || [],
-                    artifact: options.artifact || null,
-                    mentionedUsers: options.mentionedUsers || [],
+                    chatType: mode === "ask-b" ? "ASK_B" : "ASSISTANT",
+                    webSearch: opts.webSearch || false,
+                    research: opts.research || false,
+                    chatWithAPI: opts.chatWithAPI || false,
+                    dropbox: opts.dropbox || false,
+                    attachments: opts.attachments || [],
+                    artifact: opts.artifact || null,
+                    mentionedUsers: opts.mentionedUsers || [],
                 }
 
                 const response = await fetch(input, {
@@ -227,15 +248,13 @@ export function useAIChat(options: UseAIChatOptions) {
                     body: JSON.stringify(customBody)
                 })
 
+                // Check for OAuth requirement in JSON response
                 if (response.ok) {
                     const contentType = response.headers.get('content-type')
-
-                    // Check for OAuth requirement in JSON response
                     if (contentType?.includes('application/json')) {
                         const clonedResponse = response.clone()
                         try {
                             const data = await clonedResponse.json()
-
                             if (data.type === 'oauth_required') {
                                 console.log("[useAIChat] OAuth required:", data)
                                 setOAuthPrompt({
@@ -244,11 +263,11 @@ export function useAIChat(options: UseAIChatOptions) {
                                     assistantId: data.assistantId,
                                     message: data.message
                                 })
-                                // Return an empty stream response to avoid parsing errors
+                                // Return empty response to avoid parsing errors
                                 return new Response(null, { status: 200 })
                             }
                         } catch (e) {
-                            console.error("[useAIChat] Error parsing JSON response:", e)
+                            // Not JSON or parsing failed, continue normally
                         }
                     }
                 }
@@ -257,40 +276,40 @@ export function useAIChat(options: UseAIChatOptions) {
             }
         }),
 
+        // Throttle UI updates for performance
         experimental_throttle: 50,
-        // @ts-ignore - experimental property
-        experimental_activeReasoning: true,
 
         onFinish: async () => {
             console.log("[useAIChat] Stream finished")
 
-            // Refetch messages from DB
+            // Clear current options and pending attachments
+            currentOptionsRef.current = {}
+            pendingAttachmentsRef.current = null
+
+            // Refetch messages to sync with DB (for persistence)
             await refetchMessages()
 
-            // Invalidate queries
-            const chatMode = context?.chatType === "ASK_B" ? "ask-b" : "assistant"
+            // Invalidate related queries
+            const chatMode = mode === "ask-b" ? "ask-b" : "assistant"
             queryClient.invalidateQueries({
-                queryKey: ["chat-history", chatMode, context?.assistantId || undefined]
+                queryKey: ["chat-history", chatMode, assistantId || undefined]
             })
             queryClient.invalidateQueries({
                 queryKey: ["chat-header", chatId]
             })
-
-            // Clear pending options
-            pendingMessageOptionsRef.current = null
         },
 
         onError: (error: Error) => {
             console.error("[useAIChat] Error:", error)
             toast.error(error.message || "Failed to send message")
         }
-    });
+    })
 
     // Reset cleanup flag when chatId changes
     useEffect(() => {
         hasRunInitialCleanup.current = false
-        hasStartedAutoStream.current = false
-        pendingMessageOptionsRef.current = null
+        currentOptionsRef.current = {}
+        pendingAttachmentsRef.current = null
     }, [chatId])
 
     // Set context when chat is ready
@@ -308,112 +327,71 @@ export function useAIChat(options: UseAIChatOptions) {
         }
     }, [chatData])
 
-    // Sync AI SDK messages with DB messages when not streaming
+    // Sync initial messages to AI SDK when they load
     useEffect(() => {
-        const isStreaming = status === 'streaming' || status === 'submitted'
-        if (!isStreaming && convertedMessages.length > 0) {
-            const currentIds = aiMessages.map(m => m.id).join(',')
-            const dbIds = convertedMessages.map(m => m.id).join(',')
-
-            if (currentIds !== dbIds) {
-                console.log("[useAIChat] Syncing messages from DB:", convertedMessages.length)
-                setAIMessages(convertedMessages)
-            }
+        if (initialMessages.length > 0 && aiMessages.length === 0 && !isLoadingMessages) {
+            console.log("[useAIChat] Setting initial messages:", initialMessages.length)
+            setMessages(initialMessages)
         }
-    }, [convertedMessages, status, aiMessages, setAIMessages])
+    }, [initialMessages, aiMessages.length, isLoadingMessages, setMessages])
 
-    // Auto-start streaming for PENDING messages
+    // Auto-reply to orphaned user messages (e.g. from Welcome Page or reload)
+    const lastAutoReplyIdRef = useRef<string | null>(null)
+
     useEffect(() => {
-        const isStreaming = status === 'streaming' || status === 'submitted'
-        if (!context || isStreaming || isLoadingMessages || !chatData || hasStartedAutoStream.current) {
-            return
-        }
+        if (isLoadingMessages || status === 'streaming' || status === 'submitted' || aiMessages.length === 0) return
 
-        const lastMessage = dbMessages[dbMessages.length - 1]
-        if (!lastMessage || lastMessage.role !== "user") return
+        const lastMessage = aiMessages[aiMessages.length - 1]
 
-        const dbMessage = dbMessages.find(m => m.id === lastMessage.id)
-        console.log("[useAIChat] Last message status:", dbMessage?.status)
+        // If last message is from user, we need to generate a response
+        if (lastMessage.role === 'user') {
+            // Prevent infinite loops or double triggers
+            if (lastAutoReplyIdRef.current === lastMessage.id) return
 
-        if (!dbMessage || dbMessage.status !== "PENDING") {
-            return
-        }
+            console.log("[useAIChat] Found orphaned user message, triggering auto-reply:", lastMessage.id)
+            lastAutoReplyIdRef.current = lastMessage.id
 
-        const hasResponse = dbMessages.some(
-            (msg, idx) => idx > dbMessages.indexOf(lastMessage) &&
-                msg.role === "assistant" &&
-                msg.content?.trim()
-        )
-
-        if (!hasResponse) {
-            console.log("[useAIChat] ✅ Auto-starting streaming for PENDING message")
-            hasStartedAutoStream.current = true
-
-            // Extract options from message documents
-            let options = {
-                webSearch: false,
-                research: false,
-                chatWithAPI: false,
-                dropbox: false,
-                artifact: null as any,
-                mentionedUsers: [] as Array<{ id: string; name: string; email: string }>,
-                attachments: lastMessage.attachments || []
-            }
-
-            try {
-                if (dbMessage.documents) {
+            // Try to restore options from the original DB message
+            const dbMessage = initialDbMessages.find(m => m.id.toString() === lastMessage.id)
+            if (dbMessage && dbMessage.documents) {
+                try {
                     const documentsData = JSON.parse(dbMessage.documents)
                     if (documentsData.options) {
-                        options = { ...options, ...documentsData.options }
+                        console.log("[useAIChat] Restoring options for auto-reply:", documentsData.options)
+                        currentOptionsRef.current = {
+                            ...documentsData.options,
+                            attachments: documentsData.attachments,
+                            mentionedUsers: documentsData.mentionedUsers
+                        }
                     }
-                    if (documentsData.mentionedUsers) {
-                        options.mentionedUsers = documentsData.mentionedUsers
-                    }
+                } catch (e) {
+                    console.error("[useAIChat] Error parsing options for auto-reply:", e)
                 }
-            } catch (error) {
-                console.error("[useAIChat] Error parsing message documents:", error)
             }
 
-            // Store options for the request
-            pendingMessageOptionsRef.current = options
+            // Manual reload implementation since 'reload' is missing from types
+            // 1. Remove the orphaned message from UI state
+            const newMessages = aiMessages.slice(0, -1)
+            setMessages(newMessages)
 
-            // Trigger AI SDK streaming by sending the message
-            aiSendMessage({
-                text: lastMessage.content,
-            })
+            // 2. Resend the message content
+            // Need to wait a tick for state to update? Usually append handles it, 
+            // but since we just setMessages, safe to just append new one.
+            const textContent = lastMessage.parts?.filter(p => p.type === 'text').map(p => p.text).join('') || (lastMessage as any).content || ''
+
+            console.log("[useAIChat] Resending message content:", textContent)
+
+            // We use setTimeout to ensure setMessages has processed
+            setTimeout(() => {
+                aiSendMessage({
+                    text: textContent,
+                })
+            }, 0)
         }
-    }, [context, dbMessages, status, isLoadingMessages, chatData, aiSendMessage])
+    }, [aiMessages, isLoadingMessages, status, initialDbMessages, aiSendMessage, setMessages])
 
-    // Monitor for new assistant responses and invalidate queries
-    useEffect(() => {
-        const isStreaming = status === 'streaming' || status === 'submitted'
-        if (isStreaming || !context) return
-
-        const previousAssistantCount = convertedMessages.filter(m => m.role === "assistant").length
-        const currentAssistantCount = dbMessages.filter(m => m.role === "assistant").length
-
-        if (currentAssistantCount > previousAssistantCount) {
-            console.log("[useAIChat] New assistant response detected, invalidating queries")
-
-            const mode = context.chatType === "ASK_B" ? "ask-b" : "assistant"
-
-            queryClient.invalidateQueries({
-                queryKey: ["chat-history", mode, context.assistantId || undefined]
-            })
-            queryClient.refetchQueries({
-                queryKey: ["chat-history", mode, context.assistantId || undefined]
-            })
-
-            queryClient.invalidateQueries({
-                queryKey: ["chat-header", context.chatId]
-            })
-            queryClient.refetchQueries({
-                queryKey: ["chat-header", context.chatId]
-            })
-        }
-    }, [dbMessages.length, status, context, convertedMessages, queryClient])
-
-    // Send message wrapper
+    // Send message - sets options then calls AI SDK sendMessage
+    // Server handles saving user message to DB
     const sendMessage = useCallback(async (
         content: string,
         attachments?: { name: string; url: string; type: string; size: number }[],
@@ -428,54 +406,43 @@ export function useAIChat(options: UseAIChatOptions) {
     ) => {
         const isStreaming = status === 'streaming' || status === 'submitted'
         if (!context || !content.trim() || isStreaming) {
-            console.warn("[useAIChat] Cannot send message")
+            console.warn("[useAIChat] Cannot send message - not ready or already streaming")
             return
         }
 
-        console.log("[useAIChat] Sending message")
+        console.log("[useAIChat] Sending message via AI SDK")
 
-        try {
-            // Save user message to database first
-            const result = await sendChatMessage({
-                chatId: context.chatId,
-                content: content.trim(),
-                assistantId: context.assistantId,
-                chatType: context.chatType,
-                attachments,
-                webSearch: options?.webSearch,
-                research: options?.research,
-                chatWithAPI: options?.chatWithAPI,
-                dropbox: options?.dropbox,
-                artifact: options?.artifact,
-                mentionedUsers: options?.mentionedUsers
-            })
-
-            if (!result.success) {
-                throw new Error(result.error || "Failed to send message")
-            }
-
-            // Store options for the AI SDK request
-            pendingMessageOptionsRef.current = {
-                attachments,
-                ...options
-            }
-
-            // Trigger AI SDK streaming
-            aiSendMessage({
-                text: content,
-            })
-
-        } catch (error: any) {
-            console.error("[useAIChat] Error sending message:", error)
-            toast.error(error.message || "Failed to send message")
+        // Set options in ref for transport fetch to access
+        currentOptionsRef.current = {
+            attachments,
+            ...options
         }
+
+        // Store pending attachments with message content for immediate UI display
+        // We match by content to correctly associate attachments with the right message
+        if (attachments && attachments.length > 0) {
+            pendingAttachmentsRef.current = {
+                messageContent: content.trim(),
+                attachments
+            }
+            console.log("[useAIChat] Stored pending attachments for UI:", attachments.length)
+        } else {
+            // Clear pending attachments when sending a message without attachments
+            pendingAttachmentsRef.current = null
+        }
+
+        // Use AI SDK's sendMessage - server handles DB save
+        aiSendMessage({
+            text: content.trim(),
+        })
     }, [context, status, aiSendMessage])
 
     // Cancel streaming
     const cancelStreaming = useCallback(() => {
         console.log("[useAIChat] Cancelling stream")
         aiStop()
-        pendingMessageOptionsRef.current = null
+        currentOptionsRef.current = {}
+        pendingAttachmentsRef.current = null
     }, [aiStop])
 
     // OAuth handling
@@ -597,15 +564,33 @@ export function useAIChat(options: UseAIChatOptions) {
 
             // Extract reasoning from AI SDK message parts OR the reasoning property
             const reasoningParts = msg.parts?.filter(p => p.type === 'reasoning') || []
+            // Handle both standard AI SDK 'text' property and potential 'reasoning' property for reasoning parts
             const reasoning = (reasoningParts.length > 0
-                ? reasoningParts.map(p => (p as any).reasoning || (p as any).text || '').join('\n')
+                ? reasoningParts.map(p => {
+                    const partAny = p as any
+                    return partAny.reasoning || partAny.text || ''
+                }).join('\n')
                 : (msg as any).reasoning) || undefined
 
             // Filter out system messages for legacy compatibility
             const role = msg.role === 'system' ? 'assistant' : msg.role
 
             // Correctly identify if THIS message is currently streaming
-            const isStreaming = (status === 'streaming' || status === 'submitted') && idx === aiMessages.length - 1 && msg.role === 'assistant'
+            // For assistant messages, we consider it streaming if the hook status is streaming
+            const isStreaming = (status === 'streaming' || status === 'submitted') &&
+                idx === aiMessages.length - 1 &&
+                msg.role === 'assistant'
+
+            // For user messages, inject pending attachments if content matches
+            // This ensures attachments show immediately in UI before DB sync
+            // and prevents attachments from appearing on wrong messages
+            let messageAttachments = msg.attachments || []
+            if (msg.role === 'user' && pendingAttachmentsRef.current) {
+                // Match by content to ensure attachments go to the correct message
+                if (content.trim() === pendingAttachmentsRef.current.messageContent) {
+                    messageAttachments = pendingAttachmentsRef.current.attachments
+                }
+            }
 
             return {
                 id: msg.id,
@@ -615,7 +600,7 @@ export function useAIChat(options: UseAIChatOptions) {
                 parts: msg.parts,
                 createdAt: new Date(),
                 isStreaming,
-                attachments: []
+                attachments: messageAttachments
             }
         })
     }, [aiMessages, status])
