@@ -1,15 +1,16 @@
 services:
-  db:
-    image: postgres:15-alpine
-    restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-b_master}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+  # Uncomment if you want to run a local PostgreSQL database
+  # db:
+  #   image: postgres:15-alpine
+  #   restart: always
+  #   environment:
+  #     POSTGRES_USER: ${POSTGRES_USER:-postgres}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+  #     POSTGRES_DB: ${POSTGRES_DB:-b_master}
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
 
   app:
     build:
@@ -19,8 +20,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Database
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-b_master}?schema=public
+      # Database (uses external DB from .env)
+      DATABASE_URL: ${DATABASE_URL}
 
       # NextAuth
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
@@ -72,8 +73,6 @@ services:
 
       # Cron
       CRON_SECRET: ${CRON_SECRET}
-    depends_on:
-      - db
 
   worker:
     build:
@@ -82,8 +81,8 @@ services:
     command: pnpm run worker
     restart: always
     environment:
-      # Database
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-b_master}?schema=public
+      # Database (uses external DB from .env)
+      DATABASE_URL: ${DATABASE_URL}
 
       # OpenAI
       OPENAI_API_KEY: ${OPENAI_API_KEY}
@@ -113,8 +112,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_FROM: ${SMTP_FROM}
       SMTP_SECURE: ${SMTP_SECURE:-false}
-    depends_on:
-      - db
 
-volumes:
-  postgres_data:
+# Uncomment if using local db service
+# volumes:
+#   postgres_data:
