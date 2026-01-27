@@ -441,7 +441,7 @@ export async function POST(req: NextRequest) {
         // ============================================
 
         const tools: ToolSet = {}
-        let model = "gpt-5.2"
+        let model = "gpt-5"
 
         // 1. Stripe Connect Invoice Tool (Custom Function)
         tools.create_stripe_connect_invoice = tool({
@@ -482,11 +482,6 @@ export async function POST(req: NextRequest) {
         })
 
         console.log(hasImageIntent, hasImageAttachments, shouldUseIterativeEditing)
-        // ALWAYS enable image generation
-        // Switch to gpt-5 model if image editing intent is detected for better adherence
-        if (hasImageIntent || hasImageAttachments || shouldUseIterativeEditing) {
-            model = "gpt-5"
-        }
 
         tools.image_generation = tool({
             description: "Generate an image using DALL-E-3 based on a text prompt. Use this tool whenever the user asks for an image, visual, or drawing. adn editing the image.",
@@ -497,7 +492,7 @@ export async function POST(req: NextRequest) {
                 console.log(`[Chat] 🎨 Custom tool generating image: ${prompt}`)
                 try {
                     const response = await openaiClient.images.generate({
-                        model: "dall-e-3",
+                        model: "gpt-image-1.5",
                         prompt,
                         n: 1,
                         size: "1024x1024",

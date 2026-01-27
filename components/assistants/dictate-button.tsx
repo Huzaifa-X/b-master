@@ -18,8 +18,8 @@ interface DictateButtonProps {
     language?: "en" | "fr" | "auto" // Support for English, French, or auto-detect
 }
 
-export const DictateButton: FC<DictateButtonProps> = ({ 
-    onTranscript, 
+export const DictateButton: FC<DictateButtonProps> = ({
+    onTranscript,
     onStreamingTranscript,
     disabled = false,
     language = "auto"
@@ -32,22 +32,22 @@ export const DictateButton: FC<DictateButtonProps> = ({
 
     const startRecording = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
+            const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     channelCount: 1,
                     sampleRate: 16000,
                     echoCancellation: true,
                     noiseSuppression: true,
-                } 
+                }
             })
-            
+
             streamRef.current = stream
-            
+
             // Use webm with opus codec for better quality
             const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
                 ? 'audio/webm;codecs=opus'
                 : 'audio/webm'
-            
+
             const mediaRecorder = new MediaRecorder(stream, { mimeType })
             mediaRecorderRef.current = mediaRecorder
             chunksRef.current = []
@@ -63,7 +63,7 @@ export const DictateButton: FC<DictateButtonProps> = ({
             mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(chunksRef.current, { type: mimeType })
                 await transcribeAudio(audioBlob)
-                
+
                 // Clean up stream
                 if (streamRef.current) {
                     streamRef.current.getTracks().forEach(track => track.stop())
@@ -108,7 +108,7 @@ export const DictateButton: FC<DictateButtonProps> = ({
             if (!response.ok) {
                 const errorText = await response.text().catch(() => response.statusText)
                 console.error("[Dictate] Response error:", response.status, errorText)
-                
+
                 if (response.status === 401) {
                     throw new Error("Authentication required. Please sign in again.")
                 } else if (response.status === 500) {
@@ -127,20 +127,25 @@ export const DictateButton: FC<DictateButtonProps> = ({
 
             let accumulatedText = ""
             let hasError = false
+            let lineBuffer = ""
 
             // Read the stream
             while (true) {
                 const { done, value } = await reader.read()
-                
+
                 if (done) break
 
                 const chunk = decoder.decode(value, { stream: true })
-                const lines = chunk.split('\n')
+                lineBuffer += chunk
+
+                const lines = lineBuffer.split('\n')
+                lineBuffer = lines.pop() || "" // Keep the last partial line in the buffer
 
                 for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = line.slice(6).trim()
-                        
+                    const trimmedLine = line.trim()
+                    if (trimmedLine.startsWith('data: ')) {
+                        const data = trimmedLine.slice(6).trim()
+
                         if (data === '[DONE]') {
                             // Final transcript
                             if (!hasError && onTranscript && accumulatedText) {
@@ -152,13 +157,13 @@ export const DictateButton: FC<DictateButtonProps> = ({
 
                         try {
                             const parsed = JSON.parse(data)
-                            
+
                             if (parsed.error) {
                                 hasError = true
                                 console.error("[Dictate] Transcription error:", parsed.error)
                                 throw new Error(parsed.error)
                             }
-                            
+
                             if (parsed.text) {
                                 accumulatedText = parsed.text
                                 // Stream partial results to input box
@@ -169,22 +174,22 @@ export const DictateButton: FC<DictateButtonProps> = ({
                         } catch (e) {
                             // If it's our thrown error, re-throw it
                             if (e instanceof Error && (
-                                e.message.includes("Transcription") || 
-                                e.message.includes("Authentication") || 
+                                e.message.includes("Transcription") ||
+                                e.message.includes("Authentication") ||
                                 e.message.includes("Server")
                             )) {
                                 throw e
                             }
                             // Otherwise, skip invalid JSON
-                            console.warn("[Dictate] Failed to parse JSON:", e)
+                            console.warn("[Dictate] Failed to parse JSON:", e, "Line:", line)
                         }
                     }
                 }
             }
         } catch (error) {
             console.error("[Dictate] Error transcribing audio:", error)
-            const errorMessage = error instanceof Error 
-                ? error.message 
+            const errorMessage = error instanceof Error
+                ? error.message
                 : "Transcription failed. Please try again."
             alert(errorMessage)
         } finally {
@@ -208,9 +213,8 @@ export const DictateButton: FC<DictateButtonProps> = ({
                         type="button"
                         variant={isRecording ? "default" : "ghost"}
                         size="icon"
-                        className={`size-[34px] rounded-full p-1 ${
-                            isRecording ? "bg-red-500 hover:bg-red-600 animate-pulse" : ""
-                        } ${isProcessing ? "opacity-50" : ""}`}
+                        className={`size-[34px] rounded-full p-1 ${isRecording ? "bg-red-500 hover:bg-red-600 animate-pulse" : ""
+                            } ${isProcessing ? "opacity-50" : ""}`}
                         aria-label={isRecording ? "Stop recording" : "Start recording"}
                         onClick={toggleRecording}
                         disabled={disabled || isProcessing}
@@ -228,8 +232,8 @@ export const DictateButton: FC<DictateButtonProps> = ({
                     {isProcessing
                         ? "Processing..."
                         : isRecording
-                        ? "Stop recording (click to transcribe)"
-                        : "Start recording"}
+                            ? "Stop recording (click to transcribe)"
+                            : "Start recording"}
                 </TooltipContent>
             </Tooltip>
         </TooltipProvider>
