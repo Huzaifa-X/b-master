@@ -456,9 +456,19 @@ export function ChatInput({
     onDropbox?.(enabled)
   }
 
-  const handleDictateTranscript = (text: string) => {
-    onValueChange(value ? `${value} ${text}` : text)
-  }
+  const handleDictateTranscript = useCallback((text: string) => {
+    // We use a functional update if possible, but since onValueChange type is (val) => void,
+    // we rely on the latest 'value' from the dependency array.
+    onValueChange(value ? `${value.trim()} ${text}` : text)
+  }, [value, onValueChange])
+
+  const handleStreamingTranscript = useCallback((text: string) => {
+    // For streaming, we overwrite the current value's "last word" or just append 
+    // depending on how onStreamingTranscript behaves. Whisper gives full text so far.
+    // However, whisper-1 usually gives the full transcription at the end.
+    // If it were streaming partials, we'd handle it here.
+    console.log("[ChatInput] Streaming transcript:", text)
+  }, [])
 
   const handleFileSelect = (files: File[]) => {
     setAttachedFiles((prev) => [...prev, ...files])
@@ -753,6 +763,7 @@ export function ChatInput({
                   )}
                   <DictateButton
                     onTranscript={handleDictateTranscript}
+                    onStreamingTranscript={handleStreamingTranscript}
                     disabled={disabled || isLoading}
                   />
                 </div>
@@ -850,6 +861,7 @@ export function ChatInput({
                   )}
                   <DictateButton
                     onTranscript={handleDictateTranscript}
+                    onStreamingTranscript={handleStreamingTranscript}
                     disabled={disabled || isLoading}
                   />
                 </div>

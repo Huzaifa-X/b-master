@@ -112,6 +112,7 @@ export async function createStripeConnectInvoice(
         const invoice = await stripe.invoices.create(
             {
                 customer: customer.id,
+                collection_method: "send_invoice",
                 days_until_due: daysUntilDue,
                 description: description,
             },
