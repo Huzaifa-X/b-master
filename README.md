@@ -1,2 +1,2 @@
-# b-master
-Next.js application 
+# B-master
+Next.js application with everything
