@@ -7,7 +7,7 @@ let transporter: Transporter | null = null
 const getTransporter = () => {
   if (!transporter) {
     // Decode base64 password
-    // const password = Buffer.from(process.env.SMTP_PASSWORD!, 'base64').toString('utf-8')
+    const password = Buffer.from(process.env.SMTP_PASSWORD!, 'base64').toString('utf-8')
     console.log('📧 Initializing email transporter...')
 
     transporter = nodemailer.createTransport({
@@ -16,7 +16,7 @@ const getTransporter = () => {
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
         user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD, // Decoded password
+        pass: password, // Decoded password
       },
       tls: {
         rejectUnauthorized: false,
