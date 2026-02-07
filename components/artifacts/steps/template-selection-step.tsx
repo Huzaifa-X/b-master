@@ -20,7 +20,7 @@ export function TemplateSelectionStep({
   templateHtml,
   setTemplateHtml,
 }: TemplateSelectionStepProps) {
-  const [selectedCategory, setSelectedCategory] = useState<Category>("accounting")
+  const [selectedCategory, setSelectedCategory] = useState<Category>("presentation")
 
   // Get templates for selected category
   const categoryTemplates = TEMPLATES.filter((t) => t.category === selectedCategory)

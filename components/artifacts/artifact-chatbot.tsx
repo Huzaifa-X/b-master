@@ -63,6 +63,9 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
   const { artifact, refetch } = useArtifactById(artifactId)
   const artifactContent = useArtifactStore((state) => state.artifactContent)
   const setArtifact = useArtifactStore((state) => state.setArtifact)
+  const prefilledPrompt = useArtifactStore((state) => state.prefilledPrompt)
+  const setPrefilledPrompt = useArtifactStore((state) => state.setPrefilledPrompt)
+  const inputTextareaRef = useRef<HTMLTextAreaElement>(null)
 
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState<string>("")
@@ -260,6 +263,18 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [messages])
+
+  // Handle prefilled prompt from text selection (Ask-B feature)
+  useEffect(() => {
+    if (prefilledPrompt) {
+      setInput(prefilledPrompt)
+      setPrefilledPrompt(null) // Clear after using
+      // Focus the input field
+      setTimeout(() => {
+        inputTextareaRef.current?.focus()
+      }, 100)
+    }
+  }, [prefilledPrompt, setPrefilledPrompt])
 
   const handleSend = async () => {
     if ((!input.trim() && selectedFiles.length === 0) || isStreaming) return
@@ -728,6 +743,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
           className="border-primary/50 shadow-[0_0_100px_0px_hsl(var(--primary)),0_0_60px_0px_hsl(var(--primary)),0_0_30px_0px_hsl(var(--primary)),0_0_15px_0px_hsl(var(--primary))] dark:border-primary/60 dark:shadow-[0_0_120px_0px_hsl(var(--primary)),0_0_80px_0px_hsl(var(--primary)),0_0_40px_0px_hsl(var(--primary)),0_0_20px_0px_hsl(var(--primary))]"
         >
           <PromptInputTextarea
+            ref={inputTextareaRef}
             placeholder={isGenerating ? "Generating artifact..." : isUploadingFiles ? "Uploading files..." : "Ask about this artifact..."}
             className="text-foreground placeholder:text-muted-foreground"
             disabled={disabled || isGenerating || isUploadingFiles}

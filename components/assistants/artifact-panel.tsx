@@ -1,8 +1,8 @@
 "use client";
 
-import { FC, useEffect, useState } from "react";
+import { FC, useEffect, useState, useRef, useCallback } from "react";
 
-import { X, Copy, Code2, FileCode, Eye, Code, Download, Share2, FileText, FileDown } from "lucide-react";
+import { X, Copy, Code2, FileCode, Eye, Code, Download, Share2, FileText, FileDown, MessageSquare } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 import { useArtifactStore } from "@/lib/stores/artifact-store";
 
@@ -41,7 +46,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
   onVersionSelect
 }) => {
 
-  const { artifactContent, isPreviewMode, togglePreview } = useArtifactStore();
+  const { artifactContent, isPreviewMode, togglePreview, setPrefilledPrompt } = useArtifactStore();
   const params = useParams()
   const assistantId = params?.id as string
 
@@ -54,6 +59,13 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
   const [blobUrl, setBlobUrl] = useState<string>("");
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  // Text selection state for Ask-B popover
+  const [selectedText, setSelectedText] = useState<string>("");
+  const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
+  const [showSelectionPopover, setShowSelectionPopover] = useState(false);
+  const codeContainerRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Check if the code is HTML
   const isHtmlCode = artifactContent?.language?.toLowerCase() === 'html' ||
@@ -177,6 +189,84 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
   };
 
+  // Handle text selection in code view
+  const handleTextSelection = useCallback(() => {
+    const selection = window.getSelection();
+    const text = selection?.toString().trim();
+
+    if (text && text.length > 0) {
+      const range = selection?.getRangeAt(0);
+      if (range) {
+        const rect = range.getBoundingClientRect();
+        setSelectedText(text);
+        setSelectionPosition({
+          x: rect.left + rect.width / 2,
+          y: rect.top - 10
+        });
+        setShowSelectionPopover(true);
+      }
+    } else {
+      setShowSelectionPopover(false);
+      setSelectedText("");
+    }
+  }, []);
+
+  // Handle Ask-B button click
+  const handleAskB = useCallback(() => {
+    if (selectedText) {
+      // Set the prefilled prompt with the selected text
+      const prompt = `Regarding this selected content:\n\n"${selectedText}"\n\nPlease make the following changes: `;
+      setPrefilledPrompt(prompt);
+      setShowSelectionPopover(false);
+      setSelectedText("");
+    }
+  }, [selectedText, setPrefilledPrompt]);
+
+  // Close popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      // Small delay to allow button click to register
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (!selection?.toString().trim()) {
+          setShowSelectionPopover(false);
+          setSelectedText("");
+        }
+      }, 100);
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Listen for messages from iframe for text selection
+  useEffect(() => {
+    const handleIframeMessage = (event: MessageEvent) => {
+      if (event.data?.type === "textSelection") {
+        const { text, x, y } = event.data;
+        if (text && text.trim()) {
+          setSelectedText(text.trim());
+          // Adjust position relative to iframe
+          const iframe = iframeRef.current;
+          if (iframe) {
+            const iframeRect = iframe.getBoundingClientRect();
+            setSelectionPosition({
+              x: iframeRect.left + x,
+              y: iframeRect.top + y - 10
+            });
+            setShowSelectionPopover(true);
+          }
+        } else {
+          setShowSelectionPopover(false);
+          setSelectedText("");
+        }
+      }
+    };
+
+    window.addEventListener("message", handleIframeMessage);
+    return () => window.removeEventListener("message", handleIframeMessage);
+  }, []);
+
   // Create blob URL for secure iframe isolation
 
   useEffect(() => {
@@ -199,6 +289,45 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     let processedContent = displayContent;
     if (artifactId) {
       processedContent = displayContent.replace(/\{\{ARTIFACT_ID\}\}/g, artifactId);
+    }
+
+    // Inject text selection script for Ask-B feature
+    const selectionScript = `
+      <script>
+        (function() {
+          let lastSelection = '';
+          document.addEventListener('mouseup', function(e) {
+            const selection = window.getSelection();
+            const text = selection ? selection.toString().trim() : '';
+            if (text && text !== lastSelection) {
+              lastSelection = text;
+              const range = selection.getRangeAt(0);
+              const rect = range.getBoundingClientRect();
+              window.parent.postMessage({
+                type: 'textSelection',
+                text: text,
+                x: rect.left + rect.width / 2,
+                y: rect.top
+              }, '*');
+            } else if (!text && lastSelection) {
+              lastSelection = '';
+              window.parent.postMessage({
+                type: 'textSelection',
+                text: '',
+                x: 0,
+                y: 0
+              }, '*');
+            }
+          });
+        })();
+      </script>
+    `;
+
+    // Inject script before closing </body> or at the end
+    if (processedContent.includes('</body>')) {
+      processedContent = processedContent.replace('</body>', selectionScript + '</body>');
+    } else {
+      processedContent = processedContent + selectionScript;
     }
 
     const blob = new Blob([processedContent], { type: "text/html" });
@@ -383,12 +512,10 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
               blobUrl ? (
 
                 <iframe
-
+                  ref={iframeRef}
                   src={blobUrl}
 
                   className="w-full h-full border-0"
-
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
 
                   referrerPolicy="no-referrer"
 
@@ -418,7 +545,11 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
               /* Code Display Mode */
 
-              <div className="h-full overflow-auto">
+              <div
+                ref={codeContainerRef}
+                className="h-full overflow-auto"
+                onMouseUp={handleTextSelection}
+              >
 
                 {artifactContent?.type === "code" || isStreaming ? (
 
@@ -486,6 +617,27 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
           artifactName={artifactContent.title}
           assistantId={assistantId}
         />
+      )}
+
+      {/* Text Selection Popover for Ask-B */}
+      {showSelectionPopover && selectionPosition && selectedText && (
+        <div
+          className="fixed z-50 animate-in fade-in-0 zoom-in-95 duration-150"
+          style={{
+            left: selectionPosition.x,
+            top: selectionPosition.y,
+            transform: "translate(-50%, -100%)",
+          }}
+        >
+          <Button
+            size="sm"
+            onClick={handleAskB}
+            className="gap-2 shadow-lg"
+          >
+            <MessageSquare className="h-4 w-4" />
+            Ask-B
+          </Button>
+        </div>
       )}
 
     </div>
