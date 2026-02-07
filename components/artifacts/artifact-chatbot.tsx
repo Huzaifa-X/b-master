@@ -17,6 +17,7 @@ import { useArtifactById } from "@/hooks/useArtifact"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { CreateArtifactDialog } from "./create-artifact-dialog"
+import { DictateButton } from "@/components/assistants/dictate-button"
 
 interface UploadedFileData {
   name: string
@@ -66,6 +67,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
   const prefilledPrompt = useArtifactStore((state) => state.prefilledPrompt)
   const setPrefilledPrompt = useArtifactStore((state) => state.setPrefilledPrompt)
   const inputTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const preRecordingTextRef = useRef<string | null>(null) // Track text before recording starts (null = not recording)
 
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState<string>("")
@@ -749,18 +751,40 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
             disabled={disabled || isGenerating || isUploadingFiles}
           />
           <PromptInputActions className="px-2 pb-1 justify-between">
-            {/* Left side: Plus icon for file upload */}
-            <PromptInputAction tooltip="Attach files or images">
-              <Button
-                onClick={() => fileInputRef.current?.click()}
+            {/* Left side: Plus icon for file upload and Dictate button */}
+            <div className="flex items-center gap-1">
+              <PromptInputAction tooltip="Attach files or images">
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={disabled || isGenerating || isUploadingFiles || isStreaming}
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </PromptInputAction>
+
+              {/* Dictate Button */}
+              <DictateButton
+                onTranscript={(text) => {
+                  // Append final transcription to the pre-recording text
+                  const baseText = (preRecordingTextRef.current ?? "").trim()
+                  setInput(baseText + (baseText ? " " : "") + text)
+                  preRecordingTextRef.current = null // Reset for next recording
+                }}
+                onStreamingTranscript={(text) => {
+                  // On first streaming call, save the current input
+                  if (preRecordingTextRef.current === null) {
+                    preRecordingTextRef.current = input
+                  }
+                  // Append streaming text to the saved pre-recording text
+                  const baseText = (preRecordingTextRef.current ?? "").trim()
+                  setInput(baseText + (baseText ? " " : "") + text)
+                }}
                 disabled={disabled || isGenerating || isUploadingFiles || isStreaming}
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </PromptInputAction>
+              />
+            </div>
 
             {/* Right side: Send button */}
             <PromptInputAction tooltip={isGenerating ? "Generating artifact..." : "Send message (Enter)"}>
