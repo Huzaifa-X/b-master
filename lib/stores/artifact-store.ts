@@ -13,6 +13,7 @@ interface ArtifactStore {
   isPanelOpen: boolean;
   artifactContent: ArtifactContent | null;
   isPreviewMode: boolean;
+  prefilledPrompt: string | null;
   togglePanel: () => void;
   openPanel: () => void;
   closePanel: () => void;
@@ -20,12 +21,14 @@ interface ArtifactStore {
   clearArtifact: () => void;
   togglePreview: () => void;
   setPreviewMode: (mode: boolean) => void;
+  setPrefilledPrompt: (text: string | null) => void;
 }
 
 export const useArtifactStore = create<ArtifactStore>((set, get) => ({
   isPanelOpen: false,
   artifactContent: null,
   isPreviewMode: false,
+  prefilledPrompt: null,
   togglePanel: () => set((state) => {
     // If closing and no content, just close
     // If opening and has content, open
@@ -43,5 +46,6 @@ export const useArtifactStore = create<ArtifactStore>((set, get) => ({
   clearArtifact: () => set({ artifactContent: null }),
   togglePreview: () => set((state) => ({ isPreviewMode: !state.isPreviewMode })),
   setPreviewMode: (mode) => set({ isPreviewMode: mode }),
+  setPrefilledPrompt: (text) => set({ prefilledPrompt: text }),
 }));
 

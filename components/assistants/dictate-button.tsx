@@ -1,6 +1,6 @@
 "use client"
 
-import { Mic, MicOff, Loader2 } from "lucide-react"
+import { Mic, MicOff, Ellipsis } from "lucide-react"
 import type { FC } from "react"
 import { useState, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
@@ -220,7 +220,7 @@ export const DictateButton: FC<DictateButtonProps> = ({
                         disabled={disabled || isProcessing}
                     >
                         {isProcessing ? (
-                            <Loader2 className="size-5 animate-spin" />
+                            <Ellipsis className="size-5 animate-ping" />
                         ) : isRecording ? (
                             <MicOff className="size-5" />
                         ) : (

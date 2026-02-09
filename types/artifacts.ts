@@ -1,11 +1,7 @@
 export type Category =
-  | "accounting"
-  | "invoice"
-  | "payment"
-  | "documentation"
-  | "analytics"
   | "presentation"
-  | "booking"
+  | "documentation"
+  | "invoice"
   | "video_generation"
   | "others"
 

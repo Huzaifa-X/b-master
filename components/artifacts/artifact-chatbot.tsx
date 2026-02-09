@@ -17,6 +17,7 @@ import { useArtifactById } from "@/hooks/useArtifact"
 import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { CreateArtifactDialog } from "./create-artifact-dialog"
+import { DictateButton } from "@/components/assistants/dictate-button"
 
 interface UploadedFileData {
   name: string
@@ -63,6 +64,10 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
   const { artifact, refetch } = useArtifactById(artifactId)
   const artifactContent = useArtifactStore((state) => state.artifactContent)
   const setArtifact = useArtifactStore((state) => state.setArtifact)
+  const prefilledPrompt = useArtifactStore((state) => state.prefilledPrompt)
+  const setPrefilledPrompt = useArtifactStore((state) => state.setPrefilledPrompt)
+  const inputTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const preRecordingTextRef = useRef<string | null>(null) // Track text before recording starts (null = not recording)
 
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState<string>("")
@@ -260,6 +265,18 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [messages])
+
+  // Handle prefilled prompt from text selection (Ask-B feature)
+  useEffect(() => {
+    if (prefilledPrompt) {
+      setInput(prefilledPrompt)
+      setPrefilledPrompt(null) // Clear after using
+      // Focus the input field
+      setTimeout(() => {
+        inputTextareaRef.current?.focus()
+      }, 100)
+    }
+  }, [prefilledPrompt, setPrefilledPrompt])
 
   const handleSend = async () => {
     if ((!input.trim() && selectedFiles.length === 0) || isStreaming) return
@@ -728,23 +745,46 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
           className="border-primary/50 shadow-[0_0_100px_0px_hsl(var(--primary)),0_0_60px_0px_hsl(var(--primary)),0_0_30px_0px_hsl(var(--primary)),0_0_15px_0px_hsl(var(--primary))] dark:border-primary/60 dark:shadow-[0_0_120px_0px_hsl(var(--primary)),0_0_80px_0px_hsl(var(--primary)),0_0_40px_0px_hsl(var(--primary)),0_0_20px_0px_hsl(var(--primary))]"
         >
           <PromptInputTextarea
+            ref={inputTextareaRef}
             placeholder={isGenerating ? "Generating artifact..." : isUploadingFiles ? "Uploading files..." : "Ask about this artifact..."}
             className="text-foreground placeholder:text-muted-foreground"
             disabled={disabled || isGenerating || isUploadingFiles}
           />
           <PromptInputActions className="px-2 pb-1 justify-between">
-            {/* Left side: Plus icon for file upload */}
-            <PromptInputAction tooltip="Attach files or images">
-              <Button
-                onClick={() => fileInputRef.current?.click()}
+            {/* Left side: Plus icon for file upload and Dictate button */}
+            <div className="flex items-center gap-1">
+              <PromptInputAction tooltip="Attach files or images">
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={disabled || isGenerating || isUploadingFiles || isStreaming}
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </PromptInputAction>
+
+              {/* Dictate Button */}
+              <DictateButton
+                onTranscript={(text) => {
+                  // Append final transcription to the pre-recording text
+                  const baseText = (preRecordingTextRef.current ?? "").trim()
+                  setInput(baseText + (baseText ? " " : "") + text)
+                  preRecordingTextRef.current = null // Reset for next recording
+                }}
+                onStreamingTranscript={(text) => {
+                  // On first streaming call, save the current input
+                  if (preRecordingTextRef.current === null) {
+                    preRecordingTextRef.current = input
+                  }
+                  // Append streaming text to the saved pre-recording text
+                  const baseText = (preRecordingTextRef.current ?? "").trim()
+                  setInput(baseText + (baseText ? " " : "") + text)
+                }}
                 disabled={disabled || isGenerating || isUploadingFiles || isStreaming}
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </PromptInputAction>
+              />
+            </div>
 
             {/* Right side: Send button */}
             <PromptInputAction tooltip={isGenerating ? "Generating artifact..." : "Send message (Enter)"}>

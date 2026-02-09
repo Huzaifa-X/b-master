@@ -28,30 +28,6 @@ interface UploadedFile {
 }
 
 /**
- * Basic HTML sanitization to prevent dangerous patterns
- */
-function sanitizeHtml(html: string): string {
-  let sanitized = html
-
-  // Remove external script sources (only allow inline scripts)
-  sanitized = sanitized.replace(/<script[^>]*src\s*=\s*["']https?:\/\/[^"']*["'][^>]*>/gi, '')
-
-  // Remove javascript: protocol URLs
-  sanitized = sanitized.replace(/javascript:/gi, 'blocked:')
-
-  // Remove data: URLs in script contexts
-  sanitized = sanitized.replace(/<script[^>]*src\s*=\s*["']data:[^"']*["'][^>]*>/gi, '')
-
-  // Remove event handlers
-  sanitized = sanitized.replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
-
-  // Remove dangerous meta tags
-  sanitized = sanitized.replace(/<meta[^>]*http-equiv\s*=\s*["']refresh["'][^>]*>/gi, '')
-
-  return sanitized
-}
-
-/**
  * Build conversation context for AI
  */
 function buildConversationContext(chatHistory: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: Date }>): string {
@@ -287,7 +263,7 @@ ${allFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are prov
 
           let generatedCode = ""
           let buffer = ""
-          const model = 'gpt-4.1'
+          const model = 'gpt-5.2'
           const CHUNK_SIZE = 1024 // Send chunks of ~1KB
 
           // Create AI response with streaming
@@ -434,9 +410,6 @@ ${allFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are prov
               .replace(/^```\n?/i, "")
               .replace(/\n?```$/i, "")
               .trim()
-
-            // Sanitize the generated HTML
-            generatedCode = sanitizeHtml(generatedCode)
           }
 
           // Update artifact's files field if new files were uploaded
