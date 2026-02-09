@@ -2,7 +2,7 @@
 
 import { FC, useEffect, useState, useRef, useCallback } from "react";
 
-import { X, Copy, Code2, FileCode, Eye, Code, Download, Share2, FileText, FileDown, MessageSquare } from "lucide-react";
+import { X, Copy, Code2, FileCode, Eye, Code, Download, Share2, FileText, FileDown, MessageSquare, FileType, Presentation } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +59,8 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
   const [blobUrl, setBlobUrl] = useState<string>("");
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isGeneratingDOCX, setIsGeneratingDOCX] = useState(false);
+  const [isGeneratingPPTX, setIsGeneratingPPTX] = useState(false);
 
   // Text selection state for Ask-B popover
   const [selectedText, setSelectedText] = useState<string>("");
@@ -157,6 +159,98 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
       toast.error(error instanceof Error ? error.message : "Failed to generate PDF");
     } finally {
       setIsGeneratingPDF(false);
+    }
+  };
+
+  const handleDownloadAsDOCX = async () => {
+    if (!displayContent || !isHtmlCode) return;
+
+    setIsGeneratingDOCX(true);
+    try {
+      let processedContent = displayContent;
+      if (artifactId) {
+        processedContent = displayContent.replace(/\{\{ARTIFACT_ID\}\}/g, artifactId);
+      }
+
+      const response = await fetch("/api/artifacts/generate-docx", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          html: processedContent,
+          filename: getFileName(),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to generate DOCX");
+      }
+
+      const data = await response.json();
+      const docxUrl = data.docxUrl;
+
+      const a = document.createElement("a");
+      a.href = docxUrl;
+      a.download = `${getFileName()}.docx`;
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      toast.success("DOCX generated and downloaded successfully");
+    } catch (error) {
+      console.error("Error generating DOCX:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to generate DOCX");
+    } finally {
+      setIsGeneratingDOCX(false);
+    }
+  };
+
+  const handleDownloadAsPPTX = async () => {
+    if (!displayContent || !isHtmlCode) return;
+
+    setIsGeneratingPPTX(true);
+    try {
+      let processedContent = displayContent;
+      if (artifactId) {
+        processedContent = displayContent.replace(/\{\{ARTIFACT_ID\}\}/g, artifactId);
+      }
+
+      const response = await fetch("/api/artifacts/generate-pptx", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          html: processedContent,
+          filename: getFileName(),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to generate PPTX");
+      }
+
+      const data = await response.json();
+      const pptxUrl = data.pptxUrl;
+
+      const a = document.createElement("a");
+      a.href = pptxUrl;
+      a.download = `${getFileName()}.pptx`;
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      toast.success("PPTX generated and downloaded successfully");
+    } catch (error) {
+      console.error("Error generating PPTX:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to generate PPTX");
+    } finally {
+      setIsGeneratingPPTX(false);
     }
   };
 
@@ -394,9 +488,9 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
                   size="icon"
                   className="h-7 w-7 md:h-8 md:w-8 hidden md:flex"
                   title="Download"
-                  disabled={isGeneratingPDF}
+                  disabled={isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX}
                 >
-                  {isGeneratingPDF ? (
+                  {(isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX) ? (
                     <div className="h-3 w-3 md:h-4 md:w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                   ) : (
                     <Download className="h-3 w-3 md:h-4 md:w-4" />
@@ -406,17 +500,25 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
               <DropdownMenuContent align="end">
                 {isHtmlCode ? (
                   <>
-                    <DropdownMenuItem onClick={handleDownloadAsHTML} disabled={isGeneratingPDF}>
+                    <DropdownMenuItem onClick={handleDownloadAsHTML} disabled={isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX}>
                       <FileText className="h-4 w-4 mr-2" />
                       Download as HTML
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleDownloadAsPDF} disabled={isGeneratingPDF}>
+                    <DropdownMenuItem onClick={handleDownloadAsPDF} disabled={isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX}>
                       <FileDown className="h-4 w-4 mr-2" />
                       Download as PDF
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleDownloadAsDOCX} disabled={isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX}>
+                      <FileType className="h-4 w-4 mr-2" />
+                      Download as DOCX
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleDownloadAsPPTX} disabled={isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX}>
+                      <Presentation className="h-4 w-4 mr-2" />
+                      Download as PPTX
+                    </DropdownMenuItem>
                   </>
                 ) : (
-                  <DropdownMenuItem onClick={handleDownload} disabled={isGeneratingPDF}>
+                  <DropdownMenuItem onClick={handleDownload} disabled={isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX}>
                     <Download className="h-4 w-4 mr-2" />
                     Download as {artifactContent?.language || "txt"}
                   </DropdownMenuItem>

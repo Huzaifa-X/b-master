@@ -2,184 +2,149 @@ import 'server-only';
 import { uploadToS3 } from '@/lib/aws-s3';
 import { generateInvoiceHTML } from '@/lib/invoice-template';
 
-interface GeneratePDFOptions {
+interface ConvertOptions {
   html: string;
   filename: string;
   s3Folder?: string;
 }
 
+interface ConvertResult {
+  url: string;
+  buffer: Buffer;
+}
+
+// For backwards compatibility
 interface PDFResult {
   pdfUrl: string;
   pdfBuffer: Buffer;
 }
 
-// Stirling PDF API configuration
-const STIRLING_PDF_URL = process.env.STIRLING_PDF_URL || 'https://b-pdf.dev.bmaster.ch';
-const STIRLING_PDF_API_KEY = process.env.STIRLING_PDF_API_KEY || '';
-
-// Cache for fetched CSS to avoid repeated requests
-const cssCache = new Map<string, string>();
+// PDF Converter API configuration
+const PDF_CONVERTER_URL = process.env.PDF_CONVERTER_URL || 'https://pdf-converter.dev.bmaster.ch';
 
 /**
- * Fetch external CSS and inline it into the HTML
- * This is needed because Stirling PDF sanitizes external links for security
+ * Generic HTML converter using FastAPI PDF Converter
  */
-async function inlineExternalCSS(html: string): Promise<string> {
-  // Find all external stylesheet links
-  const linkRegex = /<link[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi;
-  const linkRegex2 = /<link[^>]*href=["']([^"']+)["'][^>]*rel=["']stylesheet["'][^>]*>/gi;
-
-  let processedHtml = html;
-  const cssUrls: string[] = [];
-
-  // Extract all CSS URLs
-  let match;
-  while ((match = linkRegex.exec(html)) !== null) {
-    cssUrls.push(match[1]);
-  }
-  while ((match = linkRegex2.exec(html)) !== null) {
-    if (!cssUrls.includes(match[1])) {
-      cssUrls.push(match[1]);
-    }
-  }
-
-  // Fetch and inline each CSS file
-  for (const url of cssUrls) {
-    try {
-      let cssContent = cssCache.get(url);
-
-      if (!cssContent) {
-        console.log('[PDF] Fetching external CSS:', url);
-        const response = await fetch(url, {
-          signal: AbortSignal.timeout(10000) // 10 second timeout
-        });
-
-        if (response.ok) {
-          cssContent = await response.text();
-          cssCache.set(url, cssContent);
-          console.log('[PDF] Fetched CSS, size:', cssContent.length, 'chars');
-        } else {
-          console.warn('[PDF] Failed to fetch CSS:', url, response.status);
-          continue;
-        }
-      }
-
-      // Replace the link tag with inline style
-      const linkTagRegex = new RegExp(
-        `<link[^>]*href=["']${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*>`,
-        'gi'
-      );
-      processedHtml = processedHtml.replace(linkTagRegex, `<style>${cssContent}</style>`);
-
-    } catch (error) {
-      console.warn('[PDF] Error fetching CSS:', url, error);
-    }
-  }
-
-  // Add print-specific CSS for better PDF rendering
-  const printCSS = `
-    <style>
-      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
-      @media print {
-        body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      }
-    </style>
-  `;
-
-  // Insert print CSS before </head> or at the start
-  if (processedHtml.includes('</head>')) {
-    processedHtml = processedHtml.replace('</head>', printCSS + '</head>');
-  } else if (processedHtml.includes('<body')) {
-    processedHtml = processedHtml.replace('<body', printCSS + '<body');
-  } else {
-    processedHtml = printCSS + processedHtml;
-  }
-
-  return processedHtml;
-}
-
-/**
- * Generate PDF from HTML string using Stirling PDF API
- */
-export async function generatePDFFromHTML({
+async function convertHTML({
   html,
   filename,
-  s3Folder = 'invoices'
-}: GeneratePDFOptions): Promise<PDFResult> {
+  s3Folder = 'documents',
+  format,
+  mimeType,
+}: ConvertOptions & { format: 'pdf' | 'docx' | 'pptx'; mimeType: string }): Promise<ConvertResult> {
   try {
-    console.log('[PDF] Converting HTML to PDF using Stirling API...');
-    console.log('[PDF] Stirling URL:', STIRLING_PDF_URL);
-    console.log('[PDF] API Key configured:', STIRLING_PDF_API_KEY ? `Yes (${STIRLING_PDF_API_KEY.substring(0, 4)}...)` : 'No');
-
-    // Inline external CSS to preserve styles (Stirling sanitizes external links)
-    console.log('[PDF] Inlining external CSS...');
-    const processedHtml = await inlineExternalCSS(html);
-    console.log('[PDF] HTML size after inlining:', processedHtml.length, 'chars');
+    console.log(`[Converter] Converting HTML to ${format.toUpperCase()}...`);
+    console.log('[Converter] URL:', PDF_CONVERTER_URL);
+    console.log('[Converter] HTML size:', html.length, 'chars');
 
     // Create a Blob/File from the HTML content
-    const htmlBlob = new Blob([processedHtml], { type: 'text/html' });
+    const htmlBlob = new Blob([html], { type: 'text/html' });
 
-    // Create FormData with the HTML file
+    // Create FormData with both file and html parameters
     const formData = new FormData();
-    formData.append('fileInput', htmlBlob, 'document.html');
+    formData.append('file', htmlBlob, 'document.html');
+    formData.append('html', html);
 
-    // Build headers - Stirling PDF accepts both X-API-Key and Authorization headers
-    const headers: Record<string, string> = {};
-    if (STIRLING_PDF_API_KEY) {
-      headers['X-API-Key'] = STIRLING_PDF_API_KEY;
-      headers['Authorization'] = `Bearer ${STIRLING_PDF_API_KEY}`;
-    }
-
-    // Call Stirling PDF API
-    const response = await fetch(`${STIRLING_PDF_URL}/api/v1/convert/html/pdf`, {
+    // Call Converter API
+    const response = await fetch(`${PDF_CONVERTER_URL}/convert/${format}`, {
       method: 'POST',
-      headers,
+      headers: {
+        'accept': 'application/json',
+      },
       body: formData,
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[PDF] Stirling API error:', response.status, errorText);
-      throw new Error(`Stirling PDF API failed: ${response.status} - ${errorText}`);
+      console.error(`[Converter] API error:`, response.status, errorText);
+      throw new Error(`Converter API failed: ${response.status} - ${errorText}`);
     }
 
-    // Get PDF buffer from response
-    const pdfArrayBuffer = await response.arrayBuffer();
-    const pdfBuffer = Buffer.from(pdfArrayBuffer);
+    // Get buffer from response
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-    console.log('[PDF] PDF generated, size:', pdfBuffer.length, 'bytes');
+    console.log(`[Converter] ${format.toUpperCase()} generated, size:`, buffer.length, 'bytes');
 
-    // Validate PDF size
-    if (pdfBuffer.length === 0) {
-      throw new Error('Generated PDF is empty');
-    }
-
-    if (pdfBuffer.length > 10 * 1024 * 1024) {
-      console.warn('[PDF] ⚠️ Large PDF generated:', pdfBuffer.length, 'bytes');
+    // Validate size
+    if (buffer.length === 0) {
+      throw new Error(`Generated ${format.toUpperCase()} is empty`);
     }
 
     // Upload to S3
-    console.log('[PDF] Uploading to S3...');
-    const pdfUrl = await uploadToS3(
-      pdfBuffer,
+    console.log('[Converter] Uploading to S3...');
+    const url = await uploadToS3(
+      buffer,
       filename,
-      'application/pdf',
+      mimeType,
       s3Folder
     );
 
-    console.log('[PDF] ✅ PDF uploaded to:', pdfUrl);
+    console.log(`[Converter] ✅ ${format.toUpperCase()} uploaded to:`, url);
 
-    return { pdfUrl, pdfBuffer };
+    return { url, buffer };
 
   } catch (error) {
-    console.error('[PDF] ❌ Error generating PDF:', error);
+    console.error(`[Converter] ❌ Error generating ${format.toUpperCase()}:`, error);
 
-    // Re-throw with more context
     if (error instanceof Error) {
-      throw new Error(`PDF generation failed: ${error.message}`);
+      throw new Error(`${format.toUpperCase()} generation failed: ${error.message}`);
     }
-    throw new Error('PDF generation failed: Unknown error');
+    throw new Error(`${format.toUpperCase()} generation failed: Unknown error`);
   }
+}
+
+/**
+ * Generate PDF from HTML string using FastAPI PDF Converter
+ */
+export async function generatePDFFromHTML({
+  html,
+  filename,
+  s3Folder = 'invoices'
+}: ConvertOptions): Promise<PDFResult> {
+  const result = await convertHTML({
+    html,
+    filename,
+    s3Folder,
+    format: 'pdf',
+    mimeType: 'application/pdf',
+  });
+
+  return { pdfUrl: result.url, pdfBuffer: result.buffer };
+}
+
+/**
+ * Generate DOCX from HTML string using FastAPI PDF Converter
+ */
+export async function generateDOCXFromHTML({
+  html,
+  filename,
+  s3Folder = 'documents'
+}: ConvertOptions): Promise<ConvertResult> {
+  return convertHTML({
+    html,
+    filename,
+    s3Folder,
+    format: 'docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
+}
+
+/**
+ * Generate PPTX from HTML string using FastAPI PDF Converter
+ */
+export async function generatePPTXFromHTML({
+  html,
+  filename,
+  s3Folder = 'presentations'
+}: ConvertOptions): Promise<ConvertResult> {
+  return convertHTML({
+    html,
+    filename,
+    s3Folder,
+    format: 'pptx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  });
 }
 
 /**
