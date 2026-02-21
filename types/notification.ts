@@ -14,6 +14,7 @@ export type NotificationType =
   | 'welcome_notification'
   | 'notification'
   | 'chat_message'
+  | 'group_message'
   | 'artifact_deleted';
 
 export interface NotificationData {

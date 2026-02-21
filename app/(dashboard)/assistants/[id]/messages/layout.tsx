@@ -4,6 +4,7 @@ import { use } from "react"
 import { useState } from "react"
 import { MessagesSidebar } from "@/components/assistants/messages-sidebar"
 import { ChatView } from "@/components/assistants/chat-view"
+import { GroupChatView } from "@/components/assistants/group-chat-view"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useSetAssistantMode } from "@/hooks/useAssistant"
 
@@ -14,52 +15,71 @@ interface MessagesLayoutProps {
 
 export default function MessagesLayout({ children, params }: MessagesLayoutProps) {
   const { id: assistantId } = use(params)
-  
-  // Set assistant mode in header (automatically handles fetching and cleanup)
-  useSetAssistantMode(assistantId)
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null)
-  const isMobile = useIsMobile()
 
-  const handleBack = () => {
-    setSelectedConversationId(null)
-  }
+  useSetAssistantMode(assistantId)
+
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null)
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
+  const isMobile = useIsMobile()
 
   const handleSelectConversation = (id: string | null) => {
     setSelectedConversationId(id)
+    // Clear group selection when DM is selected
+    if (id) setSelectedGroupId(null)
   }
 
-  // Mobile view: show either sidebar or chat
+  const handleSelectGroup = (id: string) => {
+    setSelectedGroupId(id)
+    // Clear DM selection when group is selected
+    setSelectedConversationId(null)
+  }
+
+  const handleBack = () => {
+    setSelectedConversationId(null)
+    setSelectedGroupId(null)
+  }
+
+  // Determine which view to show on the right
+  const showGroup = !!selectedGroupId
+  const showDm = !!selectedConversationId && !showGroup
+
+  // Mobile view
   if (isMobile) {
+    const hasSelection = !!selectedConversationId || !!selectedGroupId
     return (
       <div className="h-full w-full flex flex-col">
-        {!selectedConversationId ? (
-          // Show sidebar on mobile when no conversation selected
-          <MessagesSidebar 
+        {!hasSelection ? (
+          <MessagesSidebar
             selectedConversationId={selectedConversationId}
             onSelectConversation={handleSelectConversation}
+            selectedGroupId={selectedGroupId}
+            onSelectGroup={handleSelectGroup}
           />
+        ) : showGroup ? (
+          <GroupChatView groupId={selectedGroupId} onBack={handleBack} />
         ) : (
-          // Show chat with back button on mobile
-          <ChatView 
-            conversationId={selectedConversationId}
-            onBack={handleBack}
-          />
+          <ChatView conversationId={selectedConversationId} onBack={handleBack} />
         )}
       </div>
     )
   }
 
-  // Desktop view: show sidebar and chat side by side
+  // Desktop view
   return (
     <div className="h-full w-full flex">
-      <MessagesSidebar 
+      <MessagesSidebar
         selectedConversationId={selectedConversationId}
         onSelectConversation={handleSelectConversation}
+        selectedGroupId={selectedGroupId}
+        onSelectGroup={handleSelectGroup}
       />
       <div className="flex-1 flex flex-col">
-        <ChatView conversationId={selectedConversationId} />
+        {showGroup ? (
+          <GroupChatView groupId={selectedGroupId} />
+        ) : (
+          <ChatView conversationId={selectedConversationId} />
+        )}
       </div>
     </div>
   )
 }
-

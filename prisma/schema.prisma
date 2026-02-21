@@ -82,6 +82,9 @@ model User {
   connectors                Connector[]
   oauthStates               OAuthState[]
   scheduledPlanChange       Plan?     @relation("ScheduledPlanChange", fields: [scheduledPlanChangeId], references: [id])
+  createdGroupChats         AssistantGroupChat[]        @relation("GroupChatCreator")
+  groupChatMemberships      AssistantGroupChatMember[]  @relation("GroupChatMembers")
+  groupChatMessages         AssistantGroupChatMessage[] @relation("GroupChatMessageSender")
 
   @@index([email])
   @@index([googleId])
@@ -295,6 +298,8 @@ model Assistant {
   userChatMessages    AssistantUserChatMessage[]
   assistantChats      AssistantChat[]
   chatMessages        AssistantChatMessage[]
+  groupChats          AssistantGroupChat[]
+  groupChatMessages   AssistantGroupChatMessage[]
   newsFeeds           AssistantNewsFeed[]
   artifacts           AssistantArtifact[]
   contacts            AssistantContact[]
@@ -561,6 +566,77 @@ model AssistantChatMessage {
   @@index([senderId])
   @@index([createdAt])
   @@map("assistant_chat_messages")
+}
+
+// ================================================================
+// GROUP CHAT
+// ================================================================
+
+model AssistantGroupChat {
+  id            Int       @id @default(autoincrement())
+  assistantId   BigInt
+  name          String    @db.VarChar(255)
+  description   String?   @db.VarChar(500)
+  avatarUrl     String?   @db.VarChar(255)
+  createdById   BigInt
+  isActive      Boolean   @default(true)
+  lastMessageAt DateTime?
+  lastMessageId BigInt?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  assistant Assistant                  @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  createdBy User                       @relation("GroupChatCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  members   AssistantGroupChatMember[]
+  messages  AssistantGroupChatMessage[]
+
+  @@index([assistantId])
+  @@index([createdById])
+  @@index([lastMessageAt])
+  @@map("assistant_group_chats")
+}
+
+model AssistantGroupChatMember {
+  id          Int      @id @default(autoincrement())
+  groupChatId Int
+  userId      BigInt
+  role        String   @default("member") @db.VarChar(20) // "admin" | "member"
+  joinedAt    DateTime @default(now())
+  leftAt      DateTime?
+
+  groupChat AssistantGroupChat @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
+  user      User               @relation("GroupChatMembers", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupChatId, userId])
+  @@index([groupChatId])
+  @@index([userId])
+  @@map("assistant_group_chat_members")
+}
+
+model AssistantGroupChatMessage {
+  id            BigInt    @id @default(autoincrement())
+  groupChatId   Int
+  assistantId   BigInt
+  senderId      BigInt
+  message       String    @db.Text
+  messageType   String    @default("text") @db.VarChar(50)
+  attachmentUrl String?   @db.VarChar(255)
+  attachmentName String?  @db.VarChar(255)
+  attachmentSize BigInt?
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  groupChat AssistantGroupChat @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
+  assistant Assistant          @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  sender    User               @relation("GroupChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([groupChatId])
+  @@index([assistantId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("assistant_group_chat_messages")
 }
 
 // ================================================================
