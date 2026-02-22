@@ -34,7 +34,7 @@ export function SiteHeader() {
     // Only treat as chat if the third segment is not a known non-chat route
     if (pathname.startsWith("/assistants/")) {
       const parts = pathname.split("/")
-      const nonChatRoutes = ["contacts", "messages", "news", "artifacts", "add", "profile"]
+      const nonChatRoutes = ["contacts", "messages", "news", "artifacts", "add", "profile", "b-coder"]
       const thirdSegment = parts.length >= 4 ? parts[3] : null
       const isChat = thirdSegment && !nonChatRoutes.includes(thirdSegment)
 

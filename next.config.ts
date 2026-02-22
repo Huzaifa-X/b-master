@@ -18,6 +18,23 @@ const nextConfig = {
   images: {
     unoptimized: process.env.NODE_ENV === 'development', // Disable optimization in dev to reduce preloading
   },
+  // Headers for WebContainer support (enables SharedArrayBuffer)
+  // Required for @webcontainer/api to function properly
+  headers: async () => [
+    {
+      source: '/:path*',
+      headers: [
+        {
+          key: 'Cross-Origin-Embedder-Policy',
+          value: 'require-corp',
+        },
+        {
+          key: 'Cross-Origin-Opener-Policy',
+          value: 'same-origin',
+        },
+      ],
+    },
+  ],
 } satisfies NextConfig;
 
 export default nextConfig;
