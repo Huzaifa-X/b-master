@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { chatId, assistantId, chatType, webSearch, research, chatWithAPI, attachments, artifact, dropbox, mentionedUsers } = body
+    const { chatId, assistantId, chatType, webSearch, research, chatWithAPI, connectedApiIds, attachments, artifact, dropbox, mentionedUsers } = body
 
     console.log("[Stream] mentionedUsers:", mentionedUsers)
     const chatIdInt = parseInt(chatId)
@@ -372,6 +372,19 @@ export async function POST(req: NextRequest) {
         console.log(`[Stream] OAuth required for assistant ${assistantId}`)
       } else {
         console.warn(`[Stream] Failed to load API tools: ${toolsResult.error}`)
+      }
+    }
+
+    // Load tools from additionally connected API assistants (max 2)
+    if (Array.isArray(connectedApiIds) && connectedApiIds.length > 0) {
+      const idsToLoad = connectedApiIds.slice(0, 2)
+      for (const cId of idsToLoad) {
+        if (!cId || cId === assistantId?.toString()) continue
+        const extraResult = await loadAPITools(cId.toString())
+        if (extraResult.success && extraResult.tools) {
+          apiTools.push(...extraResult.tools)
+          console.log(`[Stream] Loaded ${extraResult.tools.length} extra API tools from assistant ${cId}`)
+        }
       }
     }
 

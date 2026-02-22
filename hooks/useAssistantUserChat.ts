@@ -45,6 +45,7 @@ interface MessageOptions {
     attachments?: { name: string; url: string; type: string; size: number }[]
     artifact?: { id: string; name: string; instructions: string; htmlContent: string }
     mentionedUsers?: Array<{ id: string; name: string; email: string }>
+    connectedApiIds?: string[]
 }
 
 export function useAIChat(options: UseAIChatOptions) {
@@ -241,6 +242,7 @@ export function useAIChat(options: UseAIChatOptions) {
                     attachments: opts.attachments || [],
                     artifact: opts.artifact || null,
                     mentionedUsers: opts.mentionedUsers || [],
+                    connectedApiIds: opts.connectedApiIds || [],
                 }
 
                 const response = await fetch(input, {
@@ -361,7 +363,8 @@ export function useAIChat(options: UseAIChatOptions) {
                         currentOptionsRef.current = {
                             ...documentsData.options,
                             attachments: documentsData.attachments,
-                            mentionedUsers: documentsData.mentionedUsers
+                            mentionedUsers: documentsData.mentionedUsers,
+                            connectedApiIds: documentsData.options.connectedApiIds || [],
                         }
                     }
                 } catch (e) {
@@ -402,6 +405,7 @@ export function useAIChat(options: UseAIChatOptions) {
             dropbox?: boolean
             artifact?: { id: string; name: string; instructions: string; htmlContent: string }
             mentionedUsers?: Array<{ id: string; name: string; email: string }>
+            connectedApiIds?: string[]
         }
     ) => {
         const isStreaming = status === 'streaming' || status === 'submitted'

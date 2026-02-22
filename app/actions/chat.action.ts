@@ -30,6 +30,7 @@ export async function createChatWithMessage(data: {
   research?: boolean
   chatWithAPI?: boolean
   dropbox?: boolean
+  connectedApiIds?: string[]
   artifact?: {
     id: string
     name: string
@@ -77,13 +78,14 @@ export async function createChatWithMessage(data: {
       }
 
       // Store options for auto-streaming
-      if (data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifact) {
+      if (data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifact || (data.connectedApiIds && data.connectedApiIds.length > 0)) {
         documentsData.options = {
           webSearch: data.webSearch || false,
           research: data.research || false,
           chatWithAPI: data.chatWithAPI || false,
           dropbox: data.dropbox || false,
-          artifact: data.artifact || null
+          artifact: data.artifact || null,
+          connectedApiIds: data.connectedApiIds || [],
         }
         console.log(`[createChatWithMessage] Storing message options:`, documentsData.options)
       }
@@ -129,6 +131,7 @@ export async function createChatWithMessage(data: {
         chatWithAPI: data.chatWithAPI || false,
         dropbox: data.dropbox || false,
         artifact: data.artifact || null,
+        connectedApiIds: data.connectedApiIds || [],
         mentionedUsers: data.mentionedUsers || null
       }
     }
@@ -558,6 +561,7 @@ export async function sendChatMessage(data: {
   research?: boolean
   chatWithAPI?: boolean
   dropbox?: boolean
+  connectedApiIds?: string[]
   artifact?: {
     id: string
     name: string
@@ -614,13 +618,14 @@ export async function sendChatMessage(data: {
       }
 
       // Store options for auto-streaming
-      if (data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifact) {
+      if (data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifact || (data.connectedApiIds && data.connectedApiIds.length > 0)) {
         documentsData.options = {
           webSearch: data.webSearch || false,
           research: data.research || false,
           chatWithAPI: data.chatWithAPI || false,
           dropbox: data.dropbox || false,
-          artifact: data.artifact || null
+          artifact: data.artifact || null,
+          connectedApiIds: data.connectedApiIds || [],
         }
         console.log(`[sendChatMessage] Storing message options:`, documentsData.options)
       }

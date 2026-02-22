@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
             webSearch,
             research,
             chatWithAPI,
+            connectedApiIds,
             attachments,
             artifact,
             dropbox,
@@ -367,6 +368,19 @@ export async function POST(req: NextRequest) {
                 oauthRequired = true
                 oauthConfig = toolsResult.oauthConfig
                 console.log(`[Chat] OAuth required for assistant ${assistantId}`)
+            }
+        }
+
+        // Load tools from additionally connected API assistants (max 2)
+        if (Array.isArray(connectedApiIds) && connectedApiIds.length > 0) {
+            const idsToLoad = connectedApiIds.slice(0, 2)
+            for (const cId of idsToLoad) {
+                if (!cId || cId === assistantId?.toString()) continue
+                const extraResult = await loadAPITools(cId.toString())
+                if (extraResult.success && extraResult.tools) {
+                    apiTools.push(...extraResult.tools)
+                    console.log(`[Chat] Loaded ${extraResult.tools.length} extra API tools from assistant ${cId}`)
+                }
             }
         }
 

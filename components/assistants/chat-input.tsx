@@ -17,6 +17,7 @@ import {
 import { AttachmentDropdown } from "@/components/assistants/attachment-dropdown"
 import { DictateButton } from "@/components/assistants/dictate-button"
 import { SelectArtifactDialog } from "@/components/assistants/select-artifact-dialog"
+import { ApiConnectPicker } from "@/components/assistants/api-connect-picker"
 import {
   Mention,
   MentionInput,
@@ -60,6 +61,7 @@ interface ChatInputProps {
       dropbox?: boolean;
       artifact?: { id: string; name: string; instructions: string; htmlContent: string }
       mentionedUsers?: MentionedUser[]
+      connectedApiIds?: string[]
     }
   ) => void
   isLoading?: boolean
@@ -107,6 +109,7 @@ export function ChatInput({
   const [isArtifactDialogOpen, setIsArtifactDialogOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [connectedApiIds, setConnectedApiIds] = useState<string[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -371,6 +374,7 @@ export function ChatInput({
         dropbox: dropboxEnabled,
         artifact: selectedArtifact || undefined,
         mentionedUsers: mentionsToSend.length > 0 ? mentionsToSend : undefined,
+        connectedApiIds: connectedApiIds.length > 0 ? connectedApiIds : undefined,
       }
     )
 
@@ -766,6 +770,14 @@ export function ChatInput({
                     onStreamingTranscript={handleStreamingTranscript}
                     disabled={disabled || isLoading}
                   />
+                  {mode === "assistant" && assistantId && (
+                    <ApiConnectPicker
+                      currentAssistantId={assistantId}
+                      selectedIds={connectedApiIds}
+                      onChange={setConnectedApiIds}
+                      disabled={disabled || isLoading}
+                    />
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Tooltip>
@@ -864,6 +876,14 @@ export function ChatInput({
                     onStreamingTranscript={handleStreamingTranscript}
                     disabled={disabled || isLoading}
                   />
+                  {mode === "assistant" && assistantId && (
+                    <ApiConnectPicker
+                      currentAssistantId={assistantId}
+                      selectedIds={connectedApiIds}
+                      onChange={setConnectedApiIds}
+                      disabled={disabled || isLoading}
+                    />
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Tooltip>
