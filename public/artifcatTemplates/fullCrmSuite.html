@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Full CRM Suite</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b27;
+    --surface2: #1e2438;
+    --border: #2a3050;
+    --accent: #7c3aed;
+    --accent2: #06b6d4;
+    --green: #10b981;
+    --red: #ef4444;
+    --orange: #f59e0b;
+    --blue: #3b82f6;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --radius: 10px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:13px; display:flex; height:100vh; overflow:hidden; }
+
+  /* SIDEBAR */
+  .sidebar { width:200px; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+  .sidebar-logo { padding:16px 18px; font-weight:800; font-size:15px; border-bottom:1px solid var(--border); background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .sidebar-nav { flex:1; padding:10px 8px; overflow-y:auto; }
+  .nav-item { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; cursor:pointer; color:var(--muted); font-size:12px; transition:.15s; margin-bottom:2px; border:none; background:transparent; width:100%; text-align:left; }
+  .nav-item:hover { background:var(--surface2); color:var(--text); }
+  .nav-item.active { background:var(--accent); color:#fff; }
+  .nav-item .icon { font-size:14px; flex-shrink:0; }
+  .nav-count { margin-left:auto; background:var(--surface2); border-radius:10px; padding:1px 7px; font-size:10px; }
+  .nav-item.active .nav-count { background:rgba(255,255,255,.2); }
+  .sidebar-footer { padding:12px; border-top:1px solid var(--border); }
+  .user-row { display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .user-avatar { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
+  .user-info { flex:1; }
+  .user-name { font-size:12px; font-weight:600; }
+  .user-role { font-size:10px; color:var(--muted); }
+
+  /* CONTENT */
+  .content { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+  .content-header { background:var(--surface); border-bottom:1px solid var(--border); padding:12px 20px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+  .page-title { font-size:16px; font-weight:700; }
+  .header-actions { display:flex; gap:8px; align-items:center; }
+  .btn { padding:6px 14px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; border:none; transition:.15s; }
+  .btn-primary { background:var(--accent); color:#fff; }
+  .btn-primary:hover { background:#6d28d9; }
+  .btn-outline { background:transparent; color:var(--text); border:1px solid var(--border); }
+  .btn-outline:hover { background:var(--surface2); }
+  .search-box { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:6px 12px; font-size:12px; outline:none; width:200px; }
+
+  /* PAGE */
+  .page { flex:1; overflow-y:auto; padding:18px 20px; display:none; flex-direction:column; gap:16px; }
+  .page.active { display:flex; }
+
+  /* CARDS */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
+  .card-title { font-weight:700; font-size:13px; margin-bottom:12px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .kpi { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; cursor:pointer; transition:.2s; }
+  .kpi:hover { transform:translateY(-2px); border-color:var(--accent); }
+  .kpi-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+  .kpi-value { font-size:24px; font-weight:800; margin-bottom:3px; }
+  .kpi-sub { font-size:10px; }
+  .up { color:var(--green); } .down { color:var(--red); } .neut { color:var(--muted); }
+
+  /* TABLE */
+  .tbl { width:100%; border-collapse:collapse; }
+  .tbl th { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); }
+  .tbl td { padding:10px 10px; border-bottom:1px solid var(--border); font-size:12px; vertical-align:middle; }
+  .tbl tr:last-child td { border-bottom:none; }
+  .tbl tr:hover td { background:var(--surface2); cursor:pointer; }
+
+  /* BADGES */
+  .badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:600; }
+  .badge-green { background:#10b98122; color:var(--green); }
+  .badge-red { background:#ef444422; color:var(--red); }
+  .badge-blue { background:#3b82f622; color:var(--blue); }
+  .badge-orange { background:#f59e0b22; color:var(--orange); }
+  .badge-purple { background:#7c3aed22; color:var(--accent); }
+  .badge-cyan { background:#06b6d422; color:var(--accent2); }
+
+  /* AVATAR */
+  .av { width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; }
+
+  /* KANBAN */
+  .kanban { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; height:calc(100vh - 200px); overflow-x:auto; }
+  .kanban-col { background:var(--surface2); border-radius:10px; padding:10px; display:flex; flex-direction:column; min-width:140px; }
+  .col-header { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+  .col-total { font-size:9px; color:var(--muted); }
+  .kanban-cards { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+  .k-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:9px; cursor:pointer; transition:.2s; }
+  .k-card:hover { border-color:var(--accent); transform:translateX(2px); }
+  .k-name { font-size:11px; font-weight:700; margin-bottom:4px; }
+  .k-meta { font-size:10px; color:var(--muted); display:flex; justify-content:space-between; margin-bottom:4px; }
+  .k-value { font-size:12px; font-weight:700; color:var(--green); }
+  .k-prob { font-size:9px; }
+  .prob-bar { height:3px; background:var(--surface2); border-radius:2px; margin-top:4px; overflow:hidden; }
+  .prob-fill { height:100%; border-radius:2px; background:var(--accent); }
+
+  /* ACTIVITY */
+  .activity-list { display:flex; flex-direction:column; }
+  .act-item { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .act-item:last-child { border-bottom:none; }
+  .act-icon { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+  .act-body { flex:1; }
+  .act-title { font-size:12px; font-weight:600; }
+  .act-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+  .act-time { font-size:10px; color:var(--muted); }
+
+  /* CHART */
+  .chart-bars { display:flex; align-items:flex-end; gap:8px; height:140px; padding-top:16px; }
+  .b-group { flex:1; display:flex; gap:3px; align-items:flex-end; flex-direction:column; }
+  .b-wrap { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; width:100%; justify-content:flex-end; }
+  .b { width:100%; border-radius:4px 4px 0 0; transition:.4s; min-height:3px; cursor:pointer; }
+  .b-label { font-size:9px; color:var(--muted); }
+
+  /* GRID */
+  .g2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .g3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+
+  /* FILTER ROW */
+  .filter-row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .filter-btn { padding:4px 12px; border-radius:20px; cursor:pointer; font-size:11px; border:1px solid var(--border); background:transparent; color:var(--muted); transition:.15s; }
+  .filter-btn:hover,.filter-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  /* LEAD SCORE */
+  .score-ring { width:36px; height:36px; border-radius:50%; border:3px solid; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; }
+
+  /* PROGRESS */
+  .progress-track { height:5px; background:var(--surface2); border-radius:3px; overflow:hidden; }
+  .progress-fill { height:100%; border-radius:3px; }
+
+  /* TASKS */
+  .task-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); }
+  .task-row:last-child { border-bottom:none; }
+  .task-cb { width:16px; height:16px; border-radius:4px; border:1px solid var(--border); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:.15s; flex-shrink:0; font-size:9px; }
+  .task-cb.done { background:var(--green); border-color:var(--green); color:#fff; }
+
+  ::-webkit-scrollbar { width:4px; height:4px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-logo">◈ CRM Suite</div>
+  <nav class="sidebar-nav">
+    <button class="nav-item active" onclick="showPage('dashboard',this)"><span class="icon">📊</span> Dashboard</button>
+    <button class="nav-item" onclick="showPage('contacts',this)"><span class="icon">👥</span> Contacts <span class="nav-count">124</span></button>
+    <button class="nav-item" onclick="showPage('deals',this)"><span class="icon">💼</span> Deals <span class="nav-count">47</span></button>
+    <button class="nav-item" onclick="showPage('activities',this)"><span class="icon">⚡</span> Activities <span class="nav-count">8</span></button>
+    <button class="nav-item" onclick="showPage('tasks',this)"><span class="icon">✅</span> Tasks <span class="nav-count">23</span></button>
+    <button class="nav-item" onclick="showPage('reports',this)"><span class="icon">📈</span> Reports</button>
+    <button class="nav-item" onclick="showPage('settings',this)" style="margin-top:auto;"><span class="icon">⚙️</span> Settings</button>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-row">
+      <div class="user-avatar">JD</div>
+      <div class="user-info">
+        <div class="user-name">James Doe</div>
+        <div class="user-role">Sales Manager</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+
+  <!-- HEADER -->
+  <div class="content-header">
+    <span class="page-title" id="pageTitle">Dashboard</span>
+    <div class="header-actions">
+      <input class="search-box" placeholder="🔍  Search contacts, deals…" id="globalSearch" oninput="handleSearch(this.value)" />
+      <button class="btn btn-outline" onclick="exportData()">↓ Export</button>
+      <button class="btn btn-primary" onclick="quickAdd()" id="pageAddBtn">+ New Deal</button>
+    </div>
+  </div>
+
+  <!-- === DASHBOARD === -->
+  <div class="page active" id="page-dashboard">
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Pipeline Value</div><div class="kpi-value" style="color:var(--accent)">$487K</div><div class="kpi-sub up">↑ 23% this month</div></div>
+      <div class="kpi"><div class="kpi-label">Won Revenue</div><div class="kpi-value" style="color:var(--green)">$284K</div><div class="kpi-sub up">↑ 18% vs target</div></div>
+      <div class="kpi"><div class="kpi-label">Win Rate</div><div class="kpi-value" style="color:var(--blue)">62%</div><div class="kpi-sub up">↑ 4pp vs last Q</div></div>
+      <div class="kpi"><div class="kpi-label">Avg Deal Size</div><div class="kpi-value" style="color:var(--orange)">$18.4K</div><div class="kpi-sub neut">→ Steady</div></div>
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">Monthly Revenue vs Target</div>
+        <div class="chart-bars" id="dashChart"></div>
+        <div style="display:flex;gap:12px;margin-top:10px;font-size:10px;">
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--accent);display:inline-block;"></span>Actual</span>
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--border);display:inline-block;"></span>Target</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Deals by Stage</div>
+        <div id="stageBreakdown"></div>
+      </div>
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">Recent Activities</div>
+        <div id="dashActivities"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Top Deals This Month</div>
+        <table class="tbl" id="topDealsTable">
+          <thead><tr><th>Contact</th><th>Value</th><th>Stage</th><th>Owner</th></tr></thead>
+          <tbody id="topDeals"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- === CONTACTS === -->
+  <div class="page" id="page-contacts">
+    <div class="filter-row" id="contactFilters">
+      <button class="filter-btn active" onclick="filterContacts('all',this)">All (124)</button>
+      <button class="filter-btn" onclick="filterContacts('hot',this)">🔥 Hot Leads</button>
+      <button class="filter-btn" onclick="filterContacts('warm',this)">🌤 Warm</button>
+      <button class="filter-btn" onclick="filterContacts('cold',this)">❄️ Cold</button>
+      <button class="filter-btn" onclick="filterContacts('customer',this)">✅ Customers</button>
+    </div>
+    <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+      <table class="tbl">
+        <thead><tr><th>Contact</th><th>Company</th><th>Title</th><th>Tag</th><th>Lead Score</th><th>Last Activity</th><th>Action</th></tr></thead>
+        <tbody id="contactsTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- === DEALS / PIPELINE === -->
+  <div class="page" id="page-deals" style="overflow-x:auto;">
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="filterDeals('all',this)">All Deals</button>
+      <button class="filter-btn" onclick="filterDeals('mine',this)">My Deals</button>
+      <button class="filter-btn" onclick="filterDeals('hot',this)">High Value</button>
+    </div>
+    <div class="kanban" id="kanbanBoard"></div>
+  </div>
+
+  <!-- === ACTIVITIES === -->
+  <div class="page" id="page-activities">
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="filterActs('all',this)">All</button>
+      <button class="filter-btn" onclick="filterActs('call',this)">📞 Calls</button>
+      <button class="filter-btn" onclick="filterActs('email',this)">📧 Emails</button>
+      <button class="filter-btn" onclick="filterActs('meeting',this)">🤝 Meetings</button>
+      <button class="filter-btn" onclick="filterActs('note',this)">📝 Notes</button>
+    </div>
+    <div class="card" style="flex:1;">
+      <div class="activity-list" id="activityList"></div>
+    </div>
+  </div>
+
+  <!-- === TASKS === -->
+  <div class="page" id="page-tasks">
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="filterTasks('all',this)">All Tasks</button>
+      <button class="filter-btn" onclick="filterTasks('today',this)">Today</button>
+      <button class="filter-btn" onclick="filterTasks('overdue',this)">Overdue</button>
+      <button class="filter-btn" onclick="filterTasks('done',this)">Completed</button>
+    </div>
+    <div class="card" style="flex:1;">
+      <div id="taskBoard"></div>
+    </div>
+  </div>
+
+  <!-- === REPORTS === -->
+  <div class="page" id="page-reports">
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Q1 Target</div><div class="kpi-value" style="color:var(--orange)">$320K</div><div class="kpi-sub neut">→ 89% achieved</div></div>
+      <div class="kpi"><div class="kpi-label">Deals Closed</div><div class="kpi-value" style="color:var(--green)">38</div><div class="kpi-sub up">↑ 12 vs Q4</div></div>
+      <div class="kpi"><div class="kpi-label">Avg Cycle</div><div class="kpi-value" style="color:var(--blue)">24d</div><div class="kpi-sub up">↓ 3 days faster</div></div>
+      <div class="kpi"><div class="kpi-label">Follow-up Rate</div><div class="kpi-value" style="color:var(--accent)">94%</div><div class="kpi-sub up">↑ 6pp</div></div>
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">Deals by Owner</div>
+        <div id="ownerReport"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Monthly Target vs Actual</div>
+        <div id="targetReport"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- === SETTINGS === -->
+  <div class="page" id="page-settings">
+    <div class="card" style="max-width:500px;">
+      <div class="card-title">CRM Settings</div>
+      <div style="display:flex;flex-direction:column;gap:14px;margin-top:8px;">
+        <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Company Name</label><input style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:12px;outline:none;" value="Acme Corporation" /></div>
+        <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Default Currency</label><select style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:12px;outline:none;"><option>USD — US Dollar</option><option>EUR — Euro</option><option>GBP — British Pound</option></select></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;"><span style="font-size:12px;">Email notifications</span><button onclick="this.dataset.on=this.dataset.on==='1'?'0':'1';this.textContent=this.dataset.on==='1'?'ON':'OFF';this.style.background=this.dataset.on==='1'?'var(--green)':'var(--surface2)'" data-on="1" style="background:var(--green);color:#fff;border:none;border-radius:20px;padding:4px 14px;cursor:pointer;font-size:11px;font-weight:700;">ON</button></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;"><span style="font-size:12px;">Lead scoring</span><button onclick="this.dataset.on=this.dataset.on==='1'?'0':'1';this.textContent=this.dataset.on==='1'?'ON':'OFF';this.style.background=this.dataset.on==='1'?'var(--green)':'var(--surface2)'" data-on="1" style="background:var(--green);color:#fff;border:none;border-radius:20px;padding:4px 14px;cursor:pointer;font-size:11px;font-weight:700;">ON</button></div>
+        <button class="btn btn-primary" style="align-self:flex-start;" onclick="alert('Settings saved!')">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end content -->
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+const STAGES = ['New Lead','Contacted','Qualified','Proposal Sent','Negotiation','Closed Won','Closed Lost']
+const STAGE_COLORS = ['#64748b','#3b82f6','#06b6d4','#7c3aed','#f59e0b','#10b981','#ef4444']
+const OWNERS = ['JD','SM','AK','ML','CR']
+
+const contacts = [
+  {id:1,name:'Sarah Miller',company:'Acme Corp',title:'VP Sales',tag:'hot',score:92,lastAct:'2h ago',email:'s.miller@acme.com'},
+  {id:2,name:'Tom Bradley',company:'Globex Ltd',title:'CEO',tag:'warm',score:74,lastAct:'1d ago',email:'t.bradley@globex.com'},
+  {id:3,name:'Ana Kim',company:'Initech',title:'CTO',tag:'cold',score:38,lastAct:'1w ago',email:'a.kim@initech.com'},
+  {id:4,name:'James Webb',company:'Umbrella Co',title:'CMO',tag:'customer',score:88,lastAct:'30m ago',email:'j.webb@umbrella.com'},
+  {id:5,name:'Lisa Park',company:'Cyberdyne',title:'Director',tag:'hot',score:85,lastAct:'3h ago',email:'l.park@cyber.com'},
+  {id:6,name:'Mark Stone',company:'Veridian',title:'COO',tag:'warm',score:61,lastAct:'2d ago',email:'m.stone@verid.com'},
+  {id:7,name:'Nina Ross',company:'Massive Dyn',title:'CFO',tag:'customer',score:95,lastAct:'5m ago',email:'n.ross@massive.com'},
+  {id:8,name:'Oscar Tang',company:'Soylent Inc',title:'PM',tag:'cold',score:29,lastAct:'2w ago',email:'o.tang@soylent.com'},
+]
+
+let deals = [
+  {id:1,name:'Acme Corp',contact:'Sarah Miller',value:24000,stage:'Proposal Sent',prob:65,owner:'JD'},
+  {id:2,name:'Globex Ltd',contact:'Tom Bradley',value:18500,stage:'Contacted',prob:30,owner:'SM'},
+  {id:3,name:'Initech',contact:'Ana Kim',value:9800,stage:'New Lead',prob:15,owner:'AK'},
+  {id:4,name:'Umbrella Co',contact:'James Webb',value:45000,stage:'Negotiation',prob:80,owner:'JD'},
+  {id:5,name:'Soylent Inc',contact:'Oscar Tang',value:12000,stage:'Closed Won',prob:100,owner:'SM'},
+  {id:6,name:'Cyberdyne',contact:'Lisa Park',value:67000,stage:'Proposal Sent',prob:60,owner:'AK'},
+  {id:7,name:'Veridian',contact:'Mark Stone',value:8500,stage:'New Lead',prob:10,owner:'ML'},
+  {id:8,name:'Massive Dyn',contact:'Nina Ross',value:33000,stage:'Closed Won',prob:100,owner:'SM'},
+  {id:9,name:'TechFlow',contact:'Chris Reed',value:52000,stage:'Qualified',prob:45,owner:'CR'},
+  {id:10,name:'DataStream',contact:'Paula Vans',value:19000,stage:'Contacted',prob:25,owner:'JD'},
+]
+
+const activities_data = [
+  {type:'call',icon:'📞',color:'#3b82f622',title:'Call with Sarah Miller','sub':'Discussed Q1 renewal — very positive','time':'10 min ago','contact':'Sarah Miller'},
+  {type:'email',icon:'📧',color:'#7c3aed22',title:'Email sent to Cyberdyne','sub':'Follow-up on proposal #CYB-2026-003','time':'45 min ago','contact':'Lisa Park'},
+  {type:'meeting',icon:'🤝',color:'#10b98122',title:'Discovery call: TechFlow','sub':'Scheduled for next Tuesday 2pm','time':'2h ago','contact':'Chris Reed'},
+  {type:'note',icon:'📝',color:'#f59e0b22',title:'Note added: Umbrella Co','sub':'Decision maker wants custom pricing deck','time':'3h ago','contact':'James Webb'},
+  {type:'call',icon:'📞',color:'#3b82f622',title:'Call: Globex Ltd','sub':'Budget approved — moving to proposal stage','time':'Yesterday','contact':'Tom Bradley'},
+  {type:'email',icon:'📧',color:'#7c3aed22',title:'Newsletter sent','sub':'38 contacts — 67% open rate','time':'2 days ago','contact':'All'},
+  {type:'meeting',icon:'🤝',color:'#10b98122',title:'QBR: Massive Dynamics','sub':'Quarterly business review completed','time':'3 days ago','contact':'Nina Ross'},
+  {type:'note',icon:'📝',color:'#f59e0b22',title:'Stage updated: Initech','sub':'Moved from New Lead → Qualified','time':'1 week ago','contact':'Ana Kim'},
+]
+
+let tasks_data = [
+  {id:1,name:'Send revised proposal to Acme Corp',due:'today',priority:'high',done:false,owner:'JD'},
+  {id:2,name:'Follow up with Cyberdyne re: contract',due:'today',priority:'high',done:false,owner:'AK'},
+  {id:3,name:'Update Q1 pipeline spreadsheet',due:'today',priority:'medium',done:true,owner:'SM'},
+  {id:4,name:'Schedule QBR with Umbrella Co',due:'tomorrow',priority:'medium',done:false,owner:'JD'},
+  {id:5,name:'Research Veridian competitors',due:'overdue',priority:'low',done:false,owner:'ML'},
+  {id:6,name:'Prepare onboarding deck for Soylent',due:'tomorrow',priority:'high',done:false,owner:'SM'},
+  {id:7,name:'Update CRM contact data',due:'overdue',priority:'low',done:true,owner:'AK'},
+  {id:8,name:'Review deal terms with legal',due:'today',priority:'high',done:false,owner:'CR'},
+]
+
+const months = ['Sep','Oct','Nov','Dec','Jan','Feb']
+const actual = [38000,52000,61000,55000,74000,84500]
+const target = [50000,55000,60000,65000,70000,80000]
+
+const TAG_BADGE = {hot:'badge-red',warm:'badge-orange',cold:'badge-blue',customer:'badge-green'}
+const TAG_LABELS = {hot:'🔥 Hot',warm:'🌤 Warm',cold:'❄️ Cold',customer:'✅ Customer'}
+const PRIO_BADGE = {high:'badge-red',medium:'badge-orange',low:'badge-purple'}
+
+let contactFilter = 'all', dealFilter = 'all', actFilter = 'all', taskFilter = 'all'
+let currentPage = 'dashboard'
+
+// ── RENDER FUNCTIONS ──────────────────────────────────────────────────────────
+function renderDashChart() {
+  const el = document.getElementById('dashChart')
+  const max = Math.max(...actual,...target)
+  el.innerHTML = months.map((m,i) => {
+    const aH = Math.round((actual[i]/max)*100)
+    const tH = Math.round((target[i]/max)*100)
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end;">
+      <div style="display:flex;gap:2px;align-items:flex-end;width:100%;justify-content:center;height:90%;">
+        <div style="flex:1;height:${aH}%;background:var(--accent);border-radius:3px 3px 0 0;cursor:pointer;transition:.3s;min-height:3px;" title="$${actual[i].toLocaleString()}"></div>
+        <div style="flex:1;height:${tH}%;background:var(--border);border-radius:3px 3px 0 0;min-height:3px;"></div>
+      </div>
+      <span style="font-size:9px;color:var(--muted);">${m}</span>
+    </div>`
+  }).join('')
+}
+
+function renderStageBreakdown() {
+  const el = document.getElementById('stageBreakdown')
+  el.innerHTML = STAGES.map((s,i) => {
+    const cnt = deals.filter(d=>d.stage===s).length
+    const pct = Math.round((cnt/deals.length)*100)
+    return `<div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;">
+        <span style="color:${STAGE_COLORS[i]}">${s}</span><span>${cnt} deals</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${STAGE_COLORS[i]};"></div></div>
+    </div>`
+  }).join('')
+}
+
+function renderDashActivities() {
+  const el = document.getElementById('dashActivities')
+  el.innerHTML = activities_data.slice(0,4).map(a => `<div class="act-item">
+    <div class="act-icon" style="background:${a.color}">${a.icon}</div>
+    <div class="act-body"><div class="act-title">${a.title}</div><div class="act-sub">${a.sub}</div></div>
+    <div class="act-time">${a.time}</div>
+  </div>`).join('')
+}
+
+function renderTopDeals() {
+  const el = document.getElementById('topDeals')
+  const top = [...deals].sort((a,b)=>b.value-a.value).slice(0,5)
+  el.innerHTML = top.map(d => {
+    const stageIdx = STAGES.indexOf(d.stage)
+    return `<tr onclick="showPage('deals')">
+      <td>${d.name}</td>
+      <td><b>$${d.value.toLocaleString()}</b></td>
+      <td><span class="badge" style="background:${STAGE_COLORS[stageIdx]}22;color:${STAGE_COLORS[stageIdx]}">${d.stage}</span></td>
+      <td><div class="av" style="background:var(--accent)">${d.owner}</div></td>
+    </tr>`
+  }).join('')
+}
+
+function renderContacts() {
+  const el = document.getElementById('contactsTable')
+  const list = contactFilter==='all' ? contacts : contacts.filter(c=>c.tag===contactFilter)
+  const q = document.getElementById('globalSearch').value.toLowerCase()
+  const filtered = q ? list.filter(c=>c.name.toLowerCase().includes(q)||c.company.toLowerCase().includes(q)) : list
+  el.innerHTML = filtered.map(c => {
+    const score = c.score
+    const scoreColor = score>=80?'var(--green)':score>=60?'var(--orange)':'var(--red)'
+    return `<tr onclick="openContact(${c.id})">
+      <td><div style="display:flex;align-items:center;gap:8px;"><div class="av" style="background:var(--accent)">${c.name.split(' ').map(n=>n[0]).join('')}</div>${c.name}</div></td>
+      <td>${c.company}</td>
+      <td style="color:var(--muted)">${c.title}</td>
+      <td><span class="badge ${TAG_BADGE[c.tag]}">${TAG_LABELS[c.tag]}</span></td>
+      <td><div class="score-ring" style="border-color:${scoreColor};color:${scoreColor}">${score}</div></td>
+      <td style="color:var(--muted)">${c.lastAct}</td>
+      <td><button class="btn btn-outline" style="padding:3px 8px;font-size:10px;" onclick="event.stopPropagation();logActivity(${c.id})">Log</button></td>
+    </tr>`
+  }).join('')
+}
+
+function renderKanban() {
+  const el = document.getElementById('kanbanBoard')
+  const list = dealFilter==='mine' ? deals.filter(d=>d.owner==='JD') : dealFilter==='hot' ? deals.filter(d=>d.value>=20000) : deals
+  el.innerHTML = STAGES.map((s,i) => {
+    const stageDeals = list.filter(d=>d.stage===s)
+    const total = stageDeals.reduce((a,d)=>a+d.value,0)
+    return `<div class="kanban-col">
+      <div class="col-header"><span style="color:${STAGE_COLORS[i]}">${s}</span><span class="col-total">$${total>999?Math.round(total/1000)+'K':total}</span></div>
+      <div class="kanban-cards">
+        ${stageDeals.map(d=>`<div class="k-card" onclick="advanceDeal(${d.id})">
+          <div class="k-name">${d.name}</div>
+          <div class="k-meta"><span>${d.contact}</span><span>${d.owner}</span></div>
+          <div class="k-value">$${d.value.toLocaleString()}</div>
+          <div class="k-prob">${d.prob}% probability</div>
+          <div class="prob-bar"><div class="prob-fill" style="width:${d.prob}%;"></div></div>
+        </div>`).join('')}
+        <div style="text-align:center;padding:6px;font-size:11px;color:var(--muted);cursor:pointer;" onclick="addDeal('${s}')">+ Add</div>
+      </div>
+    </div>`
+  }).join('')
+}
+
+function renderActivities() {
+  const el = document.getElementById('activityList')
+  const list = actFilter==='all' ? activities_data : activities_data.filter(a=>a.type===actFilter)
+  el.innerHTML = list.map(a => `<div class="act-item">
+    <div class="act-icon" style="background:${a.color};font-size:16px;">${a.icon}</div>
+    <div class="act-body">
+      <div class="act-title">${a.title}</div>
+      <div class="act-sub">${a.sub}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px;">Contact: ${a.contact}</div>
+    </div>
+    <div class="act-time">${a.time}</div>
+  </div>`).join('')
+}
+
+function renderTasks() {
+  const el = document.getElementById('taskBoard')
+  let list = taskFilter==='all' ? tasks_data : taskFilter==='done' ? tasks_data.filter(t=>t.done) : taskFilter==='overdue' ? tasks_data.filter(t=>t.due==='overdue'&&!t.done) : tasks_data.filter(t=>t.due==='today'&&!t.done)
+  el.innerHTML = list.map(t => `<div class="task-row">
+    <div class="task-cb ${t.done?'done':''}" onclick="toggleTaskItem(${t.id})">${t.done?'✓':''}</div>
+    <div style="flex:1;">
+      <div style="font-size:12px;${t.done?'text-decoration:line-through;color:var(--muted);':''}">${t.name}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px;">Assigned: ${t.owner} · Due: ${t.due}</div>
+    </div>
+    <span class="badge ${PRIO_BADGE[t.priority]}">${t.priority}</span>
+    <span class="badge ${t.due==='overdue'&&!t.done?'badge-red':t.due==='today'?'badge-orange':'badge-cyan'}">${t.due}</span>
+  </div>`).join('')
+}
+
+function renderOwnerReport() {
+  const el = document.getElementById('ownerReport')
+  el.innerHTML = OWNERS.map(o => {
+    const ownDeals = deals.filter(d=>d.owner===o)
+    const won = ownDeals.filter(d=>d.stage==='Closed Won').length
+    const total = ownDeals.length
+    const val = ownDeals.reduce((a,d)=>a+d.value,0)
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <div class="av" style="background:var(--accent)">${o}</div>
+      <div style="flex:1;"><div style="font-size:11px;font-weight:600;">${total} deals · $${val.toLocaleString()}</div>
+      <div class="progress-track" style="margin-top:4px;"><div class="progress-fill" style="width:${total?Math.round((won/total)*100):0}%;background:var(--green);"></div></div></div>
+      <span style="font-size:11px;color:var(--green);">${won} won</span>
+    </div>`
+  }).join('')
+}
+
+function renderTargetReport() {
+  const el = document.getElementById('targetReport')
+  el.innerHTML = months.map((m,i) => {
+    const pct = Math.min(Math.round((actual[i]/target[i])*100),100)
+    const color = pct>=100?'var(--green)':pct>=80?'var(--orange)':'var(--red)'
+    return `<div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;">
+        <span>${m}</span><span style="color:${color}">$${actual[i].toLocaleString()} / $${target[i].toLocaleString()} (${pct}%)</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${color};"></div></div>
+    </div>`
+  }).join('')
+}
+
+// ── INTERACTIONS ──────────────────────────────────────────────────────────────
+function showPage(id, navBtn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'))
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'))
+  const page = document.getElementById('page-'+id)
+  if(page) page.classList.add('active')
+  if(navBtn) navBtn.classList.add('active')
+  else { const b = document.querySelector(`.nav-item[onclick*="${id}"]`); if(b) b.classList.add('active') }
+  document.getElementById('pageTitle').textContent = {dashboard:'Dashboard',contacts:'Contacts',deals:'Pipeline',activities:'Activities',tasks:'Tasks',reports:'Reports',settings:'Settings'}[id] || id
+  const addLabels = {dashboard:'+ New Deal',contacts:'+ New Contact',deals:'+ New Deal',activities:'+ Log Activity',tasks:'+ New Task',reports:'↓ Export',settings:'Save'}
+  document.getElementById('pageAddBtn').textContent = addLabels[id] || '+ Add'
+  currentPage = id
+  if(id==='deals') renderKanban()
+  if(id==='activities') renderActivities()
+  if(id==='tasks') renderTasks()
+  if(id==='reports') { renderOwnerReport(); renderTargetReport() }
+}
+
+function filterContacts(f,btn) {
+  contactFilter=f; document.querySelectorAll('#contactFilters .filter-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderContacts()
+}
+function filterDeals(f,btn) {
+  dealFilter=f; btn.closest('.filter-row').querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderKanban()
+}
+function filterActs(f,btn) {
+  actFilter=f; btn.closest('.filter-row').querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderActivities()
+}
+function filterTasks(f,btn) {
+  taskFilter=f; btn.closest('.filter-row').querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderTasks()
+}
+
+function advanceDeal(id) {
+  const d = deals.find(x=>x.id===id); if(!d) return
+  const idx = STAGES.indexOf(d.stage)
+  if(idx<STAGES.length-1) { d.stage=STAGES[idx+1]; d.prob=Math.min(d.prob+15,100); renderKanban(); renderStageBreakdown() }
+}
+
+function addDeal(stage='New Lead') {
+  const name = prompt('Company name:'); if(!name) return
+  const value = parseInt(prompt('Deal value ($):')) || 5000
+  deals.push({id:Date.now(),name,contact:'New Contact',value,stage,prob:20,owner:'JD'})
+  renderKanban()
+}
+
+function openContact(id) {
+  const c = contacts.find(x=>x.id===id)
+  alert(`Contact: ${c.name}\nCompany: ${c.company}\nTitle: ${c.title}\nEmail: ${c.email}\nLead Score: ${c.score}`)
+}
+
+function logActivity(contactId) {
+  const c = contacts.find(x=>x.id===contactId)
+  const type = prompt(`Log activity for ${c.name}:\n(call / email / meeting / note)`) || 'note'
+  const desc = prompt('Description:')
+  if(desc) { activities_data.unshift({type,icon:{call:'📞',email:'📧',meeting:'🤝',note:'📝'}[type]||'📝',color:'#7c3aed22',title:`${type.charAt(0).toUpperCase()+type.slice(1)}: ${c.name}`,sub:desc,time:'just now',contact:c.name}); c.lastAct='just now' }
+}
+
+function toggleTaskItem(id) {
+  const t = tasks_data.find(x=>x.id===id); if(t) { t.done=!t.done; renderTasks() }
+}
+
+function quickAdd() {
+  if(currentPage==='contacts') { const n=prompt('Contact name:'); if(n) contacts.push({id:Date.now(),name:n,company:'',title:'',tag:'cold',score:30,lastAct:'just now',email:''}); renderContacts() }
+  else if(currentPage==='tasks') { const n=prompt('Task name:'); if(n) { tasks_data.push({id:Date.now(),name:n,due:'today',priority:'medium',done:false,owner:'JD'}); renderTasks() } }
+  else if(currentPage==='activities') { logActivity(1) }
+  else { addDeal() }
+}
+
+function handleSearch(q) { if(currentPage==='contacts') renderContacts() }
+function exportData() { alert('Exporting CRM data to CSV…\n(Integration with your export service goes here)') }
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+renderDashChart()
+renderStageBreakdown()
+renderDashActivities()
+renderTopDeals()
+renderContacts()
+</script>
+</body>
+</html>

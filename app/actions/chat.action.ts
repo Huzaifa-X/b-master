@@ -31,12 +31,12 @@ export async function createChatWithMessage(data: {
   chatWithAPI?: boolean
   dropbox?: boolean
   connectedApiIds?: string[]
-  artifact?: {
+  artifacts?: {
     id: string
     name: string
     instructions: string
     htmlContent: string
-  }
+  }[]
   mentionedUsers?: Array<{ id: string; name: string; email: string }>
 }) {
   try {
@@ -64,7 +64,7 @@ export async function createChatWithMessage(data: {
     // Prepare documents data - store attachments, mentioned users, and options
     let documentsJson: string | null = null
 
-    if (data.attachments || data.mentionedUsers || data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifact) {
+    if (data.attachments || data.mentionedUsers || data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifacts) {
       const documentsData: any = {}
 
       if (data.attachments && data.attachments.length > 0) {
@@ -78,13 +78,13 @@ export async function createChatWithMessage(data: {
       }
 
       // Store options for auto-streaming
-      if (data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifact || (data.connectedApiIds && data.connectedApiIds.length > 0)) {
+      if (data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifacts || (data.connectedApiIds && data.connectedApiIds.length > 0)) {
         documentsData.options = {
           webSearch: data.webSearch || false,
           research: data.research || false,
           chatWithAPI: data.chatWithAPI || false,
           dropbox: data.dropbox || false,
-          artifact: data.artifact || null,
+          artifacts: data.artifacts || null,
           connectedApiIds: data.connectedApiIds || [],
         }
         console.log(`[createChatWithMessage] Storing message options:`, documentsData.options)
@@ -130,7 +130,7 @@ export async function createChatWithMessage(data: {
         research: data.research || false,
         chatWithAPI: data.chatWithAPI || false,
         dropbox: data.dropbox || false,
-        artifact: data.artifact || null,
+        artifacts: data.artifacts || null,
         connectedApiIds: data.connectedApiIds || [],
         mentionedUsers: data.mentionedUsers || null
       }
@@ -562,12 +562,12 @@ export async function sendChatMessage(data: {
   chatWithAPI?: boolean
   dropbox?: boolean
   connectedApiIds?: string[]
-  artifact?: {
+  artifacts?: {
     id: string
     name: string
     instructions: string
     htmlContent: string
-  }
+  }[]
   mentionedUsers?: Array<{ id: string; name: string; email: string }>
 }) {
   try {
@@ -604,7 +604,7 @@ export async function sendChatMessage(data: {
     // Prepare documents data - store attachments, mentioned users, and options
     let documentsJson: string | null = null
 
-    if (data.attachments || data.mentionedUsers || data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifact) {
+    if (data.attachments || data.mentionedUsers || data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifacts) {
       const documentsData: any = {}
 
       if (data.attachments && data.attachments.length > 0) {
@@ -618,13 +618,13 @@ export async function sendChatMessage(data: {
       }
 
       // Store options for auto-streaming
-      if (data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifact || (data.connectedApiIds && data.connectedApiIds.length > 0)) {
+      if (data.webSearch || data.research || data.chatWithAPI || data.dropbox || data.artifacts || (data.connectedApiIds && data.connectedApiIds.length > 0)) {
         documentsData.options = {
           webSearch: data.webSearch || false,
           research: data.research || false,
           chatWithAPI: data.chatWithAPI || false,
           dropbox: data.dropbox || false,
-          artifact: data.artifact || null,
+          artifacts: data.artifacts || null,
           connectedApiIds: data.connectedApiIds || [],
         }
         console.log(`[sendChatMessage] Storing message options:`, documentsData.options)

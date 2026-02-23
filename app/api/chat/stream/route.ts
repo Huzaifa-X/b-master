@@ -64,7 +64,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { chatId, assistantId, chatType, webSearch, research, chatWithAPI, connectedApiIds, attachments, artifact, dropbox, mentionedUsers } = body
+    const { chatId, assistantId, chatType, webSearch, research, chatWithAPI, connectedApiIds, attachments, artifact, artifacts, dropbox, mentionedUsers } = body
+    // Normalize: support both legacy single `artifact` and new `artifacts` array
+    const artifactList: Array<{ id: string; name: string; instructions: string; htmlContent: string }> =
+      Array.isArray(artifacts) ? artifacts : (artifact ? [artifact] : [])
 
     console.log("[Stream] mentionedUsers:", mentionedUsers)
     const chatIdInt = parseInt(chatId)
@@ -228,34 +231,33 @@ export async function POST(req: NextRequest) {
     let enhancedUserMessage = lastUserMessage
 
     if (attachmentsToProcess.length > 0) {
-      enhancedUserMessage += `## User Attachments Handling Rules 
-      
-      The user may attach one or more files (images, PDFs, documents, or other assets).
+      const inArtifactMode = artifactList.length > 0
 
-      - **Images**:
-        - If the user explicitly asks to use the attached image, **use the provided image URL directly in the code** (do not recreate, summarize, or describe the image unless asked).
-        - If the user does not ask to use the image, ignore it.
+      if (inArtifactMode) {
+        enhancedUserMessage += `## Attachment Handling (Artifact Mode)
 
-      - **PDFs, DOC/DOCX, TXT, or similar documents**:
-        - If the user asks to use the content, **extract and use the text content** from the attachment.
-        - If the user explicitly asks to reference the file itself, **use the attachment URL instead of extracted content**.
-        - If no instruction is given, prefer **extracted content** over the URL.
-
-      - **Other file types**:
-        - Follow the user’s explicit instruction.
-        - If unclear, use the attachment URL and do not assume content structure.
-
-      Only use attachments **when the user explicitly indicates they should be used**.  
-      Never hallucinate attachment contents.  
-      Never modify or invent URLs.
+      - **Images / Photos**: ALWAYS read and analyse the full visual content. Extract any text, data, tables, diagrams, layout, colors, and structure visible in the image. Use this information when answering questions or updating an artifact (e.g. a photo of an invoice → create an invoice artifact matching that layout and data). Never ignore an attached photo.
+      - **Documents (PDF / DOCX / TXT)**: Use extracted text content when answering or updating artifacts.
       `
+      } else {
+        enhancedUserMessage += `## User Attachments Handling Rules
+
+      - **Images**: Read and describe the image content. If the user asks to use the image URL in code, embed it directly. If they ask you to read a document photo, extract all visible text and data from it.
+      - **PDFs, DOC/DOCX, TXT**: Extract and use text content when the user asks about it.
+      - **Other files**: Follow user's explicit instruction.
+
+      Never hallucinate attachment contents. Never modify or invent URLs.
+      `
+      }
+
       const extractedTexts: string[] = []
       for (const attachment of attachmentsToProcess) {
         if (upstageService.isSupportedFileType(attachment.type) && attachment.url) {
           try {
             const extracted = await upstageService.extractFromUrl(attachment.url)
             if (extracted.text) {
-              extractedTexts.push(`\n\n--- Content from ${attachment.name} \n url: ${attachment.url} \n type: ${attachment.type} ---\n${extracted.text}\n--- End of ${attachment.name} ---\n`)
+              extractedTexts.push(`\n\n--- Extracted content from ${attachment.name} (url: ${attachment.url}, type: ${attachment.type}) ---\n${extracted.text}\n--- End of ${attachment.name} ---\n`)
+              console.log(`[Stream] Extracted ${extracted.text.length} chars from ${attachment.name}`)
             }
           } catch (error) {
             console.error(`[Stream] Failed to extract from ${attachment.name}:`, error)
@@ -310,59 +312,74 @@ export async function POST(req: NextRequest) {
 
 
 
-    if (artifact) {
-      systemPrompt += `\n\n## 🎨 Artifact Context & Update Capability
+    if (artifactList.length > 0) {
+      const hasImageAttachmentsForArtifact = attachmentsToProcess.some((a: { type: string }) =>
+        ['image/png','image/jpeg','image/jpg','image/webp','image/bmp','image/tiff','image/gif'].includes(a.type.toLowerCase())
+      )
 
-      **The user has shared an artifact named "${artifact.name}" in this conversation.**
+      systemPrompt += `\n\n##  Artifact Chat Mode  ${artifactList.length} Artifact(s) Attached\n\n`
+      systemPrompt += `You are working collaboratively with the user on their artifact(s), similar to how Lovable or v0 works.\n`
+      systemPrompt += `Be conversational, proactive, and explain everything you do in first person.\n\n`
 
-      ### Artifact Content:
-      \`\`\`html
-      ${artifact.htmlContent}
-      \`\`\`
-      ${artifact.instructions ? `\n### Original Instructions:\n${artifact.instructions}\n` : ''}
+      for (const art of artifactList) {
+        systemPrompt += `### Artifact: "${art.name}" (ID: ${art.id})\n`
+        systemPrompt += `**Current HTML:**\n\`\`\`html\n${art.htmlContent}\n\`\`\`\n`
+        if (art.instructions) systemPrompt += `**Original instructions:** ${art.instructions}\n`
+        systemPrompt += `\n`
+      }
 
-      ### Your Role with This Artifact:
+      if (hasImageAttachmentsForArtifact) {
+        systemPrompt += `###  Image Attachment(s) Detected\n`
+        systemPrompt += `The user has attached one or more images. **Read the full visual content of every image**  extract any text, data, tables, form fields, layout, colors, and structure visible in the photo. If the image is a photo of a document (invoice, form, receipt, contract, etc.), extract ALL data from it and use it when answering or updating the artifact.\n\n`
+      }
 
-      **CRITICAL: Understand User Intent First**
+      systemPrompt += `###  How to Respond  Intent Classification
 
-      Before responding, analyze what the user is asking:
+First, silently classify the user's intent, then respond accordingly:
 
-      1. **Information Questions** (e.g., "What does this do?", "How does the button work?", "Explain this code"):
-        - DO NOT modify the artifact
-        - Provide clear explanations about the artifact's functionality
-        - Reference specific parts of the code when explaining
-        - Answer their questions directly without making changes
+** Q&A / Explain**  user asks a question about the artifact without requesting changes
+  Examples: "What does this do?", "How does the counter work?", "Why is the button red?", "Explain this code"
+   Do NOT call update_artifact. Answer in plain language, reference specific sections by name.
+   Be thorough and educational. Walk through the logic step by step if needed.
 
-      2. **Modification Requests** (e.g., "Change the color to blue", "Add a counter", "Fix the button", "Make it responsive"):
-        - Use the update_artifact function to implement the changes
-        - Explain what you're changing BEFORE making the update
-        - After updating, clearly describe what was changed and why
-        - Provide a concise summary of the modifications
+** Modify / Update**  user explicitly asks to change something
+  Examples: "Change the color to blue", "Add a search bar", "Make it mobile-friendly", "Update with data from this photo"
+   Narrate first: "I'll [describe what you're about to do]..." THEN call update_artifact.
+   After the update, describe exactly what changed and why in friendly first-person prose.
+   Give a brief summary of every modification made.
 
-      3. **Debugging/Help Requests** (e.g., "This isn't working", "Why is it broken?", "Help me fix this"):
-        - First, analyze and explain the issue
-        - If a fix is needed AND user confirms, then update
-        - If unclear whether to update, ASK the user first
+** Debug / Fix**  user reports something is broken or not working
+  Examples: "The button doesn't work", "This is broken", "The layout is off on mobile"
+   First explain what the bug is and why it occurs.
+   If the fix is clear, say "I'll fix that now  [explain the fix]" then call update_artifact.
+   If the cause is unclear, ask one focused question before proceeding.
 
-      4. **General Conversation** (e.g., "Thanks!", "That looks good", "Hello"):
-        - Respond naturally without modifying the artifact
-        - Acknowledge their message appropriately
+** General Chat**  greetings, thanks, general comments
+  Examples: "Thanks!", "That looks great", "Hello"
+   Respond naturally. Do NOT modify the artifact.
 
-      ### Updating the Artifact:
+###  Narration Style
+- Always speak in first person: "I'll add...", "I'm updating...", "I've changed..."
+- Before modifying: briefly state what you're about to do and why
+- After modifying: describe each change with a short friendly explanation
+- For Q&A: be thorough and educational, reference specific parts of the code by name
+- Keep responses warm, direct, and developer-friendly
 
-      When you determine the user wants modifications:
-      - Call the \`update_artifact\` function with:
-        - \`updatedCode\`: Complete updated HTML (include ALL code, not just changes)
-        - \`changeDescription\`: Detailed explanation of what changed and why
-        - \`changeSummary\`: One-line summary (e.g., "Changed button color to blue")
+###  Calling update_artifact
+When modifications are needed:
+- \`artifactId\`: ID of the artifact to update`
+      if (artifactList.length > 1) {
+        systemPrompt += `  choose from: ${artifactList.map((a: { id: string; name: string }) => `"${a.id}" (${a.name})`).join(', ')}`
+      } else {
+        systemPrompt += ` = "${artifactList[0].id}"`
+      }
+      systemPrompt += `
+- \`updatedCode\`: The COMPLETE updated HTML (never partial  include everything)
+- \`changeDescription\`: Full explanation of all changes made
+- \`changeSummary\`: One concise line, e.g. "Added blue header and search bar"
 
-      ### Key Principles:
-      - **Don't over-update**: If they ask a question, answer it - don't modify the code unless explicitly requested
-      - **Be explicit**: If you're updating, say "I'll update the artifact to..." BEFORE calling the function
-      - **Confirm uncertain requests**: If unclear whether to modify, ask for confirmation
-      - **Preserve functionality**: When updating, maintain existing features unless told to remove them
-
-      ${await getArtifactUpdateCodingPrompt()}`
+`
+      systemPrompt += await getArtifactUpdateCodingPrompt()
     }
 
     // Load API tools if needed
@@ -525,14 +542,20 @@ export async function POST(req: NextRequest) {
       }
 
       // Add artifact update tool
-      if (artifact) {
+      if (artifactList.length > 0) {
         tools.push({
           type: "function",
           name: "update_artifact",
-          description: `Update the current artifact "${artifact.name}" with new HTML code.`,
+          description: artifactList.length === 1
+            ? `Update the artifact "${artifactList[0].name}" with new HTML code.`
+            : `Update one of the ${artifactList.length} attached artifacts with new HTML code.`,
           parameters: {
             type: "object",
             properties: {
+              artifactId: {
+                type: "string",
+                description: `The ID of the artifact to update. Available: ${artifactList.map(a => `"${a.id}" (${a.name})`).join(", ")}`
+              },
               updatedCode: {
                 type: "string",
                 description: "The complete updated HTML code for the artifact."
@@ -549,7 +572,7 @@ export async function POST(req: NextRequest) {
             required: ["updatedCode", "changeDescription", "changeSummary"]
           }
         })
-        console.log(`[Stream] ✅ Added artifact update tool`)
+        console.log(`[Stream] ✅ Added artifact update tool for ${artifactList.length} artifact(s)`)
       }
     }
 
@@ -984,8 +1007,28 @@ export async function POST(req: NextRequest) {
                   }
 
                   // Artifact Update
-                  if (functionName === "update_artifact" && artifact) {
-                    console.log(`[Stream] 🎨 Updating artifact: ${artifact.name}`)
+                  if (functionName === "update_artifact" && artifactList.length > 0) {
+                    // Resolve which artifact to update: use artifactId param, fallback to first
+                    const targetId = functionArgs.artifactId
+                    const targetArtifact = targetId
+                      ? artifactList.find(a => a.id === targetId)
+                      : artifactList[0]
+
+                    if (!targetArtifact) {
+                      const errMsg = `\n\n⚠️ **Artifact Not Found**\n\nCould not find artifact with ID "${targetId}". Available: ${artifactList.map(a => `"${a.id}" (${a.name})`).join(", ")}\n\n`
+                      assistantResponse += errMsg
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", content: errMsg })}\n\n`))
+                    } else {
+                    console.log(`[Stream] 🎨 Updating artifact: ${targetArtifact.name}`)
+
+                    // Emit progress event so UI can show updating indicator
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({
+                        type: "artifact_updating",
+                        artifactId: targetArtifact.id,
+                        artifactName: targetArtifact.name,
+                      })}\n\n`)
+                    )
 
                     try {
                       const { updatedCode, changeDescription, changeSummary } = functionArgs
@@ -997,7 +1040,7 @@ export async function POST(req: NextRequest) {
                       const { createArtifactVersion } = await import("@/app/actions/update-artifact.action")
 
                       const versionResult = await createArtifactVersion({
-                        artifactId: parseInt(artifact.id),
+                        artifactId: parseInt(targetArtifact.id),
                         userId: BigInt(session.user.id),
                         code: updatedCode,
                         description: changeDescription,
@@ -1016,17 +1059,18 @@ export async function POST(req: NextRequest) {
                       }
 
                       const successMessage = `\n\n✅ **Artifact Updated Successfully**\n\n` +
+                        `**Artifact:** ${targetArtifact.name}\n` +
                         `**Version:** ${versionResult.version?.versionNumber}\n` +
                         `**Change:** ${changeSummary}\n\n` +
-                        `The artifact "${artifact.name}" has been updated with your requested changes.\n\n`
+                        `The artifact "${targetArtifact.name}" has been updated with your requested changes.\n\n`
 
                       assistantResponse += successMessage
 
                       controller.enqueue(
                         encoder.encode(`data: ${JSON.stringify({
                           type: "artifact_updated",
-                          artifactId: artifact.id,
-                          artifactName: artifact.name,
+                          artifactId: targetArtifact.id,
+                          artifactName: targetArtifact.name,
                           versionNumber: versionResult.version?.versionNumber,
                           changeSummary: changeSummary,
                           updatedCode: updatedCode,
@@ -1063,7 +1107,7 @@ export async function POST(req: NextRequest) {
                         })}\n\n`)
                       )
                     }
-                  }
+                    }
 
                   // API Tools
                   const isAPITool = apiTools.some(t => t.openaiTool.name === functionName)

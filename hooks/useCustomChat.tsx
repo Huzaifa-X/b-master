@@ -352,11 +352,14 @@ export function useCustomChat(options: UseCustomChatOptions) {
                     )
                     await refetchMessages()
                     break
+                  case "artifact_updating":
+                    console.log("[useCustomChat] ⏳ Artifact updating:", data.artifactName)
+                    toast.loading(`Updating "${data.artifactName}"...`, { id: `artifact-update-${data.artifactId}`, duration: 30000 })
+                    break
+
                   case "artifact_updated":
                     console.log("[useCustomChat] 🎨 Artifact updated:", data.artifactName, "Version:", data.versionNumber)
-
-                    // Show toast notification
-                    toast.success(`Artifact "${data.artifactName}" updated to version ${data.versionNumber}`)
+                    toast.dismiss(`artifact-update-${data.artifactId}`)
 
                     // Refresh the artifact panel store with the new HTML so the preview updates in place
                     if (data.updatedCode) {
@@ -698,8 +701,14 @@ export function useCustomChat(options: UseCustomChatOptions) {
                 await refetchMessages()
                 break
 
+              case "artifact_updating":
+                console.log("[useCustomChat] ⏳ Artifact updating (sendMessage):", data.artifactName)
+                toast.loading(`Updating "${data.artifactName}"...`, { id: `artifact-update-${data.artifactId}`, duration: 30000 })
+                break
+
               case "artifact_updated":
                 console.log("[useCustomChat] 🎨 Artifact updated (sendMessage):", data.artifactName, "Version:", data.versionNumber)
+                toast.dismiss(`artifact-update-${data.artifactId}`)
                 toast.success(`Artifact "${data.artifactName}" updated to version ${data.versionNumber}`)
                 if (data.updatedCode) {
                   useArtifactStore.getState().setArtifact({

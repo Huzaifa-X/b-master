@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/tooltip"
 import { AttachmentDropdown } from "@/components/assistants/attachment-dropdown"
 import { DictateButton } from "@/components/assistants/dictate-button"
-import { SelectArtifactDialog } from "@/components/assistants/select-artifact-dialog"
+import { SelectArtifactDialog, type ArtifactData } from "@/components/assistants/select-artifact-dialog"
 import { ApiConnectPicker } from "@/components/assistants/api-connect-picker"
 import {
   Mention,
@@ -60,7 +60,7 @@ interface ChatInputProps {
       chatWithAPI?: boolean;
       dropbox?: boolean;
       canvas?: boolean;
-      artifact?: { id: string; name: string; instructions: string; htmlContent: string }
+      artifacts?: ArtifactData[]
       mentionedUsers?: MentionedUser[]
       connectedApiIds?: string[]
     }
@@ -106,7 +106,7 @@ export function ChatInput({
   const [researchEnabled, setResearchEnabled] = useState(false)
   const [chatWithAPIEnabled, setChatWithAPIEnabled] = useState(false)
   const [dropboxEnabled, setDropboxEnabled] = useState(false)
-  const [selectedArtifact, setSelectedArtifact] = useState<{ id: string; name: string; instructions: string; htmlContent: string } | null>(null)
+  const [selectedArtifacts, setSelectedArtifacts] = useState<ArtifactData[]>([])
   const [isArtifactDialogOpen, setIsArtifactDialogOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -257,7 +257,7 @@ export function ChatInput({
     setResearchEnabled(false)
     setChatWithAPIEnabled(false)
     setDropboxEnabled(false)
-    setSelectedArtifact(null)
+    setSelectedArtifacts([])
     setMentionedUsers([])
   }, [assistantId])
 
@@ -288,13 +288,15 @@ export function ChatInput({
         setDropboxEnabled(true)
         onDropbox?.(true) // Notify parent component
       } else if (savedMode === "artifact") {
-        // Load artifact data from sessionStorage
+        // Load artifact data from sessionStorage (stored as an array)
         const savedArtifact = getStorageItem("artifact_data")
         if (savedArtifact) {
           try {
-            const artifact = JSON.parse(savedArtifact)
-            console.log("[ChatInput] Restoring artifact mode:", artifact.name)
-            setSelectedArtifact(artifact)
+            const parsed = JSON.parse(savedArtifact)
+            // Support both legacy single-object and new array format
+            const artifactsArr: ArtifactData[] = Array.isArray(parsed) ? parsed : [parsed]
+            console.log("[ChatInput] Restoring artifact mode:", artifactsArr.map(a => a.name).join(", "))
+            setSelectedArtifacts(artifactsArr)
             onChatWithArtifact?.() // Notify parent component
           } catch (error) {
             console.error("[ChatInput] Error loading artifact from sessionStorage:", error)
@@ -375,7 +377,7 @@ export function ChatInput({
         chatWithAPI: chatWithAPIEnabled,
         dropbox: dropboxEnabled,
         canvas: canvasModeEnabled,
-        artifact: selectedArtifact || undefined,
+        artifacts: selectedArtifacts.length > 0 ? selectedArtifacts : undefined,
         mentionedUsers: mentionsToSend.length > 0 ? mentionsToSend : undefined,
         connectedApiIds: connectedApiIds.length > 0 ? connectedApiIds : undefined,
       }
@@ -397,7 +399,7 @@ export function ChatInput({
       research: researchEnabled,
       chatWithAPI: chatWithAPIEnabled,
       dropbox: dropboxEnabled,
-      artifact: selectedArtifact?.name
+      artifact: selectedArtifacts.map(a => a.name).join(", ")
     })
   }
 
@@ -409,7 +411,7 @@ export function ChatInput({
     setWebSearchEnabled(enabled)
     if (enabled) {
       setResearchEnabled(false)
-      setSelectedArtifact(null)
+      setSelectedArtifacts([])
       // Clear artifact data from sessionStorage (scoped to assistantId)
       removeStorageItem("artifact_data")
       removeStorageItem("mentioned_users")
@@ -425,7 +427,7 @@ export function ChatInput({
     setResearchEnabled(enabled)
     if (enabled) {
       setWebSearchEnabled(false)
-      setSelectedArtifact(null)
+      setSelectedArtifacts([])
       // Clear artifact data from sessionStorage (scoped to assistantId)
       removeStorageItem("artifact_data")
       removeStorageItem("mentioned_users")
@@ -441,7 +443,7 @@ export function ChatInput({
     setChatWithAPIEnabled(true)
     setWebSearchEnabled(false)
     setResearchEnabled(false)
-    setSelectedArtifact(null)
+    setSelectedArtifacts([])
     // Clear artifact data from sessionStorage (scoped to assistantId)
     removeStorageItem("artifact_data")
     removeStorageItem("mentioned_users")
@@ -455,7 +457,7 @@ export function ChatInput({
   const handleDropboxChange = (enabled: boolean) => {
     setDropboxEnabled(enabled)
     if (enabled) {
-      setSelectedArtifact(null)
+      setSelectedArtifacts([])
       // Clear artifact data from sessionStorage (scoped to assistantId)
       removeStorageItem("artifact_data")
       removeStorageItem("mentioned_users")
@@ -505,7 +507,7 @@ export function ChatInput({
   const handleArtifactSelect = (artifact: { id: string; name: string; instructions: string; htmlContent: string }) => {
     console.log("[ChatInput] handleArtifactSelect called with:", artifact.name)
 
-    setSelectedArtifact(artifact)
+    setSelectedArtifacts([artifact])
 
     // Disable ALL other modes
     setWebSearchEnabled(false)
@@ -520,11 +522,40 @@ export function ChatInput({
 
     // Store BOTH mode and artifact data in sessionStorage (scoped to assistantId)
     setStorageItem("mode", "artifact")
-    setStorageItem("artifact_data", JSON.stringify(artifact))
+    setStorageItem("artifact_data", JSON.stringify([artifact]))
 
     console.log("[ChatInput] Stored artifact mode and data in sessionStorage:", artifact.name)
     console.log("[ChatInput] Verification - mode:", getStorageItem("mode"))
     console.log("[ChatInput] Verification - data:", getStorageItem("artifact_data"))
+  }
+
+  const handleArtifactsConfirm = (newArtifacts: ArtifactData[]) => {
+    console.log("[ChatInput] handleArtifactsConfirm called with:", newArtifacts.map(a => a.name).join(", "))
+
+    if (newArtifacts.length === 0) {
+      // Cleared via dialog
+      setSelectedArtifacts([])
+      removeStorageItem("mode")
+      removeStorageItem("artifact_data")
+      return
+    }
+
+    setSelectedArtifacts(newArtifacts)
+
+    // Disable ALL other modes when artifacts are attached
+    setWebSearchEnabled(false)
+    setResearchEnabled(false)
+    setChatWithAPIEnabled(false)
+    setDropboxEnabled(false)
+    onWebSearch?.(false)
+    onResearch?.(false)
+    onDropbox?.(false)
+
+    // Persist to sessionStorage
+    setStorageItem("mode", "artifact")
+    setStorageItem("artifact_data", JSON.stringify(newArtifacts))
+
+    console.log("[ChatInput] Stored", newArtifacts.length, "artifact(s) in sessionStorage")
   }
 
   const handleRemoveFile = (index: number) => {
@@ -567,7 +598,7 @@ export function ChatInput({
   return (
     <div className="w-full">
       {/* Attachments and Artifact */}
-      {(attachedFiles.length > 0 || selectedArtifact) && (
+      {(attachedFiles.length > 0 || selectedArtifacts.length > 0) && (
         <div className="mb-2 flex flex-wrap gap-2">
           {attachedFiles.map((file, index) => (
             <div
@@ -751,12 +782,25 @@ export function ChatInput({
                     disabled={disabled || isLoading}
                     mode={mode}
                     assistantId={assistantId}
-                    selectedArtifact={selectedArtifact}  // Pass selected artifact
-                    onRemoveArtifact={() => {            // Handle removal
-                      setSelectedArtifact(null)
-                      removeStorageItem("mode")
-                      removeStorageItem("artifact_data")
-                      removeStorageItem("mentioned_users")
+                    selectedArtifacts={selectedArtifacts}
+                    onRemoveArtifact={(id?: string) => {
+                      if (id) {
+                        // Remove one specific artifact
+                        const remaining = selectedArtifacts.filter(a => a.id !== id)
+                        setSelectedArtifacts(remaining)
+                        if (remaining.length === 0) {
+                          removeStorageItem("mode")
+                          removeStorageItem("artifact_data")
+                        } else {
+                          setStorageItem("artifact_data", JSON.stringify(remaining))
+                        }
+                      } else {
+                        // Clear all
+                        setSelectedArtifacts([])
+                        removeStorageItem("mode")
+                        removeStorageItem("artifact_data")
+                        removeStorageItem("mentioned_users")
+                      }
                     }}
                     // Pass mode states to sync UI
                     webSearchEnabled={webSearchEnabled}
@@ -769,7 +813,8 @@ export function ChatInput({
                       open={isArtifactDialogOpen}
                       onOpenChange={setIsArtifactDialogOpen}
                       assistantId={assistantId}
-                      onSelect={handleArtifactSelect}
+                      initialSelectedIds={selectedArtifacts.map(a => a.id)}
+                      onConfirm={handleArtifactsConfirm}
                     />
                   )}
                   <DictateButton
@@ -886,12 +931,23 @@ export function ChatInput({
                     disabled={disabled || isLoading}
                     mode={mode}
                     assistantId={assistantId}
-                    selectedArtifact={selectedArtifact}
-                    onRemoveArtifact={() => {
-                      setSelectedArtifact(null)
-                      removeStorageItem("mode")
-                      removeStorageItem("artifact_data")
-                      removeStorageItem("mentioned_users")
+                    selectedArtifacts={selectedArtifacts}
+                    onRemoveArtifact={(id?: string) => {
+                      if (id) {
+                        const remaining = selectedArtifacts.filter(a => a.id !== id)
+                        setSelectedArtifacts(remaining)
+                        if (remaining.length === 0) {
+                          removeStorageItem("mode")
+                          removeStorageItem("artifact_data")
+                        } else {
+                          setStorageItem("artifact_data", JSON.stringify(remaining))
+                        }
+                      } else {
+                        setSelectedArtifacts([])
+                        removeStorageItem("mode")
+                        removeStorageItem("artifact_data")
+                        removeStorageItem("mentioned_users")
+                      }
                     }}
                     // Pass mode states to sync UI
                     webSearchEnabled={webSearchEnabled}
@@ -904,7 +960,8 @@ export function ChatInput({
                       open={isArtifactDialogOpen}
                       onOpenChange={setIsArtifactDialogOpen}
                       assistantId={assistantId}
-                      onSelect={handleArtifactSelect}
+                      initialSelectedIds={selectedArtifacts.map(a => a.id)}
+                      onConfirm={handleArtifactsConfirm}
                     />
                   )}
                   <DictateButton

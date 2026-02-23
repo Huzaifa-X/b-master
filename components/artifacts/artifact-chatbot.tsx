@@ -56,9 +56,13 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
   const { data: session } = useSession()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
-  const scrollRef = useRef<HTMLDivElement>(null)
+  // Sentinel div ref used for auto-scroll (works correctly with Radix ScrollArea)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const storageKey = `artifact-chat-${artifactId}`
+  // Namespace the key by user ID so different users sharing a device don't see
+  // each other's history, and use localStorage so it survives tab navigation
+  // and mobile browser backgrounding (unlike sessionStorage).
+  const storageKey = `artifact-chat-${session?.user?.id || 'anon'}-${artifactId}`
 
   // Get current artifact data
   const { artifact, refetch } = useArtifactById(artifactId)
@@ -66,6 +70,8 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
   const setArtifact = useArtifactStore((state) => state.setArtifact)
   const prefilledPrompt = useArtifactStore((state) => state.prefilledPrompt)
   const setPrefilledPrompt = useArtifactStore((state) => state.setPrefilledPrompt)
+  const surgicalEditOuterHtml = useArtifactStore((state) => state.surgicalEditOuterHtml)
+  const setSurgicalEditOuterHtml = useArtifactStore((state) => state.setSurgicalEditOuterHtml)
   const inputTextareaRef = useRef<HTMLTextAreaElement>(null)
   const preRecordingTextRef = useRef<string | null>(null) // Track text before recording starts (null = not recording)
 
@@ -220,51 +226,54 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     }
   }
 
-  // Load messages from sessionStorage
+  // Load messages from localStorage (persists across navigation and mobile browser backgrounding)
   useEffect(() => {
     try {
-      const stored = sessionStorage.getItem(storageKey)
+      const stored = localStorage.getItem(storageKey)
       if (stored) {
-        const parsed = JSON.parse(stored)
-        setMessages(
-          parsed.map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp),
-          }))
+        const parsed: Message[] = JSON.parse(stored).map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp),
+        }))
+        // Always refresh the welcome message with the latest wording
+        const updatedWelcome = `Hello! I'm your AI assistant for **"${artifactName}"**. You can:\n\n- **Ask questions** — I'll explain how it works, what the code does, or anything about its content\n- **Request changes** — tell me what to modify, add, or fix and I'll update the artifact\n- **Attach files or images** — I'll read and incorporate them\n\nWhat would you like to do?`
+        const refreshed = parsed.map((msg) =>
+          msg.id === "welcome" ? { ...msg, content: updatedWelcome } : msg
         )
+        setMessages(refreshed)
       } else {
         // Initialize with welcome message
         const welcomeMessage: Message = {
           id: "welcome",
           role: "assistant",
-          content: `Hello! I'm here to help you understand and work with "${artifactName}". Feel free to ask me questions about how it works, how to use it, or request modifications.`,
+          content: `Hello! I'm your AI assistant for **"${artifactName}"**. You can:\n\n- **Ask questions** — I'll explain how it works, what the code does, or anything about its content\n- **Request changes** — tell me what to modify, add, or fix and I'll update the artifact\n- **Attach files or images** — I'll read and incorporate them\n\nWhat would you like to do?`,
           timestamp: new Date(),
         }
         setMessages([welcomeMessage])
-        sessionStorage.setItem(storageKey, JSON.stringify([welcomeMessage]))
+        localStorage.setItem(storageKey, JSON.stringify([welcomeMessage]))
       }
     } catch (error) {
       console.error("Error loading chat history:", error)
     }
   }, [artifactId, storageKey, artifactName])
 
-  // Save messages to sessionStorage
+  // Save messages to localStorage
   useEffect(() => {
     if (messages.length > 0) {
       try {
-        sessionStorage.setItem(storageKey, JSON.stringify(messages))
+        localStorage.setItem(storageKey, JSON.stringify(messages))
       } catch (error) {
         console.error("Error saving chat history:", error)
       }
     }
   }, [messages, storageKey])
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom using a sentinel element.
+  // Directly setting scrollTop on the Radix <ScrollArea> root doesn't work because
+  // the root is not the scrollable viewport — this caused the "jumps to top" bug.
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
-  }, [messages])
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages, isStreaming])
 
   // Handle prefilled prompt from text selection (Ask-B feature)
   useEffect(() => {
@@ -341,18 +350,100 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
         timestamp: msg.timestamp,
       }))
 
+    // ── SURGICAL PATCH (visual click-to-edit) ──────────────────────────────────
+    // If the user clicked a specific element in visual edit mode, we only send
+    // that element's outerHTML to the AI and do an instant string-replace.
+    // This avoids regenerating the entire document.
+    const surgicalHtml = surgicalEditOuterHtml
+    if (surgicalHtml) {
+      setSurgicalEditOuterHtml(null) // Clear immediately
+
+      const patchingMsg: Message = {
+        id: `patch-${Date.now()}`,
+        role: "assistant",
+        content: "⚡ Applying change...",
+        timestamp: new Date(),
+      }
+      setMessages((prev) => [...prev, patchingMsg])
+
+      const patchToastId = toast.loading("Applying surgical patch...")
+
+      try {
+        const patchRes = await fetch("/api/artifacts/patch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            artifactId,
+            elementOuterHtml: surgicalHtml,
+            userPrompt,
+            currentHtmlCode,
+          }),
+        })
+
+        const patchData = await patchRes.json()
+        toast.dismiss(patchToastId)
+
+        if (!patchRes.ok || patchData.error) {
+          throw new Error(patchData.error || "Patch failed")
+        }
+
+        const updatedHtml = patchData.newFullHtml || currentHtmlCode
+
+        // Update the artifact preview instantly — no streaming needed
+        setArtifact({
+          type: "code",
+          language: "html",
+          content: updatedHtml,
+          title: artifact?.name || artifactName,
+        })
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === patchingMsg.id
+              ? {
+                  ...msg,
+                  content: patchData.warning
+                    ? `⚠️ ${patchData.warning}`
+                    : `✅ Done! Applied your change instantly.${patchData.versionNumber ? ` (v${patchData.versionNumber})` : ""}`,
+                }
+              : msg
+          )
+        )
+
+        toast.success("Change applied!")
+        await refetch()
+      } catch (err: any) {
+        toast.dismiss(patchToastId)
+        toast.error(err.message || "Patch failed")
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === patchingMsg.id
+              ? { ...msg, content: `❌ **Patch failed**: ${err.message || "Unknown error"}\n\nTry rephrasing your request.` }
+              : msg
+          )
+        )
+      }
+      return // Skip the full streaming path
+    }
+    // ── END SURGICAL PATCH ─────────────────────────────────────────────────────
+
     // Start streaming update
     setIsStreaming(true)
     setStreamingContent("")
 
-    // Add streaming message
+    // Add a neutral "Thinking..." placeholder — will be updated once we know the intent
     const streamingMessage: Message = {
       id: `streaming-${Date.now()}`,
       role: "assistant",
-      content: "🔄 Updating artifact...",
+      content: "💭 Thinking...",
       timestamp: new Date(),
     }
     setMessages((prev) => [...prev, streamingMessage])
+
+    // Tracks whether the server classified this as Q&A (text only, no artifact update)
+    let isQAMode = false
+    let qaAccumulatedText = ""
+    let loadingToastId: string | number | undefined
 
     try {
       const response = await fetch('/api/artifacts/update-stream', {
@@ -394,7 +485,64 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
 
                 const data = JSON.parse(jsonStr)
 
-                if (data.type === 'code' && data.content) {
+                if (data.type === 'mode') {
+                  // Server detected intent from first tokens — update placeholder immediately
+                  if (data.mode === 'modify') {
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === streamingMessage.id
+                          ? { ...msg, content: "🔄 Updating artifact..." }
+                          : msg
+                      )
+                    )
+                  } else if (data.mode === 'qa') {
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === streamingMessage.id
+                          ? { ...msg, content: "" }
+                          : msg
+                      )
+                    )
+                  }
+
+                } else if (data.type === 'artifact_updating') {
+                  // Server is about to write the new version to the database
+                  isQAMode = false
+                  loadingToastId = toast.loading("Saving new artifact version...")
+                  setMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === streamingMessage.id
+                        ? { ...msg, content: "⏳ Saving changes..." }
+                        : msg
+                    )
+                  )
+
+                } else if (data.type === 'qa_response' && data.content) {
+                  // Text answer streaming — accumulate and show inline
+                  isQAMode = true
+                  qaAccumulatedText += data.content
+                  setMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === streamingMessage.id
+                        ? { ...msg, content: qaAccumulatedText }
+                        : msg
+                    )
+                  )
+
+                } else if (data.type === 'qa_done') {
+                  // Q&A answer complete — no artifact was updated
+                  setIsStreaming(false)
+                  setMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === streamingMessage.id
+                        ? { ...msg, content: qaAccumulatedText || "I couldn't generate a response. Please try again." }
+                        : msg
+                    )
+                  )
+                  // qa_done has an implicit break — we stop processing
+                  break
+
+                } else if (data.type === 'code' && data.content) {
                   try {
                     // Decode base64 content (browser-compatible)
                     const decodedContent = atob(data.content)
@@ -417,14 +565,22 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                 } else if (data.type === 'done') {
                   setIsStreaming(false)
 
+                  // Dismiss the "Saving..." loading toast
+                  if (loadingToastId !== undefined) {
+                    toast.dismiss(loadingToastId)
+                    loadingToastId = undefined
+                  }
+
                   // Remove streaming message
                   setMessages((prev) => prev.filter((msg) => msg.id !== streamingMessage.id))
 
-                  // Add success message
+                  // Add success message — use server-provided narration if available
                   const successMessage: Message = {
                     id: Date.now().toString(),
                     role: "assistant",
-                    content: `✅ **Artifact Updated Successfully!**\n\nThe artifact "${artifactName}" has been updated with your requested changes.`,
+                    content: data.message
+                      ? `✅ ${data.message}`
+                      : `✅ **Artifact Updated Successfully!**\n\nThe artifact "${artifactName}" has been updated with your requested changes.`,
                     timestamp: new Date(),
                   }
                   setMessages((prev) => [...prev, successMessage])
@@ -436,6 +592,12 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                   break
                 } else if (data.type === 'error') {
                   setIsStreaming(false)
+
+                  // Dismiss loading toast if present
+                  if (loadingToastId !== undefined) {
+                    toast.dismiss(loadingToastId)
+                    loadingToastId = undefined
+                  }
 
                   // Remove streaming message
                   setMessages((prev) => prev.filter((msg) => msg.id !== streamingMessage.id))
@@ -464,6 +626,11 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     } catch (error: any) {
       console.error("[Artifact Chatbot] Streaming error:", error)
       setIsStreaming(false)
+
+      // Dismiss loading toast if present
+      if (loadingToastId !== undefined) {
+        toast.dismiss(loadingToastId)
+      }
 
       // Remove streaming message
       setMessages((prev) => prev.filter((msg) => msg.id !== streamingMessage.id))
@@ -529,7 +696,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 min-h-0 px-2 md:px-4 py-4" ref={scrollRef}>
+      <ScrollArea className="flex-1 min-h-0 px-2 md:px-4 py-4">
         <div className="space-y-4">
           {messages.map((message) => (
             <div key={message.id} className="animate-in duration-150 ease-out fade-in slide-in-from-bottom-1">
@@ -669,6 +836,8 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
               </div>
             </div>
           )}
+          {/* Sentinel: auto-scroll always lands here at the very bottom */}
+          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 

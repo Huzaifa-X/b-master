@@ -177,6 +177,83 @@ export async function getAssistantContacts(assistantId: string) {
 }
 
 
+// One-click save of a chat code block as a private artifact
+export async function saveCodeAsArtifact(data: {
+    assistantId: string
+    code: string
+    language: string
+    chatId?: string | null
+    name?: string          // user-provided name; falls back to auto-derived
+}): Promise<{ success: boolean; artifactId?: string; error?: string }> {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return { success: false, error: 'Authentication required' }
+        }
+
+        const { code, language, assistantId, chatId } = data
+
+        // Use the caller-supplied name, or derive one from the first code line
+        const firstLine = code.split('\n').find(l => l.trim().length > 0) ?? ''
+        const rawName = firstLine.replace(/[<>{}[\]/\\|"'`]/g, '').trim().slice(0, 48)
+        const artifactName = data.name?.trim()
+            || (rawName ? `${rawName} (${language})` : `${language.charAt(0).toUpperCase() + language.slice(1)} Snippet`)
+
+        // HTML → render directly; other languages → wrap in a clean styled viewer
+        const isHtml = language === 'html' || language === 'htm'
+        const escaped = code
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+        const templateHtml = isHtml
+            ? code
+            : `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>${artifactName}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#fff;font-family:ui-monospace,'Cascadia Code','Source Code Pro',Menlo,Consolas,monospace;padding:2rem}
+  .header{display:flex;align-items:center;gap:.6rem;margin-bottom:1.25rem}
+  .lang-badge{background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;padding:2px 10px;font-size:.75rem;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:.05em}
+  .name{font-size:.9rem;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  pre{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:1.25rem 1.5rem;overflow-x:auto;font-size:.85rem;line-height:1.65;color:#1e293b;white-space:pre}
+</style>
+</head>
+<body>
+  <div class="header">
+    <span class="lang-badge">${language}</span>
+    <span class="name">${artifactName}</span>
+  </div>
+  <pre><code>${escaped}</code></pre>
+</body>
+</html>`
+
+        const result = await createArtifact({
+            assistantId,
+            name: artifactName,
+            instructions: `Code saved from chat. Language: ${language}.\n\n\`\`\`${language}\n${code}\n\`\`\``,
+            category: 'others',
+            permissions: 'private',
+            selectedUsers: [],
+            apiConfigs: [],
+            selectedChatId: chatId ?? null,
+            templateHtml,
+        })
+
+        if (!result.success) {
+            return { success: false, error: result.error }
+        }
+
+        return { success: true, artifactId: (result as any).artifact?.id?.toString() }
+    } catch (error) {
+        console.error('[saveCodeAsArtifact] Error:', error)
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+}
+
 // Create artifact with AI-generated code
 export async function createArtifact(data: {
     assistantId: string

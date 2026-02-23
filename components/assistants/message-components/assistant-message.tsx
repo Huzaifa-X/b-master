@@ -16,18 +16,21 @@
  */
 
 import type { FC } from "react"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback, useRef } from "react"
 import Image from "next/image"
-import { Copy, Share2, Download, Eye, X, MessageSquare, Brain, ChevronDown, ChevronUp, Loader2 } from "lucide-react"
+import { Copy, Share2, Download, Eye, X, MessageSquare, Brain, ChevronDown, ChevronUp, Loader2, Bookmark, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AddFeedDialog } from "@/components/feed/add-feed-dialog"
 import { SelectContactDialog } from "@/components/assistants/select-contact-dialog"
 import {
     Dialog,
     DialogContent,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -43,10 +46,11 @@ import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
+import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism"
 import { useCreatePost } from "@/hooks/use-newFeed"
 import { useInitiateChat, useSendMessage } from "@/hooks/use-assistant-chat"
 import { useParams, usePathname } from "next/navigation"
+import { saveCodeAsArtifact } from "@/app/actions/artifact.action"
 import {
     Reasoning,
     ReasoningContent,
@@ -74,12 +78,58 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
     const [shareDialogOpen, setShareDialogOpen] = useState(false)
     const [contactDialogOpen, setContactDialogOpen] = useState(false)
     const [showReasoning, setShowReasoning] = useState(false)
-    const pathname = usePathname()
+    // Track save state per code block keyed by first 40 chars of code
+    const [savingBlocks, setSavingBlocks] = useState<Record<string, 'idle' | 'saving' | 'saved'>>({})
+    // Save-name dialog state
+    const [saveDialog, setSaveDialog] = useState<{ open: boolean; code: string; language: string; name: string }>({
+        open: false, code: '', language: '', name: ''
+    })
+    const nameInputRef = useRef<HTMLInputElement>(null)
 
+    const pathname = usePathname()
     const isAskBMode = pathname.startsWith("/ask-b")
     const params = useParams()
     const assistantId = params.id as string
 
+    /** Derive a default artifact name from the first meaningful line of code */
+    const deriveDefaultName = useCallback((code: string, language: string) => {
+        const firstLine = code.split('\n').find(l => l.trim().length > 0) ?? ''
+        const rawName = firstLine.replace(/[<>{}[\]/\\|"'`]/g, '').trim().slice(0, 48)
+        return rawName ? `${rawName} (${language})` : `${language.charAt(0).toUpperCase() + language.slice(1)} Snippet`
+    }, [])
+
+    /** Open the name dialog pre-filled with the auto-derived name */
+    const openSaveDialog = useCallback((code: string, language: string) => {
+        setSaveDialog({ open: true, code, language, name: deriveDefaultName(code, language) })
+    }, [deriveDefaultName])
+
+    const handleSaveAsArtifact = useCallback(async () => {
+        const { code, language, name } = saveDialog
+        if (!name.trim()) return
+        const blockKey = code.slice(0, 40)
+        setSaveDialog(prev => ({ ...prev, open: false }))
+        setSavingBlocks(prev => ({ ...prev, [blockKey]: 'saving' }))
+        try {
+            const result = await saveCodeAsArtifact({
+                assistantId,
+                code,
+                language,
+                name: name.trim(),
+                chatId: (params.chatId as string) ?? null,
+            })
+            if (result.success) {
+                toast.success('Saved as artifact!')
+                setSavingBlocks(prev => ({ ...prev, [blockKey]: 'saved' }))
+                setTimeout(() => setSavingBlocks(prev => ({ ...prev, [blockKey]: 'idle' })), 3000)
+            } else {
+                toast.error(result.error || 'Failed to save artifact')
+                setSavingBlocks(prev => ({ ...prev, [blockKey]: 'idle' }))
+            }
+        } catch {
+            toast.error('Failed to save artifact')
+            setSavingBlocks(prev => ({ ...prev, [blockKey]: 'idle' }))
+        }
+    }, [saveDialog, assistantId, params])
     const createPostMutation = useCreatePost()
     const initiateChatMutation = useInitiateChat()
     const sendMessageMutation = useSendMessage()
@@ -299,7 +349,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                                                     const language = match[1]
                                                     return (
                                                         <div className="not-prose my-3 w-full">
-                                                            <div className="relative">
+                                                            <div className="relative group/codeblock">
                                                                 <button
                                                                     onClick={() =>
                                                                         window.dispatchEvent(
@@ -308,20 +358,40 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                                                                             })
                                                                         )
                                                                     }
-                                                                    className="absolute top-2 right-2 z-10 px-2 py-1 text-xs rounded bg-primary text-primary-foreground"
+                                                                    className="absolute top-2 right-2 z-10 px-2.5 py-1 text-xs font-medium rounded bg-white text-gray-800 border border-gray-200 shadow-sm opacity-0 group-hover/codeblock:opacity-100 transition-opacity duration-150"
                                                                 >
                                                                     Preview
                                                                 </button>
-                                                                <div className="w-full overflow-x-auto rounded-lg border border-border bg-[rgb(30,30,30)]">
+                                                                {/* Save as Artifact button */}
+                                                                {(() => {
+                                                                    const blockKey = rawCode.slice(0, 40)
+                                                                    const saveState = savingBlocks[blockKey] ?? 'idle'
+                                                                    return (
+                                                                        <button
+                                                                            disabled={saveState === 'saving'}
+                                                                            onClick={() => openSaveDialog(rawCode, language)}
+                                                                            className="absolute top-2 right-[5.5rem] z-10 flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded bg-white text-gray-800 border border-gray-200 shadow-sm opacity-0 group-hover/codeblock:opacity-100 transition-opacity duration-150 disabled:opacity-60"
+                                                                        >
+                                                                            {saveState === 'saving' ? (
+                                                                                <><Loader2 className="h-3 w-3 animate-spin" />Saving…</>
+                                                                            ) : saveState === 'saved' ? (
+                                                                                <><Check className="h-3 w-3 text-green-600" />Saved</>
+                                                                            ) : (
+                                                                                <><Bookmark className="h-3 w-3" />Save</>
+                                                                            )}
+                                                                        </button>
+                                                                    )
+                                                                })()}
+                                                                <div className="w-full overflow-x-auto rounded-lg border border-border bg-white">
                                                                     <SyntaxHighlighter
                                                                         language={language}
-                                                                        style={vscDarkPlus}
+                                                                        style={oneLight}
                                                                         PreTag="pre"
                                                                         customStyle={{
                                                                             margin: 0,
                                                                             padding: "1rem",
                                                                             fontSize: "0.875rem",
-                                                                            background: "rgb(30,30,30)",
+                                                                            background: "#ffffff",
                                                                             width: "fit-content",
                                                                             minWidth: "max-content",
                                                                         }}
@@ -418,6 +488,62 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                             <Image src={previewImage as string} alt="Preview" width={1200} height={1200} className="w-full h-auto max-h-[80vh] object-contain" unoptimized />
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Save Code as Artifact — Name Dialog */}
+            <Dialog
+                open={saveDialog.open}
+                onOpenChange={(open) => !open && setSaveDialog(prev => ({ ...prev, open: false }))}
+            >
+                <DialogContent className="sm:max-w-md" onOpenAutoFocus={(e) => { e.preventDefault(); nameInputRef.current?.focus() }}>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Bookmark className="h-4 w-4 text-primary" />
+                            Save as Artifact
+                        </DialogTitle>
+                        <DialogDescription>
+                            Give your artifact a name. You can rename it later from the artifacts page.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-2">
+                        <div className="mb-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            Artifact name
+                        </div>
+                        <Input
+                            ref={nameInputRef}
+                            value={saveDialog.name}
+                            onChange={(e) => setSaveDialog(prev => ({ ...prev, name: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && saveDialog.name.trim()) handleSaveAsArtifact() }}
+                            placeholder="e.g. Login form component"
+                            className="text-sm"
+                            maxLength={80}
+                        />
+                        <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
+                            <span className="font-mono bg-muted px-1.5 py-0.5 rounded">
+                                {saveDialog.language}
+                            </span>
+                            <span>{saveDialog.name.length}/80</span>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button
+                            variant="outline"
+                            onClick={() => setSaveDialog(prev => ({ ...prev, open: false }))}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            disabled={!saveDialog.name.trim()}
+                            onClick={handleSaveAsArtifact}
+                            className="gap-1.5"
+                        >
+                            <Bookmark className="h-3.5 w-3.5" />
+                            Save Artifact
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 
