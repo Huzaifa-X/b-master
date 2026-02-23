@@ -42,6 +42,7 @@ interface MessageOptions {
     research?: boolean
     chatWithAPI?: boolean
     dropbox?: boolean
+    canvas?: boolean
     attachments?: { name: string; url: string; type: string; size: number }[]
     artifact?: { id: string; name: string; instructions: string; htmlContent: string }
     mentionedUsers?: Array<{ id: string; name: string; email: string }>
@@ -239,6 +240,7 @@ export function useAIChat(options: UseAIChatOptions) {
                     research: opts.research || false,
                     chatWithAPI: opts.chatWithAPI || false,
                     dropbox: opts.dropbox || false,
+                    canvas: opts.canvas || false,
                     attachments: opts.attachments || [],
                     artifact: opts.artifact || null,
                     mentionedUsers: opts.mentionedUsers || [],
@@ -403,6 +405,7 @@ export function useAIChat(options: UseAIChatOptions) {
             research?: boolean
             chatWithAPI?: boolean
             dropbox?: boolean
+            canvas?: boolean
             artifact?: { id: string; name: string; instructions: string; htmlContent: string }
             mentionedUsers?: Array<{ id: string; name: string; email: string }>
             connectedApiIds?: string[]

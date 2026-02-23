@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
 import { SessionProvider as NextAuthSessionProvider } from "next-auth/react"
 import NotificationListener from '@/components/notifications/notificationsListener';
 import { NotificationProvider } from '@/context/notificationContext';
+import { LocaleProvider } from '@/context/locale-context';
 import { useState } from "react"
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
@@ -23,10 +24,12 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     return (
         <NextAuthSessionProvider basePath="/api/auth">
             <QueryClientProvider client={queryClient}>
-                <NotificationProvider>
-                    <NotificationListener />
-                    {children}
-                </NotificationProvider>
+                <LocaleProvider>
+                    <NotificationProvider>
+                        <NotificationListener />
+                        {children}
+                    </NotificationProvider>
+                </LocaleProvider>
                 <ReactQueryDevtools initialIsOpen={false} />
             </QueryClientProvider>
         </NextAuthSessionProvider>

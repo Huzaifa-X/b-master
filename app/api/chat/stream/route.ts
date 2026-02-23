@@ -128,6 +128,16 @@ export async function POST(req: NextRequest) {
     // Build system prompt
     let systemPrompt = await getSystemPrompt()
 
+    // Inject current date & time so the AI is always aware of when it is
+    const _now = new Date()
+    const _dateBlock = [
+      `## 📅 Current Date & Time`,
+      `- **Date**: ${_now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`,
+      `- **Time (UTC)**: ${_now.toUTCString()}`,
+      `- **ISO 8601**: ${_now.toISOString()}`,
+    ].join("\n")
+    systemPrompt = _dateBlock + "\n\n" + systemPrompt
+
     // Add mentioned users context
     if (mentionedUsers && mentionedUsers.length > 0) {
       systemPrompt += `\n\n## Mentioned Users\nWhen you see "[This message mentions: Name <email>]" at the start of a user message, those are people the user has specifically mentioned using @ mentions. You have their full contact information (name and email). Use this information when relevant - for example, if the user asks you to create an invoice for someone, send an email, or perform any action involving the mentioned person, you already have their email address and don't need to ask for it.`
@@ -1018,7 +1028,8 @@ export async function POST(req: NextRequest) {
                           artifactId: artifact.id,
                           artifactName: artifact.name,
                           versionNumber: versionResult.version?.versionNumber,
-                          changeSummary: changeSummary
+                          changeSummary: changeSummary,
+                          updatedCode: updatedCode,
                         })}\n\n`)
                       )
 

@@ -11,6 +11,7 @@ import {
 } from "@/app/actions/chat.action"
 import { Message, ChatContext, ChatType } from "@/types/chat"
 import { toast } from "sonner"
+import { useArtifactStore } from "@/lib/stores/artifact-store"
 
 export type ChatMode = "assistant" | "ask-b"
 
@@ -357,8 +358,19 @@ export function useCustomChat(options: UseCustomChatOptions) {
                     // Show toast notification
                     toast.success(`Artifact "${data.artifactName}" updated to version ${data.versionNumber}`)
 
-                    // You could also trigger a refetch of the artifact here if needed
-                    // queryClient.invalidateQueries(['artifact', data.artifactId])
+                    // Refresh the artifact panel store with the new HTML so the preview updates in place
+                    if (data.updatedCode) {
+                      useArtifactStore.getState().setArtifact({
+                        type: "code",
+                        language: "html",
+                        content: data.updatedCode,
+                        title: data.artifactName,
+                      })
+                    }
+
+                    // Also invalidate react-query cache so version history refreshes
+                    queryClient.invalidateQueries({ queryKey: ["artifact", data.artifactId] })
+                    queryClient.invalidateQueries({ queryKey: ["artifacts"] })
                     break
 
                   case "artifact_update_error":
@@ -684,6 +696,26 @@ export function useCustomChat(options: UseCustomChatOptions) {
                 )
                 // Refetch to get the final message from DB
                 await refetchMessages()
+                break
+
+              case "artifact_updated":
+                console.log("[useCustomChat] 🎨 Artifact updated (sendMessage):", data.artifactName, "Version:", data.versionNumber)
+                toast.success(`Artifact "${data.artifactName}" updated to version ${data.versionNumber}`)
+                if (data.updatedCode) {
+                  useArtifactStore.getState().setArtifact({
+                    type: "code",
+                    language: "html",
+                    content: data.updatedCode,
+                    title: data.artifactName,
+                  })
+                }
+                queryClient.invalidateQueries({ queryKey: ["artifact", data.artifactId] })
+                queryClient.invalidateQueries({ queryKey: ["artifacts"] })
+                break
+
+              case "artifact_update_error":
+                console.error("[useCustomChat] ❌ Artifact update failed:", data.error)
+                toast.error(`Failed to update artifact: ${data.error}`)
                 break
 
               case "error":

@@ -250,6 +250,16 @@ ${allFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are prov
 
     const vectorStoreId = artifact.assistant?.vectorStoreId
 
+    // Prepend current date/time to the artifact update prompt
+    const _nowArtifact = new Date()
+    const _dateBlockArtifact = [
+      `## 📅 Current Date & Time`,
+      `- **Date**: ${_nowArtifact.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`,
+      `- **Time (UTC)**: ${_nowArtifact.toUTCString()}`,
+      `- **ISO 8601**: ${_nowArtifact.toISOString()}`,
+    ].join("\n")
+    const _artifactUpdatePromptWithDate = _dateBlockArtifact + "\n\n" + ARTIFACT_UPDATE_PROMPT
+
     // Create streaming response
     const stream = new ReadableStream({
       async start(controller) {
@@ -272,7 +282,7 @@ ${allFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are prov
           try {
             const response = await openai.responses.create({
               model: model,
-              instructions: ARTIFACT_UPDATE_PROMPT + "\n\nCRITICAL REMINDER: Your response must be ONLY HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.",
+              instructions: _artifactUpdatePromptWithDate + "\n\nCRITICAL REMINDER: Your response must be ONLY HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.",
               input: aiInput,
               stream: true,
               ...(vectorStoreId && {
@@ -353,7 +363,7 @@ ${allFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are prov
               // Fallback to non-streaming
               const fallbackResponse = await openai.responses.create({
                 model: model,
-                instructions: ARTIFACT_UPDATE_PROMPT + "\n\nCRITICAL REMINDER: Your response must be ONLY HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.",
+                instructions: _artifactUpdatePromptWithDate + "\n\nCRITICAL REMINDER: Your response must be ONLY HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.",
                 input: aiInput,
                 stream: false,
                 ...(vectorStoreId && {

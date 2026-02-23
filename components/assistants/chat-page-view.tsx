@@ -247,7 +247,7 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
     }
   }
 
-  const handleSend = async (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; dropbox?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: { id: string; name: string; email: string }[]; connectedApiIds?: string[] }) => {
+  const handleSend = async (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; dropbox?: boolean; canvas?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: { id: string; name: string; email: string }[]; connectedApiIds?: string[] }) => {
     if (!message.trim() || isStreaming || isCreating) return
 
     setIsCreating(true)

@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { Loader2, ArrowUp, X, Sparkles } from "lucide-react"
+import { Loader2, ArrowUp, X, Sparkles, Palette } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   PromptInputActions,
@@ -59,6 +59,7 @@ interface ChatInputProps {
       research?: boolean;
       chatWithAPI?: boolean;
       dropbox?: boolean;
+      canvas?: boolean;
       artifact?: { id: string; name: string; instructions: string; htmlContent: string }
       mentionedUsers?: MentionedUser[]
       connectedApiIds?: string[]
@@ -109,6 +110,7 @@ export function ChatInput({
   const [isArtifactDialogOpen, setIsArtifactDialogOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [canvasModeEnabled, setCanvasModeEnabled] = useState(false)
   const [connectedApiIds, setConnectedApiIds] = useState<string[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -307,7 +309,7 @@ export function ChatInput({
     if ((!value.trim() && attachedFiles.length === 0) || isLoading || disabled) return
 
     // Store current value before clearing
-    const messageToSend = value.trim()
+    let messageToSend = value.trim()
     const mentionsToSend = [...mentionedUsers]
 
     let attachments: { name: string; url: string; type: string; size: number }[] = []
@@ -372,6 +374,7 @@ export function ChatInput({
         research: researchEnabled,
         chatWithAPI: chatWithAPIEnabled,
         dropbox: dropboxEnabled,
+        canvas: canvasModeEnabled,
         artifact: selectedArtifact || undefined,
         mentionedUsers: mentionsToSend.length > 0 ? mentionsToSend : undefined,
         connectedApiIds: connectedApiIds.length > 0 ? connectedApiIds : undefined,
@@ -396,6 +399,10 @@ export function ChatInput({
       dropbox: dropboxEnabled,
       artifact: selectedArtifact?.name
     })
+  }
+
+  const handleCanvasModeToggle = () => {
+    setCanvasModeEnabled(prev => !prev)
   }
 
   const handleWebSearchChange = (enabled: boolean) => {
@@ -778,8 +785,37 @@ export function ChatInput({
                       disabled={disabled || isLoading}
                     />
                   )}
+                  {/* Canvas mode button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant={canvasModeEnabled ? "default" : "ghost"}
+                        size="icon"
+                        className={`size-[34px] rounded-full p-1 ${
+                          canvasModeEnabled
+                            ? "bg-violet-600 text-white hover:bg-violet-700"
+                            : ""
+                        }`}
+                        onClick={handleCanvasModeToggle}
+                        disabled={disabled || isLoading}
+                        aria-label={canvasModeEnabled ? "Disable Canvas mode" : "Enable Canvas mode"}
+                      >
+                        <Palette className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {canvasModeEnabled ? "Canvas mode ON — will generate HTML" : "Canvas mode — generate visual HTML"}
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
                 <div className="flex items-center gap-2">
+                  {canvasModeEnabled && (
+                    <span className="text-xs font-medium text-violet-500 flex items-center gap-1">
+                      <Palette className="h-3 w-3" />
+                      Canvas
+                    </span>
+                  )}
                   <Tooltip>
                     <TooltipTrigger asChild disabled={disabled || isLoading || isUploading}>
                       <Button
@@ -884,8 +920,37 @@ export function ChatInput({
                       disabled={disabled || isLoading}
                     />
                   )}
+                  {/* Canvas mode button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant={canvasModeEnabled ? "default" : "ghost"}
+                        size="icon"
+                        className={`size-[34px] rounded-full p-1 ${
+                          canvasModeEnabled
+                            ? "bg-violet-600 text-white hover:bg-violet-700"
+                            : ""
+                        }`}
+                        onClick={handleCanvasModeToggle}
+                        disabled={disabled || isLoading}
+                        aria-label={canvasModeEnabled ? "Disable Canvas mode" : "Enable Canvas mode"}
+                      >
+                        <Palette className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {canvasModeEnabled ? "Canvas mode ON — will generate HTML" : "Canvas mode — generate visual HTML"}
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
                 <div className="flex items-center gap-2">
+                  {canvasModeEnabled && (
+                    <span className="text-xs font-medium text-violet-500 flex items-center gap-1">
+                      <Palette className="h-3 w-3" />
+                      Canvas
+                    </span>
+                  )}
                   <Tooltip>
                     <TooltipTrigger asChild disabled={disabled || isLoading || isUploading}>
                       <Button

@@ -575,6 +575,17 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                           ul: ({ children }) => <ul className="my-2 ml-4 list-disc space-y-1">{children}</ul>,
                           ol: ({ children }) => <ol className="my-2 ml-4 list-decimal space-y-1">{children}</ol>,
                           li: ({ children }) => <li className="text-xs md:text-sm">{children}</li>,
+                          // Always open links in a new tab to prevent SPA "not found" navigation
+                          a: ({ href, children }) => (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary underline hover:text-primary/80 break-all"
+                            >
+                              {children}
+                            </a>
+                          ),
                         }}
                       >
                         {message.content}

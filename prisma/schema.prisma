@@ -7,84 +7,69 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ================================================================
-// CORE USER & AUTHENTICATION
-// ================================================================
-
 model User {
-  id              BigInt    @id @default(autoincrement())
-  name            String?   @db.VarChar(255)
-  email           String    @unique @db.VarChar(255)
-  password        String?   @db.VarChar(255) // Nullable for OAuth users
-  image           String?   @db.VarChar(255)
-  isEmailVerified Boolean   @default(false)
-  organization    String?   @db.VarChar(255)
-  gender          String?   @db.VarChar(50)
-  googleId        String?   @unique @db.VarChar(255)
-  loginType       String    @default("email") @db.VarChar(20) // email or google
-  status          String    @default("active") @db.VarChar(255)
-  address         String?   @db.Text
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime? // Soft delete
-
-  // ============================================
-  // STRIPE CUSTOMER (for platform subscriptions)
-  // ============================================
-  stripeCustomerId      String?   @unique @db.VarChar(255) // cus_xxxxx - for charging subscriptions
-  stripeSubscriptionId  String?   @unique @db.VarChar(255) // sub_xxxxx - current subscription
-  subscriptionStatus    String?   @db.VarChar(50) // active, canceled, past_due, unpaid, trialing
-  subscriptionPeriodEnd DateTime? // When current period ends
-  currentPlanId         Int? // Reference to current plan
-  cancelAtPeriodEnd     Boolean?  @default(false) @map("cancel_at_period_end")
-  scheduledPlanChangeId Int?      @map("scheduled_plan_change_id")
-
-  // ============================================
-  // STRIPE CONNECT (for receiving marketplace payments)
-  // ============================================
-  stripeConnectAccountId      String? @unique @db.VarChar(255) // acct_xxxxx - Connected Account
-  stripeConnectStatus         String? @db.VarChar(50) // pending, active, restricted, disabled
-  stripeConnectOnboarded      Boolean @default(false) // Has completed onboarding?
-  stripeConnectPayoutsEnabled Boolean @default(false) // Can receive payouts?
-
-  // ============================================
-  // WALLET (earnings from marketplace sales)
-  // ============================================
-  pendingBalance   Decimal @default(0) @db.Decimal(10, 2) // Money in Stripe holding period
-  availableBalance Decimal @default(0) @db.Decimal(10, 2) // Ready to withdraw
-  lifetimeEarnings Decimal @default(0) @db.Decimal(10, 2) // Total ever earned
-  currency         String  @default("CHF") @db.VarChar(3)
-
-  // Relationships
-  accounts                  Account[]
-  sessions                  Session[]
-  currentPlan               Plan?                      @relation(fields: [currentPlanId], references: [id])
-  paymentRecords            PaymentRecord[]            @relation("PaymentRecipient")
-  paymentsMade              PaymentRecord[]            @relation("PaymentPayer")
-  assistants                Assistant[]
-  assistantPins             AssistantPin[]
-  assistantPurchases        AssistantPurchase[]
-  assistantUserChats        AssistantUserChat[]
-  assistantUserChatMessages AssistantUserChatMessage[]
-  initiatedChats            AssistantChat[]            @relation("ChatInitiator")
-  participatedChats         AssistantChat[]            @relation("ChatParticipant")
-  sentMessages              AssistantChatMessage[]
-  newsFeeds                 AssistantNewsFeed[]
-  newsFeedLikes             AssistantNewsFeedLike[]
-  newsFeedComments          AssistantNewsFeedComment[]
-  newsFeedPermissions       NewsFeedPermission[]
-  artifacts                 AssistantArtifact[]
-  artifactPermissions       ArtifactPermission[]
-  assistantContacts         AssistantContact[]
-  notifications             Notification[]
-  usageMetrics              UsageMetric[]
-  artifactVersions          ArtifactVersion[]
-  connectors                Connector[]
-  oauthStates               OAuthState[]
-  scheduledPlanChange       Plan?     @relation("ScheduledPlanChange", fields: [scheduledPlanChangeId], references: [id])
-  createdGroupChats         AssistantGroupChat[]        @relation("GroupChatCreator")
-  groupChatMemberships      AssistantGroupChatMember[]  @relation("GroupChatMembers")
-  groupChatMessages         AssistantGroupChatMessage[] @relation("GroupChatMessageSender")
+  id                            BigInt                          @id @default(autoincrement())
+  name                          String?                         @db.VarChar(255)
+  email                         String                          @unique @db.VarChar(255)
+  password                      String?                         @db.VarChar(255)
+  image                         String?                         @db.VarChar(255)
+  isEmailVerified               Boolean                         @default(false)
+  organization                  String?                         @db.VarChar(255)
+  gender                        String?                         @db.VarChar(50)
+  googleId                      String?                         @unique @db.VarChar(255)
+  loginType                     String                          @default("email") @db.VarChar(20)
+  status                        String                          @default("active") @db.VarChar(255)
+  address                       String?
+  createdAt                     DateTime                        @default(now())
+  updatedAt                     DateTime                        @updatedAt
+  deletedAt                     DateTime?
+  availableBalance              Decimal                         @default(0) @db.Decimal(10, 2)
+  currency                      String                          @default("CHF") @db.VarChar(3)
+  currentPlanId                 Int?
+  lifetimeEarnings              Decimal                         @default(0) @db.Decimal(10, 2)
+  pendingBalance                Decimal                         @default(0) @db.Decimal(10, 2)
+  stripeConnectAccountId        String?                         @unique @db.VarChar(255)
+  stripeConnectOnboarded        Boolean                         @default(false)
+  stripeConnectPayoutsEnabled   Boolean                         @default(false)
+  stripeConnectStatus           String?                         @db.VarChar(50)
+  stripeCustomerId              String?                         @unique @db.VarChar(255)
+  stripeSubscriptionId          String?                         @unique @db.VarChar(255)
+  subscriptionPeriodEnd         DateTime?
+  subscriptionStatus            String?                         @db.VarChar(50)
+  cancelAtPeriodEnd             Boolean?                        @default(false) @map("cancel_at_period_end")
+  scheduledPlanChangeId         Int?                            @map("scheduled_plan_change_id")
+  // PRIVACY SETTINGS
+  emailVisible                  Boolean                         @default(false) @map("email_visible")
+  accounts                      Account[]
+  artifactPermissions           ArtifactPermission[]
+  artifactVersions              ArtifactVersion[]
+  artifacts                     AssistantArtifact[]
+  assistant_chat_members        assistant_chat_members[]
+  sentMessages                  AssistantChatMessage[]
+  initiatedChats                AssistantChat[]                 @relation("ChatInitiator")
+  participatedChats             AssistantChat[]                 @relation("ChatParticipant")
+  assistantContacts             AssistantContact[]
+  assistant_group_chat_members  assistant_group_chat_members[]
+  assistant_group_chat_messages assistant_group_chat_messages[]
+  assistant_group_chats         assistant_group_chats[]
+  newsFeedComments              AssistantNewsFeedComment[]
+  newsFeedLikes                 AssistantNewsFeedLike[]
+  newsFeeds                     AssistantNewsFeed[]
+  assistantPins                 AssistantPin[]
+  assistantPurchases            AssistantPurchase[]
+  assistantUserChatMessages     AssistantUserChatMessage[]
+  assistantUserChats            AssistantUserChat[]
+  assistants                    Assistant[]
+  connectors                    Connector[]
+  newsFeedPermissions           NewsFeedPermission[]
+  notifications                 Notification[]
+  oauthStates                   OAuthState[]
+  paymentsMade                  PaymentRecord[]                 @relation("PaymentPayer")
+  paymentRecords                PaymentRecord[]                 @relation("PaymentRecipient")
+  sessions                      Session[]
+  usageMetrics                  UsageMetric[]
+  currentPlan                   Plan?                           @relation(fields: [currentPlanId], references: [id])
+  scheduledPlanChange           Plan?                           @relation("ScheduledPlanChange", fields: [scheduledPlanChangeId], references: [id])
 
   @@index([email])
   @@index([googleId])
@@ -102,15 +87,14 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@index([userId])
@@ -122,8 +106,7 @@ model Session {
   sessionToken String   @unique
   userId       BigInt
   expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("sessions")
@@ -138,104 +121,57 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
-// ================================================================
-// SUBSCRIPTION & BILLING
-// ================================================================
-
 model Plan {
-  id              Int       @id @default(autoincrement())
-  title           String    @db.VarChar(255)
-  description     String?   @db.Text
-  period          String    @default("monthly") @db.VarChar(50) // free, monthly, yearly
-  features        Json      @default("[]") // JSON array of features
-  amount          Decimal   @db.Decimal(10, 2)
-  stripeProductId String?   @db.VarChar(255)
-  stripePriceId   String?   @db.VarChar(255)
-  assistantLimit  Int       @default(1) // Number of assistants user can create
-  isActive        Boolean   @default(true)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime?
-
-  // Users currently subscribed to this plan
-  subscribers User[]
-  scheduledSubscribers User[] @relation("ScheduledPlanChange")
+  id                   Int       @id @default(autoincrement())
+  title                String    @db.VarChar(255)
+  description          String?
+  period               String    @default("monthly") @db.VarChar(50)
+  features             Json      @default("[]")
+  amount               Decimal   @db.Decimal(10, 2)
+  stripeProductId      String?   @db.VarChar(255)
+  stripePriceId        String?   @db.VarChar(255)
+  assistantLimit       Int       @default(1)
+  isActive             Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+  subscribers          User[]
+  scheduledSubscribers User[]    @relation("ScheduledPlanChange")
 
   @@index([period])
   @@index([isActive])
   @@map("plans")
 }
 
-// ================================================================
-// PAYMENT RECORD - Universal payment tracking
-// Tracks: subscriptions, assistant purchases, payouts, refunds
-// ================================================================
-
 model PaymentRecord {
-  id BigInt @id @default(autoincrement())
-
-  // ============================================
-  // WHO
-  // ============================================
-  userId      BigInt // Who receives the money (seller/creator)
-  payerUserId BigInt? // Who paid (buyer) - null for subscriptions/payouts
-
-  // ============================================
-  // PAYMENT TYPE
-  // ============================================
-  type String @db.VarChar(50)
-  // Types:
-  // - "subscription"        Platform subscription payment
-  // - "assistant_purchase"  Buyer purchases assistant
-  // - "payout"              Creator withdrawal to bank
-  // - "refund"              Money returned
-
-  // ============================================
-  // AMOUNTS
-  // ============================================
-  amount      Decimal @db.Decimal(10, 2) // Total amount
-  currency    String  @default("CHF") @db.VarChar(3)
-  platformFee Decimal @default(0) @db.Decimal(10, 2) // Platform's cut
-  netAmount   Decimal @db.Decimal(10, 2) // Amount user receives (amount - platformFee)
-
-  // ============================================
-  // CONTEXT (what this payment is for)
-  // ============================================
-  relatedType String? @db.VarChar(100) // "Plan", "Assistant", "AssistantUserChat"
-  relatedId   BigInt? // ID of the related record
-
-  // ============================================
-  // STATUS
-  // ============================================
-  status String @default("pending") @db.VarChar(50)
-  // pending, processing, completed, failed, refunded, cancelled
-
-  // ============================================
-  // STRIPE REFERENCES
-  // ============================================
-  stripePaymentIntentId   String? @unique @db.VarChar(255)
-  stripeChargeId          String? @db.VarChar(255)
-  stripeCheckoutSessionId String? @unique @db.VarChar(255)
-  stripeSubscriptionId    String? @db.VarChar(255) // For subscription payments
-  stripeInvoiceId         String? @db.VarChar(255) // Stripe invoice
-  stripeTransferId        String? @db.VarChar(255) // Transfer to connected account
-  stripePayoutId          String? @db.VarChar(255) // Payout to bank
-  stripeRefundId          String? @db.VarChar(255) // Refund ID
-
-  // ============================================
-  // METADATA & TIMESTAMPS
-  // ============================================
-  description String?   @db.Text
-  metadata    Json?     @db.Json // Extra data (invoice details, plan info, etc.)
-  completedAt DateTime?
-  refundedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Relations
-  user               User                @relation("PaymentRecipient", fields: [userId], references: [id], onDelete: Cascade)
-  payer              User?               @relation("PaymentPayer", fields: [payerUserId], references: [id], onDelete: SetNull)
-  assistantPurchases AssistantPurchase[]
+  id                      BigInt              @id @default(autoincrement())
+  userId                  BigInt
+  payerUserId             BigInt?
+  type                    String              @db.VarChar(50)
+  amount                  Decimal             @db.Decimal(10, 2)
+  currency                String              @default("CHF") @db.VarChar(3)
+  platformFee             Decimal             @default(0) @db.Decimal(10, 2)
+  netAmount               Decimal             @db.Decimal(10, 2)
+  relatedType             String?             @db.VarChar(100)
+  relatedId               BigInt?
+  status                  String              @default("pending") @db.VarChar(50)
+  stripePaymentIntentId   String?             @unique @db.VarChar(255)
+  stripeChargeId          String?             @db.VarChar(255)
+  stripeCheckoutSessionId String?             @unique @db.VarChar(255)
+  stripeSubscriptionId    String?             @db.VarChar(255)
+  stripeInvoiceId         String?             @db.VarChar(255)
+  stripeTransferId        String?             @db.VarChar(255)
+  stripePayoutId          String?             @db.VarChar(255)
+  stripeRefundId          String?             @db.VarChar(255)
+  description             String?
+  metadata                Json?               @db.Json
+  completedAt             DateTime?
+  refundedAt              DateTime?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  assistantPurchases      AssistantPurchase[]
+  payer                   User?               @relation("PaymentPayer", fields: [payerUserId], references: [id])
+  user                    User                @relation("PaymentRecipient", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([payerUserId])
@@ -249,63 +185,43 @@ model PaymentRecord {
   @@map("payment_records")
 }
 
-// ================================================================
-// AI ASSISTANT CORE
-// ================================================================
-
-enum AssistantCategory {
-  EDUCATION
-  TRAVEL
-  PROGRAMMING
-  MARKETING
-  ANALYSIS
-  BOOKING
-  OTHER
-}
-
 model Assistant {
-  id               BigInt            @id @default(autoincrement())
-  userId           BigInt
-  name             String            @db.VarChar(255)
-  price            Decimal           @default(0)
-  currency         String            @default("CHF") @db.VarChar(3)
-  priceType        String            @default("paid") @db.VarChar(255) // free or paid
-  category         AssistantCategory @default(OTHER)
-  description      String?           @db.Text
-  instructions     String?           @db.Text
-  image            String?           @db.VarChar(255)
-  vectorStoreId    String?           @db.VarChar(255) // OpenAI vector store ID
-  public           Boolean           @default(true)
-  buyerPermissions String?           @db.Text // JSON: ["chat", "contacts", "messenger", "newsfeed", "artifacts"]
-  isDeleted        Boolean           @default(false)
-  
-  // ============================================
-  // STRIPE CONNECT - Marketplace Products
-  // ============================================
-  stripeProductId  String?           @db.VarChar(255) // prod_xxxxx - Stripe product for this assistant
-  stripePriceId    String?           @db.VarChar(255) // price_xxxxx - Stripe price for one-time payment
-  
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  deletedAt        DateTime?
-
-  owner               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  knowledgebases      AssistantKnowledgebase[]
-  apiConfiguration    AssistantApiConfiguration?
-  pins                AssistantPin[]
-  purchases           AssistantPurchase[]
-  userChats           AssistantUserChat[]
-  userChatMessages    AssistantUserChatMessage[]
-  assistantChats      AssistantChat[]
-  chatMessages        AssistantChatMessage[]
-  groupChats          AssistantGroupChat[]
-  groupChatMessages   AssistantGroupChatMessage[]
-  newsFeeds           AssistantNewsFeed[]
-  artifacts           AssistantArtifact[]
-  contacts            AssistantContact[]
-  artifactPermissions ArtifactPermission[]
-  usageMetrics        UsageMetric[]
-  connectors          Connector[]
+  id                            BigInt                          @id @default(autoincrement())
+  userId                        BigInt
+  name                          String                          @db.VarChar(255)
+  price                         Decimal                         @default(0)
+  currency                      String                          @default("CHF") @db.VarChar(3)
+  priceType                     String                          @default("paid") @db.VarChar(255)
+  category                      AssistantCategory               @default(OTHER)
+  description                   String?
+  instructions                  String?
+  image                         String?                         @db.VarChar(255)
+  vectorStoreId                 String?                         @db.VarChar(255)
+  public                        Boolean                         @default(true)
+  createdAt                     DateTime                        @default(now())
+  updatedAt                     DateTime                        @updatedAt
+  deletedAt                     DateTime?
+  buyerPermissions              String?
+  isDeleted                     Boolean                         @default(false)
+  stripePriceId                 String?                         @db.VarChar(255)
+  stripeProductId               String?                         @db.VarChar(255)
+  artifactPermissions           ArtifactPermission[]
+  apiConfiguration              AssistantApiConfiguration?
+  artifacts                     AssistantArtifact[]
+  chatMessages                  AssistantChatMessage[]
+  assistantChats                AssistantChat[]
+  contacts                      AssistantContact[]
+  assistant_group_chat_messages assistant_group_chat_messages[]
+  assistant_group_chats         assistant_group_chats[]
+  knowledgebases                AssistantKnowledgebase[]
+  newsFeeds                     AssistantNewsFeed[]
+  pins                          AssistantPin[]
+  purchases                     AssistantPurchase[]
+  userChatMessages              AssistantUserChatMessage[]
+  userChats                     AssistantUserChat[]
+  owner                         User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectors                    Connector[]
+  usageMetrics                  UsageMetric[]
 
   @@index([userId])
   @@index([public])
@@ -315,18 +231,17 @@ model Assistant {
 }
 
 model AssistantKnowledgebase {
-  id           Int      @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   assistantId  BigInt
-  url          String?  @db.Text
-  note         String?  @db.Text
-  file         String?  @db.Text
-  vectorFileId String?  @db.Text // OpenAI file ID
-  type         String   @default("url") @db.VarChar(50) // url, file, text
-  isCrawled    Boolean  @default(false) // Track if URL has been crawled
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  assistant Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  url          String?
+  note         String?
+  file         String?
+  type         String    @default("url") @db.VarChar(50)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  isCrawled    Boolean   @default(false)
+  vectorFileId String?
+  assistant    Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
 
   @@index([assistantId])
   @@index([isCrawled])
@@ -334,99 +249,66 @@ model AssistantKnowledgebase {
 }
 
 model AssistantApiConfiguration {
-  id          Int    @id @default(autoincrement())
-  assistantId BigInt @unique // One API config per assistant
-
-  // Authentication Type Selection
-  authenticationType String @default("none") @db.VarChar(50)
-  // Options: "none", "api_key", "oauth"
-
-  // ============================================
-  // API KEY AUTHENTICATION (when type = "api_key")
-  // ============================================
-  apiKey               String? @db.Text // Encrypted API key
-  authType             String? @db.VarChar(50) // Options: "basic", "bearer", "custom", "query"
-  customHeaderName     String? @db.VarChar(255) // Custom header name for API key auth
-  customQueryParamName String? @db.VarChar(255) // Custom query param name for API key auth (e.g., "appid", "apikey")
-
-  // ============================================
-  // OAUTH AUTHENTICATION (when type = "oauth")
-  // ============================================
-  clientId            String? @db.VarChar(255)
-  clientSecret        String? @db.Text // Encrypted
-  authorizationUrl    String? @db.Text
-  tokenUrl            String? @db.Text
-  scope               String? @db.Text
-  tokenExchangeMethod String? @db.VarChar(50)
-  // Options: "post", "basic_auth"
-
-  // OAuth Token Storage (obtained after user authorizes)
-  accessToken  String?   @db.Text // Encrypted - obtained after OAuth flow
-  refreshToken String?   @db.Text // Encrypted - for refreshing expired access tokens
-  tokenExpiry  DateTime? // When the access token expires
-
-  // ============================================
-  // OPENAPI SCHEMA STORAGE (2-part strategy)
-  // ============================================
-  schemaText String? @db.Text // Raw YAML/JSON (for editing)
-  schema     Json? // Parsed JSON (for validation)
-
-  // ============================================
-  // PARSED TOOLS (from OpenAPI schema)
-  // ============================================
-  tools Json? // Array of parsed tool definitions for OpenAI function calling
-
-  // ============================================
-  // METADATA
-  // ============================================
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  assistant Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  id                   Int       @id @default(autoincrement())
+  assistantId          BigInt    @unique
+  authenticationType   String    @default("none") @db.VarChar(50)
+  apiKey               String?
+  authType             String?   @db.VarChar(50)
+  customHeaderName     String?   @db.VarChar(255)
+  clientId             String?   @db.VarChar(255)
+  clientSecret         String?
+  authorizationUrl     String?
+  tokenUrl             String?
+  scope                String?
+  tokenExchangeMethod  String?   @db.VarChar(50)
+  schemaText           String?
+  schema               Json?
+  isActive             Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  tools                Json?
+  customQueryParamName String?   @db.VarChar(255)
+  accessToken          String?
+  refreshToken         String?
+  tokenExpiry          DateTime?
+  assistant            Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
 
   @@map("assistant_api_configurations")
 }
 
 model AssistantContact {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   assistantId BigInt
   userId      BigInt
-  description String?  @db.Text
-  role        String?  @db.VarChar(255)
-  telephone   String?  @db.VarChar(50)
-  information String?  @db.Text
-  access      String   @default("admin") @db.VarChar(50) // admin, user
-  permissions String?  @db.Text // JSON: ["chat", "contacts", "messenger", "newsfeed", "artifacts"]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  assistant Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  description String?
+  role        String?   @db.VarChar(255)
+  access      String    @default("admin") @db.VarChar(50)
+  permissions String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  information String?
+  telephone   String?   @db.VarChar(50)
+  assistant   Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([assistantId])
   @@index([userId])
   @@map("assistant_contacts")
 }
 
-// ================================================================
-// USAGE METRICS & ANALYTICS
-// ================================================================
-
 model UsageMetric {
-  id          BigInt   @id @default(autoincrement())
+  id          BigInt     @id @default(autoincrement())
   assistantId BigInt?
   userId      BigInt
-  inputToken  Int      @default(0)
-  outputToken Int      @default(0)
-  totalToken  Int      @default(0)
-  totalCost   Float    @default(0)
-  toolUsing   String?  @db.Text // Tools/functions used in the request
-  costType    String?  @db.VarChar(100) // Type of cost calculation
-  createdAt   DateTime @default(now())
-
-  assistant Assistant? @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inputToken  Int        @default(0)
+  outputToken Int        @default(0)
+  totalToken  Int        @default(0)
+  totalCost   Float      @default(0)
+  toolUsing   String?
+  costType    String?    @db.VarChar(100)
+  createdAt   DateTime   @default(now())
+  assistant   Assistant? @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([assistantId])
   @@index([userId])
@@ -434,23 +316,18 @@ model UsageMetric {
   @@map("usage_metrics")
 }
 
-// ================================================================
-// MARKETPLACE & TRANSACTIONS
-// ================================================================
-
 model AssistantPurchase {
-  id              Int       @id @default(autoincrement())
+  id              Int            @id @default(autoincrement())
   buyerId         BigInt
   assistantId     BigInt
-  paymentRecordId BigInt? // Link to the payment record
-  purchaseDate    DateTime  @default(now())
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime? // Soft delete support
-
-  buyer         User           @relation(fields: [buyerId], references: [id], onDelete: Cascade)
-  assistant     Assistant      @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  paymentRecord PaymentRecord? @relation(fields: [paymentRecordId], references: [id])
+  purchaseDate    DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  paymentRecordId BigInt?
+  deletedAt       DateTime?
+  assistant       Assistant      @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  buyer           User           @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  paymentRecord   PaymentRecord? @relation(fields: [paymentRecordId], references: [id])
 
   @@unique([buyerId, assistantId])
   @@index([buyerId])
@@ -460,31 +337,19 @@ model AssistantPurchase {
   @@map("assistant_purchases")
 }
 
-// ================================================================
-// DUAL CHAT SYSTEM
-// ================================================================
-
-enum MessageStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  FAILED
-}
-
 model AssistantUserChat {
-  id          Int       @id @default(autoincrement())
-  userId      BigInt
-  topic       String
-  assistantId BigInt?
-  chatType    String
-  shareableId String?   @unique @db.VarChar(255)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-
-  user            User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assistant       Assistant?                 @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  id              Int                        @id @default(autoincrement())
+  userId          BigInt
+  topic           String
+  assistantId     BigInt?
+  shareableId     String?                    @unique @db.VarChar(255)
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  deletedAt       DateTime?
+  chatType        String
   messages        AssistantUserChatMessage[]
+  assistant       Assistant?                 @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user            User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   connectorUsages ConnectorChatUsage[]
 
   @@index([userId])
@@ -494,22 +359,21 @@ model AssistantUserChat {
 }
 
 model AssistantUserChatMessage {
-  id                  Int           @id @default(autoincrement())
-  role                String        @db.VarChar(50)
-  message             String?       @db.Text
-  documents           String?       @db.Text
+  id                  Int               @id @default(autoincrement())
+  role                String            @db.VarChar(50)
+  message             String?
+  documents           String?
   userId              BigInt?
   assistantUserChatId Int
-  status              MessageStatus @default(PENDING)
-  openaiResponseId    String?       @db.VarChar(255)
-  hasImages           Boolean       @default(false)
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
-
-  chat        AssistantUserChat @relation(fields: [assistantUserChatId], references: [id], onDelete: Cascade)
-  user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
-  assistant   Assistant?        @relation(fields: [assistantId], references: [id])
-  assistantId BigInt?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  assistantId         BigInt?
+  hasImages           Boolean           @default(false)
+  openaiResponseId    String?           @db.VarChar(255)
+  status              MessageStatus     @default(PENDING)
+  assistant           Assistant?        @relation(fields: [assistantId], references: [id])
+  chat                AssistantUserChat @relation(fields: [assistantUserChatId], references: [id], onDelete: Cascade)
+  user                User?             @relation(fields: [userId], references: [id])
 
   @@index([assistantUserChatId])
   @@index([userId])
@@ -518,48 +382,50 @@ model AssistantUserChatMessage {
 }
 
 model AssistantChat {
-  id            Int       @id @default(autoincrement())
-  assistantId   BigInt
-  initiatorId   BigInt
-  participantId BigInt
-  isActive      Boolean   @default(true)
-  lastMessageAt DateTime?
-  lastMessageId BigInt?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
-
-  assistant   Assistant              @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  initiator   User                   @relation("ChatInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
-  participant User                   @relation("ChatParticipant", fields: [participantId], references: [id], onDelete: Cascade)
-  messages    AssistantChatMessage[] @relation("ChatMessages")
+  id                     Int                      @id @default(autoincrement())
+  assistantId            BigInt
+  initiatorId            BigInt
+  participantId          BigInt?
+  isActive               Boolean                  @default(true)
+  lastMessageAt          DateTime?
+  lastMessageId          BigInt?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  deletedAt              DateTime?
+  groupName              String?                  @db.VarChar(255)
+  isGroup                Boolean                  @default(false)
+  assistant_chat_members assistant_chat_members[]
+  messages               AssistantChatMessage[]   @relation("ChatMessages")
+  assistant              Assistant                @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  initiator              User                     @relation("ChatInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+  participant            User?                    @relation("ChatParticipant", fields: [participantId], references: [id], onDelete: Cascade)
 
   @@unique([assistantId, initiatorId, participantId])
   @@index([assistantId, initiatorId])
   @@index([assistantId, participantId])
   @@index([lastMessageId])
+  @@index([isGroup])
   @@map("assistant_chats")
 }
 
 model AssistantChatMessage {
-  id              BigInt    @id @default(autoincrement())
+  id              BigInt        @id @default(autoincrement())
   assistantChatId Int
   assistantId     BigInt
   senderId        BigInt
-  message         String    @db.Text
-  messageType     String    @default("text") @db.VarChar(50)
-  attachmentUrl   String?   @db.VarChar(255)
-  attachmentName  String?   @db.VarChar(255)
+  message         String
+  messageType     String        @default("text") @db.VarChar(50)
+  attachmentUrl   String?       @db.VarChar(255)
+  attachmentName  String?       @db.VarChar(255)
   attachmentSize  BigInt?
-  isRead          Boolean   @default(false)
+  isRead          Boolean       @default(false)
   readAt          DateTime?
   deletedAt       DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  chat      AssistantChat @relation("ChatMessages", fields: [assistantChatId], references: [id], onDelete: Cascade)
-  assistant Assistant     @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  sender    User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  chat            AssistantChat @relation("ChatMessages", fields: [assistantChatId], references: [id], onDelete: Cascade)
+  assistant       Assistant     @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  sender          User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([assistantChatId])
   @@index([assistantId])
@@ -568,99 +434,23 @@ model AssistantChatMessage {
   @@map("assistant_chat_messages")
 }
 
-// ================================================================
-// GROUP CHAT
-// ================================================================
-
-model AssistantGroupChat {
-  id            Int       @id @default(autoincrement())
-  assistantId   BigInt
-  name          String    @db.VarChar(255)
-  description   String?   @db.VarChar(500)
-  avatarUrl     String?   @db.VarChar(255)
-  createdById   BigInt
-  isActive      Boolean   @default(true)
-  lastMessageAt DateTime?
-  lastMessageId BigInt?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
-
-  assistant Assistant                  @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  createdBy User                       @relation("GroupChatCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  members   AssistantGroupChatMember[]
-  messages  AssistantGroupChatMessage[]
-
-  @@index([assistantId])
-  @@index([createdById])
-  @@index([lastMessageAt])
-  @@map("assistant_group_chats")
-}
-
-model AssistantGroupChatMember {
-  id          Int      @id @default(autoincrement())
-  groupChatId Int
-  userId      BigInt
-  role        String   @default("member") @db.VarChar(20) // "admin" | "member"
-  joinedAt    DateTime @default(now())
-  leftAt      DateTime?
-
-  groupChat AssistantGroupChat @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
-  user      User               @relation("GroupChatMembers", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([groupChatId, userId])
-  @@index([groupChatId])
-  @@index([userId])
-  @@map("assistant_group_chat_members")
-}
-
-model AssistantGroupChatMessage {
-  id            BigInt    @id @default(autoincrement())
-  groupChatId   Int
-  assistantId   BigInt
-  senderId      BigInt
-  message       String    @db.Text
-  messageType   String    @default("text") @db.VarChar(50)
-  attachmentUrl String?   @db.VarChar(255)
-  attachmentName String?  @db.VarChar(255)
-  attachmentSize BigInt?
-  deletedAt     DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  groupChat AssistantGroupChat @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
-  assistant Assistant          @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  sender    User               @relation("GroupChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-
-  @@index([groupChatId])
-  @@index([assistantId])
-  @@index([senderId])
-  @@index([createdAt])
-  @@map("assistant_group_chat_messages")
-}
-
-// ================================================================
-// SOCIAL FEATURES - NEWS FEED
-// ================================================================
-
 model AssistantNewsFeed {
-  id           Int      @id @default(autoincrement())
+  id           Int                        @id @default(autoincrement())
   assistantId  BigInt
   userId       BigInt
-  title        String?  @db.VarChar(255)
-  image        String?  @db.Text
-  content      String?  @db.Text
-  isPublic     Boolean  @default(true)
-  likeCount    Int      @default(0)
-  commentCount Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  assistant   Assistant                  @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  user        User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  likes       AssistantNewsFeedLike[]
-  comments    AssistantNewsFeedComment[]
-  permissions NewsFeedPermission[]
+  content      String?
+  isPublic     Boolean                    @default(true)
+  likeCount    Int                        @default(0)
+  commentCount Int                        @default(0)
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+  image        String?
+  title        String?                    @db.VarChar(255)
+  comments     AssistantNewsFeedComment[]
+  likes        AssistantNewsFeedLike[]
+  assistant    Assistant                  @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user         User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissions  NewsFeedPermission[]
 
   @@index([assistantId])
   @@index([userId])
@@ -669,13 +459,12 @@ model AssistantNewsFeed {
 }
 
 model NewsFeedPermission {
-  id         Int      @id @default(autoincrement())
+  id         Int               @id @default(autoincrement())
   newsFeedId Int
   userId     BigInt
-  createdAt  DateTime @default(now())
-
-  newsFeed AssistantNewsFeed @relation(fields: [newsFeedId], references: [id], onDelete: Cascade)
-  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime          @default(now())
+  newsFeed   AssistantNewsFeed @relation(fields: [newsFeedId], references: [id], onDelete: Cascade)
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([newsFeedId, userId])
   @@index([newsFeedId])
@@ -684,14 +473,13 @@ model NewsFeedPermission {
 }
 
 model AssistantNewsFeedLike {
-  id         Int      @id @default(autoincrement())
+  id         Int               @id @default(autoincrement())
   newsFeedId Int
   userId     BigInt
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  newsFeed AssistantNewsFeed @relation(fields: [newsFeedId], references: [id], onDelete: Cascade)
-  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  newsFeed   AssistantNewsFeed @relation(fields: [newsFeedId], references: [id], onDelete: Cascade)
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([newsFeedId, userId])
   @@index([newsFeedId])
@@ -700,19 +488,18 @@ model AssistantNewsFeedLike {
 }
 
 model AssistantNewsFeedComment {
-  id              Int      @id @default(autoincrement())
+  id              Int                        @id @default(autoincrement())
   newsFeedId      Int
   userId          BigInt
-  comment         String?  @db.Text
+  comment         String?
   parentCommentId Int?
-  status          String   @default("active") @db.VarChar(50)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  newsFeed      AssistantNewsFeed          @relation(fields: [newsFeedId], references: [id], onDelete: Cascade)
-  user          User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parentComment AssistantNewsFeedComment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
-  replies       AssistantNewsFeedComment[] @relation("CommentReplies")
+  status          String                     @default("active") @db.VarChar(50)
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  newsFeed        AssistantNewsFeed          @relation(fields: [newsFeedId], references: [id], onDelete: Cascade)
+  parentComment   AssistantNewsFeedComment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         AssistantNewsFeedComment[] @relation("CommentReplies")
+  user            User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([newsFeedId])
   @@index([userId])
@@ -720,46 +507,32 @@ model AssistantNewsFeedComment {
   @@map("assistant_news_feed_comments")
 }
 
-// ================================================================
-// ARTIFACTS & PERMISSIONS
-// ================================================================
-
-enum ArtifactAccessLevel {
-  VIEWER
-  EDITOR
-  ADMIN
-}
-
 model AssistantArtifact {
-  id              Int     @id @default(autoincrement())
+  id              Int                     @id @default(autoincrement())
   assistantId     BigInt
   userId          BigInt
-  name            String? @db.VarChar(255)
-  instructions    String? @db.Text
-  category        String? @db.VarChar(255)
+  name            String?                 @db.VarChar(255)
+  instructions    String?
+  category        String?                 @db.VarChar(255)
+  tools           Json?                   @db.Json
+  apiKeys         Json?                   @db.Json
+  isPublic        Boolean                 @default(false)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  files           Json?                   @db.Json
+  images          Json?                   @db.Json
+  thumbnailUrl    String?
+  videoMetadata   Json?                   @db.Json
+  videoUrl        String?
   activeVersionId Int?
-  shareableId     String? @unique @db.VarChar(255)
-
-  // JSON Fields for flexible data storage
-  tools         Json?   @db.Json // For booking: connector config, availability, form fields, etc.
-  apiKeys       Json?   @db.Json
-  files         Json?   @db.Json
-  images        Json?   @db.Json
-  videoUrl      String? @db.Text
-  videoMetadata Json?   @db.Json
-  thumbnailUrl  String? @db.Text
-
-  isPublic  Boolean   @default(false)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
-  assistant      Assistant               @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  permissions    ArtifactPermission[]
-  versions       ArtifactVersion[]
-  activeVersion  ArtifactVersion?        @relation("ActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
-  generationJobs ArtifactGenerationJob[]
+  deletedAt       DateTime?
+  shareableId     String?                 @unique @db.VarChar(255)
+  generationJobs  ArtifactGenerationJob[]
+  permissions     ArtifactPermission[]
+  versions        ArtifactVersion[]
+  activeVersion   ArtifactVersion?        @relation("ActiveVersion", fields: [activeVersionId], references: [id])
+  assistant       Assistant               @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([assistantId])
   @@index([userId])
@@ -770,20 +543,19 @@ model AssistantArtifact {
 }
 
 model ArtifactVersion {
-  id            Int       @id @default(autoincrement())
-  artifactId    Int
-  userId        BigInt
-  versionNumber Int
-  versionName   String?   @db.VarChar(255)
-  code          String    @db.Text
-  description   String?   @db.Text
-  changeType    String    @default("manual") @db.VarChar(50)
-  changedFrom   Int?
-  isSnapshot    Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
-
+  id                 Int                 @id @default(autoincrement())
+  artifactId         Int
+  userId             BigInt
+  versionNumber      Int
+  versionName        String?             @db.VarChar(255)
+  code               String
+  description        String?
+  changeType         String              @default("manual") @db.VarChar(50)
+  changedFrom        Int?
+  isSnapshot         Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
   artifact           AssistantArtifact   @relation(fields: [artifactId], references: [id], onDelete: Cascade)
   creator            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   activeForArtifacts AssistantArtifact[] @relation("ActiveVersion")
@@ -802,13 +574,12 @@ model ArtifactPermission {
   userId      BigInt
   assistantId BigInt
   artifactId  Int
-  access      ArtifactAccessLevel @default(VIEWER)
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
-
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assistant Assistant         @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  artifact  AssistantArtifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  access      ArtifactAccessLevel @default(VIEWER)
+  artifact    AssistantArtifact   @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  assistant   Assistant           @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, artifactId])
   @@index([userId])
@@ -816,24 +587,19 @@ model ArtifactPermission {
   @@map("artifact_permissions")
 }
 
-// ================================================================
-// ARTIFACT GENERATION JOBS
-// ================================================================
-
 model ArtifactGenerationJob {
-  id          String    @id @default(cuid())
+  id          String            @id @default(cuid())
   artifactId  Int
-  status      String    @default("pending") @db.VarChar(50)
-  progress    Int       @default(0)
-  result      String?   @db.Text
-  error       String?   @db.Text
-  metadata    Json?     @db.Json
+  status      String            @default("pending") @db.VarChar(50)
+  progress    Int               @default(0)
+  result      String?
+  error       String?
+  metadata    Json?             @db.Json
   startedAt   DateTime?
   completedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  artifact AssistantArtifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  artifact    AssistantArtifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
 
   @@index([artifactId])
   @@index([status])
@@ -841,19 +607,14 @@ model ArtifactGenerationJob {
   @@map("artifact_generation_jobs")
 }
 
-// ================================================================
-// PINNED ASSISTANT
-// ================================================================
-
 model AssistantPin {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   userId      BigInt
   assistantId BigInt
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assistant Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  assistant   Assistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, assistantId])
   @@index([userId])
@@ -861,15 +622,11 @@ model AssistantPin {
   @@map("assistant_pins")
 }
 
-// ================================================================
-// NOTIFICATION SYSTEM
-// ================================================================
-
 model Notification {
   id          Int       @id @default(autoincrement())
   userId      BigInt
   title       String?   @db.VarChar(255)
-  message     String?   @db.Text
+  message     String?
   type        String?   @db.VarChar(100)
   relatedId   Int?
   relatedType String?   @db.VarChar(100)
@@ -879,8 +636,7 @@ model Notification {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([type])
@@ -890,14 +646,10 @@ model Notification {
   @@map("notifications")
 }
 
-// ================================================================
-// PROMPTS
-// ================================================================
-
 model Prompt {
   id        Int      @id @default(autoincrement())
   name      String   @unique @db.VarChar(255)
-  prompt    String   @db.Text
+  prompt    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -905,9 +657,169 @@ model Prompt {
   @@map("prompts")
 }
 
-// ================================================================
-// GENERIC CONNECTOR SYSTEM (Google, Dropbox, etc.)
-// ================================================================
+model Connector {
+  id                Int                  @id @default(autoincrement())
+  userId            BigInt
+  assistantId       BigInt?
+  provider          ConnectorProvider
+  name              String               @db.VarChar(255)
+  description       String?
+  accessToken       String
+  refreshToken      String
+  tokenExpiry       DateTime
+  providerAccountId String?              @db.VarChar(255)
+  providerEmail     String?              @db.VarChar(255)
+  scopes            Json                 @default("[]")
+  status            ConnectorStatus      @default(PENDING)
+  requireApproval   String               @default("never") @db.VarChar(50)
+  autoRefresh       Boolean              @default(true)
+  config            Json?                @db.Json
+  metadata          Json?                @db.Json
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  deletedAt         DateTime?
+  chatUsages        ConnectorChatUsage[]
+  assistant         Assistant?           @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assistantId, provider])
+  @@index([userId])
+  @@index([assistantId])
+  @@index([provider])
+  @@index([status])
+  @@map("connectors")
+}
+
+model ConnectorChatUsage {
+  id                  Int               @id @default(autoincrement())
+  connectorId         Int
+  assistantUserChatId Int
+  isActive            Boolean           @default(true)
+  lastUsedAt          DateTime          @default(now())
+  usageCount          Int               @default(0)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  chat                AssistantUserChat @relation(fields: [assistantUserChatId], references: [id], onDelete: Cascade)
+  connector           Connector         @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@unique([connectorId, assistantUserChatId])
+  @@index([connectorId])
+  @@index([assistantUserChatId])
+  @@map("connector_chat_usages")
+}
+
+model OAuthState {
+  id        String   @id @default(cuid())
+  state     String   @unique
+  userId    BigInt
+  provider  String   @db.VarChar(50)
+  data      Json?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([state])
+  @@index([expiresAt])
+  @@map("oauth_states")
+}
+
+model assistant_chat_members {
+  id              Int           @id @default(autoincrement())
+  chatId          Int
+  userId          BigInt
+  role            String        @default("member") @db.VarChar(50)
+  joinedAt        DateTime      @default(now())
+  assistant_chats AssistantChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  users           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chatId, userId])
+  @@index([chatId])
+  @@index([userId])
+}
+
+model assistant_group_chat_members {
+  id                    Int                   @id @default(autoincrement())
+  groupChatId           Int
+  userId                BigInt
+  role                  String                @default("member") @db.VarChar(20)
+  joinedAt              DateTime              @default(now())
+  leftAt                DateTime?
+  assistant_group_chats assistant_group_chats @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
+  users                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupChatId, userId])
+  @@index([groupChatId])
+  @@index([userId])
+}
+
+model assistant_group_chat_messages {
+  id                    BigInt                @id @default(autoincrement())
+  groupChatId           Int
+  assistantId           BigInt
+  senderId              BigInt
+  message               String
+  messageType           String                @default("text") @db.VarChar(50)
+  attachmentUrl         String?               @db.VarChar(255)
+  attachmentName        String?               @db.VarChar(255)
+  attachmentSize        BigInt?
+  deletedAt             DateTime?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime
+  assistants            Assistant             @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  assistant_group_chats assistant_group_chats @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
+  users                 User                  @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([assistantId])
+  @@index([createdAt])
+  @@index([groupChatId])
+  @@index([senderId])
+}
+
+model assistant_group_chats {
+  id                            Int                             @id @default(autoincrement())
+  assistantId                   BigInt
+  name                          String                          @db.VarChar(255)
+  description                   String?                         @db.VarChar(500)
+  avatarUrl                     String?                         @db.VarChar(255)
+  createdById                   BigInt
+  isActive                      Boolean                         @default(true)
+  lastMessageAt                 DateTime?
+  lastMessageId                 BigInt?
+  createdAt                     DateTime                        @default(now())
+  updatedAt                     DateTime
+  deletedAt                     DateTime?
+  assistant_group_chat_members  assistant_group_chat_members[]
+  assistant_group_chat_messages assistant_group_chat_messages[]
+  assistants                    Assistant                       @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+  users                         User                            @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([assistantId])
+  @@index([createdById])
+  @@index([lastMessageAt])
+}
+
+enum AssistantCategory {
+  EDUCATION
+  TRAVEL
+  PROGRAMMING
+  MARKETING
+  ANALYSIS
+  BOOKING
+  OTHER
+}
+
+enum MessageStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ArtifactAccessLevel {
+  VIEWER
+  EDITOR
+  ADMIN
+}
 
 enum ConnectorStatus {
   PENDING
@@ -921,78 +833,5 @@ enum ConnectorStatus {
 enum ConnectorProvider {
   DROPBOX
   GOOGLE
-  // Future: MICROSOFT, NOTION, SLACK, etc.
-}
-
-model Connector {
-  id                Int               @id @default(autoincrement())
-  userId            BigInt
-  assistantId       BigInt?
-  provider          ConnectorProvider
-  name              String            @db.VarChar(255)
-  description       String?           @db.Text
-  accessToken       String            @db.Text
-  refreshToken      String            @db.Text
-  tokenExpiry       DateTime
-  providerAccountId String?           @db.VarChar(255)
-  providerEmail     String?           @db.VarChar(255)
-  scopes            Json              @default("[]")
-  status            ConnectorStatus   @default(PENDING)
-  requireApproval   String            @default("never") @db.VarChar(50)
-  autoRefresh       Boolean           @default(true)
-  config            Json?             @db.Json
-  metadata          Json?             @db.Json
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  deletedAt         DateTime?
-
-  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assistant  Assistant?           @relation(fields: [assistantId], references: [id], onDelete: Cascade)
-  chatUsages ConnectorChatUsage[]
-
-  @@unique([userId, assistantId, provider])
-  @@index([userId])
-  @@index([assistantId])
-  @@index([provider])
-  @@index([status])
-  @@map("connectors")
-}
-
-model ConnectorChatUsage {
-  id                  Int      @id @default(autoincrement())
-  connectorId         Int
-  assistantUserChatId Int
-  isActive            Boolean  @default(true)
-  lastUsedAt          DateTime @default(now())
-  usageCount          Int      @default(0)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  connector Connector         @relation(fields: [connectorId], references: [id], onDelete: Cascade)
-  chat      AssistantUserChat @relation(fields: [assistantUserChatId], references: [id], onDelete: Cascade)
-
-  @@unique([connectorId, assistantUserChatId])
-  @@index([connectorId])
-  @@index([assistantUserChatId])
-  @@map("connector_chat_usages")
-}
-
-// ================================================================
-// OAUTH STATE STORAGE
-// ================================================================
-
-model OAuthState {
-  id        String   @id @default(cuid())
-  state     String   @unique
-  userId    BigInt
-  provider  String   @db.VarChar(50)
-  data      Json?
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([state])
-  @@index([expiresAt])
-  @@map("oauth_states")
+  SUPABASE
 }

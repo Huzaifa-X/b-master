@@ -15,6 +15,7 @@ import { registerSchema, RegisterInput } from "@/lib/validations/auth"
 import { useRegisterMutation } from "@/hooks/useAuth"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useLocale } from "@/lib/i18n"
 
 export function SignupForm({
   className,
@@ -22,6 +23,7 @@ export function SignupForm({
 }: React.ComponentProps<"form">) {
   const router = useRouter()
   const registerMutation = useRegisterMutation()
+  const { t } = useLocale()
   
   const [formData, setFormData] = useState<RegisterInput>({
     name: "",
@@ -106,19 +108,19 @@ export function SignupForm({
     <form className={cn("flex flex-col gap-6", className)} {...props} onSubmit={handleSubmit}>
       <FieldGroup>
         <div className="flex flex-col items-center gap-1 text-center">
-          <h1 className="text-2xl font-bold">Create your account</h1>
+          <h1 className="text-2xl font-bold">{t("auth.createAccount")}</h1>
           <p className="text-muted-foreground text-sm text-balance">
-            Fill in the form below to create your account
+            {t("auth.signUpSubtitle")}
           </p>
         </div>
 
         {/* Full Name Field */}
         <Field>
-          <FieldLabel htmlFor="name">Full Name</FieldLabel>
+          <FieldLabel htmlFor="name">{t("auth.name")}</FieldLabel>
           <Input
             id="name"
             type="text"
-            placeholder="Enter your full name"
+            placeholder={t("auth.namePlaceholder")}
             value={formData.name}
             onChange={handleChange}
             className={cn(
@@ -135,11 +137,11 @@ export function SignupForm({
 
         {/* Email Field */}
         <Field>
-          <FieldLabel htmlFor="email">Email</FieldLabel>
+          <FieldLabel htmlFor="email">{t("auth.email")}</FieldLabel>
           <Input
             id="email"
             type="email"
-            placeholder="Enter your email address"
+            placeholder={t("auth.emailAddressPlaceholder")}
             value={formData.email}
             onChange={handleChange}
             className={cn(
@@ -156,12 +158,12 @@ export function SignupForm({
 
         {/* Password Field */}
         <Field>
-          <FieldLabel htmlFor="password">Password</FieldLabel>
+          <FieldLabel htmlFor="password">{t("auth.password")}</FieldLabel>
           <div className="relative">
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
-              placeholder="Create a strong password"
+              placeholder={t("auth.createPasswordPlaceholder")}
               value={formData.password}
               onChange={handleChange}
               className={cn(
@@ -185,19 +187,19 @@ export function SignupForm({
             <p className="text-sm text-red-600 mt-1 animate-fade-in">{errors.password}</p>
           ) : (
             <FieldDescription>
-              Must be at least 8 characters with uppercase, lowercase, and number.
+              {t("auth.passwordHint")}
             </FieldDescription>
           )}
         </Field>
 
         {/* Confirm Password Field */}
         <Field>
-          <FieldLabel htmlFor="confirm-password">Confirm Password</FieldLabel>
+          <FieldLabel htmlFor="confirm-password">{t("auth.confirmPassword")}</FieldLabel>
           <div className="relative">
             <Input
               id="confirm-password"
               type={showConfirmPassword ? "text" : "password"}
-              placeholder="Re-enter your password"
+              placeholder={t("auth.reenterPasswordPlaceholder")}
               value={formData.confirmPassword}
               onChange={handleChange}
               className={cn(
@@ -234,10 +236,10 @@ export function SignupForm({
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating Account...
+                {t("auth.creatingAccount")}
               </>
             ) : (
-              "Create Account"
+              t("auth.createAccount")
             )}
           </Button>
         </Field>
@@ -245,12 +247,12 @@ export function SignupForm({
         {/* Sign In Link */}
         <Field>
           <FieldDescription className="px-6 text-center">
-            Already have an account?{" "}
+            {t("auth.alreadyHaveAccount")}{" "}
             <Link
               href="/login" 
               className="underline underline-offset-4 hover:text-blue-600 transition-colors duration-200"
             >
-              Sign in
+              {t("auth.signIn")}
             </Link>
           </FieldDescription>
         </Field>

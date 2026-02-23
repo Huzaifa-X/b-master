@@ -2,6 +2,7 @@
 
 import { File, Link2, ExternalLink } from "lucide-react"
 import { format } from "date-fns"
+import { HtmlCodePreview } from "@/components/assistants/html-code-preview"
 
 /** Build a server-proxy URL so the browser never hits S3 directly */
 function toProxyUrl(url: string | null | undefined): string | null {
@@ -59,6 +60,41 @@ function linkifyText(text: string, isOwn: boolean) {
     }
     return <span key={i}>{part}</span>
   })
+}
+
+/**
+ * Splits a raw message into alternating plain-text and code-fence segments.
+ * Returns an array of { type: "text" | "code", content, language? }
+ */
+type MessageSegment =
+  | { type: "text"; content: string }
+  | { type: "code"; content: string; language: string }
+
+function parseMessageSegments(text: string): MessageSegment[] {
+  const segments: MessageSegment[] = []
+  // Matches ```lang\n...code...\n```
+  const FENCE_RE = /```(\w*)\n([\s\S]*?)```/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = FENCE_RE.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: "text", content: text.slice(lastIndex, match.index) })
+    }
+    segments.push({ type: "code", content: match[2].trimEnd(), language: match[1] || "plaintext" })
+    lastIndex = match.index + match[0].length
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ type: "text", content: text.slice(lastIndex) })
+  }
+
+  return segments.length > 0 ? segments : [{ type: "text", content: text }]
+}
+
+/** Returns true if the message contains at least one code fence */
+function hasCodeFence(text: string): boolean {
+  return /```[\w]*\n[\s\S]*?```/.test(text)
 }
 
 export function MessageBubble({
@@ -166,10 +202,32 @@ export function MessageBubble({
         )}
 
         {/* ── Text message ── */}
-        {message && (
+        {message && !hasCodeFence(message) && (
           <p className="text-sm whitespace-pre-wrap break-words">
             {linkifyText(message, isOwn)}
           </p>
+        )}
+
+        {/* ── Message with inline code blocks (e.g. HTML preview) ── */}
+        {message && hasCodeFence(message) && (
+          <div className="text-sm">
+            {parseMessageSegments(message).map((seg, i) => {
+              if (seg.type === "text") {
+                return seg.content.trim() ? (
+                  <p key={i} className="whitespace-pre-wrap break-words mb-1">
+                    {linkifyText(seg.content, isOwn)}
+                  </p>
+                ) : null
+              }
+              // Code block — use HtmlCodePreview for any language; it renders
+              // Code/Preview tabs for HTML and plain syntax highlight for others
+              return (
+                <div key={i} className="my-2">
+                  <HtmlCodePreview code={seg.content} language={seg.language} />
+                </div>
+              )
+            })}
+          </div>
         )}
 
         {/* ── Timestamp ── */}

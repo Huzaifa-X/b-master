@@ -531,6 +531,59 @@ export async function createArtifact(data: {
             // Don't fail the operation if notification fails
         }
 
+        // ── Create initial version for template artifacts ─────────────────────
+        if (data.templateHtml) {
+            try {
+                const templateVersion = await prisma.artifactVersion.create({
+                    data: {
+                        artifactId: artifact.id,
+                        userId: userId,
+                        versionNumber: 1,
+                        versionName: 'Version 1',
+                        code: data.templateHtml,
+                        description: 'Initial template version',
+                        changeType: 'ai',
+                        isSnapshot: false,
+                    },
+                })
+                await prisma.assistantArtifact.update({
+                    where: { id: artifact.id },
+                    data: { activeVersionId: templateVersion.id },
+                })
+                console.log('[Artifact Action] ✅ Template version created:', templateVersion.id)
+            } catch (versionError) {
+                console.error('[Artifact Action] Failed to create template version:', versionError)
+            }
+        }
+
+        // ── Enqueue AI generation immediately so it runs in parallel with the
+        //    user navigating to the artifact page (only for AI-generated artifacts)
+        if (data.category !== 'video_generation' && !data.templateHtml) {
+            try {
+                const { enqueueArtifactGeneration } = await import('@/lib/queues/artifact-generation.queue')
+                const { processArtifactGeneration } = await import('@/lib/services/artifact-generation.service')
+
+                const jobId = await enqueueArtifactGeneration({
+                    artifactId: Number(artifact.id),
+                    userId: session.user.id,
+                    assistantId: data.assistantId,
+                    instructions: data.instructions,
+                    selectedChatId: data.selectedChatId ? parseInt(data.selectedChatId) : undefined,
+                })
+
+                console.log('[Artifact Action] ✅ Generation job enqueued:', jobId)
+
+                // Fire-and-forget: process inline so generation works even when
+                // the standalone worker process is not running
+                void processArtifactGeneration(jobId, Number(artifact.id)).catch(err => {
+                    console.error('[Artifact Action] Inline generation error:', err)
+                })
+            } catch (queueError) {
+                console.error('[Artifact Action] Failed to enqueue generation job:', queueError)
+                // Don't fail the artifact creation; user can still trigger generation from the page
+            }
+        }
+
         return {
             success: true,
             artifact: {
@@ -1227,17 +1280,20 @@ export async function shareArtifact(data: {
             }
         }
 
-        // Create shareable link
-        const shareableLink = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/share/${shareableId}`
+        // Create shareable link (strip any trailing slash from NEXTAUTH_URL)
+        const baseUrl = (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/$/, '')
+        const shareableLink = `${baseUrl}/share/${shareableId}`
 
-        // Send message with artifact link
+        // Send message with artifact link — use 'url' type so it renders as a clickable card
         const message = await prisma.assistantChatMessage.create({
             data: {
                 assistantChatId: chatId,
                 assistantId: assistantIdBigInt,
                 senderId: userId,
-                message: `I shared an artifact with you: "${data.artifactName}"\n\nView it here: ${shareableLink}`,
-                messageType: 'text'
+                message: `🎨 Artifact shared: "${data.artifactName}"`,
+                messageType: 'url',
+                attachmentUrl: shareableLink,
+                attachmentName: data.artifactName,
             },
             include: {
                 sender: {
