@@ -64,6 +64,7 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
         messenger: false,
         artifact: false,
         newsFeed: false,
+        library: false,
       },
     }
   )

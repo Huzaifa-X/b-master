@@ -3,6 +3,17 @@
 import { File, Link2, ExternalLink } from "lucide-react"
 import { format } from "date-fns"
 
+/** Build a server-proxy URL so the browser never hits S3 directly */
+function toProxyUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  // Already a proxy or relative URL — use as-is
+  if (url.startsWith("/") || url.includes("/api/attachments")) return url
+  // External non-S3 URLs (e.g. user-pasted links) — use directly
+  const isS3 = url.includes("amazonaws.com") || url.includes("s3.")
+  if (!isS3) return url
+  return `/api/attachments?url=${encodeURIComponent(url)}`
+}
+
 interface MessageBubbleProps {
   message: string
   messageType: string
@@ -62,6 +73,9 @@ export function MessageBubble({
   const isImage = isImageAttachment(messageType, attachmentName)
   const isUrl = isUrlMessage(messageType)
 
+  // Route S3 attachments through our server proxy (browser never hits S3 directly)
+  const resolvedAttachmentUrl = isUrl ? attachmentUrl : toProxyUrl(attachmentUrl)
+
   return (
     <div className="max-w-[70%]">
       {senderName && (
@@ -74,16 +88,16 @@ export function MessageBubble({
         }`}
       >
         {/* ── Image attachment ── */}
-        {isImage && attachmentUrl && (
+        {isImage && resolvedAttachmentUrl && (
           <div className="mb-2">
             <a
-              href={attachmentUrl}
+              href={resolvedAttachmentUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="block rounded-lg overflow-hidden"
             >
               <img
-                src={attachmentUrl}
+                src={resolvedAttachmentUrl}
                 alt={attachmentName ?? "Image"}
                 className="max-w-full h-auto max-h-[320px] object-contain rounded-lg"
                 loading="lazy"
@@ -125,9 +139,9 @@ export function MessageBubble({
         )}
 
         {/* ── File attachment (non-image) ── */}
-        {attachmentUrl && !isImage && !isUrl && (
+        {resolvedAttachmentUrl && !isImage && !isUrl && (
           <a
-            href={attachmentUrl}
+            href={resolvedAttachmentUrl}
             target="_blank"
             rel="noopener noreferrer"
             className={`flex items-center gap-2 mb-2 p-2 rounded-lg border text-sm transition-opacity hover:opacity-80 ${

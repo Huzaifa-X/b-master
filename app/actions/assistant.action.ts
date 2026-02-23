@@ -155,6 +155,7 @@ interface CreateCompleteAssistantParams {
             messenger: boolean
             artifact: boolean
             newsFeed: boolean
+            library: boolean
         }
     }>
     buyerPermissions: {
@@ -163,6 +164,7 @@ interface CreateCompleteAssistantParams {
         messenger: boolean
         artifact: boolean
         newsFeed: boolean
+        library: boolean
     }
 }
 
