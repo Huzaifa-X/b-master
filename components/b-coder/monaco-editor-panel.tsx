@@ -40,6 +40,8 @@ import {
 } from "./file-dialogs"
 import { SupabaseConnectDialog } from "./supabase-connect-dialog"
 import { useBCoderSupabase } from "@/hooks/useBCoderSupabase"
+import { GithubDeployDialog } from "./github-deploy-dialog"
+import { deployToGithubAndVercel } from "@/app/actions/deploy.action"
 
 interface FileNode {
   name: string
@@ -170,6 +172,8 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
   const [localFileStructure, setLocalFileStructure] = useState<FileNode[]>([])
   const [openFolders, setOpenFolders] = useState<Set<string>>(new Set(["src"]))
   const [supabaseDialogOpen, setSupabaseDialogOpen] = useState(false)
+  const [deployDialogOpen, setDeployDialogOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false) // Mobile sidebar toggle state
   const { resolvedTheme } = useTheme()
   const { connection: supabaseConn } = useBCoderSupabase()
 
@@ -207,6 +211,7 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
     selectedFilePath,
     setSelectedFilePath,
     webcontainerInstance,
+    exportFilesAsJson,
   } = useBCoderContext()
 
   const editorTheme = resolvedTheme === "dark" ? "vs-dark" : "light"
@@ -286,6 +291,7 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
   const handleFileSelect = useCallback((path: string, language: string) => {
     setSelectedFilePath(path)
     setSelectedLanguage(language)
+    setSidebarOpen(false) // Auto-close mobile sidebar when a file is mapped
   }, [setSelectedFilePath])
 
   useEffect(() => {
@@ -387,7 +393,6 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
         await deleteFolder(path)
       }
 
-      await buildFileTree()
       await contextBuildFileTree()
       setDeleteDialog({ open: false, path: "", name: "", type: "file" })
     } catch {
@@ -395,31 +400,58 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
     }
   }, [deleteDialog, deleteFile, deleteFolder, buildFileTree, contextBuildFileTree, selectedFilePath, setSelectedFilePath])
 
+  const handleDeploy = async (data: { repoName: string, description: string, isPrivate: boolean }) => {
+    try {
+      const files = await exportFilesAsJson();
+      const result = await deployToGithubAndVercel({
+        ...data,
+        files
+      });
+      return result;
+    } catch (err: any) {
+      return { success: false, error: { message: err.message || "Failed to extract WebContainer files." } }
+    }
+  }
+
   return (
-    <div className="h-full flex flex-col bg-background">
-      <div className="border-b bg-gradient-to-r from-emerald-50/50 to-cyan-50/50 dark:from-emerald-950/20 dark:to-cyan-950/20">
-        <div className="px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+    <div className="h-full flex flex-col bg-background relative overflow-hidden">
+      <div className="border-b bg-gradient-to-r from-emerald-50/50 to-cyan-50/50 dark:from-emerald-950/20 dark:to-cyan-950/20 z-10">
+        <div className="px-2 sm:px-4 py-2 sm:py-3 flex items-center justify-between">
+          <div className="flex items-center gap-1 sm:gap-2">
+            {!isPreview && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="md:hidden h-7 w-7 p-0 mr-1 shrink-0"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                title="Toggle File Explorer"
+              >
+                <Folder className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              </Button>
+            )}
             <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
               <Button
                 variant={!isPreview ? "secondary" : "ghost"}
                 size="sm"
                 className={cn(
-                  "h-7 text-xs transition-colors",
+                  "h-7 text-xs transition-colors px-2 sm:px-3",
                   !isPreview
                     ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/40"
                     : "text-foreground hover:text-foreground hover:bg-amber-50 dark:hover:bg-amber-950/20"
                 )}
-                onClick={() => setIsPreview(false)}
+                onClick={() => {
+                  setIsPreview(false)
+                  setSidebarOpen(false)
+                }}
               >
-                <Code className="h-3 w-3 mr-1" />
-                Code
+                <Code className="h-3 w-3 sm:mr-1 shrink-0" />
+                <span className="hidden sm:inline">Code</span>
               </Button>
               <Button
                 variant={isPreview ? "secondary" : "ghost"}
                 size="sm"
                 className={cn(
-                  "h-7 text-xs transition-colors",
+                  "h-7 text-xs transition-colors px-2 sm:px-3",
                   isPreview
                     ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/40"
                     : "text-foreground hover:text-foreground hover:bg-amber-50 dark:hover:bg-amber-950/20"
@@ -427,58 +459,58 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
                 onClick={() => setIsPreview(true)}
                 disabled={!isServerReady}
               >
-                <Eye className="h-3 w-3 mr-1" />
-                Preview
+                <Eye className="h-3 w-3 sm:mr-1 shrink-0" />
+                <span className="hidden sm:inline">Preview</span>
               </Button>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted/50">
-              {isBooting && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-              {isInstalling && <Package className="h-4 w-4 animate-pulse text-amber-500" />}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-muted/50 shrink-0">
+              {isBooting && <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin text-muted-foreground" />}
+              {isInstalling && <Package className="h-3 w-3 sm:h-4 sm:w-4 animate-pulse text-amber-500" />}
               {isServerReady && (
                 <div className="relative">
                   <div className="absolute inset-0 bg-emerald-500/20 blur-sm rounded-full animate-pulse" />
-                  <div className="relative h-3 w-3 bg-emerald-500 rounded-full" />
+                  <div className="relative h-2 w-2 sm:h-3 sm:w-3 bg-emerald-500 rounded-full" />
                 </div>
               )}
               {!isBooting && !isInstalling && !isServerReady && (
-                <div className="h-3 w-3 bg-gray-300 dark:bg-gray-600 rounded-full" />
+                <div className="h-2 w-2 sm:h-3 sm:w-3 bg-gray-300 dark:bg-gray-600 rounded-full" />
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setSupabaseDialogOpen(true)}
                 className={cn(
-                  "h-8 px-2 gap-1.5 text-xs font-medium transition-all",
+                  "h-7 sm:h-8 px-1.5 sm:px-2 gap-1.5 text-xs font-medium transition-all max-w-[120px]",
                   supabaseConn.connected
                     ? "bg-emerald-500 hover:bg-emerald-600 border-emerald-600 text-white"
                     : "bg-muted hover:bg-muted/80 opacity-80 hover:text-black dark:hover:text-white"
                 )}
                 title={supabaseConn.connected ? `Supabase: ${supabaseConn.projectRef}` : "Connect Supabase"}
               >
-                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <svg className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M13.277 21.998c-.403.02-.806-.102-1.124-.34a1.74 1.74 0 0 1-.627-1.084L10.47 10.47H3.03c-.522 0-1.01-.267-1.29-.707a1.49 1.49 0 0 1-.154-1.386l.002-.004C2.31 6.658 5.257 1.027 5.257 1.027c.23-.407.636-.7 1.103-.793a1.74 1.74 0 0 1 1.29.34c.38.295.627.73.627 1.084l1.056 10.105h7.44c.522 0 1.01.267 1.29.707.28.44.312.99.154 1.386l-.002.004c-.722 1.715-3.669 7.346-3.669 7.346-.23.407-.636.7-1.103.793-.09.018-.18.027-.27.027l.104-.028Z" />
                 </svg>
                 {supabaseConn.connected ? (
-                  <span className="hidden sm:inline">Connected</span>
+                  <span className="hidden lg:inline truncate">Connected</span>
                 ) : (
-                  <span className="hidden sm:inline">Supabase</span>
+                  <span className="hidden lg:inline truncate">Supabase</span>
                 )}
               </Button>
 
               <Button
-                variant="outline"
                 size="sm"
-                disabled
-                className="h-8 w-8 p-0 bg-black dark:bg-white border-black dark:border-white opacity-50 cursor-not-allowed"
-                title="Deploy to GitHub (Coming Soon)"
+                onClick={() => setDeployDialogOpen(true)}
+                className="h-7 sm:h-8 px-2 sm:px-3 gap-1.5 text-xs font-medium transition-all bg-emerald-500 hover:bg-emerald-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] border-0 ml-1"
+                title="Deploy Project to Vercel"
               >
-                <Globe className="h-4 w-4 text-white dark:text-black" />
+                <Globe className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
+                <span className="hidden lg:inline truncate">Deploy</span>
               </Button>
             </div>
           </div>
@@ -486,19 +518,31 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
       </div>
 
       {error && (
-        <Alert variant="destructive" className="m-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
+        <Alert variant="destructive" className="m-2 sm:m-4 text-xs sm:text-sm">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <AlertDescription className="break-all">{error}</AlertDescription>
         </Alert>
       )}
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         {!isPreview ? (
           <>
-            <div className="w-64 border-r bg-muted/30 overflow-y-auto">
-              <div className="p-2">
-                <div className="flex items-center justify-between mb-2 px-2">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase">Files</span>
+            {/* Overlay background for mobile sidebar */}
+            {sidebarOpen && (
+              <div
+                className="absolute inset-0 bg-background/80 backdrop-blur-sm z-20 md:hidden"
+                onClick={() => setSidebarOpen(false)}
+              />
+            )}
+
+            {/* File Explorer Sidebar */}
+            <div className={cn(
+              "absolute md:relative top-0 bottom-0 left-0 z-30 w-64 border-r bg-background md:bg-muted/30 overflow-y-auto transition-transform duration-300 md:duration-0 h-full shadow-2xl md:shadow-none",
+              sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+            )}>
+              <div className="p-2 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-2 px-2 shrink-0">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase">Explorer</span>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setCreateFileDialog({ open: true, parentPath: "" })} title="New File">
                       <FilePlus className="h-3 w-3" />
@@ -508,37 +552,40 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
                     </Button>
                   </div>
                 </div>
-                {localFileStructure.map((node) => (
-                  <FileTreeItem
-                    key={node.path}
-                    node={node}
-                    onSelect={handleFileSelect}
-                    selectedPath={selectedFilePath || ""}
-                    onCreateFile={(parentPath) => setCreateFileDialog({ open: true, parentPath })}
-                    onCreateFolder={(parentPath) => setCreateFolderDialog({ open: true, parentPath })}
-                    onRename={(path, type) => {
-                      const name = path.split("/").pop() || ""
-                      setRenameDialog({ open: true, path, name, type })
-                    }}
-                    onDelete={(path, type) => {
-                      const name = path.split("/").pop() || ""
-                      setDeleteDialog({ open: true, path, name, type })
-                    }}
-                    openFolders={openFolders}
-                    toggleFolder={toggleFolder}
-                  />
-                ))}
+                <div className="flex-1 overflow-y-auto">
+                  {localFileStructure.map((node) => (
+                    <FileTreeItem
+                      key={node.path}
+                      node={node}
+                      onSelect={handleFileSelect}
+                      selectedPath={selectedFilePath || ""}
+                      onCreateFile={(parentPath) => setCreateFileDialog({ open: true, parentPath })}
+                      onCreateFolder={(parentPath) => setCreateFolderDialog({ open: true, parentPath })}
+                      onRename={(path, type) => {
+                        const name = path.split("/").pop() || ""
+                        setRenameDialog({ open: true, path, name, type })
+                      }}
+                      onDelete={(path, type) => {
+                        const name = path.split("/").pop() || ""
+                        setDeleteDialog({ open: true, path, name, type })
+                      }}
+                      openFolders={openFolders}
+                      toggleFolder={toggleFolder}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="flex-1 flex flex-col">
-              <div className="border-b px-4 py-2 bg-muted/20">
-                <div className="flex items-center gap-2">
-                  <FileCode className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">{selectedFilePath || "No file selected"}</span>
+            {/* Monaco Editor Wrapper */}
+            <div className="flex-1 flex flex-col min-w-0 h-full w-full">
+              <div className="border-b px-2 sm:px-4 py-2 bg-muted/20 shrink-0 flex items-center overflow-x-auto scroolbar-hide">
+                <div className="flex items-center gap-2 whitespace-nowrap min-w-0 w-full">
+                  <FileCode className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-500 shrink-0" />
+                  <span className="text-xs sm:text-sm font-medium truncate w-full pr-4">{selectedFilePath || "No file selected"}</span>
                 </div>
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-h-0 relative">
                 <Editor
                   height="100%"
                   language={selectedLanguage}
@@ -552,6 +599,7 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
                     lineNumbers: "on",
                     scrollBeyondLastLine: false,
                     automaticLayout: true,
+                    wordWrap: "on",
                     tabSize: 2,
                   }}
                 />
@@ -559,21 +607,21 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col">
-            <div className="border-b px-4 py-2 bg-muted/20">
+          <div className="flex-1 flex flex-col w-full min-w-0">
+            <div className="border-b px-4 py-2 bg-muted/20 shrink-0">
               <div className="flex items-center gap-2">
-                <Eye className="h-4 w-4 text-muted-foreground" />
+                <Eye className="h-4 w-4 text-emerald-500 shrink-0" />
                 <span className="text-sm font-medium">Live Preview</span>
               </div>
             </div>
-            <div className="flex-1 bg-white dark:bg-gray-900">
+            <div className="flex-1 bg-white dark:bg-gray-900 overflow-hidden relative w-full h-full">
               {serverUrl ? (
-                <iframe src={serverUrl} className="w-full h-full border-0" title="Preview" />
+                <iframe src={serverUrl} className="w-full h-full absolute inset-0 border-0" title="Preview" />
               ) : (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center text-muted-foreground">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-                    <p>Starting server...</p>
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-emerald-500" />
+                    <p className="text-sm animate-pulse">Running build step...</p>
                   </div>
                 </div>
               )}
@@ -615,6 +663,12 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
       <SupabaseConnectDialog
         open={supabaseDialogOpen}
         onOpenChange={setSupabaseDialogOpen}
+      />
+
+      <GithubDeployDialog
+        open={deployDialogOpen}
+        onOpenChange={setDeployDialogOpen}
+        onDeploy={handleDeploy}
       />
     </div>
   )

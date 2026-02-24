@@ -20,7 +20,10 @@ interface UseWebContainerReturn {
     createFolder: (path: string) => Promise<void>
     deleteFolder: (path: string) => Promise<void>
     runCommand: (commandString: string) => Promise<void>
+    exportFilesAsJson: () => Promise<{ [path: string]: string }>
 }
+
+let globalWebContainerPromise: Promise<WebContainer> | null = null
 
 export function useWebContainer(templateId: string): UseWebContainerReturn {
     const [isBooting, setIsBooting] = useState(true)
@@ -29,10 +32,10 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
     const [serverUrl, setServerUrl] = useState<string | null>(null)
     const [terminalOutput, setTerminalOutput] = useState<string[]>([])
     const [error, setError] = useState<string | null>(null)
-    // State-tracked instance so consumers re-render when it becomes available
     const [webcontainerInstance, setWebcontainerInstance] = useState<WebContainer | null>(null)
 
     const webcontainerInstanceRef = useRef<WebContainer | null>(null)
+    const devServerProcessRef = useRef<any | null>(null)
     const isBootingRef = useRef(false)
 
     const addTerminalOutput = useCallback((message: string) => {
@@ -41,10 +44,8 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
 
     const writeFile = useCallback(async (path: string, content: string) => {
         if (!webcontainerInstanceRef.current) return
-        // Normalize path: WebContainer uses relative paths, strip leading slash
         const normalizedPath = path.startsWith('/') ? path.slice(1) : path
         try {
-            // Ensure parent directories exist before writing
             const parts = normalizedPath.split('/')
             if (parts.length > 1) {
                 const dir = parts.slice(0, -1).join('/')
@@ -111,10 +112,17 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
     }, [addTerminalOutput])
 
     const startDevServer = useCallback(async (webcontainer: WebContainer) => {
-        addTerminalOutput("🚀 Starting Vite dev server...")
+        // Kill existing dev server if one is running in this component instance
+        if (devServerProcessRef.current) {
+            devServerProcessRef.current.kill()
+            devServerProcessRef.current = null
+        }
 
+        addTerminalOutput("🚀 Starting Vite dev server...")
         try {
             const serverProcess = await webcontainer.spawn("npm", ["run", "dev"])
+            devServerProcessRef.current = serverProcess
+
             serverProcess.output.pipeTo(new WritableStream({ write(data) { addTerminalOutput(data) } }))
 
             webcontainer.on("server-ready", (_port, url) => {
@@ -130,18 +138,46 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
         }
     }, [addTerminalOutput])
 
+    const cleanupFileSystem = useCallback(async (webcontainer: WebContainer) => {
+        // Only delete the specific files/folders that we mount, so we don't accidentally
+        // kill hidden webcontainer files or node_modules
+        const itemsToDelete = ['src', 'public', 'package.json', 'vite.config.js', 'index.html']
+        for (const item of itemsToDelete) {
+            try {
+                await webcontainer.fs.rm(item, { recursive: true })
+            } catch (err) {
+                // Ignore errors if the file/folder doesn't exist
+            }
+        }
+    }, [])
+
     useEffect(() => {
+        // Prevent double booting loop within the same mounted component
         if (isBootingRef.current || webcontainerInstanceRef.current) return
 
         isBootingRef.current = true
 
         async function bootWebContainer() {
             try {
-                addTerminalOutput("⏳ Booting WebContainer...")
-                const webcontainer = await WebContainer.boot()
+                let webcontainer: WebContainer;
+
+                // SINGLETON LOGIC
+                if (!globalWebContainerPromise) {
+                    addTerminalOutput("⏳ Booting fresh WebContainer instance (this only happens once)...")
+                    globalWebContainerPromise = WebContainer.boot()
+                    webcontainer = await globalWebContainerPromise
+                    addTerminalOutput("✅ Fresh WebContainer booted!")
+                } else {
+                    addTerminalOutput("🔄 Reusing existing WebContainer instance...")
+                    webcontainer = await globalWebContainerPromise
+                    addTerminalOutput("✅ Existing WebContainer connected!")
+
+                    addTerminalOutput("🧹 Cleaning up old workspace files...")
+                    await cleanupFileSystem(webcontainer)
+                }
+
                 webcontainerInstanceRef.current = webcontainer
                 setWebcontainerInstance(webcontainer)
-                addTerminalOutput("✅ WebContainer booted!")
 
                 addTerminalOutput(`📦 Loading template: ${templateId}`)
                 const template = getTemplateById(templateId)
@@ -163,7 +199,7 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
                     current[fileName] = { file: { contents: content } }
                 }
 
-                addTerminalOutput("📁 Mounting files...")
+                addTerminalOutput("📁 Mounting template files...")
                 await webcontainer.mount(templateFiles)
                 addTerminalOutput("✅ Files mounted!")
 
@@ -180,15 +216,20 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
 
         bootWebContainer()
 
+        // Clean up when this specific hook unmounts (e.g. modal is closed)
         return () => {
-            if (webcontainerInstanceRef.current) {
-                webcontainerInstanceRef.current.teardown()
-                webcontainerInstanceRef.current = null
-                isBootingRef.current = false
+            isBootingRef.current = false
+            setIsServerReady(false)
+            setServerUrl(null)
+
+            // Kill ONLY the dev server process, do NOT tear down the webcontainer 
+            if (devServerProcessRef.current) {
+                devServerProcessRef.current.kill()
+                devServerProcessRef.current = null
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [templateId]) // Added templateId as dependency to re-run if it changes dynamically
 
     const runCommand = useCallback(async (commandString: string) => {
         if (!webcontainerInstanceRef.current) return
@@ -210,6 +251,41 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
         }
     }, [addTerminalOutput])
 
+    const exportFilesAsJson = useCallback(async (): Promise<{ [path: string]: string }> => {
+        if (!webcontainerInstanceRef.current) throw new Error("WebContainer not ready")
+
+        const result: { [path: string]: string } = {}
+
+        const readDirRecursive = async (path: string) => {
+            const entries = await webcontainerInstanceRef.current!.fs.readdir(path, { withFileTypes: true })
+
+            for (const entry of entries) {
+                // Skip node_modules and hidden folders/files to save bandwidth
+                if (entry.name === 'node_modules' || entry.name.startsWith('.git')) {
+                    continue
+                }
+
+                const fullPath = path === '.' ? entry.name : `${path}/${entry.name}`
+
+                if (entry.isDirectory()) {
+                    await readDirRecursive(fullPath)
+                } else {
+                    try {
+                        // Assuming text files for this export. Binary files like images might need
+                        // special base64 handling if they are user-uploaded, but for template code, utf-8 works.
+                        const content = await webcontainerInstanceRef.current!.fs.readFile(fullPath, "utf-8")
+                        result[fullPath] = content
+                    } catch (err) {
+                        console.error(`Failed to read file for export: ${fullPath}`, err)
+                    }
+                }
+            }
+        }
+
+        await readDirRecursive('.')
+        return result
+    }, [])
+
     return {
         isBooting,
         isInstalling,
@@ -226,5 +302,6 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
         createFolder,
         deleteFolder,
         runCommand,
+        exportFilesAsJson,
     }
 }

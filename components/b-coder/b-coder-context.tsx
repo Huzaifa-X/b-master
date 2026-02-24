@@ -25,6 +25,7 @@ interface BCoderContextValue {
     createFolder: (path: string) => Promise<void>
     deleteFolder: (path: string) => Promise<void>
     runCommand: (commandString: string) => Promise<void>
+    exportFilesAsJson: () => Promise<{ [path: string]: string }>
     buildFileTree: () => Promise<void>
     fileStructure: FileNode[]
     selectedFilePath: string | null

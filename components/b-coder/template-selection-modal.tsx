@@ -43,7 +43,7 @@ const templates: TemplateOption[] = [
         name: "Booking",
         description: "Complete booking management system",
         icon: <Calendar className="h-8 w-8" />,
-        isEnabled: false,
+        isEnabled: true,
         category: "booking",
     },
     {
@@ -51,7 +51,7 @@ const templates: TemplateOption[] = [
         name: "Accounting",
         description: "Financial tracking and reporting dashboard",
         icon: <Calculator className="h-8 w-8" />,
-        isEnabled: false,
+        isEnabled: true,
         category: "accounting",
     },
     {
@@ -59,7 +59,7 @@ const templates: TemplateOption[] = [
         name: "Analytical Dashboard",
         description: "Data visualization and analytics platform",
         icon: <BarChart3 className="h-8 w-8" />,
-        isEnabled: false,
+        isEnabled: true,
         category: "analytics",
     },
 ]

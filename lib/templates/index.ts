@@ -4,6 +4,9 @@
  */
 
 import { defaultTodoTemplate } from "./default-todo"
+import { bookingSystemTemplate } from "./booking-system"
+import { accountingDashboardTemplate } from "./accounting-dashboard"
+import { analyticsDashboardTemplate } from "./analytics-dashboard"
 
 export interface Template {
     id: string
@@ -20,31 +23,18 @@ const templates: Record<string, Template> = {
         ...defaultTodoTemplate,
         isEnabled: true,
     } as Template,
-    // Future templates (disabled for now)
     "booking-system": {
-        id: "booking-system",
-        name: "Booking System",
-        description: "Complete booking management system",
-        category: "booking",
-        files: {},
-        isEnabled: false,
-    },
+        ...bookingSystemTemplate,
+        isEnabled: true,
+    } as Template,
     "accounting-dashboard": {
-        id: "accounting-dashboard",
-        name: "Accounting Dashboard",
-        description: "Financial tracking and reporting dashboard",
-        category: "accounting",
-        files: {},
-        isEnabled: false,
-    },
+        ...accountingDashboardTemplate,
+        isEnabled: true,
+    } as Template,
     "analytics-dashboard": {
-        id: "analytics-dashboard",
-        name: "Analytics Dashboard",
-        description: "Data visualization and analytics platform",
-        category: "analytics",
-        files: {},
-        isEnabled: false,
-    },
+        ...analyticsDashboardTemplate,
+        isEnabled: true,
+    } as Template,
 }
 
 /**
