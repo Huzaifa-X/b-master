@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { generatePDFFromHTML } from '@/lib/services/pdf-generator';
 
 export const dynamic = 'force-dynamic';
+// Allow up to 90s for serverless deployment (converter timeout is 60s + upload buffer)
+export const maxDuration = 90;
 
 /**
  * POST /api/artifacts/generate-pdf

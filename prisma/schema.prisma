@@ -39,6 +39,8 @@ model User {
   subscriptionStatus            String?                         @db.VarChar(50)
   cancelAtPeriodEnd             Boolean?                        @default(false) @map("cancel_at_period_end")
   scheduledPlanChangeId         Int?                            @map("scheduled_plan_change_id")
+  // PRIVACY SETTINGS
+  emailVisible                  Boolean                         @default(false) @map("email_visible")
   accounts                      Account[]
   artifactPermissions           ArtifactPermission[]
   artifactVersions              ArtifactVersion[]

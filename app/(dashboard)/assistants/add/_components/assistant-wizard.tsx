@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, Lock, AlertTriangle } from "lucide-react"
 import { BasicInformationStep } from "@/app/(dashboard)/assistants/add/_components/steps/basic-information-step"
 import { VisualIdentityStep } from "@/app/(dashboard)/assistants/add/_components/steps/visual-identity-step"
 import { KnowledgeBaseStep } from "@/app/(dashboard)/assistants/add/_components/steps/knowledge-base-step"
@@ -15,6 +15,8 @@ import { useWizardStore } from "@/lib/stores/wizard-store"
 import { AssistantFormData } from "@/types/assistant"
 import { useRouter } from "next/navigation"
 import { useAssistantMutations } from "@/hooks/useAssistantMutations"
+import { useSubscriptionLimits } from "@/hooks/useSubscriptionLimits"
+import Link from "next/link"
 
 interface AssistantWizardProps {
   assistantId?: string
@@ -32,6 +34,9 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
   // Assistant mutations
   const { createAssistant, updateAssistant, isCreating, isUpdating } = useAssistantMutations()
   const isSaving = isCreating || isUpdating
+
+  // Plan limit check (create mode only)
+  const { limits: subscriptionLimits, loading: limitsLoading } = useSubscriptionLimits()
 
   const [formData, setFormData] = useState<AssistantFormData>(
     initialData || {
@@ -64,6 +69,7 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
         messenger: false,
         artifact: false,
         newsFeed: false,
+        library: false,
       },
     }
   )
@@ -204,6 +210,53 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
     } else {
       toast.error(result.error || `Failed to ${mode === "edit" ? "update" : "create"} assistant`)
     }
+  }
+
+  // Plan limit gate — show before the wizard so users aren't surprised at step 6
+  if (mode === "create" && limitsLoading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (mode === "create" && !limitsLoading && !subscriptionLimits.canCreateMore) {
+    return (
+      <Card className="flex flex-col items-center gap-6 p-10 text-center border border-border bg-muted/30">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+          <Lock className="h-8 w-8 text-destructive" />
+        </div>
+
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold">Assistant Limit Reached</h2>
+          <p className="text-muted-foreground">
+            Your <span className="font-medium text-foreground">{subscriptionLimits.planTitle || "current"}</span> plan allows up to{" "}
+            <span className="font-medium text-foreground">{subscriptionLimits.assistantLimit}</span> assistant
+            {subscriptionLimits.assistantLimit !== 1 ? "s" : ""}.{" "}
+            You currently have{" "}
+            <span className="font-medium text-foreground">{subscriptionLimits.currentAssistants}</span>.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Upgrade your plan to create more assistants.
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
+          <Button asChild className="flex-1">
+            <Link href="/pricing">Upgrade Plan</Link>
+          </Button>
+          <Button variant="outline" asChild className="flex-1">
+            <Link href="/assistants">Back to Assistants</Link>
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>Unlimited assistants are available on higher plans.</span>
+        </div>
+      </Card>
+    )
   }
 
   return (

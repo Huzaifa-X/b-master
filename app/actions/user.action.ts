@@ -34,6 +34,7 @@ export async function getCurrentUser() {
         isEmailVerified: true,
         status: true,
         createdAt: true,
+        emailVisible: true,
       },
     })
 
@@ -57,6 +58,7 @@ export async function getCurrentUser() {
         isEmailVerified: user.isEmailVerified,
         status: user.status,
         createdAt: user.createdAt,
+        emailVisible: user.emailVisible,
       },
     }
   } catch (error) {
@@ -204,14 +206,15 @@ export async function getAvailableContacts(): Promise<UserContact[]> {
 
     const currentUserId = BigInt(session.user.id)
 
-    // Fetch all users except the current user
+    // Fetch all users EXCEPT the current user who have opted into being discoverable
     const users = await prisma.user.findMany({
       where: {
         id: {
           not: currentUserId
         },
         deletedAt: null, // Only active users
-        status: "active" // Only active users
+        status: "active", // Only active users
+        emailVisible: true, // Only users who opted in to be discoverable
       },
       select: {
         id: true,
@@ -232,6 +235,35 @@ export async function getAvailableContacts(): Promise<UserContact[]> {
   } catch (error) {
     console.error("Error fetching available contacts:", error)
     throw new Error("Failed to fetch available contacts")
+  }
+}
+
+// ============================================
+// UPDATE EMAIL VISIBILITY
+// ============================================
+/**
+ * Toggle whether this user appears in contact discovery searches.
+ * When emailVisible is false (default), no one can find them via search.
+ */
+export async function updateEmailVisibility(visible: boolean): Promise<{
+  success: boolean
+  error?: string
+}> {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return { success: false, error: "Authentication required" }
+    }
+
+    await prisma.user.update({
+      where: { id: BigInt(session.user.id) },
+      data: { emailVisible: visible },
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error("Error updating email visibility:", error)
+    return { success: false, error: "Failed to update privacy setting" }
   }
 }
 

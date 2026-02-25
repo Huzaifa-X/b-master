@@ -155,6 +155,7 @@ interface CreateCompleteAssistantParams {
             messenger: boolean
             artifact: boolean
             newsFeed: boolean
+            library: boolean
         }
     }>
     buyerPermissions: {
@@ -163,6 +164,7 @@ interface CreateCompleteAssistantParams {
         messenger: boolean
         artifact: boolean
         newsFeed: boolean
+        library: boolean
     }
 }
 
@@ -374,8 +376,8 @@ export async function createCompleteAssistant(
                     }
                 }
 
-                // Process files (already uploaded to S3, now add to OpenAI vector store)
-                for (const fileData of params.fileURLs) {
+                // Process files in parallel (already uploaded to S3, now add to OpenAI vector store)
+                await Promise.all(params.fileURLs.map(async (fileData) => {
                     try {
                         // Files are already uploaded to S3, we have the URL
                         // Now we need to download from S3 and upload to OpenAI vector store
@@ -411,7 +413,7 @@ export async function createCompleteAssistant(
                         console.error(`❌ Error processing file ${fileData.fileName}:`, fileError)
                         // Continue with other files even if one fails
                     }
-                }
+                }))
             } catch (vectorStoreError) {
                 console.error('Error creating vector store:', vectorStoreError)
                 // Don't fail the entire operation
@@ -2727,5 +2729,136 @@ export async function deleteExcessAssistants(
             success: false,
             error: error instanceof Error ? error.message : 'Failed to delete excess assistants',
         }
+    }
+}
+
+// ============================================
+// LEAVE SHARED ASSISTANT
+// ============================================
+
+/**
+ * Allows a non-owner user to leave (unsubscribe from) a shared assistant.
+ * Removes the user's AssistantContact record and any pin for that assistant.
+ */
+export async function leaveAssistant(assistantId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return { success: false, error: 'Authentication required' }
+        }
+
+        const userId = BigInt(session.user.id)
+        const assistantBigInt = BigInt(assistantId)
+
+        // Ensure the user is NOT the owner before allowing them to leave
+        const assistant = await prisma.assistant.findFirst({
+            where: { id: assistantBigInt, deletedAt: null }
+        })
+
+        if (!assistant) {
+            return { success: false, error: 'Assistant not found' }
+        }
+
+        if (assistant.userId === userId) {
+            return { success: false, error: 'Owners cannot leave their own assistant. Delete it instead.' }
+        }
+
+        // Remove from contacts
+        await prisma.assistantContact.deleteMany({
+            where: { assistantId: assistantBigInt, userId }
+        })
+
+        // Remove any pin the user may have
+        await prisma.assistantPin.deleteMany({
+            where: { assistantId: assistantBigInt, userId }
+        })
+
+        revalidatePath('/assistants')
+
+        return { success: true }
+    } catch (error) {
+        console.error('[LeaveAssistant] Error:', error)
+        return { success: false, error: error instanceof Error ? error.message : 'Failed to leave assistant' }
+    }
+}
+
+// ============================================
+// DUPLICATE ASSISTANT
+// ============================================
+
+/**
+ * Duplicates an assistant owned by the current user.
+ * Creates a new assistant with the same configuration, named "Copy of <name>".
+ * Knowledge base files, notes, and URLs are copied. Shared users are NOT copied.
+ */
+export async function duplicateAssistant(assistantId: string): Promise<{ success: boolean; error?: string; newAssistantId?: string }> {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return { success: false, error: 'Authentication required' }
+        }
+
+        // Fetch original assistant data
+        const editResult = await getAssistantForEdit(assistantId)
+        if (!editResult.success || !editResult.assistant) {
+            return { success: false, error: editResult.error || 'Assistant not found' }
+        }
+
+        const src = editResult.assistant
+
+        // Build the params for createCompleteAssistant
+        const params: CreateCompleteAssistantParams = {
+            name: `Copy of ${src.name}`,
+            price: src.price,
+            category: src.category as AssistantCategory,
+            description: src.description,
+            imageURL: src.imageURL ?? null,
+            instructions: src.instructions,
+            notes: src.notes,
+            urls: src.urls,
+            // Map files array to the expected fileURLs format
+            fileURLs: src.files.map((f: { url: string; name: string }) => ({
+                url: f.url,
+                fileName: f.name,
+                fileSize: 0, // Size not stored, use 0 as placeholder
+            })),
+            // API configuration
+            authenticationType: src.apiConfiguration?.authenticationType ?? 'none',
+            apiKey: src.apiConfiguration?.apiKey ?? '',
+            authType: src.apiConfiguration?.authType ?? 'basic',
+            customHeaderName: src.apiConfiguration?.customHeaderName ?? '',
+            clientId: src.apiConfiguration?.clientId ?? '',
+            clientSecret: src.apiConfiguration?.clientSecret ?? '',
+            authorizationUrl: src.apiConfiguration?.authorizationUrl ?? '',
+            tokenUrl: src.apiConfiguration?.tokenUrl ?? '',
+            scope: src.apiConfiguration?.scope ?? '',
+            tokenExchangeMethod: src.apiConfiguration?.tokenExchangeMethod ?? 'post',
+            schemaText: src.apiConfiguration?.schemaText ?? '',
+            schema: src.apiConfiguration?.schema ?? null,
+            // Sharing — private with no shared users for the duplicate
+            permissionLevel: 'private',
+            sharedUsers: [],
+            buyerPermissions: {
+                chat: false,
+                contact: false,
+                messenger: false,
+                artifact: false,
+                newsFeed: false,
+                library: false,
+            },
+        }
+
+        const result = await createCompleteAssistant(params)
+
+        if (!result.success) {
+            return { success: false, error: result.error }
+        }
+
+        revalidatePath('/assistants')
+
+        return { success: true, newAssistantId: result.assistantId }
+    } catch (error) {
+        console.error('[DuplicateAssistant] Error:', error)
+        return { success: false, error: error instanceof Error ? error.message : 'Failed to duplicate assistant' }
     }
 }

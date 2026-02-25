@@ -15,7 +15,7 @@ export type AuthenticationType = "none" | "api_key" | "oauth"
 export type AuthType = "basic" | "bearer" | "custom"
 export type TokenExchangeMethod = "post" | "basic_auth"
 export type PermissionLevel = "private" | "public"
-export type PermissionType = "chat" | "contact" | "messenger" | "artifact" | "newsFeed"
+export type PermissionType = "chat" | "contact" | "messenger" | "artifact" | "newsFeed" | "library"
 
 // ================================================================
 // ASSISTANT FORM DATA INTERFACE
@@ -87,6 +87,7 @@ export interface UserPermissions {
   messenger: boolean
   artifact: boolean
   newsFeed: boolean
+  library: boolean
 }
 
 // ================================================================

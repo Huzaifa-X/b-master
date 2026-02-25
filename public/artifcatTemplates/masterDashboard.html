@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Master Business Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --accent: #6366f1;
+    --accent2: #22d3ee;
+    --green: #22c55e;
+    --red: #f43f5e;
+    --orange: #f97316;
+    --yellow: #eab308;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --radius: 12px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:13px; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+  /* TOP BAR */
+  .topbar { background:var(--surface); border-bottom:1px solid var(--border); padding:0 20px; height:52px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+  .topbar-left { display:flex; align-items:center; gap:12px; }
+  .logo { font-weight:700; font-size:16px; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .nav-tabs { display:flex; gap:4px; }
+  .nav-tab { padding:6px 14px; border-radius:8px; cursor:pointer; color:var(--muted); font-size:12px; transition:.2s; border:none; background:transparent; }
+  .nav-tab.active { background:var(--accent); color:#fff; }
+  .nav-tab:hover:not(.active) { background:var(--surface2); color:var(--text); }
+  .topbar-right { display:flex; align-items:center; gap:10px; }
+  .avatar { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; cursor:pointer; }
+  .badge { background:var(--red); color:#fff; border-radius:50%; width:18px; height:18px; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; }
+  .search { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:5px 10px; color:var(--text); font-size:12px; width:180px; outline:none; }
+
+  /* MAIN */
+  .main { flex:1; overflow-y:auto; padding:16px 20px; display:flex; flex-direction:column; gap:16px; }
+
+  /* KPI ROW */
+  .kpi-row { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+  .kpi { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; cursor:pointer; transition:.2s; }
+  .kpi:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .kpi-label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+  .kpi-value { font-size:22px; font-weight:700; margin-bottom:4px; }
+  .kpi-delta { font-size:11px; }
+  .up { color:var(--green); } .down { color:var(--red); } .neutral { color:var(--muted); }
+
+  /* GRID */
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .grid-3 { display:grid; grid-template-columns:2fr 1.2fr 1fr; gap:16px; }
+
+  /* CARD */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
+  .card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .card-title { font-weight:600; font-size:13px; }
+  .card-action { color:var(--accent); font-size:11px; cursor:pointer; }
+
+  /* PIPELINE */
+  .pipeline { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+  .stage { background:var(--surface2); border-radius:10px; padding:10px; }
+  .stage-header { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+  .deal-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:6px; cursor:pointer; transition:.2s; }
+  .deal-card:hover { border-color:var(--accent); }
+  .deal-name { font-size:11px; font-weight:600; margin-bottom:3px; }
+  .deal-meta { font-size:10px; color:var(--muted); display:flex; justify-content:space-between; }
+  .deal-value { color:var(--green); font-weight:600; }
+
+  /* CHART */
+  .chart-area { height:120px; position:relative; overflow:hidden; }
+  .chart-bars { display:flex; align-items:flex-end; gap:6px; height:100%; padding-top:10px; }
+  .bar-wrap { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; height:100%; justify-content:flex-end; cursor:pointer; }
+  .bar { width:100%; border-radius:4px 4px 0 0; transition:.3s; min-height:4px; }
+  .bar-label { font-size:9px; color:var(--muted); }
+
+  /* TABLE */
+  .table { width:100%; border-collapse:collapse; }
+  .table th { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
+  .table td { padding:8px 8px; border-bottom:1px solid var(--border); font-size:12px; }
+  .table tr:last-child td { border-bottom:none; }
+  .table tr:hover td { background:var(--surface2); }
+
+  /* STATUS BADGE */
+  .status { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:600; }
+  .status-won { background:#22c55e22; color:var(--green); }
+  .status-lost { background:#f43f5e22; color:var(--red); }
+  .status-progress { background:#6366f122; color:var(--accent); }
+  .status-pending { background:#eab30822; color:var(--yellow); }
+  .status-paid { background:#22c55e22; color:var(--green); }
+  .status-unpaid { background:#f43f5e22; color:var(--red); }
+
+  /* ACTIVITY FEED */
+  .activity-item { display:flex; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
+  .activity-item:last-child { border-bottom:none; }
+  .activity-dot { width:8px; height:8px; border-radius:50%; margin-top:4px; flex-shrink:0; }
+  .activity-text { font-size:12px; }
+  .activity-time { font-size:10px; color:var(--muted); margin-top:2px; }
+
+  /* TASK LIST */
+  .task-item { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); cursor:pointer; }
+  .task-item:last-child { border-bottom:none; }
+  .task-check { width:16px; height:16px; border-radius:4px; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:.2s; }
+  .task-check.done { background:var(--green); border-color:var(--green); }
+  .task-name { flex:1; font-size:12px; }
+  .task-name.done { text-decoration:line-through; color:var(--muted); }
+  .task-due { font-size:10px; color:var(--muted); }
+
+  /* MINI CAL */
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+  .cal-day { text-align:center; padding:4px 2px; border-radius:6px; font-size:10px; cursor:pointer; transition:.2s; }
+  .cal-day:hover { background:var(--surface2); }
+  .cal-day.today { background:var(--accent); color:#fff; font-weight:700; }
+  .cal-day.event { background:#6366f133; color:var(--accent); font-weight:600; }
+  .cal-day.muted { color:var(--muted); }
+  .cal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:12px; font-weight:600; }
+  .cal-weekdays { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; margin-bottom:4px; }
+  .cal-wd { text-align:center; font-size:9px; color:var(--muted); padding:2px; }
+
+  /* PROGRESS BAR */
+  .progress-row { margin-bottom:10px; }
+  .progress-label { display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px; }
+  .progress-track { height:6px; background:var(--surface2); border-radius:3px; overflow:hidden; }
+  .progress-fill { height:100%; border-radius:3px; transition:.4s; }
+
+  /* TAGS */
+  .tag { display:inline-block; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:600; margin-right:3px; }
+  .tag-blue { background:#6366f130; color:var(--accent); }
+  .tag-cyan { background:#22d3ee22; color:var(--accent2); }
+  .tag-green { background:#22c55e22; color:var(--green); }
+
+  /* SCROLL */
+  ::-webkit-scrollbar { width:4px; height:4px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+  /* SECTION TABS */
+  .section-page { display:none; }
+  .section-page.active { display:contents; }
+
+  /* TOOLTIP */
+  .tooltip { position:relative; }
+  .tooltip:hover::after { content:attr(data-tip); position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%); background:#1e2135; color:var(--text); font-size:10px; padding:4px 8px; border-radius:6px; white-space:nowrap; border:1px solid var(--border); pointer-events:none; z-index:99; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="logo">⬡ Command</span>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchTab(this,'overview')">Overview</button>
+      <button class="nav-tab" onclick="switchTab(this,'pipeline')">Pipeline</button>
+      <button class="nav-tab" onclick="switchTab(this,'projects')">Projects</button>
+      <button class="nav-tab" onclick="switchTab(this,'finance')">Finance</button>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <input class="search" placeholder="🔍  Search anything…" />
+    <div class="tooltip" data-tip="3 notifications" style="position:relative;cursor:pointer;">
+      🔔 <span class="badge" style="position:absolute;top:-6px;right:-8px;">3</span>
+    </div>
+    <div class="avatar">JD</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- KPI ROW (always visible) -->
+  <div class="kpi-row">
+    <div class="kpi" onclick="animateKpi(this)">
+      <div class="kpi-label">Total Revenue</div>
+      <div class="kpi-value" style="color:var(--green)">$284,500</div>
+      <div class="kpi-delta up">↑ 18.4% vs last month</div>
+    </div>
+    <div class="kpi" onclick="animateKpi(this)">
+      <div class="kpi-label">Active Deals</div>
+      <div class="kpi-value" style="color:var(--accent)">47</div>
+      <div class="kpi-delta up">↑ 12 new this week</div>
+    </div>
+    <div class="kpi" onclick="animateKpi(this)">
+      <div class="kpi-label">Open Tasks</div>
+      <div class="kpi-value" style="color:var(--yellow)">23</div>
+      <div class="kpi-delta neutral">→ 5 due today</div>
+    </div>
+    <div class="kpi" onclick="animateKpi(this)">
+      <div class="kpi-label">Unpaid Invoices</div>
+      <div class="kpi-value" style="color:var(--red)">$31,200</div>
+      <div class="kpi-delta down">↑ 3 overdue</div>
+    </div>
+    <div class="kpi" onclick="animateKpi(this)">
+      <div class="kpi-label">Team Members</div>
+      <div class="kpi-value" style="color:var(--accent2)">12</div>
+      <div class="kpi-delta neutral">→ 9 online now</div>
+    </div>
+  </div>
+
+  <!-- OVERVIEW TAB -->
+  <div id="tab-overview" class="section-page active">
+
+    <!-- Revenue Chart + Pipeline summary + Activity -->
+    <div class="grid-3">
+      <!-- Revenue Chart -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Revenue (6 months)</span>
+          <span class="card-action" onclick="toggleChartType()">Toggle View</span>
+        </div>
+        <div class="chart-area">
+          <div class="chart-bars" id="revChart">
+            <!-- filled by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- CRM Pipeline Summary -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Pipeline Value</span>
+          <span class="card-action">Details →</span>
+        </div>
+        <div id="pipelineSummary"></div>
+      </div>
+
+      <!-- Activity Feed -->
+      <div class="card" style="overflow:hidden;">
+        <div class="card-header">
+          <span class="card-title">Live Activity</span>
+          <span class="card-action" onclick="addActivity()">+ Add</span>
+        </div>
+        <div id="activityFeed" style="overflow-y:auto;max-height:140px;"></div>
+      </div>
+    </div>
+
+    <!-- Bottom Row: Projects + Invoices + Tasks + Calendar -->
+    <div class="grid-2">
+      <!-- Projects -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Active Projects</span>
+          <span class="card-action">View All</span>
+        </div>
+        <div id="projectList"></div>
+      </div>
+      <!-- Invoices + Tasks column -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <!-- Mini Tasks -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Today's Tasks</span>
+            <span class="card-action" onclick="addTask()">+ Add</span>
+          </div>
+          <div id="taskList"></div>
+        </div>
+        <!-- Mini Calendar -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">February 2026</span>
+          </div>
+          <div id="miniCal"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end overview -->
+
+  <!-- PIPELINE TAB -->
+  <div id="tab-pipeline" class="section-page">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Sales Pipeline — Kanban</span>
+        <button onclick="addDeal()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:12px;">+ New Deal</button>
+      </div>
+      <div class="pipeline" id="kanban"></div>
+    </div>
+  </div>
+
+  <!-- PROJECTS TAB -->
+  <div id="tab-projects" class="section-page">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">All Projects</span>
+        <button onclick="addProject()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:12px;">+ New Project</button>
+      </div>
+      <div id="allProjects"></div>
+    </div>
+  </div>
+
+  <!-- FINANCE TAB -->
+  <div id="tab-finance" class="section-page">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Invoices & Payments</span>
+        <div style="display:flex;gap:8px;">
+          <button onclick="filterInvoices('all')" id="f-all" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:11px;">All</button>
+          <button onclick="filterInvoices('paid')" id="f-paid" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;font-size:11px;">Paid</button>
+          <button onclick="filterInvoices('unpaid')" id="f-unpaid" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;font-size:11px;">Unpaid</button>
+        </div>
+      </div>
+      <table class="table">
+        <thead><tr><th>#</th><th>Client</th><th>Amount</th><th>Date</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="invoiceTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- end main -->
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+const MONTHS = ['Sep','Oct','Nov','Dec','Jan','Feb']
+const REV = [42000,58000,61000,53000,71000,78500]
+const STAGES = ['Lead','Qualified','Proposal','Negotiation','Won']
+const STAGE_COLORS = ['#6366f1','#22d3ee','#f97316','#eab308','#22c55e']
+
+const deals = [
+  {id:1,name:'Acme Corp',value:24000,stage:'Proposal',owner:'JD'},
+  {id:2,name:'Globex Ltd',value:18500,stage:'Qualified',owner:'SM'},
+  {id:3,name:'Initech',value:9800,stage:'Lead',owner:'AK'},
+  {id:4,name:'Umbrella Co',value:45000,stage:'Negotiation',owner:'JD'},
+  {id:5,name:'Soylent Inc',value:12000,stage:'Won',owner:'SM'},
+  {id:6,name:'Cyberdyne',value:67000,stage:'Proposal',owner:'AK'},
+  {id:7,name:'Veridian',value:8500,stage:'Lead',owner:'JD'},
+  {id:8,name:'Massive Dyn',value:33000,stage:'Won',owner:'SM'},
+]
+
+const projects = [
+  {name:'Website Redesign',client:'Acme Corp',progress:72,status:'progress',deadline:'Mar 5'},
+  {name:'CRM Integration',client:'Globex Ltd',progress:45,status:'progress',deadline:'Mar 20'},
+  {name:'Mobile App v2',client:'Cyberdyne',progress:90,status:'progress',deadline:'Feb 28'},
+  {name:'Data Migration',client:'Initech',progress:100,status:'won',deadline:'Done'},
+  {name:'Brand Identity',client:'Umbrella Co',progress:20,status:'pending',deadline:'Apr 10'},
+  {name:'SEO Campaign',client:'Soylent Inc',progress:60,status:'progress',deadline:'Mar 15'},
+]
+
+const invoices = [
+  {id:'INV-001',client:'Acme Corp',amount:8400,date:'Feb 18',status:'paid'},
+  {id:'INV-002',client:'Globex Ltd',amount:12500,date:'Feb 10',status:'unpaid'},
+  {id:'INV-003',client:'Cyberdyne',amount:22000,date:'Jan 30',status:'paid'},
+  {id:'INV-004',client:'Initech',amount:4800,date:'Feb 20',status:'unpaid'},
+  {id:'INV-005',client:'Umbrella Co',amount:9600,date:'Feb 5',status:'paid'},
+  {id:'INV-006',client:'Soylent Inc',amount:6700,date:'Jan 25',status:'unpaid'},
+  {id:'INV-007',client:'Veridian',amount:3200,date:'Feb 15',status:'paid'},
+]
+
+const activities = [
+  {color:'#6366f1',text:'Deal "Cyberdyne" moved to Proposal',time:'2 min ago'},
+  {color:'#22c55e',text:'Invoice INV-003 marked paid',time:'14 min ago'},
+  {color:'#22d3ee',text:'New contact added: Sarah Miller',time:'1 hr ago'},
+  {color:'#f97316',text:'Task "Q1 Report" is overdue',time:'3 hr ago'},
+  {color:'#eab308',text:'Meeting scheduled: Globex follow-up',time:'Yesterday'},
+]
+
+let tasks = [
+  {name:'Send Q1 proposal to Acme',done:false,due:'Today'},
+  {name:'Follow up with Cyberdyne',done:false,due:'Today'},
+  {name:'Review budget spreadsheet',done:true,due:'Done'},
+  {name:'Update team on Umbrella deal',done:false,due:'Tomorrow'},
+]
+
+let invoiceFilter = 'all'
+
+// ── RENDER ─────────────────────────────────────────────────────────────────────
+function renderRevChart() {
+  const el = document.getElementById('revChart')
+  const max = Math.max(...REV)
+  el.innerHTML = REV.map((v,i) => {
+    const h = Math.round((v/max)*90)
+    const color = i===REV.length-1 ? 'var(--accent)' : 'var(--surface2)'
+    return `<div class="bar-wrap tooltip" data-tip="$${v.toLocaleString()}" onclick="this.querySelector('.bar').style.background='var(--accent2)'">
+      <div class="bar" style="height:${h}%;background:${color};"></div>
+      <span class="bar-label">${MONTHS[i]}</span>
+    </div>`
+  }).join('')
+}
+
+function renderPipelineSummary() {
+  const el = document.getElementById('pipelineSummary')
+  el.innerHTML = STAGES.map((s,i) => {
+    const stagDeals = deals.filter(d=>d.stage===s)
+    const sum = stagDeals.reduce((a,d)=>a+d.value,0)
+    const pct = Math.round((sum/200000)*100)
+    return `<div class="progress-row">
+      <div class="progress-label">
+        <span style="color:${STAGE_COLORS[i]}">${s}</span>
+        <span>$${sum.toLocaleString()} (${stagDeals.length})</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${STAGE_COLORS[i]};"></div></div>
+    </div>`
+  }).join('')
+}
+
+function renderActivity() {
+  const el = document.getElementById('activityFeed')
+  el.innerHTML = activities.map(a => `<div class="activity-item">
+    <div class="activity-dot" style="background:${a.color};"></div>
+    <div><div class="activity-text">${a.text}</div><div class="activity-time">${a.time}</div></div>
+  </div>`).join('')
+}
+
+function renderProjects(container='projectList', all=false) {
+  const el = document.getElementById(container)
+  const list = all ? projects : projects.slice(0,3)
+  el.innerHTML = list.map(p => `<div class="progress-row" style="cursor:pointer;" onclick="openProject('${p.name}')">
+    <div class="progress-label">
+      <span>${p.name} <span class="tag tag-blue" style="font-size:9px;">${p.client}</span></span>
+      <span class="${p.status==='won'?'up':p.status==='pending'?'neutral':'up'}">${p.progress}% — ${p.deadline}</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" style="width:${p.progress}%;background:${p.progress===100?'var(--green)':p.progress<30?'var(--red)':'var(--accent)'};"></div></div>
+  </div>`).join('')
+}
+
+function renderTasks() {
+  const el = document.getElementById('taskList')
+  el.innerHTML = tasks.map((t,i) => `<div class="task-item" onclick="toggleTask(${i})">
+    <div class="task-check ${t.done?'done':''}">${t.done?'✓':''}</div>
+    <span class="task-name ${t.done?'done':''}">${t.name}</span>
+    <span class="task-due">${t.due}</span>
+  </div>`).join('')
+}
+
+function renderCalendar() {
+  const el = document.getElementById('miniCal')
+  const events = [3,7,12,17,23,28]
+  const days = Array.from({length:28},(_,i)=>i+1)
+  const today = 23
+  el.innerHTML = `<div class="cal-weekdays">${['S','M','T','W','T','F','S'].map(d=>`<div class="cal-wd">${d}</div>`).join('')}</div>
+  <div class="cal-grid">${['','',''].map(()=>'<div></div>').join('')}${days.map(d => {
+    let cls = 'cal-day'
+    if(d===today) cls+=' today'
+    else if(events.includes(d)) cls+=' event'
+    return `<div class="${cls}" title="Feb ${d}">${d}</div>`
+  }).join('')}</div>`
+}
+
+function renderKanban() {
+  const el = document.getElementById('kanban')
+  el.innerHTML = STAGES.map((s,i) => {
+    const stageDeals = deals.filter(d=>d.stage===s)
+    const total = stageDeals.reduce((a,d)=>a+d.value,0)
+    return `<div class="stage">
+      <div class="stage-header">
+        <span style="color:${STAGE_COLORS[i]}">${s}</span>
+        <span>$${total.toLocaleString()}</span>
+      </div>
+      ${stageDeals.map(d=>`<div class="deal-card" draggable="true" onclick="moveDeal(${d.id})">
+        <div class="deal-name">${d.name}</div>
+        <div class="deal-meta"><span class="deal-value">$${d.value.toLocaleString()}</span><span>${d.owner}</span></div>
+      </div>`).join('')}
+    </div>`
+  }).join('')
+}
+
+function renderAllProjects() {
+  renderProjects('allProjects', true)
+}
+
+function renderInvoices() {
+  const el = document.getElementById('invoiceTable')
+  const list = invoiceFilter==='all' ? invoices : invoices.filter(i=>i.status===invoiceFilter)
+  el.innerHTML = list.map(inv => `<tr>
+    <td><b>${inv.id}</b></td>
+    <td>${inv.client}</td>
+    <td><b>$${inv.amount.toLocaleString()}</b></td>
+    <td>${inv.date}</td>
+    <td><span class="status status-${inv.status}">${inv.status}</span></td>
+    <td><button onclick="toggleInvoice('${inv.id}')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;">${inv.status==='paid'?'Mark Unpaid':'Mark Paid'}</button></td>
+  </tr>`).join('')
+}
+
+// ── INTERACTIONS ──────────────────────────────────────────────────────────────
+function switchTab(btn, id) {
+  document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'))
+  btn.classList.add('active')
+  document.querySelectorAll('.section-page').forEach(p=>p.classList.remove('active'))
+  const t = document.getElementById('tab-'+id)
+  if(t) { t.classList.add('active'); if(id==='pipeline') renderKanban(); if(id==='projects') renderAllProjects(); if(id==='finance') renderInvoices(); }
+}
+
+function animateKpi(el) {
+  el.style.borderColor='var(--accent)'; el.style.transform='translateY(-3px)'
+  setTimeout(()=>{ el.style.borderColor=''; el.style.transform=''; },600)
+}
+
+function toggleTask(i) { tasks[i].done=!tasks[i].done; renderTasks(); }
+
+function addTask() {
+  const name = prompt('New task name:')
+  if(name) { tasks.unshift({name,done:false,due:'Today'}); renderTasks(); }
+}
+
+function addActivity() {
+  const text = prompt('Activity description:')
+  if(text) { activities.unshift({color:'var(--accent)',text,time:'just now'}); renderActivity(); }
+}
+
+function moveDeal(id) {
+  const d = deals.find(x=>x.id===id)
+  const idx = STAGES.indexOf(d.stage)
+  if(idx<STAGES.length-1) { d.stage=STAGES[idx+1]; renderKanban(); renderPipelineSummary(); }
+}
+
+function addDeal() {
+  const name = prompt('Company name:')
+  if(!name) return
+  const value = parseInt(prompt('Deal value ($):')) || 5000
+  deals.push({id:Date.now(),name,value,stage:'Lead',owner:'JD'})
+  renderKanban(); renderPipelineSummary()
+}
+
+function openProject(name) { alert(`Opening project: ${name}\n\n(Navigate to the Projects tab for full detail.)`) }
+
+function addProject() {
+  const name = prompt('Project name:')
+  if(!name) return
+  const client = prompt('Client name:') || 'Internal'
+  projects.push({name,client,progress:0,status:'pending',deadline:'TBD'})
+  renderAllProjects()
+}
+
+function filterInvoices(type) {
+  invoiceFilter = type
+  document.querySelectorAll('[id^=f-]').forEach(b=>{ b.style.background='var(--surface2)'; b.style.border='1px solid var(--border)'; b.style.color='var(--text)' })
+  document.getElementById('f-'+type).style.background='var(--accent)'; document.getElementById('f-'+type).style.color='#fff'
+  renderInvoices()
+}
+
+function toggleInvoice(id) {
+  const inv = invoices.find(i=>i.id===id)
+  if(inv) { inv.status = inv.status==='paid' ? 'unpaid' : 'paid'; renderInvoices() }
+}
+
+let chartType = 'bar'
+function toggleChartType() { chartType = chartType==='bar'?'line':'bar'; renderRevChart() }
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+renderRevChart()
+renderPipelineSummary()
+renderActivity()
+renderProjects()
+renderTasks()
+renderCalendar()
+</script>
+</body>
+</html>

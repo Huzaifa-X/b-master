@@ -84,9 +84,11 @@ export async function POST(req: NextRequest) {
             webSearch,
             research,
             chatWithAPI,
+            connectedApiIds,
             attachments,
             artifact,
             dropbox,
+            canvas,
             mentionedUsers,
             messages: clientMessages, // Messages from AI SDK useChat
         } = body
@@ -262,6 +264,16 @@ export async function POST(req: NextRequest) {
         // Build system prompt
         let systemPrompt = await getSystemPrompt()
 
+        // Inject current date & time so the AI is always aware of when it is
+        const _now = new Date()
+        const _dateBlock = [
+          `## 📅 Current Date & Time`,
+          `- **Date**: ${_now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`,
+          `- **Time (UTC)**: ${_now.toUTCString()}`,
+          `- **ISO 8601**: ${_now.toISOString()}`,
+        ].join("\n")
+        systemPrompt = _dateBlock + "\n\n" + systemPrompt
+
         // Force image generation tool usage
         systemPrompt += `\n\n## IMAGE GENERATION CAPABILITIES\n**YOU HAVE THE CAPABILITY TO GENERATE IMAGES.**\n- If the user asks for an image, visual, or photo, you **MUST** use the \`image_generation\` tool.\n- **NEVER** say "I can't generate images" or "I can't render bitmap images". YOU CAN.\n- **NEVER** offer to generate an SVG or text description instead. JUST USE THE TOOL.\n- The tool will return a public S3 URL of the generated image.\n- **CRITICAL**: You MUST display the generated image using markdown syntax: \`![Generated Image](url)\` in your response so the user can see it.\n- Trust the tool.`
 
@@ -280,6 +292,10 @@ export async function POST(req: NextRequest) {
 
         if (dropbox) {
             systemPrompt += `\n\nIMPORTANT: The user has enabled Dropbox integration.`
+        }
+
+        if (canvas) {
+            systemPrompt += `\n\nIMPORTANT: Canvas mode is active. The user wants rich visual HTML output. You MUST respond with a complete, self-contained HTML page that includes all CSS and JavaScript inline. Wrap the entire HTML document in a single \`\`\`html code block. Do not explain — just output the HTML code block directly.`
         }
 
         // STRIPE CONNECT INSTRUCTIONS
@@ -367,6 +383,19 @@ export async function POST(req: NextRequest) {
                 oauthRequired = true
                 oauthConfig = toolsResult.oauthConfig
                 console.log(`[Chat] OAuth required for assistant ${assistantId}`)
+            }
+        }
+
+        // Load tools from additionally connected API assistants (max 2)
+        if (Array.isArray(connectedApiIds) && connectedApiIds.length > 0) {
+            const idsToLoad = connectedApiIds.slice(0, 2)
+            for (const cId of idsToLoad) {
+                if (!cId || cId === assistantId?.toString()) continue
+                const extraResult = await loadAPITools(cId.toString())
+                if (extraResult.success && extraResult.tools) {
+                    apiTools.push(...extraResult.tools)
+                    console.log(`[Chat] Loaded ${extraResult.tools.length} extra API tools from assistant ${cId}`)
+                }
             }
         }
 

@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Heart, MessageCircle, ChevronDown, ChevronUp, Send, Lock, Globe, Trash2, X, Loader2 } from "lucide-react"
+import { Heart, MessageCircle, ChevronDown, ChevronUp, Send, Lock, Globe, Trash2, X, Loader2, FileText } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import { useOutsideClick } from "@/hooks/use-outside-click"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
 import { PresignedImage } from "@/components/ui/presigned-image"
+import { PresignedVideo } from "@/components/ui/presigned-video"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
@@ -44,6 +45,50 @@ interface FeedCardProps {
   onToggleLike: () => void
   onAddComment: (text: string) => void
   onDelete: (id: string) => void
+}
+
+type MediaKind = "image" | "video" | "pdf"
+
+function getMediaType(url: string | null): MediaKind {
+  if (!url) return "image"
+  const lower = url.toLowerCase().split("?")[0]
+  if (/\.(mp4|mov|webm|ogg|avi)/.test(lower) || lower.includes("/video/")) return "video"
+  if (/\.pdf/.test(lower) || lower.includes("/pdf")) return "pdf"
+  return "image"
+}
+
+function MediaRenderer({ src, className }: { src: string; className?: string }) {
+  const kind = getMediaType(src)
+  if (kind === "video") {
+    return (
+      <PresignedVideo
+        src={src}
+        className={className ?? "rounded-lg w-full bg-black"}
+      />
+    )
+  }
+  if (kind === "pdf") {
+    const rawName = src.split("/").pop()?.split("?")[0] ?? "document.pdf"
+    const fileName = decodeURIComponent(rawName)
+    return (
+      <a
+        href={src}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-3 p-3 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors"
+      >
+        <FileText className="h-8 w-8 text-muted-foreground shrink-0" />
+        <span className="text-sm font-medium truncate">{fileName}</span>
+      </a>
+    )
+  }
+  return (
+    <PresignedImage
+      src={src}
+      alt="Post media"
+      className={className ?? "rounded-lg w-full object-cover"}
+    />
+  )
 }
 
 function formatTimestamp(date: Date): string {
@@ -197,14 +242,10 @@ export function FeedCard({
             )}
           </div>
 
-          {/* Image */}
+          {/* Media */}
           {post.image && (
             <div className="mt-3">
-              <PresignedImage
-                src={post.image}
-                alt="Post image"
-                className="rounded-lg w-full object-cover max-h-48"
-              />
+              <MediaRenderer src={post.image} className="rounded-lg w-full object-cover max-h-48" />
             </div>
           )}
         </div>
@@ -339,14 +380,10 @@ export function FeedCard({
                       {content}
                     </p>
 
-                    {/* Image */}
+                    {/* Media */}
                     {post.image && (
                       <div className="mt-4">
-                        <PresignedImage
-                          src={post.image}
-                          alt="Post image"
-                          className="rounded-lg w-full object-cover max-h-96"
-                        />
+                        <MediaRenderer src={post.image} className="rounded-lg w-full object-cover max-h-96" />
                       </div>
                     )}
                   </div>

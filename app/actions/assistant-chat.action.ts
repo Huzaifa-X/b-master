@@ -511,7 +511,7 @@ export async function sendChatMessage(data: {
     assistantId: string
     chatId: string
     message: string
-    messageType?: 'text' | 'image' | 'file' | 'audio' | 'video'
+    messageType?: 'text' | 'image' | 'file' | 'audio' | 'video' | 'url'
     attachmentUrl?: string
     attachmentName?: string
     attachmentSize?: number
