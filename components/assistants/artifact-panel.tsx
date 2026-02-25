@@ -2,7 +2,7 @@
 
 import { FC, useEffect, useState, useRef, useCallback } from "react";
 
-import { X, Copy, Code2, FileCode, Eye, Code, Download, Share2, FileText, FileDown, MessageSquare, FileType, Presentation, MousePointer2 } from "lucide-react";
+import { X, Copy, Code2, FileCode, Eye, Code, Download, Share2, FileText, FileDown, MessageSquare, FileType, Presentation } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -46,7 +46,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
   onVersionSelect
 }) => {
 
-  const { artifactContent, isPreviewMode, togglePreview, setPrefilledPrompt, setSurgicalEditOuterHtml } = useArtifactStore();
+  const { artifactContent, isPreviewMode, togglePreview, setPrefilledPrompt } = useArtifactStore();
   const params = useParams()
   const assistantId = params?.id as string
 
@@ -68,9 +68,6 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
   const [showSelectionPopover, setShowSelectionPopover] = useState(false);
   const codeContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  // Visual edit mode (click-to-edit like Lovable)
-  const [isVisualEditMode, setIsVisualEditMode] = useState(false);
 
   // Check if the code is HTML
   const isHtmlCode = artifactContent?.language?.toLowerCase() === 'html' ||
@@ -308,15 +305,6 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     }
   }, []);
 
-  // Handle keyboard shortcut to exit visual edit mode (Escape)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isVisualEditMode) setIsVisualEditMode(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isVisualEditMode]);
-
   // Handle Ask-B button click
   const handleAskB = useCallback(() => {
     if (selectedText) {
@@ -345,7 +333,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Listen for messages from iframe for text selection + visual element clicks
+  // Listen for messages from iframe for text selection
   useEffect(() => {
     const handleIframeMessage = (event: MessageEvent) => {
       if (event.data?.type === "textSelection") {
@@ -366,37 +354,12 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
           setShowSelectionPopover(false);
           setSelectedText("");
         }
-      } else if (event.data?.type === "elementClick") {
-        // Visual edit mode: user clicked an element inside the iframe
-        const { description, outerHtml } = event.data;
-        if (description) {
-          // Store the outerHTML so the chatbot can do a surgical patch
-          setSurgicalEditOuterHtml(outerHtml || null);
-          const prompt = `Edit the ${description}: `;
-          setPrefilledPrompt(prompt);
-          // Turn off visual edit mode after a selection
-          setIsVisualEditMode(false);
-        }
       }
     };
 
     window.addEventListener("message", handleIframeMessage);
     return () => window.removeEventListener("message", handleIframeMessage);
-  }, [setPrefilledPrompt]);
-
-  // Send toggle message to iframe whenever visual edit mode changes
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe || !blobUrl) return;
-    // Small delay to make sure iframe is loaded
-    const send = () => {
-      try {
-        iframe.contentWindow?.postMessage({ type: "toggleVisualEdit", enabled: isVisualEditMode }, "*");
-      } catch (_) {}
-    };
-    const t = setTimeout(send, 100);
-    return () => clearTimeout(t);
-  }, [isVisualEditMode, blobUrl]);
+  }, []);
 
   // Create blob URL for secure iframe isolation
 
@@ -422,14 +385,12 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
       processedContent = displayContent.replace(/\{\{ARTIFACT_ID\}\}/g, artifactId);
     }
 
-    // Inject text selection script for Ask-B feature + visual edit mode
+    // Inject text selection script for Ask-B feature
     const selectionScript = `
       <script>
         (function() {
-          // ── Text Selection (Ask-B) ─────────────────────────────────────────
           let lastSelection = '';
           document.addEventListener('mouseup', function(e) {
-            if (window.__visualEditMode) return; // ignore selections during edit mode
             const selection = window.getSelection();
             const text = selection ? selection.toString().trim() : '';
             if (text && text !== lastSelection) {
@@ -450,109 +411,6 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
                 x: 0,
                 y: 0
               }, '*');
-            }
-          });
-
-          // ── Visual Edit Mode ───────────────────────────────────────────────
-          window.__visualEditMode = false;
-          var __hoveredEl = null;
-          var __originalOutline = '';
-          var __originalCursor = '';
-          var __styleTag = null;
-
-          function getElementDescription(el) {
-            var tag = el.tagName.toLowerCase();
-            var tagLabels = {
-              h1:'H1 heading',h2:'H2 heading',h3:'H3 heading',h4:'H4 heading',
-              h5:'H5 heading',h6:'H6 heading',p:'paragraph',button:'button',
-              a:'link',img:'image',input:'input field',textarea:'text area',
-              select:'dropdown',table:'table',tr:'table row',td:'table cell',
-              th:'table header',ul:'list',ol:'ordered list',li:'list item',
-              div:'section',span:'text',label:'label',nav:'navigation',
-              header:'header',footer:'footer',section:'section',form:'form',
-              article:'article',aside:'sidebar',figure:'figure',
-              strong:'bold text',em:'italic text'
-            };
-            var label = tagLabels[tag] || tag;
-            var detail = '';
-            if (tag === 'img') {
-              detail = el.alt || el.title || (el.src ? el.src.split('/').pop().split('?')[0] : '');
-            } else if (tag === 'input') {
-              detail = el.placeholder || el.name || el.type || '';
-            } else if (tag === 'a') {
-              detail = (el.textContent || '').trim().slice(0, 60);
-            } else {
-              detail = (el.textContent || '').replace(/\\s+/g,' ').trim().slice(0, 60);
-            }
-            return detail ? label + ' \"' + detail + '\"' : label;
-          }
-
-          function enableVisualEdit() {
-            if (__styleTag) return;
-            __styleTag = document.createElement('style');
-            __styleTag.id = '__visual-edit-style';
-            __styleTag.textContent = '* { cursor: crosshair !important; } body { user-select: none !important; }';
-            document.head.appendChild(__styleTag);
-            document.addEventListener('mouseover', __onMouseOver, true);
-            document.addEventListener('mouseout', __onMouseOut, true);
-            document.addEventListener('click', __onClick, true);
-          }
-
-          function disableVisualEdit() {
-            if (__hoveredEl) {
-              __hoveredEl.style.outline = __originalOutline;
-              __hoveredEl.style.boxShadow = '';
-              __hoveredEl = null;
-            }
-            document.removeEventListener('mouseover', __onMouseOver, true);
-            document.removeEventListener('mouseout', __onMouseOut, true);
-            document.removeEventListener('click', __onClick, true);
-            if (__styleTag) { __styleTag.remove(); __styleTag = null; }
-          }
-
-          function __onMouseOver(e) {
-            var el = e.target;
-            if (el === document.body || el === document.documentElement) return;
-            if (__hoveredEl && __hoveredEl !== el) {
-              __hoveredEl.style.outline = __originalOutline;
-              __hoveredEl.style.boxShadow = '';
-            }
-            __hoveredEl = el;
-            __originalOutline = el.style.outline || '';
-            el.style.outline = '2px solid #818cf8';
-            el.style.boxShadow = '0 0 0 4px rgba(129,140,248,0.2)';
-            e.stopPropagation();
-          }
-
-          function __onMouseOut(e) {
-            var el = e.target;
-            if (el === __hoveredEl) {
-              el.style.outline = __originalOutline;
-              el.style.boxShadow = '';
-              __hoveredEl = null;
-            }
-          }
-
-          function __onClick(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            var el = e.target;
-            if (el === document.body || el === document.documentElement) return;
-            var description = getElementDescription(el);
-            window.parent.postMessage({
-              type: 'elementClick',
-              description: description,
-              tag: el.tagName.toLowerCase(),
-              outerHtml: el.outerHTML
-            }, '*');
-          }
-
-          // Listen for toggle from parent
-          window.addEventListener('message', function(e) {
-            if (e.data && e.data.type === 'toggleVisualEdit') {
-              window.__visualEditMode = !!e.data.enabled;
-              if (window.__visualEditMode) { enableVisualEdit(); }
-              else { disableVisualEdit(); }
             }
           });
         })();
@@ -615,29 +473,9 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
               size="icon"
               className="h-7 w-7 md:h-8 md:w-8"
               title={isPreviewMode ? "Show code" : "Preview"}
-              onClick={() => {
-                if (isVisualEditMode) setIsVisualEditMode(false);
-                togglePreview();
-              }}
+              onClick={togglePreview}
             >
               {isPreviewMode ? <Code className="h-3 w-3 md:h-4 md:w-4" /> : <Eye className="h-3 w-3 md:h-4 md:w-4" />}
-            </Button>
-          )}
-
-          {/* Visual Edit Mode Toggle - only in HTML preview */}
-          {isHtmlCode && isPreviewMode && (
-            <Button
-              variant={isVisualEditMode ? "default" : "ghost"}
-              size="icon"
-              className={`h-7 w-7 md:h-8 md:w-8 ${
-                isVisualEditMode
-                  ? "bg-indigo-500 hover:bg-indigo-600 text-white"
-                  : "text-muted-foreground"
-              }`}
-              title={isVisualEditMode ? "Exit visual edit mode" : "Click any element to edit it"}
-              onClick={() => setIsVisualEditMode((v) => !v)}
-            >
-              <MousePointer2 className="h-3 w-3 md:h-4 md:w-4" />
             </Button>
           )}
 
@@ -775,23 +613,19 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
               blobUrl ? (
 
-                <div className="relative w-full h-full">
-                  {/* Visual edit mode overlay banner */}
-                  {isVisualEditMode && (
-                    <div className="absolute top-0 left-0 right-0 z-10 bg-indigo-500/90 text-white text-xs text-center py-1.5 px-3 flex items-center justify-center gap-2 pointer-events-none">
-                      <MousePointer2 className="h-3 w-3" />
-                      <span>Click any element to edit it — press <kbd className="bg-white/20 rounded px-1">Esc</kbd> or the pointer button to exit</span>
-                    </div>
-                  )}
-                  <iframe
-                    ref={iframeRef}
-                    src={blobUrl}
-                    className="w-full h-full border-0"
-                    referrerPolicy="no-referrer"
-                    allow="clipboard-write"
-                    title="HTML Preview"
-                  />
-                </div>
+                <iframe
+                  ref={iframeRef}
+                  src={blobUrl}
+
+                  className="w-full h-full border-0"
+
+                  referrerPolicy="no-referrer"
+
+                  allow="clipboard-write"
+
+                  title="HTML Preview"
+
+                />
 
               ) : (
 

@@ -94,7 +94,6 @@ export function SharingPermissionsStep({
             messenger: true,
             artifact: true,
             newsFeed: true,
-            library: true,
           },
         }
 
@@ -264,7 +263,6 @@ export function SharingPermissionsStep({
                       <TableHead className="text-center">News Feed</TableHead>
                       <TableHead className="text-center">Messenger</TableHead>
                       <TableHead className="text-center">Artifact</TableHead>
-                      <TableHead className="text-center">Library</TableHead>
                       <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -330,16 +328,6 @@ export function SharingPermissionsStep({
                               checked={user.permissions.artifact}
                               onCheckedChange={(checked) =>
                                 updateUserPermission(user.id, "artifact", checked as boolean)
-                              }
-                            />
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-center">
-                            <Checkbox
-                              checked={user.permissions.library}
-                              onCheckedChange={(checked) =>
-                                updateUserPermission(user.id, "library", checked as boolean)
                               }
                             />
                           </div>
@@ -498,28 +486,6 @@ export function SharingPermissionsStep({
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Create & share artifacts
-                    </p>
-                  </div>
-
-                  {/* Library Permission */}
-                  <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-3">
-                      <Checkbox
-                        id="buyer-library"
-                        checked={formData.buyerPermissions.library}
-                        onCheckedChange={(checked) =>
-                          updateBuyerPermission("library", checked as boolean)
-                        }
-                      />
-                      <label
-                        htmlFor="buyer-library"
-                        className="text-sm font-medium leading-none cursor-pointer"
-                      >
-                        Library
-                      </label>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Access knowledge library
                     </p>
                   </div>
                 </div>

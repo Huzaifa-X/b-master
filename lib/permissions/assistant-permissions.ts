@@ -10,7 +10,7 @@
 
 import prisma from '@/lib/prisma';
 
-export type AssistantPermission = 'chat' | 'contacts' | 'messenger' | 'newsfeed' | 'artifacts' | 'library';
+export type AssistantPermission = 'chat' | 'contacts' | 'messenger' | 'newsfeed' | 'artifacts';
 export type AssistantAccess = 'admin' | 'user' | 'none';
 
 export interface AssistantPermissionResult {
@@ -56,7 +56,7 @@ export async function getUserAssistantPermissions(
     return {
       hasAccess: true,
       access: 'admin',
-      permissions: ['chat', 'contacts', 'messenger', 'newsfeed', 'artifacts', 'library'],
+      permissions: ['chat', 'contacts', 'messenger', 'newsfeed', 'artifacts'],
       isOwner: true,
       isPurchaser: false,
       isShared: false,
@@ -89,7 +89,7 @@ export async function getUserAssistantPermissions(
         const parsed = JSON.parse(assistant.buyerPermissions);
         if (Array.isArray(parsed)) {
           permissions = parsed.filter((p): p is AssistantPermission =>
-            ['chat', 'contacts', 'messenger', 'newsfeed', 'artifacts', 'library'].includes(p)
+            ['chat', 'contacts', 'messenger', 'newsfeed', 'artifacts'].includes(p)
           );
         }
       } catch (error) {
@@ -137,7 +137,7 @@ export async function getUserAssistantPermissions(
       const parsed = JSON.parse(contact.permissions);
       if (Array.isArray(parsed)) {
         permissions = parsed.filter((p): p is AssistantPermission =>
-          ['chat', 'contacts', 'messenger', 'newsfeed', 'artifacts', 'library'].includes(p)
+          ['chat', 'contacts', 'messenger', 'newsfeed', 'artifacts'].includes(p)
         );
       }
     } catch (error) {
@@ -147,7 +147,7 @@ export async function getUserAssistantPermissions(
 
   // If access is 'admin', grant all permissions
   if (contact.access === 'admin') {
-    permissions = ['chat', 'contacts', 'messenger', 'newsfeed', 'artifacts', 'library'];
+    permissions = ['chat', 'contacts', 'messenger', 'newsfeed', 'artifacts'];
   }
 
   return {

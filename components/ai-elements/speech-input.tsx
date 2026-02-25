@@ -111,8 +111,6 @@ export const SpeechInput = ({
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  // Tracks whether the user wants to keep recording (enables infinite-duration)
-  const shouldRestartRef = useRef(false);
 
   // Detect mode on mount
   useEffect(() => {
@@ -138,18 +136,7 @@ export const SpeechInput = ({
     };
 
     speechRecognition.onend = () => {
-      // Auto-restart if the user didn't explicitly stop — enables recordings > 10 min
-      if (shouldRestartRef.current) {
-        try {
-          speechRecognition.start();
-        } catch {
-          // recognition already started or browser refused — give up quietly
-          shouldRestartRef.current = false;
-          setIsListening(false);
-        }
-      } else {
-        setIsListening(false);
-      }
+      setIsListening(false);
     };
 
     speechRecognition.onresult = (event) => {
@@ -237,8 +224,7 @@ export const SpeechInput = ({
       };
 
       mediaRecorderRef.current = mediaRecorder;
-      // timeslice = 10 s: flush chunks frequently so huge recordings never overflow memory
-      mediaRecorder.start(10_000);
+      mediaRecorder.start();
       setIsListening(true);
     } catch (error) {
       console.error("Failed to start MediaRecorder:", error);
@@ -257,10 +243,8 @@ export const SpeechInput = ({
   const toggleListening = useCallback(() => {
     if (mode === "speech-recognition" && recognition) {
       if (isListening) {
-        shouldRestartRef.current = false; // user explicitly stopping
         recognition.stop();
       } else {
-        shouldRestartRef.current = true; // user wants continuous recording
         recognition.start();
       }
     } else if (mode === "media-recorder") {

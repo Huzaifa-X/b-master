@@ -19,13 +19,11 @@ import { signIn } from "next-auth/react"
 import { loginSchema, LoginInput } from "@/lib/validations/auth"
 import { useResendVerificationEmail } from "@/hooks/useAuth"
 import { toast } from "sonner"
-import { useLocale } from "@/lib/i18n"
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"form">) {
-  const { locale, setLocale: _setLocale, t } = useLocale()
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get("callbackUrl") || "/home"
@@ -157,19 +155,19 @@ export function LoginForm({
     <form className={cn("flex flex-col gap-6", className)} {...props} onSubmit={handleSubmit}>
       <FieldGroup>
         <div className="flex flex-col items-center gap-1 text-center">
-          <h1 className="text-2xl font-bold">{t("auth.loginTitle")}</h1>
+          <h1 className="text-2xl font-bold">Login to your account</h1>
           <p className="text-muted-foreground text-sm text-balance">
-            {t("auth.loginSubtitle")}
+            Enter your email below to login to your account
           </p>
         </div>
 
         {/* Email Field */}
         <Field>
-          <FieldLabel htmlFor="email">{t("auth.email")}</FieldLabel>
+          <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input
             id="email"
             type="email"
-            placeholder={t("auth.emailAddressPlaceholder")}
+            placeholder="Enter your email address"
             value={formData.email}
             onChange={handleChange}
             className={cn(
@@ -188,18 +186,18 @@ export function LoginForm({
         {/* Password Field */}
         <Field>
           <div className="flex items-center">
-            <FieldLabel htmlFor="password">{t("auth.password")}</FieldLabel>
+            <FieldLabel htmlFor="password">Password</FieldLabel>
             <Link
               href="/forgot-password"
               className="ml-auto text-sm underline-offset-4 hover:underline"
             >
-              {t("auth.forgotYourPassword")}
+              Forgot your password?
             </Link>
           </div>
           <div className="relative">
             <Input
               id="password"
-              placeholder={t("auth.passwordPlaceholder")}
+              placeholder="Enter your password"
               type={showPassword ? "text" : "password"}
               value={formData.password}
               onChange={handleChange}
@@ -232,10 +230,10 @@ export function LoginForm({
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t("auth.signingIn")}
+                Signing in...
               </>
             ) : (
-              t("auth.login")
+              "Login"
             )}
           </Button>
         </Field>
@@ -261,12 +259,12 @@ export function LoginForm({
             Login with Google
           </Button> */}
         <FieldDescription className="text-center">
-          {t("auth.dontHaveAccount")}{" "}
+          Don&apos;t have an account?{" "}
           <Link
             href="/signup"
             className="underline underline-offset-4 hover:text-blue-600 transition-colors duration-200"
           >
-            {t("auth.signUp")}
+            Sign up
           </Link>
         </FieldDescription>
         {/* </Field> COMMENTED OUT - Google provider disabled */}

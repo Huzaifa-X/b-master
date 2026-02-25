@@ -129,39 +129,6 @@ export async function uploadAndAddToVectorStore(
 }
 
 /**
- * Upload file to OpenAI and enqueue it in vector store WITHOUT polling for completion.
- * Use this in interactive/API contexts where long polling would block the request for minutes.
- * The file will be indexed asynchronously by OpenAI in the background.
- * @param vectorStoreId - ID of the vector store
- * @param fileBuffer - Buffer containing file data
- * @param fileName - Name of the file
- * @returns OpenAI file ID (indexing status will be "in_progress" initially)
- */
-export async function uploadAndAddToVectorStoreNoPoll(
-  vectorStoreId: string,
-  fileBuffer: Buffer,
-  fileName: string
-): Promise<string> {
-  try {
-    // Step 1: Upload the file to OpenAI Files API
-    const fileId = await uploadFileToOpenAI(fileBuffer, fileName)
-
-    // Step 2: Enqueue into the vector store (no waiting for completion)
-    await openai.vectorStores.files.create(vectorStoreId, {
-      file_id: fileId,
-    })
-
-    console.log(`✅ File uploaded and queued in vector store (no-poll): ${fileId}`)
-    return fileId
-  } catch (error) {
-    console.error("❌ Error uploading to vector store (no-poll):", error)
-    throw new Error(
-      `Failed to upload to vector store: ${error instanceof Error ? error.message : "Unknown error"}`
-    )
-  }
-}
-
-/**
  * Add text note to vector store by creating a temporary text file
  * @param vectorStoreId - ID of the vector store
  * @param noteContent - Text content to add

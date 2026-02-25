@@ -3,11 +3,9 @@
 import {
   ChevronsUpDown,
   DollarSign,
-  Languages,
   LogOut,
   Sparkles,
   User,
-  HelpCircle,
 } from "lucide-react"
 
 import {
@@ -35,7 +33,6 @@ import { toast } from "sonner"
 import { signOut } from "next-auth/react"
 import { NavUserType } from "@/types/user"
 import { useSubscription } from "@/hooks/useSubscription"
-import { useLocale } from "@/lib/i18n"
 
 export function NavUser({
   user,
@@ -43,7 +40,6 @@ export function NavUser({
   user: NavUserType
 }) {
   const { subscription, loading } = useSubscription()
-  const { t, locale, setLocale } = useLocale()
   const router = useRouter()
 
   if (!user) {
@@ -105,13 +101,13 @@ export function NavUser({
                 router.push("/profile")
               }}>
                 <User className="text-black focus:!text-black focus:!bg-muted" />
-                {t("nav.profile")}
+                My Profile
               </DropdownMenuItem>
               <DropdownMenuItem className="text-black focus:!text-black focus:!bg-muted cursor-pointer" onClick={() => {
                 router.push("/assistants")
               }}>
                 <Sparkles className="text-black focus:!text-black focus:!bg-muted" />
-                {t("nav.myAssistants")}
+                My Assistants
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
@@ -120,21 +116,7 @@ export function NavUser({
                 router.push("/pricing")
               }}>
                 <DollarSign className="text-black focus:!text-black focus:!bg-muted" />
-                {t("nav.upgradePlan")}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-black focus:!text-black focus:!bg-muted cursor-pointer"
-                onClick={() => window.dispatchEvent(new CustomEvent("bmaster:restart-tour"))}
-              >
-                <HelpCircle className="text-black focus:!text-black focus:!bg-muted" />
-                {t("nav.replayTour")}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-black focus:!text-black focus:!bg-muted cursor-pointer"
-                onClick={() => setLocale(locale === "en" ? "fr" : "en")}
-              >
-                <Languages className="text-black focus:!text-black focus:!bg-muted" />
-                {t("nav.language")}: {locale === "en" ? t("nav.french") : t("nav.english")}
+                Upgrade Plan
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
@@ -158,7 +140,7 @@ export function NavUser({
               }}
             >
               <LogOut className="text-black focus:!text-black focus:!bg-muted" />
-              {t("auth.signOut")}
+              Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

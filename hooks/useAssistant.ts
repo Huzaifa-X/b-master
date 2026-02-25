@@ -197,7 +197,6 @@ export function useAssistantForEdit(
           messenger: false,
           artifact: false,
           newsFeed: false,
-          library: false,
         },
       }
 

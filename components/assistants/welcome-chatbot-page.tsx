@@ -44,7 +44,7 @@ export function WelcomeChatbotPage({
   const handleSend = async (
     message: string,
     attachments?: { name: string; url: string; type: string; size: number }[],
-    options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; dropbox?: boolean; artifacts?: { id: string; name: string; instructions: string; htmlContent: string }[]; mentionedUsers?: Array<{ id: string; name: string; email: string }>; connectedApiIds?: string[] }
+    options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; dropbox?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: Array<{ id: string; name: string; email: string }> }
   ) => {
     if (!message.trim() || isCreating) return
 
@@ -61,9 +61,8 @@ export function WelcomeChatbotPage({
         research: options?.research,
         chatWithAPI: options?.chatWithAPI,
         dropbox: options?.dropbox,
-        artifacts: options?.artifacts,
-        mentionedUsers: options?.mentionedUsers,
-        connectedApiIds: options?.connectedApiIds,
+        artifact: options?.artifact,
+        mentionedUsers: options?.mentionedUsers
       })
 
       if (!result.success || !result.chatId) {

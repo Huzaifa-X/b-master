@@ -2,9 +2,6 @@ import 'server-only';
 import { uploadToS3 } from '@/lib/aws-s3';
 import { generateInvoiceHTML } from '@/lib/invoice-template';
 
-// Timeout for the external converter service (default 60s, configurable via env)
-const CONVERTER_TIMEOUT_MS = parseInt(process.env.PDF_CONVERTER_TIMEOUT_MS || '60000', 10);
-
 interface ConvertOptions {
   html: string;
   filename: string;
@@ -48,31 +45,14 @@ async function convertHTML({
     formData.append('file', htmlBlob, 'document.html');
     formData.append('html', html);
 
-    // Call Converter API with explicit timeout to avoid hanging for minutes
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), CONVERTER_TIMEOUT_MS);
-
-    let response: Response;
-    try {
-      response = await fetch(`${PDF_CONVERTER_URL}/convert/${format}`, {
-        method: 'POST',
-        headers: {
-          'accept': 'application/json',
-        },
-        body: formData,
-        signal: controller.signal,
-      });
-    } catch (fetchError: any) {
-      if (fetchError?.name === 'AbortError' || fetchError?.code === 'UND_ERR_HEADERS_TIMEOUT') {
-        throw new Error(
-          `Converter service timed out after ${CONVERTER_TIMEOUT_MS / 1000}s. ` +
-          `The service at ${PDF_CONVERTER_URL} may be unavailable or overloaded.`
-        );
-      }
-      throw fetchError;
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    // Call Converter API
+    const response = await fetch(`${PDF_CONVERTER_URL}/convert/${format}`, {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+      },
+      body: formData,
+    });
 
     if (!response.ok) {
       const errorText = await response.text();

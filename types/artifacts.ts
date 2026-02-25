@@ -2,8 +2,6 @@ export type Category =
   | "presentation"
   | "documentation"
   | "invoice"
-  | "crm"
-  | "scheduling"
   | "video_generation"
   | "others"
 

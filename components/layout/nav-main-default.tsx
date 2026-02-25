@@ -10,7 +10,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { useLocale } from "@/lib/i18n"
 
 // Custom icon component combining MessageCircle and Sparkles
 function AskBIcon({ className }: { className?: string }) {
@@ -22,25 +21,39 @@ function AskBIcon({ className }: { className?: string }) {
   )
 }
 
+const navItems = [
+  {
+    title: "Ask B",
+    url: "/ask-b",
+    icon: AskBIcon,
+  },
+  {
+    title: "Bmaster Store",
+    url: "/store",
+    icon: Store,
+  },
+  {
+    title: "Contacts",
+    url: "/contacts",
+    icon: Users,
+  },
+  {
+    title: "Add Assistants",
+    url: "/assistants/add",
+    icon: Plus,
+  },
+]
+
 export function NavMainDefault({ currentPath }: { currentPath: string }) {
-  const { t } = useLocale()
-
-  const navItems = [
-    { titleKey: "nav.askB",         url: "/ask-b",          icon: AskBIcon, dataTour: "ask-b" },
-    { titleKey: "nav.store",        url: "/store",          icon: Store,    dataTour: "store" },
-    { titleKey: "nav.contacts",     url: "/contacts",       icon: Users,    dataTour: "contacts" },
-    { titleKey: "nav.addAssistants",url: "/assistants/add", icon: Plus,     dataTour: "add-assistant" },
-  ]
-
   return (
     <SidebarGroup>
       <SidebarMenu>
         {navItems.map((item) => (
-          <SidebarMenuItem key={item.titleKey}>
-            <SidebarMenuButton asChild tooltip={t(item.titleKey)} isActive={currentPath === item.url}>
-              <Link href={item.url} className="group/nav-item" data-tour={item.dataTour}>
+          <SidebarMenuItem key={item.title}>
+            <SidebarMenuButton asChild tooltip={item.title} isActive={currentPath === item.url}>
+              <Link href={item.url} className="group/nav-item">
                 <item.icon className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
-                <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">{t(item.titleKey)}</span>
+                <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">{item.title}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

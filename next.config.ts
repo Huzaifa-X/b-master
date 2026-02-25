@@ -9,9 +9,9 @@ const nextConfig = {
   // Experimental features configuration
   experimental: {
     // Server Actions body size limit
-    // NOTE: Supports large media uploads (videos up to 500MB for newsfeed)
+    // NOTE: Supports large document uploads (up to 50MB for PDF processing)
     serverActions: {
-      bodySizeLimit: '500mb', // Support large video uploads for newsfeed
+      bodySizeLimit: '50mb', // Support large PDFs for Upstage extraction
     },
   },
   // Images configuration to prevent aggressive preloading

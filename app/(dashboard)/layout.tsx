@@ -7,7 +7,6 @@ import {
 import { AppSidebar } from "@/components/layout/sidebar/app-sidebar"
 import { SiteHeader } from "@/components/layout/site-header"
 import { ProtectedRoute } from "@/components/auth/protected-route"
-import { OnboardingTour } from "@/components/shared/onboarding-tour"
 
 export default function DashboardLayout({
   children,
@@ -26,7 +25,6 @@ export default function DashboardLayout({
               </div>
             </SidebarInset>
           </div>
-          <OnboardingTour />
         </SidebarProvider>
     </ProtectedRoute>
   )

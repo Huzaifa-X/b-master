@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useParams } from "next/navigation"
-import { MessageSquare, ArrowLeft, ChevronDown } from "lucide-react"
+import { MessageSquare, ArrowLeft, Download, File, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { AIInput, PendingAttachment } from "@/components/ui/ai-input"
+import { AIInput } from "@/components/ui/ai-input"
 import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
-import { MessageBubble } from "./message-bubble"
 import { useChatMessages, useSendMessage, useMarkAsRead, useMessageSubscription, useUserChats } from "@/hooks/use-assistant-chat"
 import { useSession } from "next-auth/react"
+import { format } from "date-fns"
 import { useUploadFileToS3 } from "@/hooks/useUpload"
 import { toast } from "sonner"
 
@@ -202,56 +202,60 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
     }
   }, [conversationId, currentChat?.unreadCount, markAsRead, assistantId])
 
+  const handleSendMessage = async (message: string) => {
+    if (!conversationId || !message.trim()) return
+
+    sendMessage({
+      assistantId,
+      chatId: conversationId,
+      message: message.trim(),
+      messageType: "text"
+    })
+  }
+
+  // Helper function to check if file is an image
   const isImageFile = (fileName: string, contentType?: string): boolean => {
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico']
     const imageMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp']
+
     const extension = fileName.toLowerCase().substring(fileName.lastIndexOf('.'))
     return imageExtensions.includes(extension) || (contentType ? imageMimeTypes.includes(contentType) : false)
   }
 
-  const handleSend = async (message: string, attachment?: PendingAttachment) => {
-    if (!conversationId || (!message.trim() && !attachment)) return
+  const handleFileUpload = async (files: FileList) => {
+    if (!conversationId || files.length === 0) return
 
-    if (attachment?.type === "file" && attachment.file) {
-      if (attachment.file.size > 10 * 1024 * 1024) {
-        toast.error("File size must be less than 10MB")
-        return
-      }
-      try {
-        const formData = new FormData()
-        formData.append("file", attachment.file)
-        formData.append("folder", "attachments")
-        const uploadResult = await uploadFileAsync(formData)
-        const isImage = isImageFile(attachment.file.name, attachment.file.type)
-        sendMessage({
-          assistantId,
-          chatId: conversationId,
-          message: message.trim() || (isImage ? "" : `[File: ${attachment.file.name}]`),
-          messageType: isImage ? "image" : "file",
-          attachmentUrl: uploadResult.url,
-          attachmentName: uploadResult.fileName,
-          attachmentSize: uploadResult.fileSize
-        })
-      } catch (error) {
-        console.error("File upload error:", error)
-        toast.error("Failed to upload file")
-      }
-    } else if (attachment?.type === "url" && attachment.url) {
+    const file = files[0]
+
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File size must be less than 10MB")
+      return
+    }
+
+    try {
+      // Create FormData for file upload
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("folder", "attachments")
+
+      // Upload to S3 using the existing hook
+      const uploadResult = await uploadFileAsync(formData)
+
+      const isImage = isImageFile(file.name, file.type)
+
       sendMessage({
         assistantId,
         chatId: conversationId,
-        message: message.trim(),
-        messageType: "url",
-        attachmentUrl: attachment.url,
-        attachmentName: attachment.url
+        message: isImage ? "" : `[File: ${file.name}]`,
+        messageType: isImage ? "image" : "file",
+        attachmentUrl: uploadResult.url,
+        attachmentName: uploadResult.fileName,
+        attachmentSize: uploadResult.fileSize
       })
-    } else {
-      sendMessage({
-        assistantId,
-        chatId: conversationId,
-        message: message.trim(),
-        messageType: "text"
-      })
+    } catch (error) {
+      console.error("File upload error:", error)
+      toast.error("Failed to upload file")
     }
   }
 
@@ -260,6 +264,30 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
       ? currentChat.participant
       : currentChat.initiator)
     : null
+
+  // Convert URLs in text to clickable links
+  const linkifyText = (text: string, isOwn: boolean) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g
+    const parts = text.split(urlRegex)
+
+    return parts.map((part, index) => {
+      if (part.match(urlRegex)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`underline hover:opacity-80 ${isOwn ? "text-primary-foreground" : "text-primary"
+              }`}
+          >
+            {part}
+          </a>
+        )
+      }
+      return <span key={index}>{part}</span>
+    })
+  }
 
   if (!conversationId) {
     return (
@@ -341,6 +369,8 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
               </div>
             )}
             {allMessages.slice().reverse().map((message) => {
+              // Check if message is from current user
+              // Handle both real messages and optimistic messages
               const currentUserId = session?.user?.id
               const isOwn = currentUserId
                 ? (message.senderId === currentUserId ||
@@ -348,19 +378,70 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
                   (message as any)._isOptimistic === true)
                 : false
 
+              // Check if attachment is an image
+              const isImage = message.attachmentUrl && (
+                message.messageType === 'image' ||
+                (message.attachmentName && isImageFile(message.attachmentName))
+              )
+
               return (
                 <div
                   key={message.id}
                   className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                 >
-                  <MessageBubble
-                    message={message.message}
-                    messageType={message.messageType}
-                    attachmentUrl={message.attachmentUrl}
-                    attachmentName={message.attachmentName}
-                    createdAt={message.createdAt}
-                    isOwn={isOwn}
-                  />
+                  <div
+                    className={`max-w-[70%] rounded-2xl px-4 py-2 ${isOwn
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted"
+                      }`}
+                  >
+                    {/* Display image inline */}
+                    {isImage && message.attachmentUrl && (
+                      <div className="mb-2">
+                        <a
+                          href={message.attachmentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block rounded-lg overflow-hidden max-w-full"
+                        >
+                          <img
+                            src={message.attachmentUrl}
+                            alt={message.attachmentName || "Image"}
+                            className="max-w-full h-auto max-h-[400px] object-contain rounded-lg"
+                            loading="lazy"
+                          />
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Display text message */}
+                    {message.message && (
+                      <p className="text-sm whitespace-pre-wrap break-words">
+                        {linkifyText(message.message, isOwn)}
+                      </p>
+                    )}
+
+                    {/* Display file download link for non-images */}
+                    {message.attachmentUrl && !isImage && (
+                      <a
+                        href={message.attachmentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`mt-2 flex items-center gap-2 text-sm ${isOwn ? "text-primary-foreground/80 hover:text-primary-foreground" : "text-primary hover:text-primary/80"
+                          }`}
+                      >
+                        <File className="h-4 w-4" />
+                        <span className="underline">{message.attachmentName || "Download File"}</span>
+                      </a>
+                    )}
+
+                    <p className={`text-xs mt-1 ${isOwn
+                        ? "text-primary-foreground/70"
+                        : "text-muted-foreground"
+                      }`}>
+                      {format(new Date(message.createdAt), "HH:mm")}
+                    </p>
+                  </div>
                 </div>
               )
             })}
@@ -373,7 +454,8 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
       <div className="shrink-0 border-t">
         <AIInput
           placeholder={isSending || isUploading ? "Sending..." : "Type a message..."}
-          onSubmit={handleSend}
+          onSubmit={handleSendMessage}
+          onFileUpload={handleFileUpload}
           minHeight={52}
           maxHeight={200}
         />

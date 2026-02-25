@@ -14,7 +14,12 @@ export const usePusher = () => {
       const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
         cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
         authEndpoint: '/api/pusher/auth',
-        // No Authorization header needed — the auth endpoint uses NextAuth session cookies
+        auth: {
+          headers: {
+            // Adjust based on your session structure
+            Authorization: `Bearer ${(session as any).accessToken}`
+          }
+        }
       });
 
       pusher.connection.bind('connected', () => {
@@ -22,10 +27,7 @@ export const usePusher = () => {
       });
 
       pusher.connection.bind('error', (err: any) => {
-        // Only log errors with meaningful details; ignore empty {} transport-close events
-        if (err && typeof err === 'object' && Object.keys(err).length > 0) {
-          console.error('❌ Pusher error:', err);
-        }
+        console.error('❌ Pusher error:', err);
       });
 
       setPusherClient(pusher);

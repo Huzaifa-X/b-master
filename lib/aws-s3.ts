@@ -184,40 +184,6 @@ export async function deleteFromS3(fileUrl: string): Promise<void> {
 // ============================================
 
 /**
- * Fetch an S3 object and return its body as a Node.js Readable stream together
- * with content-type and content-length metadata.
- * Preferred over generating a presigned URL + HTTP fetch because the SDK call
- * goes over the internal AWS network and does NOT require an outbound HTTPS
- * connection from the server to s3.<region>.amazonaws.com.
- */
-export async function getS3ObjectStream(key: string): Promise<{
-  body: NodeJS.ReadableStream
-  contentType: string
-  contentLength: number | null
-}> {
-  const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-  })
-
-  const response = await s3Client.send(command)
-
-  if (!response.Body) {
-    throw new Error(`S3 object body is empty for key: ${key}`)
-  }
-
-  // The Body is a SdkStreamMixin which is a Node.js Readable in the Node runtime
-  const body = response.Body as unknown as NodeJS.ReadableStream
-
-  return {
-    body,
-    contentType: response.ContentType ?? "application/octet-stream",
-    contentLength:
-      response.ContentLength !== undefined ? response.ContentLength : null,
-  }
-}
-
-/**
  * Generate a signed URL for private file access
  * @param key - S3 key of the file
  * @param expiresIn - URL expiration time in seconds (default: 1 hour)

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { X, Upload, ImageIcon, Globe, Lock, Loader2, Users, FileText } from "lucide-react"
+import { X, Upload, ImageIcon, Globe, Lock, Loader2, Users } from "lucide-react"
 import {
     Dialog,
     DialogContent,
@@ -26,28 +26,11 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from "sonner"
 import { useAssistantContacts } from "@/hooks/useContacts"
 import { useSession } from "next-auth/react"
-import { uploadNewsfeedMediaToS3 } from "@/app/actions/upload.action"
 
 // Constants
 const MAX_TITLE_LENGTH = 100
 const MAX_CONTENT_LENGTH = 1000
-const MAX_VIDEO_SIZE = 500 * 1024 * 1024 // 500MB
-const MAX_PDF_SIZE = 100 * 1024 * 1024   // 100MB
-const MAX_IMAGE_SIZE = 100 * 1024 * 1024  // 100MB
-
-type MediaType = "image" | "video" | "pdf" | null
-
-function getMediaTypeFromFile(file: File): MediaType {
-    if (file.type.startsWith("video/")) return "video"
-    if (file.type === "application/pdf") return "pdf"
-    if (file.type.startsWith("image/")) return "image"
-    return null
-}
-
-function formatBytes(bytes: number): string {
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
-}
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5MB
 
 interface AddFeedDialogProps {
     open: boolean
@@ -77,12 +60,8 @@ export function AddFeedDialog({
     const { data: session } = useSession()
     const [title, setTitle] = useState("")
     const [content, setContent] = useState("")
-    const [image, setImage] = useState<string | undefined>(undefined)  // S3 URL after upload
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null)    // local blob URL
-    const [mediaFile, setMediaFile] = useState<File | null>(null)
-    const [mediaType, setMediaType] = useState<MediaType>(null)
-    const [isUploadingMedia, setIsUploadingMedia] = useState(false)
-    const [uploadProgress, setUploadProgress] = useState(0)
+    const [image, setImage] = useState<string | undefined>(undefined)
+    const [imageFile, setImageFile] = useState<File | null>(null)
     const [privacy, setPrivacy] = useState<"public" | "private">("public")
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -118,12 +97,7 @@ export function AddFeedDialog({
         setTitle("")
         setContent("")
         setImage(undefined)
-        if (previewUrl) URL.revokeObjectURL(previewUrl)
-        setPreviewUrl(null)
-        setMediaFile(null)
-        setMediaType(null)
-        setIsUploadingMedia(false)
-        setUploadProgress(0)
+        setImageFile(null)
         setPrivacy("public")
         setSelectedUserIds([])
         
@@ -163,81 +137,45 @@ export function AddFeedDialog({
         handleReset()
     }
 
-    const handleMediaChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (!file) return
 
-        const type = getMediaTypeFromFile(file)
-        if (!type) {
-            toast.error("Unsupported file type")
+        // Check file size
+        if (file.size > MAX_IMAGE_SIZE) {
+            toast.error("Image size must be less than 5MB")
             return
         }
 
-        // Size validation
-        const maxSize = type === "video" ? MAX_VIDEO_SIZE : type === "pdf" ? MAX_PDF_SIZE : MAX_IMAGE_SIZE
-        if (file.size > maxSize) {
-            const limitMB = maxSize / (1024 * 1024)
-            toast.error(`File too large. ${type === "video" ? "Videos" : type === "pdf" ? "PDFs" : "Images"} must be under ${limitMB}MB`)
-            if (fileInputRef.current) fileInputRef.current.value = ""
+        // Check file type
+        if (!file.type.startsWith("image/")) {
+            toast.error("Please upload a valid image file")
             return
         }
 
-        setMediaFile(file)
-        setMediaType(type)
-        setImage(undefined)
-        setIsUploadingMedia(true)
-        setUploadProgress(0)
+        setImageFile(file)
 
-        // Create local preview URL (for video & image)
-        if (type === "video" || type === "image") {
-            const localUrl = URL.createObjectURL(file)
-            setPreviewUrl(localUrl)
-        } else {
-            setPreviewUrl(null)
+        // Create preview URL with error handling
+        const reader = new FileReader()
+        
+        reader.onloadend = () => {
+            setImage(reader.result as string)
         }
-
-        // Simulate initial progress tick
-        setUploadProgress(10)
-
-        try {
-            const formData = new FormData()
-            formData.append("file", file)
-
-            // Tick progress while uploading
-            const ticker = setInterval(() => {
-                setUploadProgress(prev => Math.min(prev + 5, 85))
-            }, 500)
-
-            const result = await uploadNewsfeedMediaToS3(formData)
-            clearInterval(ticker)
-
-            if (!result.success || !result.url) {
-                throw new Error(result.error || "Upload failed")
+        
+        reader.onerror = () => {
+            toast.error("Failed to read image file")
+            setImageFile(null)
+            if (fileInputRef.current) {
+                fileInputRef.current.value = ""
             }
-
-            setImage(result.url)
-            setUploadProgress(100)
-            toast.success("Media uploaded successfully")
-        } catch (err: any) {
-            toast.error(err.message || "Failed to upload media")
-            if (previewUrl) URL.revokeObjectURL(previewUrl)
-            setPreviewUrl(null)
-            setMediaFile(null)
-            setMediaType(null)
-            setImage(undefined)
-            if (fileInputRef.current) fileInputRef.current.value = ""
-        } finally {
-            setIsUploadingMedia(false)
         }
+        
+        reader.readAsDataURL(file)
     }
 
-    const handleRemoveMedia = () => {
+    const handleRemoveImage = () => {
         setImage(undefined)
-        if (previewUrl) URL.revokeObjectURL(previewUrl)
-        setPreviewUrl(null)
-        setMediaFile(null)
-        setMediaType(null)
-        setUploadProgress(0)
+        setImageFile(null)
         if (fileInputRef.current) {
             fileInputRef.current.value = ""
         }
@@ -269,7 +207,6 @@ export function AddFeedDialog({
         !title.trim() || 
         !content.trim() || 
         isLoading ||
-        isUploadingMedia ||
         (privacy === "private" && selectedUserIds.length === 0)
 
     return (
@@ -419,31 +356,14 @@ export function AddFeedDialog({
                         </p>
                     </div>
 
-                    {/* Media Upload */}
+                    {/* Image Upload */}
                     <div className="space-y-2">
-                        <Label htmlFor="media">Media (Optional)</Label>
+                        <Label htmlFor="image">Image (Optional)</Label>
                         <div className="flex flex-col gap-3">
-                            {/* Uploading progress */}
-                            {isUploadingMedia && (
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                        <span>Uploading {mediaFile?.name}…</span>
-                                        <span>{uploadProgress}%</span>
-                                    </div>
-                                    <div className="w-full bg-muted rounded-full h-1.5">
-                                        <div
-                                            className="bg-primary h-1.5 rounded-full transition-all duration-300"
-                                            style={{ width: `${uploadProgress}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Preview after upload */}
-                            {!isUploadingMedia && image && mediaType === "image" && previewUrl && (
+                            {image ? (
                                 <div className="relative">
                                     <img
-                                        src={previewUrl}
+                                        src={image}
                                         alt="Upload preview"
                                         className="w-full h-48 object-cover rounded-md"
                                     />
@@ -452,67 +372,23 @@ export function AddFeedDialog({
                                         variant="destructive"
                                         size="icon"
                                         className="absolute top-2 right-2"
-                                        onClick={handleRemoveMedia}
+                                        onClick={handleRemoveImage}
                                         disabled={isLoading}
                                     >
                                         <X className="h-4 w-4" />
                                     </Button>
                                 </div>
-                            )}
-
-                            {!isUploadingMedia && image && mediaType === "video" && previewUrl && (
-                                <div className="relative">
-                                    <video
-                                        src={previewUrl}
-                                        controls
-                                        preload="metadata"
-                                        className="w-full h-48 rounded-md bg-black"
-                                    />
-                                    <Button
-                                        type="button"
-                                        variant="destructive"
-                                        size="icon"
-                                        className="absolute top-2 right-2"
-                                        onClick={handleRemoveMedia}
-                                        disabled={isLoading}
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            )}
-
-                            {!isUploadingMedia && image && mediaType === "pdf" && mediaFile && (
-                                <div className="relative flex items-center gap-3 p-3 border rounded-md bg-muted/30">
-                                    <FileText className="h-8 w-8 text-muted-foreground shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate">{mediaFile.name}</p>
-                                        <p className="text-xs text-muted-foreground">{formatBytes(mediaFile.size)}</p>
-                                    </div>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="text-destructive hover:text-destructive"
-                                        onClick={handleRemoveMedia}
-                                        disabled={isLoading}
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            )}
-
-                            {/* File picker (shown when no media) */}
-                            {!isUploadingMedia && !image && (
+                            ) : (
                                 <div className="flex items-center gap-2">
                                     <Input
                                         ref={fileInputRef}
-                                        id="media"
+                                        id="image"
                                         type="file"
-                                        accept="image/*,application/pdf,video/mp4,video/quicktime,video/webm"
-                                        onChange={handleMediaChange}
+                                        accept="image/*"
+                                        onChange={handleImageChange}
                                         className="hidden"
                                         disabled={isLoading}
-                                        aria-label="Upload media"
+                                        aria-label="Upload image"
                                     />
                                     <Button
                                         type="button"
@@ -522,13 +398,12 @@ export function AddFeedDialog({
                                         className="w-full"
                                     >
                                         <Upload className="h-4 w-4 mr-2" />
-                                        Upload Image, PDF, or Video
+                                        Upload Image
                                     </Button>
                                 </div>
                             )}
-
                             <p className="text-xs text-muted-foreground">
-                                Images up to 100MB · PDFs up to 100MB · Videos (MP4/MOV/WebM) up to 500MB
+                                Max file size: 5MB. Supported formats: JPG, PNG, GIF, WebP
                             </p>
                         </div>
                     </div>
@@ -551,11 +426,6 @@ export function AddFeedDialog({
                             <>
                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                                 Posting...
-                            </>
-                        ) : isUploadingMedia ? (
-                            <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Uploading media...
                             </>
                         ) : (
                             <>

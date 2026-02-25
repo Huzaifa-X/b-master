@@ -1,101 +1,59 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
 import { useArtifacts } from "@/hooks/useArtifact"
-import { Loader2, Sparkles, Check } from "lucide-react"
+import { Loader2, Sparkles } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-
-export type ArtifactData = {
-  id: string
-  name: string
-  instructions: string
-  htmlContent: string
-}
 
 interface SelectArtifactDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   assistantId: string
-  /** IDs already attached — pre-checked when the dialog opens */
-  initialSelectedIds?: string[]
-  onConfirm: (artifacts: ArtifactData[]) => void
+  onSelect: (artifact: { id: string; name: string; instructions: string; htmlContent: string }) => void
 }
 
 export function SelectArtifactDialog({
   open,
   onOpenChange,
   assistantId,
-  initialSelectedIds = [],
-  onConfirm,
+  onSelect,
 }: SelectArtifactDialogProps) {
   const { artifacts, isLoading, isError } = useArtifacts(assistantId, {
     enabled: open && !!assistantId,
   })
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    new Set(initialSelectedIds)
-  )
-
-  // Sync pre-selection whenever the dialog opens
-  useEffect(() => {
-    if (open) setSelectedIds(new Set(initialSelectedIds))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
-
-  const toggleArtifact = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const handleConfirm = () => {
-    const selected = artifacts
-      .filter((a) => selectedIds.has(a.id))
-      .map((a) => ({
-        id: a.id,
-        name: a.name,
-        instructions: a.instructions || "",
-        htmlContent: a.htmlContent || "",
-      }))
-    onConfirm(selected)
+  const handleSelect = (artifact: {
+    id: string
+    name: string
+    instructions: string
+    htmlContent: string
+  }) => {
+    onSelect(artifact)
     onOpenChange(false)
   }
 
-  const count = selectedIds.size
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-2xl max-h-[80vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Select Artifacts
+            <Sparkles className="h-5 w-5" />
+            Select an Artifact
           </DialogTitle>
-          <DialogDescription className="flex items-center gap-2">
-            Choose one or more artifacts to include in this chat.
-            {count > 0 && (
-              <Badge variant="secondary" className="ml-1">
-                {count} selected
-              </Badge>
-            )}
+          <DialogDescription>
+            Choose an artifact to share in the chat. You can only see artifacts you have permission to access.
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 max-h-[52vh] pr-4">
+        <ScrollArea className="max-h-[60vh] pr-4">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -109,8 +67,7 @@ export function SelectArtifactDialog({
           ) : artifacts.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <p className="text-sm text-muted-foreground">
-                No artifacts available. Create an artifact first to use this
-                feature.
+                No artifacts available. Create an artifact first to use this feature.
               </p>
             </div>
           ) : (
@@ -144,22 +101,7 @@ export function SelectArtifactDialog({
                         <p className="text-xs text-muted-foreground mt-1">
                           Created by {artifact.creator.name}
                         </p>
-                        {artifact.creator && (
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            by {artifact.creator.name}
-                          </p>
-                        )}
-                      </div>
-                      <div
-                        className={cn(
-                          "h-5 w-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all",
-                          isSelected
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-muted-foreground/40"
-                        )}
-                      >
-                        {isSelected && <Check className="h-3 w-3" />}
-                      </div>
+                      )}
                     </div>
                     {artifact.category === "Deployed Project" ? (
                       <div className="flex-shrink-0 mt-1">
@@ -178,16 +120,6 @@ export function SelectArtifactDialog({
             </div>
           )}
         </ScrollArea>
-
-        <DialogFooter className="flex-shrink-0 gap-2 sm:gap-0 pt-2 border-t">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleConfirm} disabled={count === 0} className="gap-2">
-            <Sparkles className="h-4 w-4" />
-            Attach {count > 0 ? `${count} ` : ""}Artifact{count !== 1 ? "s" : ""}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

@@ -6,7 +6,6 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { enqueueArtifactGeneration } from "@/lib/queues/artifact-generation.queue"
-import { processArtifactGeneration } from "@/lib/services/artifact-generation.service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -124,13 +123,6 @@ export async function POST(req: NextRequest) {
     })
 
     console.log('[Artifact Stream API] ✅ Job enqueued successfully:', jobId)
-
-    // Fire-and-forget: start processing inline so generation works even when
-    // the standalone worker process is not running.  The service is idempotent —
-    // it will skip jobs already being processed by the worker.
-    void processArtifactGeneration(jobId, artifactIdInt).catch((err) => {
-      console.error('[Artifact Stream API] Inline generation error:', err)
-    })
 
     // Return job info for frontend to connect to stream
     return NextResponse.json({

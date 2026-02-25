@@ -230,7 +230,7 @@ export default function ArtifactPage({ params }: PageProps) {
     // Check if this is a brand new artifact (no versions created yet)
     const hasNoVersions = artifact.versionsCount === 0
     const hasEmptyContent = !artifact.htmlContent || artifact.htmlContent.trim() === ''
-    const isRecentArtifact = artifact.createdAt && (Date.now() - new Date(artifact.createdAt).getTime()) < 300000 // 5 minutes
+    const isRecentArtifact = artifact.createdAt && (Date.now() - new Date(artifact.createdAt).getTime()) < 60000 // 60 seconds
 
     // Start streaming for brand new artifacts with no versions
     if (hasNoVersions && hasEmptyContent && isRecentArtifact && !streamingInitiatedRef.current) {

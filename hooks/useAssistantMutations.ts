@@ -53,7 +53,6 @@ interface CreateAssistantParams {
             messenger: boolean
             artifact: boolean
             newsFeed: boolean
-            library: boolean
         }
     }>
     buyerPermissions: {
@@ -62,7 +61,6 @@ interface CreateAssistantParams {
         messenger: boolean
         artifact: boolean
         newsFeed: boolean
-        library: boolean
     }
 }
 

@@ -44,7 +44,6 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
     isStreaming,
     sendMessage,
     cancelStreaming,
-    closeChat,
     isReady,
     oauthPrompt,
     handleOAuthConnect,
@@ -218,19 +217,6 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
     }
   }, [isReady, messages.length > 0])
 
-  // Listen for close-chat-requested event from the site header X button
-  // Cancel any active stream before the router navigates away
-  useEffect(() => {
-    const handler = () => {
-      if (isStreaming) {
-        cancelStreaming()
-      }
-      closeChat()
-    }
-    window.addEventListener("close-chat-requested", handler)
-    return () => window.removeEventListener("close-chat-requested", handler)
-  }, [isStreaming, cancelStreaming, closeChat])
-
   // Listen for code preview events
   useEffect(() => {
     const handler = (e: CustomEvent) => {
@@ -261,7 +247,7 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
     }
   }
 
-  const handleSend = async (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; dropbox?: boolean; canvas?: boolean; artifacts?: { id: string; name: string; instructions: string; htmlContent: string }[]; mentionedUsers?: { id: string; name: string; email: string }[]; connectedApiIds?: string[] }) => {
+  const handleSend = async (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; dropbox?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: { id: string; name: string; email: string }[] }) => {
     if (!message.trim() || isStreaming || isCreating) return
 
     setIsCreating(true)

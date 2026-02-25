@@ -9,21 +9,6 @@ import {
   Video,
   HelpCircle,
   Sparkles,
-  TrendingUp,
-  Calendar,
-  CreditCard,
-  Users,
-  Building2,
-  ClipboardList,
-  Ticket,
-  LineChart,
-  Activity,
-  CalendarCheck,
-  UserCheck,
-  MonitorPlay,
-  LayoutDashboard,
-  CalendarDays,
-  ClipboardCheck,
 } from "lucide-react"
 import type { Template } from "@/types/artifacts"
 
@@ -145,180 +130,12 @@ export const TEMPLATES: Template[] = [
     prefilledInstructions: "",
     isCustom: true,
   },
-
-  // CRM & Business
-  {
-    id: "crm-1",
-    name: "Real-Time Project Tracker",
-    description: "Live project monitoring with milestones, team progress, and interactive controls",
-    category: "crm",
-    icon: "Activity",
-    prefilledInstructions:
-      "Create a real-time project tracking artifact with milestones, team assignments, progress bars, status badges, deadline countdowns, and an interactive control panel to update task statuses. Include charts for burn-down rate and completion percentage.",
-  },
-  {
-    id: "crm-2",
-    name: "CRM & Payment Dashboard",
-    description: "CRM artifact with Stripe-style payments, invoicing, and sales pipeline",
-    category: "crm",
-    icon: "CreditCard",
-    prefilledInstructions:
-      "Build a CRM dashboard with sales pipeline, received payments, unpaid invoices, and Stripe-style payment management. Include a contacts list, deal stages, revenue metrics, and invoice generation.",
-  },
-  {
-    id: "crm-3",
-    name: "Sales CRM Dashboard",
-    description: "Full CRM with leads, opportunities, and revenue analytics",
-    category: "crm",
-    icon: "Users",
-    prefilledInstructions:
-      "Create a sales CRM dashboard with lead tracking, opportunity pipeline, contact management, deal stages, activity log, and revenue analytics charts.",
-  },
-  {
-    id: "crm-4",
-    name: "Payment Tracker",
-    description: "Track payments, invoices, and financial transactions",
-    category: "crm",
-    icon: "TrendingUp",
-    prefilledInstructions:
-      "Build a payment tracking artifact with paid/unpaid invoice lists, payment status badges, total revenue widget, overdue alerts, and filter by date or client.",
-  },
-  {
-    id: "crm-5",
-    name: "Expense Tracker",
-    description: "Personal or business expense management with budgets",
-    category: "crm",
-    icon: "LineChart",
-    prefilledInstructions:
-      "Create an expense tracker with categorized expenses, monthly budget limits, spending charts, receipt notes, and a summary of total spend vs. budget.",
-  },
-  {
-    id: "crm-6",
-    name: "Subscription Manager",
-    description: "Manage subscriptions, renewals, and billing cycles",
-    category: "crm",
-    icon: "ClipboardList",
-    prefilledInstructions:
-      "Build a subscription manager with active/cancelled subscription lists, renewal dates, billing amounts, cost summary, and cancel/upgrade action buttons.",
-  },
-  {
-    id: "crm-7",
-    name: "Ticketing System",
-    description: "Support ticket management with priority and status tracking",
-    category: "crm",
-    icon: "Ticket",
-    prefilledInstructions:
-      "Create a support ticketing system with open/closed/in-progress tickets, priority levels (high/medium/low), assignee management, SLA timers, and a dashboard with ticket stats.",
-  },
-  {
-    id: "crm-8",
-    name: "Performance Analytics",
-    description: "Team and business performance analysis dashboard",
-    category: "crm",
-    icon: "LayoutDashboard",
-    prefilledInstructions:
-      "Build a performance analytics dashboard with KPI cards, team velocity charts, goal completion rates, comparison with previous periods, and exportable reports.",
-  },
-  {
-    id: "crm-9",
-    name: "All-in-One Master Dashboard",
-    description: "Complete business command center: KPIs, CRM pipeline, projects, invoices, team & analytics",
-    category: "crm",
-    icon: "LayoutDashboard",
-    prefilledInstructions:
-      "Build a comprehensive all-in-one business master dashboard with: a top KPI bar (revenue, active deals, open tasks, team members), a CRM sales pipeline (Kanban columns: Lead → Qualified → Proposal → Won/Lost), a project tracker with progress bars, an invoice summary widget with paid/unpaid amounts, a team activity feed, a mini calendar for upcoming events, and a revenue line chart by month. All sections interactive with status updates.",
-  },
-  {
-    id: "crm-10",
-    name: "Full CRM Suite",
-    description: "Enterprise CRM: contacts, deals pipeline, activity log, email history, tasks & revenue analytics",
-    category: "crm",
-    icon: "Users",
-    prefilledInstructions:
-      "Create a detailed enterprise CRM suite with multiple tabs: (1) Dashboard – revenue metrics, win rate, avg deal size, pipeline value, and a monthly revenue chart; (2) Contacts – searchable/filterable table with contact cards, tags, last activity, and lead score; (3) Deals – full Kanban pipeline with drag-drop stages (New Lead, Contacted, Qualified, Proposal Sent, Negotiation, Closed Won, Closed Lost), deal value, probability, and owner; (4) Activities – chronological timeline of calls, emails, meetings, and notes with filters; (5) Tasks – task list with due dates, priorities, and completion tracking; (6) Reports – bar/pie charts for deals by stage, deals by owner, monthly targets vs actual. Include sidebar navigation, search, and notification bell.",
-  },
-  {
-    id: "crm-custom",
-    name: "Start from Scratch",
-    description: "Create a custom CRM or business artifact from scratch",
-    category: "crm",
-    icon: "Sparkles",
-    prefilledInstructions: "",
-    isCustom: true,
-  },
-
-  // Scheduling & Booking
-  {
-    id: "sch-1",
-    name: "Business Management Suite",
-    description: "All-in-one suite: marketing, projects, invoicing, and tasks",
-    category: "scheduling",
-    icon: "Building2",
-    prefilledInstructions:
-      "Create a comprehensive business management suite with tabs for marketing campaigns, project tracker, invoice management, and task board. Include KPI widgets, team overview, and an evolving action center.",
-  },
-  {
-    id: "sch-2",
-    name: "Calendar Booking",
-    description: "Appointment scheduling and availability management",
-    category: "scheduling",
-    icon: "Calendar",
-    prefilledInstructions:
-      "Build a calendar booking artifact with monthly/weekly view, appointment slots, availability toggling, booking form, and upcoming appointments list.",
-  },
-  {
-    id: "sch-3",
-    name: "Event Registration",
-    description: "Event sign-up form with attendee management",
-    category: "scheduling",
-    icon: "UserCheck",
-    prefilledInstructions:
-      "Create an event registration artifact with event details, registration form, attendee counter, confirmation summary, and a printable ticket section.",
-  },
-  {
-    id: "sch-4",
-    name: "Meeting Scheduler",
-    description: "Team meeting planner with time zone support",
-    category: "scheduling",
-    icon: "CalendarCheck",
-    prefilledInstructions:
-      "Build a meeting scheduler with time slot picker, attendee invites, agenda editor, time zone conversion, and a meeting summary card.",
-  },
-  {
-    id: "sch-5",
-    name: "Office Space Booking",
-    description: "Reserve desks, rooms, and office resources",
-    category: "scheduling",
-    icon: "ClipboardCheck",
-    prefilledInstructions:
-      "Create an office space booking system with floor plan view, desk/room availability, booking form, current reservations list, and cancellation option.",
-  },
-  {
-    id: "sch-6",
-    name: "Reservation System",
-    description: "General-purpose reservation management for any service",
-    category: "scheduling",
-    icon: "CalendarDays",
-    prefilledInstructions:
-      "Build a reservation system with date/time picker, service selection, customer information form, reservation confirmation, and a management panel for upcoming bookings.",
-  },
-  {
-    id: "sch-custom",
-    name: "Start from Scratch",
-    description: "Create a custom scheduling or booking artifact from scratch",
-    category: "scheduling",
-    icon: "Sparkles",
-    prefilledInstructions: "",
-    isCustom: true,
-  },
 ]
 
 export const CATEGORIES = [
   { id: "presentation", label: "Presentations", icon: Presentation },
   { id: "documentation", label: "Documentations", icon: BookOpen },
   { id: "invoice", label: "Invoices", icon: Receipt },
-  { id: "crm", label: "CRM & Business", icon: TrendingUp },
-  { id: "scheduling", label: "Scheduling & Booking", icon: Calendar },
   { id: "video_generation", label: "Video Generation", icon: Video },
   { id: "others", label: "Others", icon: HelpCircle },
 ] as const
@@ -334,21 +151,6 @@ export const ICON_MAP: Record<string, any> = {
   Video,
   HelpCircle,
   Sparkles,
-  TrendingUp,
-  Calendar,
-  CreditCard,
-  Users,
-  Building2,
-  ClipboardList,
-  Ticket,
-  LineChart,
-  Activity,
-  CalendarCheck,
-  UserCheck,
-  MonitorPlay,
-  LayoutDashboard,
-  CalendarDays,
-  ClipboardCheck,
 }
 
 export const TEMPLATE_FILES: Record<string, string> = {
@@ -364,25 +166,5 @@ export const TEMPLATE_FILES: Record<string, string> = {
   "inv-1": "/artifcatTemplates/professionalInvoice.html",
   "inv-3": "/artifcatTemplates/productInvoice.html",
   "inv-6": "/artifcatTemplates/taxInvoice.html",
-
-  // CRM & Business
-  "crm-1": "/artifcatTemplates/performanceAnalysis.html",
-  "crm-2": "/artifcatTemplates/paymentTracker.html",
-  "crm-3": "/artifcatTemplates/salesDashboard.html",
-  "crm-4": "/artifcatTemplates/paymentTracker.html",
-  "crm-5": "/artifcatTemplates/expenseTracker.html",
-  "crm-6": "/artifcatTemplates/subscription.html",
-  "crm-7": "/artifcatTemplates/ticketingSystem.html",
-  "crm-8": "/artifcatTemplates/performanceAnalysis.html",
-  "crm-9": "/artifcatTemplates/masterDashboard.html",
-  "crm-10": "/artifcatTemplates/fullCrmSuite.html",
-
-  // Scheduling & Booking
-  "sch-1": "/artifcatTemplates/salesDashboard.html",
-  "sch-2": "/artifcatTemplates/calendarBooking.html",
-  "sch-3": "/artifcatTemplates/eventRegistration.html",
-  "sch-4": "/artifcatTemplates/meetingScheduler.html",
-  "sch-5": "/artifcatTemplates/officeBooking.html",
-  "sch-6": "/artifcatTemplates/reservationSystem.html",
 }
 

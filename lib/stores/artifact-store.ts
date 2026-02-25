@@ -14,9 +14,6 @@ interface ArtifactStore {
   artifactContent: ArtifactContent | null;
   isPreviewMode: boolean;
   prefilledPrompt: string | null;
-  /** outerHTML of the element the user clicked in visual-edit mode. When set,
-   *  the chatbot performs a surgical patch instead of full regeneration. */
-  surgicalEditOuterHtml: string | null;
   togglePanel: () => void;
   openPanel: () => void;
   closePanel: () => void;
@@ -25,7 +22,6 @@ interface ArtifactStore {
   togglePreview: () => void;
   setPreviewMode: (mode: boolean) => void;
   setPrefilledPrompt: (text: string | null) => void;
-  setSurgicalEditOuterHtml: (html: string | null) => void;
 }
 
 export const useArtifactStore = create<ArtifactStore>((set, get) => ({
@@ -33,7 +29,6 @@ export const useArtifactStore = create<ArtifactStore>((set, get) => ({
   artifactContent: null,
   isPreviewMode: false,
   prefilledPrompt: null,
-  surgicalEditOuterHtml: null,
   togglePanel: () => set((state) => {
     // If closing and no content, just close
     // If opening and has content, open
@@ -52,6 +47,5 @@ export const useArtifactStore = create<ArtifactStore>((set, get) => ({
   togglePreview: () => set((state) => ({ isPreviewMode: !state.isPreviewMode })),
   setPreviewMode: (mode) => set({ isPreviewMode: mode }),
   setPrefilledPrompt: (text) => set({ prefilledPrompt: text }),
-  setSurgicalEditOuterHtml: (html) => set({ surgicalEditOuterHtml: html }),
 }));
 

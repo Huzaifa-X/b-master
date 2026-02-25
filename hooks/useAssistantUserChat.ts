@@ -42,11 +42,9 @@ interface MessageOptions {
     research?: boolean
     chatWithAPI?: boolean
     dropbox?: boolean
-    canvas?: boolean
     attachments?: { name: string; url: string; type: string; size: number }[]
-    artifacts?: { id: string; name: string; instructions: string; htmlContent: string }[]
+    artifact?: { id: string; name: string; instructions: string; htmlContent: string }
     mentionedUsers?: Array<{ id: string; name: string; email: string }>
-    connectedApiIds?: string[]
 }
 
 export function useAIChat(options: UseAIChatOptions) {
@@ -240,11 +238,9 @@ export function useAIChat(options: UseAIChatOptions) {
                     research: opts.research || false,
                     chatWithAPI: opts.chatWithAPI || false,
                     dropbox: opts.dropbox || false,
-                    canvas: opts.canvas || false,
                     attachments: opts.attachments || [],
-                    artifacts: opts.artifacts || null,
+                    artifact: opts.artifact || null,
                     mentionedUsers: opts.mentionedUsers || [],
-                    connectedApiIds: opts.connectedApiIds || [],
                 }
 
                 const response = await fetch(input, {
@@ -316,25 +312,6 @@ export function useAIChat(options: UseAIChatOptions) {
         pendingAttachmentsRef.current = null
     }, [chatId])
 
-    // Cleanup on unmount: stop active stream, clear messages and transient state
-    // Uses refs to access latest versions without stale closures
-    const aiStopRef = useRef(aiStop)
-    const setMessagesRef = useRef(setMessages)
-    useEffect(() => {
-        aiStopRef.current = aiStop
-        setMessagesRef.current = setMessages
-    })
-    useEffect(() => {
-        return () => {
-            console.log("[useAIChat] Unmounting - cleaning up session for chat:", chatId)
-            aiStopRef.current()
-            setMessagesRef.current([])
-            currentOptionsRef.current = {}
-            pendingAttachmentsRef.current = null
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
-
     // Set context when chat is ready
     useEffect(() => {
         if (chatData) {
@@ -384,8 +361,7 @@ export function useAIChat(options: UseAIChatOptions) {
                         currentOptionsRef.current = {
                             ...documentsData.options,
                             attachments: documentsData.attachments,
-                            mentionedUsers: documentsData.mentionedUsers,
-                            connectedApiIds: documentsData.options.connectedApiIds || [],
+                            mentionedUsers: documentsData.mentionedUsers
                         }
                     }
                 } catch (e) {
@@ -424,10 +400,8 @@ export function useAIChat(options: UseAIChatOptions) {
             research?: boolean
             chatWithAPI?: boolean
             dropbox?: boolean
-            canvas?: boolean
-            artifacts?: { id: string; name: string; instructions: string; htmlContent: string }[]
+            artifact?: { id: string; name: string; instructions: string; htmlContent: string }
             mentionedUsers?: Array<{ id: string; name: string; email: string }>
-            connectedApiIds?: string[]
         }
     ) => {
         const isStreaming = status === 'streaming' || status === 'submitted'
@@ -470,18 +444,6 @@ export function useAIChat(options: UseAIChatOptions) {
         currentOptionsRef.current = {}
         pendingAttachmentsRef.current = null
     }, [aiStop])
-
-    // Close chat: abort stream, wipe message state, evict query cache
-    const closeChat = useCallback(() => {
-        console.log("[useAIChat] Closing chat:", chatId)
-        aiStop()
-        setMessages([])
-        currentOptionsRef.current = {}
-        pendingAttachmentsRef.current = null
-        // Remove cached data so a fresh load occurs if the chat is re-opened
-        queryClient.removeQueries({ queryKey: ["chat", chatId] })
-        queryClient.removeQueries({ queryKey: ["chat-messages", chatId] })
-    }, [aiStop, setMessages, chatId, queryClient])
 
     // OAuth handling
     const handleOAuthConnect = useCallback((authUrl: string, lastMessage?: string) => {
@@ -654,7 +616,6 @@ export function useAIChat(options: UseAIChatOptions) {
         isReady: !!context && !isInitializing,
         sendMessage,
         cancelStreaming,
-        closeChat,
         refetchMessages,
         oauthPrompt,
         handleOAuthConnect,
