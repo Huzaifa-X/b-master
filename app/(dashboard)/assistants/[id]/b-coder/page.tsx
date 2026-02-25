@@ -10,9 +10,10 @@ export default function BCoderPage({ params }: { params: Promise<{ id: string }>
     const { id: assistantId } = use(params)
     const searchParams = useSearchParams()
     const templateId = searchParams.get("template") || "default-todo"
+    const artifactId = searchParams.get("artifact")
 
     // Set assistant mode in header
     useSetAssistantMode(assistantId)
 
-    return <BCoderChatView assistantId={assistantId} templateId={templateId} />
+    return <BCoderChatView assistantId={assistantId} templateId={templateId} artifactId={artifactId} />
 }

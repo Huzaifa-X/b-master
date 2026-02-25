@@ -18,7 +18,7 @@
 import type { FC } from "react"
 import { useState, useMemo } from "react"
 import Image from "next/image"
-import { Copy, Share2, Download, Eye, X, MessageSquare, Brain, ChevronDown, ChevronUp, Loader2 } from "lucide-react"
+import { Copy, Share2, Download, Eye, X, MessageSquare, ChevronDown, ExternalLink, Globe } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AddFeedDialog } from "@/components/feed/add-feed-dialog"
 import { SelectContactDialog } from "@/components/assistants/select-contact-dialog"
@@ -34,11 +34,6 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from "@/components/ui/collapsible"
 import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -52,6 +47,19 @@ import {
     ReasoningContent,
     ReasoningTrigger,
 } from '@/components/ai-elements/reasoning';
+import {
+    Sources,
+    SourcesTrigger,
+    SourcesContent,
+    Source,
+} from '@/components/ai-elements/sources';
+
+// Interface for parsed source
+interface ParsedSource {
+    title: string
+    url: string
+    description?: string
+}
 
 interface AssistantMessageProps {
     content: string
@@ -217,10 +225,88 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
         }
     }
 
-    // ⭐ Helper to safely extract reasoning text from parts
-    // Reasoning parts use 'text' property (not 'reasoning')
-    const getReasoningText = (part: any): string => {
-        return part.reasoning || part.text || ""
+    // ⭐ Extract sources from parts (AI SDK) and parse from content
+    const { sources, contentWithoutSources } = useMemo(() => {
+        const parsedSources: ParsedSource[] = []
+        let cleanContent = content || ""
+
+        // 1. Extract sources from AI SDK parts (type='source')
+        if (parts && Array.isArray(parts)) {
+            for (const part of parts) {
+                if (part.type === 'source' && part.source) {
+                    const source = part.source
+                    parsedSources.push({
+                        title: source.title || source.name || 'Source',
+                        url: source.url || source.link || '',
+                        description: source.description || source.snippet || undefined
+                    })
+                }
+            }
+        }
+
+        // 2. Parse markdown-style sources from content
+        // Matches patterns like:
+        // **Sources:**
+        // - [Title](url)
+        // - [Title](url)
+        // OR
+        // Sources:
+        // - [Title](url)
+        const sourcesRegex = /(?:\n\n|\n)?(?:\*\*)?Sources?:?\*?\*?:?\s*\n((?:[-*•]\s*\[.+?\]\(.+?\)(?:\s*[-–—]\s*.+?)?\s*\n?)+)/gi
+        const match = sourcesRegex.exec(cleanContent)
+
+        if (match) {
+            // Remove the sources section from content
+            cleanContent = cleanContent.replace(match[0], '').trim()
+
+            // Parse individual source links
+            const sourcesList = match[1]
+            const linkRegex = /[-*•]\s*\[([^\]]+)\]\(([^)]+)\)(?:\s*[-–—]\s*(.+?))?(?:\n|$)/g
+            let linkMatch
+
+            while ((linkMatch = linkRegex.exec(sourcesList)) !== null) {
+                const title = linkMatch[1].trim()
+                const url = linkMatch[2].trim()
+                const description = linkMatch[3]?.trim()
+
+                // Avoid duplicates
+                if (!parsedSources.some(s => s.url === url)) {
+                    parsedSources.push({ title, url, description })
+                }
+            }
+        }
+
+        // Also try to match simpler formats like "Sources:\n[Title](url)\n[Title](url)"
+        const simpleSourcesRegex = /(?:\n\n|\n)?(?:\*\*)?Sources?:?\*?\*?:?\s*\n((?:\[.+?\]\(.+?\)\s*\n?)+)/gi
+        const simpleMatch = simpleSourcesRegex.exec(cleanContent)
+
+        if (simpleMatch) {
+            cleanContent = cleanContent.replace(simpleMatch[0], '').trim()
+
+            const simpleLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g
+            let simpleLinkMatch
+
+            while ((simpleLinkMatch = simpleLinkRegex.exec(simpleMatch[1])) !== null) {
+                const title = simpleLinkMatch[1].trim()
+                const url = simpleLinkMatch[2].trim()
+
+                if (!parsedSources.some(s => s.url === url)) {
+                    parsedSources.push({ title, url })
+                }
+            }
+        }
+
+        return { sources: parsedSources, contentWithoutSources: cleanContent }
+    }, [content, parts])
+
+    // Helper to get favicon URL
+    const getFaviconUrl = (url: string) => {
+        try {
+            const hostname = new URL(url).hostname
+            return `https://www.google.com/s2/favicons?domain=${hostname}&sz=32`
+        } catch {
+            return null
+        }
     }
 
     return (
@@ -244,7 +330,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                         </div>
                     )}
 
-                {content && content.trim().length > 0 && (
+                {(contentWithoutSources && contentWithoutSources.trim().length > 0) && (
                     <div className="flex gap-4 px-2">
                         {/* Avatar */}
                         <div className="flex-shrink-0 pt-1">
@@ -364,11 +450,60 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                                             },
                                         }}
                                     >
-                                        {content || (isLoading ? " " : "")}
+                                        {contentWithoutSources || (isLoading ? " " : "")}
                                     </ReactMarkdown>
 
                                 </div>
                             </div>
+
+                            {/* ⭐ SOURCES SECTION - Beautiful collapsible display */}
+                            {sources.length > 0 && (
+                                <div className="mt-4">
+                                    <Sources>
+                                        <SourcesTrigger count={sources.length} className="text-muted-foreground hover:text-primary transition-colors">
+                                            <Globe className="h-4 w-4" />
+                                            <span className="font-medium">
+                                                {sources.length} {sources.length === 1 ? 'source' : 'sources'}
+                                            </span>
+                                            <ChevronDown className="h-4 w-4 transition-transform [[data-state=open]_&]:rotate-180" />
+                                        </SourcesTrigger>
+                                        <SourcesContent className="mt-2 flex flex-col gap-1.5">
+                                            {sources.map((source, idx) => (
+                                                <Source
+                                                    key={`${source.url}-${idx}`}
+                                                    href={source.url}
+                                                    title={source.title}
+                                                    className="group flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                                                >
+                                                    <div className="flex-shrink-0 w-5 h-5 rounded overflow-hidden bg-background flex items-center justify-center">
+                                                        <img
+                                                            src={getFaviconUrl(source.url) || ''}
+                                                            alt=""
+                                                            className="w-4 h-4"
+                                                            onError={(e) => {
+                                                                (e.target as HTMLImageElement).style.display = 'none';
+                                                                (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                                            }}
+                                                        />
+                                                        <Globe className="w-3 h-3 text-muted-foreground hidden" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <span className="block text-sm font-medium truncate group-hover:text-primary transition-colors">
+                                                            {source.title}
+                                                        </span>
+                                                        {source.description && (
+                                                            <span className="block text-xs text-muted-foreground truncate">
+                                                                {source.description}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                                                </Source>
+                                            ))}
+                                        </SourcesContent>
+                                    </Sources>
+                                </div>
+                            )}
 
                             {/* Actions */}
 

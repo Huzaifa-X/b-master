@@ -159,11 +159,25 @@ export async function createCheckoutSession(
     }
 
     // ============================================
-    // 6. CHECKOUT SESSION CREATION
+    // 6. PROMO CODE APPLICATION
+    // ============================================
+    const activePromotion = await prisma.userPromotion.findFirst({
+      where: {
+        userId: userId,
+        isActive: true,
+        redeemedAt: null,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    })
+
+    // ============================================
+    // 7. CHECKOUT SESSION CREATION
     // ============================================
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000"
 
-    const checkoutSession = await stripe.checkout.sessions.create({
+    const checkoutSessionParams: any = {
       customer: stripeCustomerId,
       payment_method_types: ["card"],
       line_items: [
@@ -185,7 +199,22 @@ export async function createCheckoutSession(
           planId: planId.toString(),
         },
       },
-    })
+    }
+
+    if (activePromotion) {
+      console.log(`[Checkout] Applying promo code ${activePromotion.code} for user ${userId}`)
+      checkoutSessionParams.discounts = [
+        {
+          promotion_code: activePromotion.stripePromotionCodeId,
+        },
+      ]
+
+      // Pass the promotion ID in metadata to easily mark it redeemed later
+      checkoutSessionParams.metadata.promotionId = activePromotion.id.toString()
+      checkoutSessionParams.subscription_data.metadata.promotionId = activePromotion.id.toString()
+    }
+
+    const checkoutSession = await stripe.checkout.sessions.create(checkoutSessionParams)
 
     console.log(`[Checkout] Created checkout session ${checkoutSession.id} for user ${userId}`)
 

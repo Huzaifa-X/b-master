@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
     Dialog,
     DialogContent,
@@ -23,20 +23,31 @@ interface ActionResponse<T> {
 interface GithubDeployDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    onDeploy: (data: { repoName: string; description: string; isPrivate: boolean }) => Promise<ActionResponse<any>>
+    onDeploy: (data: { repoName: string; description: string; isPrivate: boolean; isUpdate: boolean }) => Promise<ActionResponse<any>>
+    initialRepoName?: string
+    isUpdateMode?: boolean
 }
 
 export function GithubDeployDialog({
     open,
     onOpenChange,
     onDeploy,
+    initialRepoName,
+    isUpdateMode
 }: GithubDeployDialogProps) {
-    const [repoName, setRepoName] = useState("")
+    const [repoName, setRepoName] = useState(initialRepoName || "")
     const [description, setDescription] = useState("")
     const [isDeploying, setIsDeploying] = useState(false)
     const [successData, setSuccessData] = useState<{ githubUrl?: string; vercelUrl?: string } | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [step, setStep] = useState<"idle" | "packaging" | "github" | "vercel">("idle")
+
+    // Update repo name if props change
+    useEffect(() => {
+        if (open && initialRepoName) {
+            setRepoName(initialRepoName)
+        }
+    }, [open, initialRepoName])
 
     // Generate a random default name
     const placeholders = ["b-coder-awesome-app", "my-new-saas", "react-dashboard-v1"]
@@ -59,6 +70,7 @@ export function GithubDeployDialog({
                 repoName: finalRepoName,
                 description: description.trim(),
                 isPrivate: false, // Defaulting to public for now
+                isUpdate: !!isUpdateMode
             })
 
             if (!response.success || response.error) {
@@ -95,10 +107,12 @@ export function GithubDeployDialog({
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Globe className="h-5 w-5 text-emerald-500" />
-                        Deploy Project
+                        {isUpdateMode ? "Update Deployed Project" : "Deploy Project"}
                     </DialogTitle>
                     <DialogDescription>
-                        Publish your B-Coder workspace code to GitHub and deploy it live on Vercel.
+                        {isUpdateMode
+                            ? "Push new commits to your GitHub repository and trigger a Vercel redeployment."
+                            : "Publish your code to a new GitHub repository and deploy it to Vercel instantly."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -142,16 +156,23 @@ export function GithubDeployDialog({
                                     <AlertDescription className="break-words">{error}</AlertDescription>
                                 </Alert>
                             )}
-                            <div className="grid gap-2">
+                            <div className="space-y-2">
                                 <Label htmlFor="repoName">Repository Name</Label>
                                 <Input
                                     id="repoName"
-                                    value={repoName}
-                                    onChange={(e) => setRepoName(e.target.value.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase())}
                                     placeholder={placeholder}
-                                    disabled={isDeploying}
+                                    value={repoName}
+                                    onChange={(e) => setRepoName(e.target.value)}
+                                    disabled={isDeploying || isUpdateMode}
                                 />
-                                <p className="text-[10px] text-muted-foreground">Only lowercase letters, numbers, and hyphens.</p>
+                                {isUpdateMode && (
+                                    <p className="text-xs text-muted-foreground">
+                                        You are updating an existing repository. The name cannot be changed.
+                                    </p>
+                                )}
+                                {!isUpdateMode && (
+                                    <p className="text-[10px] text-muted-foreground">Only lowercase letters, numbers, and hyphens.</p>
+                                )}
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="description">Description (Optional)</Label>
@@ -171,16 +192,21 @@ export function GithubDeployDialog({
                             </Button>
                             <Button
                                 type="submit"
-                                disabled={isDeploying}
-                                className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 text-white min-w-[120px]"
+                                disabled={isDeploying || (!repoName.trim() && !isUpdateMode)}
+                                className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 text-white"
                             >
                                 {isDeploying ? (
                                     <>
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Publishing...
+                                        {step === "packaging" ? "Packaging Files..." :
+                                            step === "github" ? "Pushing to GitHub..." :
+                                                "Deploying to Vercel..."}
                                     </>
                                 ) : (
-                                    "Publish Project"
+                                    <>
+                                        <Globe className="mr-2 h-4 w-4" />
+                                        {isUpdateMode ? "Update Deployment" : "Deploy Now"}
+                                    </>
                                 )}
                             </Button>
                         </DialogFooter>

@@ -67,10 +67,14 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
         // For EDITOR/ADMIN access, navigate to full page with chatbot
         const isViewerAccess = artifact.access === 'VIEWER'
         const isVideoArtifact = artifact.category === "video_generation"
+        const isDeployedProject = artifact.category === "Deployed Project"
 
         if (isVideoArtifact || isViewerAccess) {
             // Read-only view in modal (can view and download only)
             setViewArtifactId(artifact.id)
+        } else if (isDeployedProject) {
+            // Open B-Coder and load the project using the artifact ID
+            router.push(`/assistants/${assistantId}/b-coder?artifact=${artifact.id}`)
         } else {
             // Full access - navigate to detail page with chatbot (can edit)
             router.push(`/assistants/${assistantId}/artifacts/${artifact.id}`)

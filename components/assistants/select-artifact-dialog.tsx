@@ -86,11 +86,12 @@ export function SelectArtifactDialog({
                   className={cn(
                     "w-full text-left p-4 rounded-lg border transition-colors",
                     "hover:bg-muted hover:border-muted/50",
+                    artifact.category === "Deployed Project" && "border-emerald-500/30 bg-emerald-50/10 hover:bg-emerald-50/20"
                   )}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-sm mb-1 truncate">
+                      <h3 className="font-medium text-sm mb-1 truncate flex items-center gap-2">
                         {artifact.name}
                       </h3>
                       <p className="text-xs text-muted-foreground line-clamp-2">
@@ -102,7 +103,17 @@ export function SelectArtifactDialog({
                         </p>
                       )}
                     </div>
-                    <Sparkles className="h-4 w-4 text-primary flex-shrink-0 mt-1" />
+                    {artifact.category === "Deployed Project" ? (
+                      <div className="flex-shrink-0 mt-1">
+                        <svg className="h-5 w-5 text-emerald-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                          <path d="M2 12h20" />
+                        </svg>
+                      </div>
+                    ) : (
+                      <Sparkles className="h-4 w-4 text-primary flex-shrink-0 mt-1" />
+                    )}
                   </div>
                 </button>
               ))}

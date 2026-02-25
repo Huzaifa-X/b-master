@@ -10,9 +10,10 @@ import { MessageSquare, Code2 } from "lucide-react"
 interface BCoderChatViewProps {
     assistantId: string
     templateId: string
+    artifactId?: string | null
 }
 
-export function BCoderChatView({ assistantId, templateId }: BCoderChatViewProps) {
+export function BCoderChatView({ assistantId, templateId, artifactId }: BCoderChatViewProps) {
     const [activeTab, setActiveTab] = useState<'chat' | 'code'>('chat')
 
     return (
@@ -25,8 +26,8 @@ export function BCoderChatView({ assistantId, templateId }: BCoderChatViewProps)
                         <button
                             onClick={() => setActiveTab('chat')}
                             className={`flex flex-1 items-center justify-center gap-2 py-2 px-3 text-sm font-medium rounded-lg transition-all ${activeTab === 'chat'
-                                    ? 'bg-white dark:bg-zinc-800 shadow-sm text-foreground'
-                                    : 'text-muted-foreground hover:text-foreground'
+                                ? 'bg-white dark:bg-zinc-800 shadow-sm text-foreground'
+                                : 'text-muted-foreground hover:text-foreground'
                                 }`}
                         >
                             <MessageSquare className="w-4 h-4" />
@@ -35,8 +36,8 @@ export function BCoderChatView({ assistantId, templateId }: BCoderChatViewProps)
                         <button
                             onClick={() => setActiveTab('code')}
                             className={`flex flex-1 items-center justify-center gap-2 py-2 px-3 text-sm font-medium rounded-lg transition-all ${activeTab === 'code'
-                                    ? 'bg-white dark:bg-zinc-800 shadow-sm text-foreground'
-                                    : 'text-muted-foreground hover:text-foreground'
+                                ? 'bg-white dark:bg-zinc-800 shadow-sm text-foreground'
+                                : 'text-muted-foreground hover:text-foreground'
                                 }`}
                         >
                             <Code2 className="w-4 h-4" />
@@ -54,7 +55,7 @@ export function BCoderChatView({ assistantId, templateId }: BCoderChatViewProps)
                             className={`transition-all duration-300 ${activeTab !== 'chat' ? 'hidden md:block' : ''}`}
                         >
                             <div className="h-full overflow-hidden">
-                                <BCoderChat assistantId={assistantId} templateId={templateId} />
+                                <BCoderChat assistantId={assistantId} templateId={templateId} artifactId={artifactId} />
                             </div>
                         </ResizablePanel>
 
@@ -70,7 +71,7 @@ export function BCoderChatView({ assistantId, templateId }: BCoderChatViewProps)
                             minSize={25}
                             className={`transition-all duration-300 ${activeTab !== 'code' ? 'hidden md:block' : ''}`}
                         >
-                            <MonacoEditorPanel templateId={templateId} />
+                            <MonacoEditorPanel templateId={templateId} assistantId={assistantId} />
                         </ResizablePanel>
                     </ResizablePanelGroup>
                 </div>

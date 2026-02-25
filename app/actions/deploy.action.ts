@@ -8,6 +8,8 @@ const deploySchema = z.object({
     description: z.string().optional(),
     isPrivate: z.boolean().default(false),
     files: z.record(z.string(), z.string()).refine((val) => Object.keys(val).length > 0, { message: "No files to deploy" }),
+    isUpdate: z.boolean().optional(),
+    activeArtifactId: z.number().optional(),
 })
 
 export async function deployToGithubAndVercel(input: any) {
@@ -20,7 +22,31 @@ export async function deployToGithubAndVercel(input: any) {
             }
         }
 
-        const { repoName, description, isPrivate, files } = parseResult.data
+        const { repoName, description, isPrivate, files, isUpdate, activeArtifactId } = parseResult.data
+        const assistantId = input.assistantId
+
+        if (!assistantId) {
+            return {
+                success: false,
+                error: { message: "Assistant ID is required to save the deployment as an artifact." }
+            }
+        }
+
+        // Get authenticated user for artifact creation
+        const { getServerSession } = await import("next-auth")
+        const { authOptions } = await import("@/lib/auth")
+        const session = await getServerSession(authOptions)
+
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: { message: "Authentication required to deploy" }
+            }
+        }
+
+        const userId = BigInt(session.user.id)
+        const assistantIdBigInt = BigInt(assistantId)
+
 
         const githubToken = process.env.GITHUB_PAT
         if (!githubToken) {
@@ -36,31 +62,43 @@ export async function deployToGithubAndVercel(input: any) {
         const { data: user } = await octokit.rest.users.getAuthenticated()
         const owner = user.login
 
-        // 2. Create Repository
-        let repoResponse;
-        try {
-            repoResponse = await octokit.rest.repos.createForAuthenticatedUser({
-                name: repoName,
-                description: description || "Deployed via B-Coder Workspace",
-                private: isPrivate,
-                auto_init: true, // we need an initial commit to get a branch to push to
-            })
-        } catch (err: any) {
-            // handle repo already exists
-            if (err.status === 422 && err.message?.includes('already exists')) {
+        // 2. Handle Repository
+        let defaultBranch = "main"
+        if (!isUpdate) {
+            let repoResponse;
+            try {
+                repoResponse = await octokit.rest.repos.createForAuthenticatedUser({
+                    name: repoName,
+                    description: description || "Deployed via B-Coder Workspace",
+                    private: isPrivate,
+                    auto_init: true, // we need an initial commit to get a branch to push to
+                })
+            } catch (err: any) {
+                // handle repo already exists
+                if (err.status === 422 && err.message?.includes('already exists')) {
+                    return {
+                        success: false,
+                        error: { message: `Repository '${repoName}' already exists on GitHub. Please choose a different name.` }
+                    }
+                }
                 return {
                     success: false,
-                    error: { message: `Repository '${repoName}' already exists on GitHub. Please choose a different name.` }
+                    error: { message: `Failed to create repository: ${err.message}` }
                 }
             }
-            return {
-                success: false,
-                error: { message: `Failed to create repository: ${err.message}` }
+            defaultBranch = repoResponse.data.default_branch || "main"
+        } else {
+            // Get repository to confirm existence and get default branch
+            try {
+                const { data: existingRepo } = await octokit.rest.repos.get({
+                    owner,
+                    repo: repoName,
+                })
+                defaultBranch = existingRepo.default_branch || "main"
+            } catch (err: any) {
+                return { success: false, error: { message: `Repository '${repoName}' not found or inaccessible.` } }
             }
         }
-
-        const repoUrl = repoResponse.data.html_url
-        const defaultBranch = repoResponse.data.default_branch || "main"
 
         // 3. Get the latest commit SHA of the default branch
         const { data: refData } = await octokit.rest.git.getRef({
@@ -85,7 +123,7 @@ export async function deployToGithubAndVercel(input: any) {
                 const { data: blobData } = await octokit.rest.git.createBlob({
                     owner,
                     repo: repoName,
-                    content: content,
+                    content: content as string,
                     encoding: "utf-8",
                 })
 
@@ -110,7 +148,7 @@ export async function deployToGithubAndVercel(input: any) {
         const { data: newCommitData } = await octokit.rest.git.createCommit({
             owner,
             repo: repoName,
-            message: "Initial commit by B-Coder",
+            message: isUpdate ? (description || "Update deployment by B-Coder") : "Initial commit by B-Coder",
             tree: newTreeData.sha,
             parents: [commitSha],
         })
@@ -139,7 +177,7 @@ export async function deployToGithubAndVercel(input: any) {
                 },
                 body: JSON.stringify({
                     github_url: fullRepoPath,
-                    first_time: true
+                    first_time: !isUpdate
                 })
             })
 
@@ -162,11 +200,104 @@ export async function deployToGithubAndVercel(input: any) {
             }
         }
 
+        // ===========================================
+        // 10. Save as an Artifact
+        // ===========================================
+        let artifactId: number | null = null;
+        const repoUrl = `https://github.com/${owner}/${repoName}`
+        try {
+            // Import prisma dynamically to avoid edge runtime issues if applicable
+            const { default: prisma } = await import('@/lib/prisma')
+
+            const deployMetadata = {
+                githubUrl: repoUrl,
+                vercelUrl: vercelUrl,
+                owner: owner,
+                repo: repoName
+            }
+
+            if (isUpdate && activeArtifactId) {
+                // Determine next version number
+                const lastVersion = await prisma.artifactVersion.findFirst({
+                    where: { artifactId: activeArtifactId },
+                    orderBy: { versionNumber: 'desc' }
+                });
+                const nextVersionNumber = lastVersion ? lastVersion.versionNumber + 1 : 1;
+
+                const newVersion = await prisma.artifactVersion.create({
+                    data: {
+                        artifactId: activeArtifactId,
+                        userId: userId,
+                        versionNumber: nextVersionNumber,
+                        versionName: `v1.0.${nextVersionNumber}`,
+                        code: JSON.stringify(deployMetadata, null, 2),
+                        description: description || "Update Deployment",
+                        changeType: "user",
+                        isSnapshot: false
+                    }
+                })
+
+                await prisma.assistantArtifact.update({
+                    where: { id: activeArtifactId },
+                    data: { activeVersionId: newVersion.id }
+                })
+
+                artifactId = activeArtifactId;
+            } else {
+                const newArtifact = await prisma.assistantArtifact.create({
+                    data: {
+                        assistantId: assistantIdBigInt,
+                        userId: userId,
+                        name: repoName,
+                        instructions: JSON.stringify(deployMetadata),
+                        category: "Deployed Project",
+                        isPublic: false,
+                    }
+                })
+
+                artifactId = newArtifact.id
+
+                // Create ADMIN permission for the creator
+                await prisma.artifactPermission.create({
+                    data: {
+                        userId: userId,
+                        assistantId: assistantIdBigInt,
+                        artifactId: newArtifact.id,
+                        access: 'ADMIN'
+                    }
+                })
+
+                // Create an initial version
+                const firstVersion = await prisma.artifactVersion.create({
+                    data: {
+                        artifactId: newArtifact.id,
+                        userId: userId,
+                        versionNumber: 1,
+                        versionName: "v1.0.0",
+                        code: JSON.stringify(deployMetadata, null, 2),
+                        description: "Initial Deployment",
+                        changeType: "user",
+                        isSnapshot: false
+                    }
+                })
+
+                // Update artifact with active version
+                await prisma.assistantArtifact.update({
+                    where: { id: newArtifact.id },
+                    data: { activeVersionId: firstVersion.id }
+                })
+            }
+        } catch (err) {
+            console.error("Failed to save artifact:", err)
+            // Soft fail: return success but log the error
+        }
+
         return {
             success: true,
             data: {
                 githubUrl: repoUrl,
                 vercelUrl: vercelUrl,
+                artifactId: artifactId
             }
         }
 

@@ -24,10 +24,14 @@ import { DictateButton } from "@/components/assistants/dictate-button"
 import { useResponsesChat } from "@/hooks/useResponsesChat"
 import { useBCoderContext } from "./b-coder-context"
 import { BoltMessageParser, BoltActionData } from "@/lib/runtime/message-parser"
+import { toast } from "sonner"
+import { fetchGithubRepo } from "@/app/actions/github.action"
+import { useArtifactById } from "@/hooks/useArtifact"
 
 interface BCoderChatProps {
     assistantId: string
     templateId: string
+    artifactId?: string | null
 }
 
 interface FileUpdate {
@@ -77,7 +81,7 @@ function extractArtifactTitle(content: string): string | null {
     return match ? match[1] : null
 }
 
-export function BCoderChat({ assistantId: _assistantId, templateId }: BCoderChatProps) {
+export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }: BCoderChatProps) {
     const viewportRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
@@ -92,10 +96,59 @@ export function BCoderChat({ assistantId: _assistantId, templateId }: BCoderChat
         selectedFilePath,
         getCurrentFileContent,
         isServerReady,
+        webcontainerInstance,
+        createFile,
+        setActiveArtifact
     } = useBCoderContext()
 
     const [input, setInput] = useState("")
     const [currentFileContent, setCurrentFileContent] = useState<string | null>(null)
+
+    const { artifact } = useArtifactById(artifactId || "", { enabled: !!artifactId })
+    const [hasImported, setHasImported] = useState(false)
+
+    useEffect(() => {
+        if (!artifact || !isServerReady || hasImported) return;
+
+        const importArtifact = async () => {
+            setHasImported(true);
+            try {
+                let instructionsObj;
+                try {
+                    instructionsObj = JSON.parse(artifact.instructions);
+                } catch (e) {
+                    // Not JSON
+                }
+
+                if (instructionsObj && instructionsObj.owner && instructionsObj.repo) {
+                    setActiveArtifact({
+                        id: artifact.id,
+                        name: artifact.name,
+                        instructions: artifact.instructions,
+                        category: artifact.category || "Deployed Project"
+                    });
+
+                    const toastId = toast.loading(`Importing ${instructionsObj.repo} from GitHub...`);
+                    const result = await fetchGithubRepo(instructionsObj.owner, instructionsObj.repo);
+                    if (result.success && result.data) {
+                        toast.loading(`Writing ${Object.keys(result.data.files).length} files to workspace...`, { id: toastId });
+                        for (const [path, content] of Object.entries(result.data.files)) {
+                            await writeFile(path, content);
+                        }
+                        await buildFileTree();
+                        toast.success(`Successfully imported ${instructionsObj.repo}`, { id: toastId });
+                        setInput(`I have imported the ${instructionsObj.repo} repository into the workspace.`);
+                    } else {
+                        toast.error(`Failed to import: ${result.error}`, { id: toastId });
+                    }
+                }
+            } catch (err: any) {
+                toast.error(`Error importing artifact: ${err.message}`);
+            }
+        };
+
+        importArtifact();
+    }, [artifact, isServerReady, hasImported, setActiveArtifact, writeFile, buildFileTree]);
 
     const fileStructureRef = useRef(fileStructure)
     const currentFileContentRef = useRef(currentFileContent)
@@ -527,6 +580,7 @@ export function BCoderChat({ assistantId: _assistantId, templateId }: BCoderChat
                     fileInputRef={fileInputRef}
                     onFilesSelected={uploadFiles}
                     onRemoveAttachment={removeAttachment}
+                    assistantId={_assistantId}
                 />
             </div>
         </div>
@@ -542,6 +596,7 @@ function BCoderInput({
     fileInputRef,
     onFilesSelected,
     onRemoveAttachment,
+    assistantId
 }: {
     input: string
     handleInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
@@ -551,6 +606,7 @@ function BCoderInput({
     fileInputRef: React.RefObject<HTMLInputElement | null>
     onFilesSelected: (files: FileList) => void
     onRemoveAttachment: (id: string) => void
+    assistantId: string
 }) {
     const handleDictate = useCallback((text: string) => {
         const syntheticEvent = {
@@ -673,6 +729,7 @@ function BCoderInput({
                     Press <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-muted border border-border rounded">Enter</kbd> to send • <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-muted border border-border rounded">Shift</kbd> + <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-muted border border-border rounded">Enter</kbd> for new line
                 </span>
             </div>
+
         </div>
     )
 }

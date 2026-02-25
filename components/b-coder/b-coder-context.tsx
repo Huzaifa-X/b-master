@@ -31,6 +31,8 @@ interface BCoderContextValue {
     selectedFilePath: string | null
     setSelectedFilePath: (path: string | null) => void
     getCurrentFileContent: () => Promise<string | null>
+    activeArtifact: { id: string, name: string, instructions: string, category: string } | null
+    setActiveArtifact: (artifact: { id: string, name: string, instructions: string, category: string } | null) => void
 }
 
 const BCoderContext = createContext<BCoderContextValue | null>(null)
@@ -52,6 +54,7 @@ export function BCoderProvider({ children, templateId }: BCoderProviderProps) {
     const webContainer = useWebContainer(templateId)
     const [fileStructure, setFileStructure] = useState<FileNode[]>([])
     const [selectedFilePath, setSelectedFilePath] = useState<string | null>("src/App.jsx")
+    const [activeArtifact, setActiveArtifact] = useState<{ id: string, name: string, instructions: string, category: string } | null>(null)
 
     const buildFileTree = useCallback(async () => {
         if (!webContainer.webcontainerInstance) return
@@ -111,6 +114,8 @@ export function BCoderProvider({ children, templateId }: BCoderProviderProps) {
         selectedFilePath,
         setSelectedFilePath,
         getCurrentFileContent,
+        activeArtifact,
+        setActiveArtifact
     }
 
     return (

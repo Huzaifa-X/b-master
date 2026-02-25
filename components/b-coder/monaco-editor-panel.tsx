@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import Editor from "@monaco-editor/react"
 import {
   FileCode,
@@ -163,9 +163,10 @@ function FileTreeItem({
 
 interface MonacoEditorPanelProps {
   templateId: string
+  assistantId: string
 }
 
-export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
+export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanelProps) {
   const [selectedLanguage, setSelectedLanguage] = useState("javascript")
   const [editorContent, setEditorContent] = useState("")
   const [isPreview, setIsPreview] = useState(false)
@@ -200,19 +201,40 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
     isServerReady,
     serverUrl,
     error,
-    writeFile,
     createFile,
     deleteFile,
     renameFile,
+    writeFile,
     createFolder,
     deleteFolder,
     buildFileTree: contextBuildFileTree,
     fileStructure: contextFileStructure,
     selectedFilePath,
     setSelectedFilePath,
+    activeArtifact,
     webcontainerInstance,
     exportFilesAsJson,
   } = useBCoderContext()
+
+  const isUpdateMode = useMemo(() => {
+    try {
+      if (!activeArtifact || activeArtifact.category !== "Deployed Project") return false;
+      const details = JSON.parse(activeArtifact.instructions);
+      return !!(details.owner && details.repo);
+    } catch (e) {
+      return false;
+    }
+  }, [activeArtifact]);
+
+  const initialRepoName = useMemo(() => {
+    try {
+      if (!activeArtifact || activeArtifact.category !== "Deployed Project") return "";
+      const details = JSON.parse(activeArtifact.instructions);
+      return details.repo || "";
+    } catch (e) {
+      return "";
+    }
+  }, [activeArtifact]);
 
   const editorTheme = resolvedTheme === "dark" ? "vs-dark" : "light"
 
@@ -400,13 +422,18 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
     }
   }, [deleteDialog, deleteFile, deleteFolder, buildFileTree, contextBuildFileTree, selectedFilePath, setSelectedFilePath])
 
-  const handleDeploy = async (data: { repoName: string, description: string, isPrivate: boolean }) => {
+  const handleDeploy = async (data: { repoName: string, description: string, isPrivate: boolean, isUpdate?: boolean }) => {
     try {
       const files = await exportFilesAsJson();
-      const result = await deployToGithubAndVercel({
+      const payload: any = {
         ...data,
+        assistantId,
         files
-      });
+      };
+      if (data.isUpdate && activeArtifact) {
+        payload.activeArtifactId = activeArtifact.id;
+      }
+      const result = await deployToGithubAndVercel(payload);
       return result;
     } catch (err: any) {
       return { success: false, error: { message: err.message || "Failed to extract WebContainer files." } }
@@ -669,6 +696,8 @@ export function MonacoEditorPanel({ templateId }: MonacoEditorPanelProps) {
         open={deployDialogOpen}
         onOpenChange={setDeployDialogOpen}
         onDeploy={handleDeploy}
+        initialRepoName={initialRepoName}
+        isUpdateMode={isUpdateMode}
       />
     </div>
   )
