@@ -472,7 +472,17 @@ export function ChatInput({
   const handleDictateTranscript = useCallback((text: string) => {
     // We use a functional update if possible, but since onValueChange type is (val) => void,
     // we rely on the latest 'value' from the dependency array.
-    onValueChange(value ? `${value.trim()} ${text}` : text)
+    const newText = value ? `${value.trim()} ${text}` : text
+    onValueChange(newText)
+
+    // Fallback: forcefully update textarea DOM and trigger event 
+    // to ensure Mention component and native form state are in sync.
+    if (textareaRef.current) {
+      if (textareaRef.current.value !== newText) {
+        textareaRef.current.value = newText
+        textareaRef.current.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+    }
   }, [value, onValueChange])
 
   const handleStreamingTranscript = useCallback((text: string) => {

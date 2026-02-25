@@ -61,6 +61,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           image: user.image,
+          hasCompletedOnboarding: user.hasCompletedOnboarding,
         };
       },
     }),
@@ -77,6 +78,7 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email;
         token.name = user.name;
         token.picture = user.image;
+        token.hasCompletedOnboarding = user.hasCompletedOnboarding;
 
         // Create a session record in database for tracking
         try {
@@ -109,6 +111,9 @@ export const authOptions: NextAuthOptions = {
         token.name = session.user?.name || token.name;
         token.email = session.user?.email || token.email;
         token.picture = session.user?.image || token.picture;
+        if (session.user?.hasCompletedOnboarding !== undefined) {
+          token.hasCompletedOnboarding = session.user.hasCompletedOnboarding;
+        }
       }
 
       return token;
@@ -120,6 +125,7 @@ export const authOptions: NextAuthOptions = {
         session.user.email = token.email as string;
         session.user.name = token.name as string;
         session.user.image = token.picture as string;
+        session.user.hasCompletedOnboarding = token.hasCompletedOnboarding as boolean;
       }
       return session;
     },
