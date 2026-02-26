@@ -95,7 +95,7 @@ export function SelectArtifactDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 max-h-[52vh] pr-4">
+        <ScrollArea className="h-[60vh] pr-4 -mx-4 px-4">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -114,72 +114,59 @@ export function SelectArtifactDialog({
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {artifacts.map((artifact) => (
-                <button
-                  key={artifact.id}
-                  onClick={() => {
-                    handleSelect({
-                      id: artifact.id,
-                      name: artifact.name,
-                      instructions: artifact.instructions || "",
-                      htmlContent: artifact.htmlContent || "",
-                    })
-                  }}
-                  className={cn(
-                    "w-full text-left p-4 rounded-lg border transition-colors",
-                    "hover:bg-muted hover:border-muted/50",
-                    artifact.category === "Deployed Project" && "border-emerald-500/30 bg-emerald-50/10 hover:bg-emerald-50/20"
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-sm mb-1 truncate flex items-center gap-2">
-                        {artifact.name}
-                      </h3>
-                      <p className="text-xs text-muted-foreground line-clamp-2">
-                        {artifact.category}
-                      </p>
-                      {artifact.creator && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Created by {artifact.creator.name}
-                        </p>
-                        {artifact.creator && (
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            by {artifact.creator.name}
+            <div className="space-y-3 pb-6">
+              {artifacts.filter(a => a.category !== "Deployed Project" && a.category !== "video_generation").map((artifact) => {
+                const isSelected = selectedIds.has(artifact.id)
+                return (
+                  <button
+                    key={artifact.id}
+                    onClick={() => toggleArtifact(artifact.id)}
+                    className={cn(
+                      "w-full text-left p-4 rounded-lg border transition-colors relative z-10",
+                      "hover:bg-muted hover:border-muted/50",
+                      isSelected && "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20",
+                      !isSelected && "bg-card shadow-sm"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex gap-3 min-w-0 flex-1">
+                        <Sparkles className={cn(
+                          "h-4 w-4 flex-shrink-0 mt-1",
+                          isSelected ? "text-primary" : "text-muted-foreground/60"
+                        )} />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-sm mb-1 truncate flex items-center gap-2">
+                            {artifact.name}
+                          </h3>
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {artifact.category}
                           </p>
-                        )}
+                          {artifact.creator && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Created by {artifact.creator.name}
+                            </p>
+                          )}
+                        </div>
                       </div>
                       <div
                         className={cn(
                           "h-5 w-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all",
                           isSelected
                             ? "border-primary bg-primary text-primary-foreground"
-                            : "border-muted-foreground/40"
+                            : "border-muted-foreground/40 bg-background"
                         )}
                       >
                         {isSelected && <Check className="h-3 w-3" />}
                       </div>
                     </div>
-                    {artifact.category === "Deployed Project" ? (
-                      <div className="flex-shrink-0 mt-1">
-                        <svg className="h-5 w-5 text-emerald-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10" />
-                          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-                          <path d="M2 12h20" />
-                        </svg>
-                      </div>
-                    ) : (
-                      <Sparkles className="h-4 w-4 text-primary flex-shrink-0 mt-1" />
-                    )}
-                  </div>
-                </button>
-              ))}
+                  </button>
+                )
+              })}
             </div>
           )}
         </ScrollArea>
 
-        <DialogFooter className="flex-shrink-0 gap-2 sm:gap-0 pt-2 border-t">
+        <DialogFooter className="flex-shrink-0 gap-4 sm:gap-2 pt-2 border-t">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>

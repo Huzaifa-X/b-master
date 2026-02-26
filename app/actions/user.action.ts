@@ -34,7 +34,6 @@ export async function getCurrentUser() {
         isEmailVerified: true,
         status: true,
         createdAt: true,
-        emailVisible: true,
       },
     })
 
@@ -58,7 +57,6 @@ export async function getCurrentUser() {
         isEmailVerified: user.isEmailVerified,
         status: user.status,
         createdAt: user.createdAt,
-        emailVisible: user.emailVisible,
       },
     }
   } catch (error) {
@@ -214,7 +212,6 @@ export async function getAvailableContacts(): Promise<UserContact[]> {
         },
         deletedAt: null, // Only active users
         status: "active", // Only active users
-        emailVisible: true, // Only users who opted in to be discoverable
       },
       select: {
         id: true,
@@ -239,33 +236,9 @@ export async function getAvailableContacts(): Promise<UserContact[]> {
 }
 
 // ============================================
-// UPDATE EMAIL VISIBILITY
+// EMAIL VISIBILITY FEATURE WITHDRAWN
 // ============================================
-/**
- * Toggle whether this user appears in contact discovery searches.
- * When emailVisible is false (default), no one can find them via search.
- */
-export async function updateEmailVisibility(visible: boolean): Promise<{
-  success: boolean
-  error?: string
-}> {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return { success: false, error: "Authentication required" }
-    }
-
-    await prisma.user.update({
-      where: { id: BigInt(session.user.id) },
-      data: { emailVisible: visible },
-    })
-
-    return { success: true }
-  } catch (error) {
-    console.error("Error updating email visibility:", error)
-    return { success: false, error: "Failed to update privacy setting" }
-  }
-}
+// updateEmailVisibility was removed because the emailVisible field no longer exists.
 
 // ============================================
 // VERIFY USER BY EMAIL

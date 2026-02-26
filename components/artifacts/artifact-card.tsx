@@ -43,7 +43,7 @@ export function ArtifactCard({ artifact, onClick }: ArtifactCardProps) {
       </div>
 
       {/* HTML Preview */}
-      <div>
+      {/* <div>
         <div className="w-full h-64 rounded-lg overflow-hidden border-2 bg-white dark:bg-neutral-950">
           <iframe
             srcDoc={artifact.htmlContent}
@@ -59,7 +59,7 @@ export function ArtifactCard({ artifact, onClick }: ArtifactCardProps) {
             loading="lazy"
           />
         </div>
-      </div>
+      </div> */}
     </div>
   )
 }

@@ -69,7 +69,7 @@ export function GithubDeployDialog({
             const response = await onDeploy({
                 repoName: finalRepoName,
                 description: description.trim(),
-                isPrivate: false, // Defaulting to public for now
+                isPrivate: true, // Defaulting to private
                 isUpdate: !!isUpdateMode
             })
 

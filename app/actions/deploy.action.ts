@@ -6,7 +6,7 @@ import { z } from "zod"
 const deploySchema = z.object({
     repoName: z.string().min(1, "Repository name is required"),
     description: z.string().optional(),
-    isPrivate: z.boolean().default(false),
+    isPrivate: z.boolean().default(true),
     files: z.record(z.string(), z.string()).refine((val) => Object.keys(val).length > 0, { message: "No files to deploy" }),
     isUpdate: z.boolean().optional(),
     activeArtifactId: z.number().optional(),
