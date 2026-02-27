@@ -7,9 +7,13 @@ import { Label } from "@/components/ui/label"
 import { ImageUploadField } from "@/components/ui/image-uploader"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
 import { ProfileData, ProfileTabProps } from "@/types/profile"
+import { toast } from "sonner"
+import { useLocale } from "@/lib/i18n"
 
 export default function ProfileTab({ initialData, onSave, isLoading }: ProfileTabProps) {
+    const { t } = useLocale()
     const [formData, setFormData] = useState<ProfileData>(initialData)
     const [isModified, setIsModified] = useState(false)
 
@@ -66,16 +70,16 @@ export default function ProfileTab({ initialData, onSave, isLoading }: ProfileTa
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-xl font-semibold">Profile Information</h2>
+                <h2 className="text-xl font-semibold">{t("profile.profileInformation")}</h2>
                 <p className="text-muted-foreground text-sm">
-                    Manage your personal information and preferences
+                    {t("profile.profileDescription")}
                 </p>
             </div>
 
             <div className="space-y-6 max-w-xl">
                 {/* Profile Image */}
                 <div className="space-y-2">
-                    <Label htmlFor="profile-image">Profile Picture</Label>
+                    <Label htmlFor="profile-image">{t("profile.profilePicture")}</Label>
                     <ImageUploadField
                         value={formData.image}
                         onChange={handleImageChange}
@@ -86,52 +90,52 @@ export default function ProfileTab({ initialData, onSave, isLoading }: ProfileTa
 
                 {/* Name */}
                 <div className="space-y-2">
-                    <Label htmlFor="name">Full Name</Label>
+                    <Label htmlFor="name">{t("profile.fullName")}</Label>
                     <Input
                         id="name"
                         value={formData.name}
                         onChange={(e) => handleInputChange("name", e.target.value)}
-                        placeholder="Enter your full name"
+                        placeholder={t("profile.fullNamePlaceholder")}
                     />
                 </div>
 
                 {/* Organization */}
                 <div className="space-y-2">
-                    <Label htmlFor="organization">Organization</Label>
+                    <Label htmlFor="organization">{t("profile.organization")}</Label>
                     <Input
                         id="organization"
                         value={formData.organization}
                         onChange={(e) => handleInputChange("organization", e.target.value)}
-                        placeholder="Enter your organization"
+                        placeholder={t("profile.organizationPlaceholder")}
                     />
                 </div>
 
                 {/* Gender */}
                 <div className="space-y-2">
-                    <Label htmlFor="gender">Gender</Label>
+                    <Label htmlFor="gender">{t("profile.gender")}</Label>
                     <Select
                         value={formData.gender}
                         onValueChange={(value) => handleInputChange("gender", value)}
                     >
                         <SelectTrigger id="gender">
-                            <SelectValue placeholder="Select your gender" />
+                            <SelectValue placeholder={t("profile.genderPlaceholder")} />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="male" className="focus:bg-muted focus:text-foreground">Male</SelectItem>
-                            <SelectItem value="female" className="focus:bg-muted focus:text-foreground">Female</SelectItem>
-                            <SelectItem value="other" className="focus:bg-muted focus:text-foreground">Other</SelectItem>
+                            <SelectItem value="male" className="focus:bg-muted focus:text-foreground">{t("profile.male")}</SelectItem>
+                            <SelectItem value="female" className="focus:bg-muted focus:text-foreground">{t("profile.female")}</SelectItem>
+                            <SelectItem value="other" className="focus:bg-muted focus:text-foreground">{t("profile.other")}</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
 
                 {/* Address */}
                 <div className="space-y-2">
-                    <Label htmlFor="address">Address</Label>
+                    <Label htmlFor="address">{t("profile.address")}</Label>
                     <Textarea
                         id="address"
                         value={formData.address}
                         onChange={(e) => handleInputChange("address", e.target.value)}
-                        placeholder="Enter your address"
+                        placeholder={t("profile.addressPlaceholder")}
                         rows={4}
                         className="resize-none"
                     />
@@ -140,11 +144,11 @@ export default function ProfileTab({ initialData, onSave, isLoading }: ProfileTa
                 {/* Action Buttons - Only show when modified */}
                 {isModified && (
                     <div className="flex gap-3 pt-4">
-                        <Button 
+                        <Button
                             onClick={handleSave}
                             disabled={isLoading}
                         >
-                            {isLoading ? "Saving..." : "Save Changes"}
+                            {isLoading ? t("common.saving") : t("profile.saveProfile")}
                         </Button>
                         <Button
                             variant="outline"
@@ -152,7 +156,7 @@ export default function ProfileTab({ initialData, onSave, isLoading }: ProfileTa
                             disabled={isLoading}
                             className="hover:text-primary hover:bg-transparent"
                         >
-                            Cancel
+                            {t("common.cancel")}
                         </Button>
                     </div>
                 )}

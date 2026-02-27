@@ -1,6 +1,6 @@
 "use client"
 
-import { MessageCircle, ChevronLeft, ArrowLeft, Users, Megaphone, Layers, Plus } from "lucide-react"
+import { MessageCircle, ChevronLeft, ArrowLeft, Users, Megaphone, Layers, Plus, BookOpen } from "lucide-react"
 import Link from "next/link"
 import {
     SidebarGroup,
@@ -28,6 +28,8 @@ export function NavMainAssistant({ currentPath }: { currentPath: string }) {
     const canViewMessenger = isLoading || !permissions ? true : permissions.hasAccess && (permissions.access === 'admin' || permissions.permissions.includes('messenger'));
     const canViewNewsfeed = isLoading || !permissions ? true : permissions.hasAccess && (permissions.access === 'admin' || permissions.permissions.includes('newsfeed'));
     const canViewArtifacts = isLoading || !permissions ? true : permissions.hasAccess && (permissions.access === 'admin' || permissions.permissions.includes('artifacts'));
+    // Library is visible to everyone with access (owners get upload/delete, others get view-only)
+    const canViewLibrary = isLoading || !permissions ? true : permissions.hasAccess;
 
     return (
         <SidebarGroup>
@@ -93,6 +95,17 @@ export function NavMainAssistant({ currentPath }: { currentPath: string }) {
                             <Link href={`/assistants/${assistantId}/artifacts`} className="group/nav-item">
                                 <Layers className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
                                 <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">Artifacts</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                )}
+
+                {canViewLibrary && (
+                    <SidebarMenuItem key={"Library"}>
+                        <SidebarMenuButton asChild tooltip={"Library"} isActive={currentPath.includes("/library")}>
+                            <Link href={`/assistants/${assistantId}/library`} className="group/nav-item">
+                                <BookOpen className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
+                                <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">Library</span>
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>

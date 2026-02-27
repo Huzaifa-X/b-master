@@ -271,6 +271,23 @@ export async function POST(req: NextRequest) {
                     console.error(`[Webhook] ❌ Failed to create PaymentRecord:`, recordError)
                 }
 
+                // Check if a promotion code was used and mark it redeemed
+                const promotionId = session.metadata?.promotionId
+                if (promotionId) {
+                    try {
+                        await prisma.userPromotion.update({
+                            where: { id: parseInt(promotionId) },
+                            data: {
+                                redeemedAt: new Date(),
+                                isActive: false,
+                            }
+                        })
+                        console.log(`✅ [Webhook] Marked promotion ${promotionId} as redeemed for user ${userId}`)
+                    } catch (promoError) {
+                        console.error(`[Webhook] ❌ Failed to mark promotion as redeemed:`, promoError)
+                    }
+                }
+
                 console.log(`✅ [Webhook] Subscription activated for user ${userId}`)
                 console.log(`   - Subscription ID: ${subscription.id}`)
                 console.log(`   - Status: ${subscription.status}`)

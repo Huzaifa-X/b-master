@@ -44,8 +44,24 @@ export const sendNotification = async (userId: string, eventName: string, data: 
     const channelName = `private-user-${userId}`;
     await pusher.trigger(channelName, eventName, data);
     console.log(`Notification sent to user ${userId}: ${eventName}`);
-  } catch (error) {
-    console.error('Pusher error:', error);
+  } catch (error: any) {
+    // Detect clock-skew 401 specifically and give an actionable message
+    const body: string = error?.body ?? error?.message ?? '';
+    if (error?.status === 401 && body.includes('Timestamp expired')) {
+      const match = body.match(/Given timestamp \((.+?)\).*server time \((.+?)\)/);
+      const hint = match
+        ? `Server clock is off by ~${Math.round((new Date(match[1]).getTime() - new Date(match[2]).getTime()) / 60000)} minutes.`
+        : 'Server clock is out of sync with Pusher.';
+      console.warn(
+        `[Pusher] Clock skew detected – ${hint}\n` +
+        `  Fix on Docker/WSL2 : wsl --shutdown  (then restart)\n` +
+        `  Fix on bare Linux   : sudo ntpdate -u pool.ntp.org\n` +
+        `  Fix on Windows      : Settings → Time & Language → Sync now\n` +
+        `  Notification was saved to DB and will appear on next page load.`
+      );
+      return;
+    }
+    console.error('[Pusher] Failed to send real-time notification:', error);
     console.warn('Real-time notification failed, but saved to database');
   }
 };

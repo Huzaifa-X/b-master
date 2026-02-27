@@ -2,6 +2,7 @@
 "use client"
 
 import { FileIcon, PlusIcon, X, Globe, Search, Sparkles, Code } from "lucide-react"
+import type { ArtifactData } from "@/components/assistants/select-artifact-dialog"
 import type { FC } from "react"
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
@@ -24,8 +25,9 @@ interface AttachmentDropdownProps {
     disabled?: boolean
     mode?: "ask-b" | "assistant"
     assistantId?: string
-    selectedArtifact?: { id: string; name: string; instructions: string; htmlContent: string } | null
-    onRemoveArtifact?: () => void
+    selectedArtifacts?: ArtifactData[]
+    /** Called with an artifact id to remove that one, or no args to clear all */
+    onRemoveArtifact?: (id?: string) => void
     // Mode state props to sync with parent
     webSearchEnabled?: boolean
     researchEnabled?: boolean
@@ -43,7 +45,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     disabled = false,
     mode = "assistant",
     assistantId,
-    selectedArtifact,
+    selectedArtifacts = [],
     onRemoveArtifact,
     webSearchEnabled = false,
     researchEnabled = false,
@@ -66,14 +68,14 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
         checkDropboxConnection()
     }, [])
 
-    // Update selected mode when artifact prop changes
+    // Update selected mode when artifact props change
     useEffect(() => {
-        if (selectedArtifact) {
+        if (selectedArtifacts && selectedArtifacts.length > 0) {
             setSelectedMode("artifact")
         } else if (selectedMode === "artifact") {
             setSelectedMode(null)
         }
-    }, [selectedArtifact])
+    }, [selectedArtifacts])
 
     // Sync internal state with parent component mode props
     useEffect(() => {
@@ -86,7 +88,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
         })
 
         // Priority order: artifact > specific modes
-        if (selectedArtifact) {
+        if (selectedArtifacts && selectedArtifacts.length > 0) {
             // Artifact takes precedence
             if (selectedMode !== "artifact") {
                 setSelectedMode("artifact")
@@ -118,7 +120,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                 setSelectedMode(null)
             }
         }
-    }, [webSearchEnabled, researchEnabled, chatWithAPIEnabled, dropboxEnabled, selectedArtifact])
+    }, [webSearchEnabled, researchEnabled, chatWithAPIEnabled, dropboxEnabled, selectedArtifacts])
 
     // Note: ChatInput component now handles sessionStorage with assistant-scoped keys
     // This component just reflects the current state via props
@@ -198,6 +200,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
         } else if (currentMode === "dropbox") {
             onDropbox?.(false)
         } else if (currentMode === "artifact") {
+            // clear all artifacts
             onRemoveArtifact?.()
         }
     }
@@ -378,13 +381,13 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                     </DropdownMenuContent>
                 </DropdownMenu>
 
-                {selectedMode && (
-                    <div className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm ${selectedMode === "dropbox"
+                {/* Non-artifact single-mode badge */}
+                {selectedMode && selectedMode !== "artifact" && (
+                    <div className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm ${
+                        selectedMode === "dropbox"
                             ? "border-blue-500 bg-blue-500/10"
-                            : selectedMode === "artifact"
-                                ? "border-purple-500 bg-purple-500/10"
-                                : "border-primary bg-primary/10"
-                        }`}>
+                            : "border-primary bg-primary/10"
+                    }`}>
                         {selectedMode === "webSearch" ? (
                             <>
                                 <Globe className="size-3.5" />
@@ -405,22 +408,12 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                                 <DropboxIcon className="size-3.5 text-blue-600" />
                                 <span className="font-medium text-blue-600">Dropbox</span>
                             </>
-                        ) : selectedMode === "artifact" ? (
-                            <>
-                                <Sparkles className="size-3.5 text-purple-600" />
-                                <span className="font-medium text-purple-600 truncate max-w-[150px]">
-                                    {selectedArtifact?.name || "Artifact"}
-                                </span>
-                            </>
                         ) : null}
                         <button
                             onClick={handleRemoveMode}
-                            className={`ml-1 rounded-full disabled:opacity-50 disabled:cursor-not-allowed ${selectedMode === "dropbox"
-                                    ? "hover:bg-blue-500/20"
-                                    : selectedMode === "artifact"
-                                        ? "hover:bg-purple-500/20"
-                                        : "hover:bg-primary/20"
-                                }`}
+                            className={`ml-1 rounded-full disabled:opacity-50 disabled:cursor-not-allowed ${
+                                selectedMode === "dropbox" ? "hover:bg-blue-500/20" : "hover:bg-primary/20"
+                            }`}
                             aria-label="Remove mode"
                             disabled={disabled}
                         >
@@ -428,6 +421,27 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                         </button>
                     </div>
                 )}
+
+                {/* Per-artifact badges — each has its own remove button */}
+                {selectedArtifacts && selectedArtifacts.length > 0 && selectedArtifacts.map((artifact) => (
+                    <div
+                        key={artifact.id}
+                        className="flex items-center gap-1.5 rounded-full border border-purple-500 bg-purple-500/10 px-3 py-1.5 text-sm"
+                    >
+                        <Sparkles className="size-3.5 text-purple-600 flex-shrink-0" />
+                        <span className="font-medium text-purple-600 truncate max-w-[130px]">
+                            {artifact.name}
+                        </span>
+                        <button
+                            onClick={() => onRemoveArtifact?.(artifact.id)}
+                            className="ml-0.5 rounded-full hover:bg-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            aria-label={`Remove artifact ${artifact.name}`}
+                            disabled={disabled}
+                        >
+                            <X className="size-3.5 text-purple-600" />
+                        </button>
+                    </div>
+                ))}
             </div>
         </>
     )

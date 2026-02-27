@@ -71,8 +71,9 @@ export const DictateButton: FC<DictateButtonProps> = ({
                 }
             }
 
-            // Start recording
-            mediaRecorder.start()
+            // Start recording — flush a chunk every 10 s so long recordings
+            // (beyond 10 minutes) never overflow memory before transcription
+            mediaRecorder.start(10_000)
             setIsRecording(true)
         } catch (error) {
             console.error("Error starting recording:", error)

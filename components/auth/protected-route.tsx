@@ -1,7 +1,7 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { useEffect } from "react"
 import { Loader2 } from "lucide-react"
 import { ProtectedRouteProps } from "@/types/auth"
@@ -12,12 +12,27 @@ export function ProtectedRoute({
 }: ProtectedRouteProps) {
     const { data: session, status } = useSession()
     const router = useRouter()
+    const pathname = usePathname()
 
     useEffect(() => {
         if (status === "unauthenticated") {
             router.push(redirectTo)
+            return
         }
-    }, [status, router, redirectTo])
+
+        if (status === "authenticated" && session?.user) {
+            // Check onboarding status
+            const isOnboardingRoute = pathname === "/onboarding"
+            const hasCompletedOnboarding = session.user.hasCompletedOnboarding
+
+            if (!hasCompletedOnboarding && !isOnboardingRoute) {
+                router.push("/onboarding")
+            } else if (hasCompletedOnboarding && isOnboardingRoute) {
+                // Prevent going back to onboarding if already completed
+                router.push("/home")
+            }
+        }
+    }, [status, session, router, pathname, redirectTo])
 
     if (status === "loading") {
         return (

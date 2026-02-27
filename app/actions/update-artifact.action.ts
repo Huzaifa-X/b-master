@@ -76,41 +76,62 @@ export async function createArtifactVersion({
     setAsActive?: boolean
 }): Promise<{ success: boolean; error?: string; version?: any }> {
     try {
-        // Get the latest version number
-        const latestVersion = await prisma.artifactVersion.findFirst({
-            where: { artifactId },
-            orderBy: { versionNumber: 'desc' },
-            select: { versionNumber: true, id: true }
-        })
+        // Retry loop: reading the latest version number INSIDE the transaction
+        // and retrying on P2002 eliminates the TOCTOU race on
+        // @@unique([artifactId, versionNumber]) that caused failures after v16.
+        let result: any = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                result = await prisma.$transaction(async (tx) => {
+                    // Read inside the transaction to shrink the race window
+                    const latestVersion = await tx.artifactVersion.findFirst({
+                        where: { artifactId },
+                        orderBy: { versionNumber: 'desc' },
+                        select: { versionNumber: true, id: true }
+                    })
 
-        const newVersionNumber = (latestVersion?.versionNumber || 0) + 1
+                    const newVersionNumber = (latestVersion?.versionNumber || 0) + 1
 
-        // Create new version in a transaction
-        const result = await prisma.$transaction(async (tx) => {
-            const newVersion = await tx.artifactVersion.create({
-                data: {
-                    artifactId,
-                    userId,
-                    versionNumber: newVersionNumber,
-                    versionName: `Version ${newVersionNumber}`,
-                    code,
-                    description: description || `Updated to version ${newVersionNumber}`,
-                    changeType,
-                    changedFrom: latestVersion?.id,
-                    isSnapshot: false
-                }
-            })
+                    const newVersion = await tx.artifactVersion.create({
+                        data: {
+                            artifactId,
+                            userId,
+                            versionNumber: newVersionNumber,
+                            versionName: `Version ${newVersionNumber}`,
+                            code,
+                            description: description || `Updated to version ${newVersionNumber}`,
+                            changeType,
+                            changedFrom: latestVersion?.id ?? null,
+                            isSnapshot: false
+                        }
+                    })
 
-            // Set as active version if requested
-            if (setAsActive) {
-                await tx.assistantArtifact.update({
-                    where: { id: artifactId },
-                    data: { activeVersionId: newVersion.id }
+                    // Set as active version if requested
+                    if (setAsActive) {
+                        await tx.assistantArtifact.update({
+                            where: { id: artifactId },
+                            data: { activeVersionId: newVersion.id }
+                        })
+                    }
+
+                    return newVersion
                 })
+                break // success – exit retry loop
+            } catch (txErr: any) {
+                // P2002 = unique constraint violation on (artifactId, versionNumber).
+                // Retry with a small random back-off so the next attempt reads a
+                // higher (non-colliding) version number from the DB.
+                if (txErr?.code === 'P2002' && attempt < 2) {
+                    await new Promise(r => setTimeout(r, 25 + Math.random() * 75))
+                    continue
+                }
+                throw txErr
             }
+        }
+        if (!result) throw new Error('Failed to create artifact version after retries')
 
-            return newVersion
-        })
+        // Extract version number from result (newVersionNumber was scoped inside the transaction)
+        const newVersionNumber = result.versionNumber
 
         // Send notifications to shared users (only for updates, not first version)
         if (newVersionNumber > 1 && (changeType === 'ai' || changeType === 'manual')) {

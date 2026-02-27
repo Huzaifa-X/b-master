@@ -5,6 +5,7 @@ declare module "next-auth" {
     interface Session {
         user: {
             id: string; // String because we convert BigInt to string
+            hasCompletedOnboarding?: boolean;
         } & DefaultSession["user"];
     }
 
@@ -14,11 +15,13 @@ declare module "next-auth" {
         name?: string | null;
         image?: string | null;
         password?: string | null;
+        hasCompletedOnboarding?: boolean;
     }
 }
 
 declare module "next-auth/jwt" {
     interface JWT {
         id: string;
+        hasCompletedOnboarding?: boolean;
     }
 }

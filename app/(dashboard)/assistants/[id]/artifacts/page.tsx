@@ -4,11 +4,12 @@ import { use, useState, lazy, Suspense } from "react"
 import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, Plus, FolderOpen, Loader2 } from "lucide-react"
+import { Search, Plus, FolderOpen, Loader2, Code2 } from "lucide-react"
 import { ArtifactCard, type Artifact } from "@/components/artifacts/artifact-card"
 import { useArtifacts, useInvalidateArtifacts, useArtifactById } from "@/hooks/useArtifact"
 import { useSetAssistantMode } from "@/hooks/useAssistant"
 import { useAssistantPermissions } from "@/hooks/usePermissions"
+import { TemplateSelectionModal } from "@/components/b-coder/template-selection-modal"
 
 // Lazy load the CreateArtifactDialog to reduce initial bundle size
 const CreateArtifactDialog = lazy(() =>
@@ -38,6 +39,7 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
     const [searchQuery, setSearchQuery] = useState("")
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
     const [viewArtifactId, setViewArtifactId] = useState<string | null>(null)
+    const [showTemplateModal, setShowTemplateModal] = useState(false)
 
     // Use React Query hook to fetch artifacts
     const { artifacts, isLoading, isError } = useArtifacts(assistantId)
@@ -65,10 +67,14 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
         // For EDITOR/ADMIN access, navigate to full page with chatbot
         const isViewerAccess = artifact.access === 'VIEWER'
         const isVideoArtifact = artifact.category === "video_generation"
+        const isDeployedProject = artifact.category === "Deployed Project"
 
         if (isVideoArtifact || isViewerAccess) {
             // Read-only view in modal (can view and download only)
             setViewArtifactId(artifact.id)
+        } else if (isDeployedProject) {
+            // Open B-Coder and load the project using the artifact ID
+            router.push(`/assistants/${assistantId}/b-coder?artifact=${artifact.id}`)
         } else {
             // Full access - navigate to detail page with chatbot (can edit)
             router.push(`/assistants/${assistantId}/artifacts/${artifact.id}`)
@@ -95,13 +101,23 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                             </p>
                         </div>
                         {canCreateArtifacts && (
-                            <Button
-                                onClick={handleCreateArtifact}
-                                className="w-full sm:w-auto"
-                            >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Create Artifact
-                            </Button>
+                            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                                <Button
+                                    onClick={() => setShowTemplateModal(true)}
+                                    variant="outline"
+                                    className="w-full sm:w-auto bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/50"
+                                >
+                                    <Code2 className="h-4 w-4 mr-2" />
+                                    B-Coder
+                                </Button>
+                                <Button
+                                    onClick={handleCreateArtifact}
+                                    className="w-full sm:w-auto"
+                                >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Create Artifact
+                                </Button>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -203,6 +219,15 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                     />
                 </Suspense>
             )}
+
+            {/* Template Selection Modal for B-Coder */}
+            <TemplateSelectionModal
+                open={showTemplateModal}
+                onOpenChange={setShowTemplateModal}
+                onSelectTemplate={(templateId) => {
+                    router.push(`/assistants/${assistantId}/b-coder?template=${templateId}`)
+                }}
+            />
         </div>
     )
 }

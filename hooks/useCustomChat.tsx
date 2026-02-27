@@ -11,6 +11,7 @@ import {
 } from "@/app/actions/chat.action"
 import { Message, ChatContext, ChatType } from "@/types/chat"
 import { toast } from "sonner"
+import { useArtifactStore } from "@/lib/stores/artifact-store"
 
 export type ChatMode = "assistant" | "ask-b"
 
@@ -203,7 +204,8 @@ export function useCustomChat(options: UseCustomChatOptions) {
         chatWithAPI: false,
         dropbox: false,
         artifact: null as any,
-        mentionedUsers: [] as Array<{ id: string; name: string; email: string }>
+        mentionedUsers: [] as Array<{ id: string; name: string; email: string }>,
+        connectedApiIds: [] as string[],
       }
 
       try {
@@ -219,6 +221,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
             options.chatWithAPI = documentsData.options.chatWithAPI || false
             options.dropbox = documentsData.options.dropbox || false
             options.artifact = documentsData.options.artifact || null
+            options.connectedApiIds = documentsData.options.connectedApiIds || []
             console.log("[useCustomChat] Retrieved options from message documents:", documentsData.options)
           }
 
@@ -274,7 +277,8 @@ export function useCustomChat(options: UseCustomChatOptions) {
               dropbox: options.dropbox,          // 🔥 Use retrieved option
               artifact: options.artifact,        // 🔥 Use retrieved option
               attachments: attachments,
-              mentionedUsers: options?.mentionedUsers
+              mentionedUsers: options?.mentionedUsers,
+              connectedApiIds: options.connectedApiIds || [],
             }),
             signal: abortControllerRef.current.signal
           })
@@ -348,14 +352,28 @@ export function useCustomChat(options: UseCustomChatOptions) {
                     )
                     await refetchMessages()
                     break
+                  case "artifact_updating":
+                    console.log("[useCustomChat] ⏳ Artifact updating:", data.artifactName)
+                    toast.loading(`Updating "${data.artifactName}"...`, { id: `artifact-update-${data.artifactId}`, duration: 30000 })
+                    break
+
                   case "artifact_updated":
                     console.log("[useCustomChat] 🎨 Artifact updated:", data.artifactName, "Version:", data.versionNumber)
+                    toast.dismiss(`artifact-update-${data.artifactId}`)
 
-                    // Show toast notification
-                    toast.success(`Artifact "${data.artifactName}" updated to version ${data.versionNumber}`)
+                    // Refresh the artifact panel store with the new HTML so the preview updates in place
+                    if (data.updatedCode) {
+                      useArtifactStore.getState().setArtifact({
+                        type: "code",
+                        language: "html",
+                        content: data.updatedCode,
+                        title: data.artifactName,
+                      })
+                    }
 
-                    // You could also trigger a refetch of the artifact here if needed
-                    // queryClient.invalidateQueries(['artifact', data.artifactId])
+                    // Also invalidate react-query cache so version history refreshes
+                    queryClient.invalidateQueries({ queryKey: ["artifact", data.artifactId] })
+                    queryClient.invalidateQueries({ queryKey: ["artifacts"] })
                     break
 
                   case "artifact_update_error":
@@ -461,7 +479,7 @@ export function useCustomChat(options: UseCustomChatOptions) {
   }, [dbMessageIds, currentMessageIds, isStreaming, dbMessages, messages, context, queryClient])
 
   // Send message with streaming
-  const sendMessage = useCallback(async (content: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; dropbox?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: Array<{ id: string; name: string; email: string }> }) => {
+  const sendMessage = useCallback(async (content: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; dropbox?: boolean; artifact?: { id: string; name: string; instructions: string; htmlContent: string }; mentionedUsers?: Array<{ id: string; name: string; email: string }>; connectedApiIds?: string[] }) => {
     if (!context || !content.trim() || isStreamingRef.current) {  // 🔥 Use ref
       console.warn("[useCustomChat] Cannot send message:", {
         hasContext: !!context,
@@ -507,7 +525,8 @@ export function useCustomChat(options: UseCustomChatOptions) {
         chatWithAPI: options?.chatWithAPI,
         dropbox: options?.dropbox,
         artifact: options?.artifact,
-        mentionedUsers: options?.mentionedUsers
+        mentionedUsers: options?.mentionedUsers,
+        connectedApiIds: options?.connectedApiIds,
       })
 
       if (!result.success) {
@@ -545,7 +564,8 @@ export function useCustomChat(options: UseCustomChatOptions) {
           dropbox: options?.dropbox,
           artifact: options?.artifact,
           attachments: attachments,
-          mentionedUsers: options?.mentionedUsers
+          mentionedUsers: options?.mentionedUsers,
+          connectedApiIds: options?.connectedApiIds || [],
         }),
         signal: abortControllerRef.current.signal
       })
@@ -679,6 +699,32 @@ export function useCustomChat(options: UseCustomChatOptions) {
                 )
                 // Refetch to get the final message from DB
                 await refetchMessages()
+                break
+
+              case "artifact_updating":
+                console.log("[useCustomChat] ⏳ Artifact updating (sendMessage):", data.artifactName)
+                toast.loading(`Updating "${data.artifactName}"...`, { id: `artifact-update-${data.artifactId}`, duration: 30000 })
+                break
+
+              case "artifact_updated":
+                console.log("[useCustomChat] 🎨 Artifact updated (sendMessage):", data.artifactName, "Version:", data.versionNumber)
+                toast.dismiss(`artifact-update-${data.artifactId}`)
+                toast.success(`Artifact "${data.artifactName}" updated to version ${data.versionNumber}`)
+                if (data.updatedCode) {
+                  useArtifactStore.getState().setArtifact({
+                    type: "code",
+                    language: "html",
+                    content: data.updatedCode,
+                    title: data.artifactName,
+                  })
+                }
+                queryClient.invalidateQueries({ queryKey: ["artifact", data.artifactId] })
+                queryClient.invalidateQueries({ queryKey: ["artifacts"] })
+                break
+
+              case "artifact_update_error":
+                console.error("[useCustomChat] ❌ Artifact update failed:", data.error)
+                toast.error(`Failed to update artifact: ${data.error}`)
                 break
 
               case "error":

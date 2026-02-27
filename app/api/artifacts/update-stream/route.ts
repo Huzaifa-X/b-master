@@ -175,20 +175,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Build file context from both stored files and newly uploaded files
+    // Build file context from ONLY the files uploaded in THIS request.
+    // Previously ALL stored (historical) files were injected on every call —
+    // with multiple large documents this quickly exceeds the model's context
+    // window, causing crashes, timeouts, and hallucinated content.
+    // Stored files are still persisted to the DB for reference; they just
+    // aren't blindly re-sent to the AI on every subsequent request.
     let fileContext = ""
 
-    // Get stored files from artifact database
-    const storedFiles = (artifact.files as unknown as UploadedFile[]) || []
-
-    // Combine stored files with newly uploaded files
-    const allFiles: UploadedFile[] = [...storedFiles]
-
-    // Add newly uploaded files (if any)
-    if (uploadedFiles && uploadedFiles.length > 0) {
-      const newlyUploadedFiles = uploadedFiles as UploadedFile[]
-      allFiles.push(...newlyUploadedFiles)
-    }
+    const allFiles: UploadedFile[] = uploadedFiles && uploadedFiles.length > 0
+      ? (uploadedFiles as UploadedFile[])
+      : []
 
     // Build context from all available files
     if (allFiles.length > 0) {
@@ -200,12 +197,17 @@ export async function POST(req: NextRequest) {
         // Add image URLs
         if (file.preview) {
           fileContext += `Image URL: ${file.preview}\n`
-          fileContext += `Note: This is an image that should be embedded in the HTML using an <img> tag with this URL.\n`
+          fileContext += `CRITICAL: This is an image. You MUST visually analyse its content thoroughly. Read all text, numbers, labels, charts, or visual elements present. Use the image meaningfully in the artifact by embedding it with an <img> tag using this URL and incorporating what you observe from it into the design or content.\n`
         }
 
-        // Add extracted document content
+        // Add extracted document content (truncate large docs to avoid token-limit failures)
         if (file.extractedContent) {
-          fileContext += `\nExtracted Text:\n${file.extractedContent.text}\n`
+          const MAX_DOC_CHARS = 12_000
+          const rawText = file.extractedContent.text
+          const truncatedText = rawText.length > MAX_DOC_CHARS
+            ? rawText.slice(0, MAX_DOC_CHARS) + `\n...[truncated – ${rawText.length - MAX_DOC_CHARS} additional characters omitted to stay within context limits]`
+            : rawText
+          fileContext += `\nExtracted Text:\n${truncatedText}\n`
 
           if (file.extractedContent.html) {
             fileContext += `\nExtracted HTML:\n${file.extractedContent.html}\n`
@@ -227,259 +229,203 @@ export async function POST(req: NextRequest) {
 
       fileContext += "\n=== END AVAILABLE FILES CONTEXT ===\n"
 
-      console.log("[Artifact Update Stream] Using files - Stored:", storedFiles.length, "Newly uploaded:", uploadedFiles?.length || 0, "Total:", allFiles.length)
+      console.log("[Artifact Update Stream] Using files from current request:", allFiles.length)
     }
 
     // Prepare input for AI using the active version's code
-    const aiInput = `${conversationContext}${artifactChatContext}
-
-=== CURRENT ARTIFACT CODE (Active Version ${artifact.activeVersion?.versionNumber || 'N/A'}) ===
-${activeVersionCode}
-=== END CURRENT CODE ===
-${fileContext}
-=== USER REQUEST ===
-${userPrompt || "Update the artifact using the available files."}
-=== END USER REQUEST ===
-
-Please update the artifact code based on the user's request while considering the entire conversation history${artifactChatContext ? ', the artifact chat context' : ''}${allFiles.length > 0 ? ', and the available files' : ''}.
-
-${currentHtmlCode}
-This is the current HTML code of the artifact. Please update the artifact code based on the user's request while considering the entire conversation history${artifactChatContext ? ', the artifact chat context' : ''}${allFiles.length > 0 ? ', and the available files' : ''}.
-
-${allFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are provided, embed them in the HTML using <img> tags with the provided URLs.\n- If documents are provided, use the extracted text/html content to enhance the artifact. and use there urls in the code if needed.\n- Make sure all image URLs are properly used in src attributes.\n- The files context includes both previously uploaded files and any newly uploaded files.\n\n' : ''}Generate the complete updated HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.`
+    // NOTE: send the code exactly once — no duplicate injection
+    const aiInput = [
+      conversationContext,
+      artifactChatContext,
+      `=== CURRENT ARTIFACT (v${artifact.activeVersion?.versionNumber || 'N/A'}) ===`,
+      activeVersionCode,
+      `=== END ARTIFACT ===`,
+      fileContext,
+      `=== USER REQUEST ===`,
+      userPrompt || "Update the artifact using the available files.",
+      `=== END REQUEST ===`,
+    ].filter(Boolean).join("\n")
 
     const vectorStoreId = artifact.assistant?.vectorStoreId
 
-    // Create streaming response
+    // ── Unified system prompt — single call, no pre-flight classification roundtrip ──
+    const _now = new Date()
+    const _dateBlock = `## Current Date & Time\n- Date: ${_now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}\n- Time (UTC): ${_now.toUTCString()}`
+
+    const unifiedSystemPrompt = [
+      _dateBlock,
+      "",
+      ARTIFACT_UPDATE_PROMPT,
+      "",
+      "## RESPONSE FORMAT — CRITICAL, FOLLOW EXACTLY",
+      "Your response MUST start with one of these two prefixes as the very first characters (no leading whitespace):",
+      "",
+      "  [QA]     — user is asking a question, wants explanation, help understanding, or is chatting.",
+      "              After [QA] write a clear concise markdown answer. Do NOT include full HTML.",
+      "",
+      "  [UPDATE] — user wants to change, add, remove, fix, redesign, or update ANYTHING in the artifact.",
+      "              After [UPDATE] output ONLY the complete updated HTML starting with <!DOCTYPE html>.",
+      "              No explanations, no markdown, no backticks — just raw HTML.",
+      "",
+      allFiles.length > 0
+        ? "FILES: Embed images with <img src=\"URL\">. Use extracted document text/HTML to enhance content."
+        : "",
+    ].filter(Boolean).join("\n")
+
+    // Create streaming response — streams immediately without any pre-flight classification call
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          console.log("[Artifact Update Stream] Starting HTML update generation for artifact:", artifactId)
+          console.log("[Artifact Update Stream] Starting unified stream for artifact:", artifactId)
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "connected" })}\n\n`))
 
-          // Send initial connection message
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: "connected" })}\n\n`)
-          )
-
-          let generatedCode = ""
+          let fullText = ""
           let buffer = ""
-          const model = 'gpt-5.2'
-          const CHUNK_SIZE = 1024 // Send chunks of ~1KB
+          let detectedMode: "qa" | "modify" | null = null
+          let prefixBuffer = ""
+          const CHUNK_SIZE = 1024
 
-          // Create AI response with streaming
-          console.log("[Artifact Update Stream] Creating OpenAI response with streaming enabled")
-
+          let streamResponse: Awaited<ReturnType<typeof openai.responses.create>> | null = null
           try {
-            const response = await openai.responses.create({
-              model: model,
-              instructions: ARTIFACT_UPDATE_PROMPT + "\n\nCRITICAL REMINDER: Your response must be ONLY HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.",
+            streamResponse = await openai.responses.create({
+              model: "gpt-4.1",
+              instructions: unifiedSystemPrompt,
               input: aiInput,
               stream: true,
               ...(vectorStoreId && {
-                tools: [
-                  {
-                    type: "file_search",
-                    vector_store_ids: [vectorStoreId],
-                  },
-                ],
+                tools: [{ type: "file_search", vector_store_ids: [vectorStoreId] }],
               }),
             })
-
-            console.log("[Artifact Update Stream API] AI response received, starting streaming")
-
-            // Add timeout for streaming response (5 minutes)
-            const timeoutPromise = new Promise<never>((_, reject) => {
-              setTimeout(() => reject(new Error("Streaming timeout after 5 minutes")), 5 * 60 * 1000)
-            })
-
-            await Promise.race([
-              (async () => {
-                for await (const event of response) {
-                  console.log("[Artifact Update Stream] Event type:", event.type)
-
-                  switch (event.type) {
-                    case "response.created":
-                      console.log("[Artifact Update Stream] Response created")
-                      break
-
-                    case "response.output_text.delta":
-                      // Text chunk received - buffer it
-                      if (event.delta) {
-                        generatedCode += event.delta
-                        buffer += event.delta
-
-                        // Send buffered chunks when they reach the threshold
-                        if (buffer.length >= CHUNK_SIZE) {
-                          controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify({
-                              type: "code",
-                              content: Buffer.from(buffer).toString('base64')
-                            })}\n\n`)
-                          )
-                          buffer = ""
-                        }
-                      }
-                      break
-
-                    case "response.completed":
-                      console.log("[Artifact Update Stream] Response completed")
-                      // Send any remaining buffered content
-                      if (buffer.length > 0) {
-                        controller.enqueue(
-                          encoder.encode(`data: ${JSON.stringify({
-                            type: "code",
-                            content: Buffer.from(buffer).toString('base64')
-                          })}\n\n`)
-                        )
-                        buffer = ""
-                      }
-                      break
-
-                    case "error":
-                      console.error("[Artifact Update Stream] Error event:", event)
-                      throw new Error("Stream error")
-                  }
-                }
-              })(),
-              timeoutPromise
-            ])
-
-            console.log("[Artifact Update Stream] Finished streaming, total code length:", generatedCode.length)
-
-          } catch (streamError: any) {
-            console.error("[Artifact Update Stream] Streaming failed, trying fallback:", streamError)
-
-            try {
-              // Fallback to non-streaming
-              const fallbackResponse = await openai.responses.create({
-                model: model,
-                instructions: ARTIFACT_UPDATE_PROMPT + "\n\nCRITICAL REMINDER: Your response must be ONLY HTML code starting with <!DOCTYPE html> and ending with </html>. No explanations, no descriptions, no markdown formatting.",
-                input: aiInput,
-                stream: false,
-                ...(vectorStoreId && {
-                  tools: [
-                    {
-                      type: "file_search",
-                      vector_store_ids: [vectorStoreId],
-                    },
-                  ],
-                }),
-              })
-
-              generatedCode = fallbackResponse.output_text || ""
-
-              // Simulate streaming by sending buffered chunks
-              let buffer = ""
-              const CHUNK_SIZE = 1024
-
-              for (let i = 0; i < generatedCode.length; i++) {
-                buffer += generatedCode[i]
-
-                if (buffer.length >= CHUNK_SIZE || i === generatedCode.length - 1) {
-                  controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({
-                      type: "code",
-                      content: Buffer.from(buffer).toString('base64')
-                    })}\n\n`)
-                  )
-                  buffer = ""
-                  // Small delay to simulate streaming
-                  await new Promise(resolve => setTimeout(resolve, 10))
-                }
-              }
-
-              console.log("[Artifact Update Stream] Fallback completed, code length:", generatedCode.length)
-            } catch (fallbackError: any) {
-              console.error("[Artifact Update Stream] Fallback also failed:", fallbackError)
-
-              // Send error message to client
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({
-                  type: "error",
-                  error: "Failed to update artifact. OpenAI API is currently experiencing issues. Please try again later."
-                })}\n\n`)
-              )
-              return
-            }
+          } catch (err: any) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", error: "Failed to start AI stream. Please try again." })}\n\n`))
+            controller.close()
+            return
           }
 
-          // Clean up the generated code
-          if (generatedCode) {
-            generatedCode = generatedCode
-              .replace(/^```html\n?/i, "")
-              .replace(/^```\n?/i, "")
-              .replace(/\n?```$/i, "")
-              .trim()
-          }
-
-          // Update artifact's files field if new files were uploaded
-          if (uploadedFiles && uploadedFiles.length > 0) {
-            console.log("[Artifact Update Stream] Updating artifact files field with", uploadedFiles.length, "files")
-
-            // Get existing files from artifact
-            const existingFiles = (artifact.files as unknown as UploadedFile[]) || []
-
-            // Merge new files with existing ones (avoid duplicates by URL)
-            const existingUrls = new Set(existingFiles.map(f => f.url))
-            const newFiles = uploadedFiles.filter((f: UploadedFile) => !existingUrls.has(f.url))
-            const updatedFiles = [...existingFiles, ...newFiles]
-
-            // Update artifact with new files (including extracted content)
-            await prisma.assistantArtifact.update({
-              where: { id: artifactIdInt },
-              data: {
-                files: updatedFiles as any, // Store files with extracted content
-                updatedAt: new Date()
-              }
-            })
-
-            console.log("[Artifact Update Stream] Artifact files updated. Total files:", updatedFiles.length)
-          }
-
-          // Create a new version with the AI-generated code
-          // This will create a new version based on the ACTIVE version's code
-          // and set it as the new active version (setAsActive: true)
-          const versionResult = await createArtifactVersion({
-            artifactId: artifactIdInt,
-            userId: userId,
-            code: generatedCode,
-            description: `AI update: ${userPrompt?.substring(0, 100) || 'Updated with files'}`,
-            changeType: 'ai',
-            setAsActive: true // ✅ This will update artifact.activeVersionId to this new version
-          })
-
-          if (!versionResult.success) {
-            throw new Error(versionResult.error || "Failed to create artifact version")
-          }
-
-          console.log("[Artifact Update Stream] New artifact version created:", versionResult.version?.versionNumber)
-
-          // Send completion signal
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: "done", code: generatedCode })}\n\n`)
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Streaming timeout after 5 minutes")), 5 * 60 * 1000)
           )
 
+          await Promise.race([
+            (async () => {
+              for await (const event of streamResponse!) {
+                if (event.type === "response.output_text.delta" && event.delta) {
+                  fullText += event.delta
+
+                  // ── Detect mode from prefix tokens ─────────────────────────
+                  if (detectedMode === null) {
+                    prefixBuffer += event.delta
+                    if (prefixBuffer.length < 8) continue
+
+                    const trimmed = prefixBuffer.trimStart()
+                    if (trimmed.startsWith("[QA]")) {
+                      detectedMode = "qa"
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "mode", mode: "qa" })}\n\n`))
+                      buffer = trimmed.replace(/^\[QA\]\s*/i, "")
+                    } else if (trimmed.startsWith("[UPDATE]")) {
+                      detectedMode = "modify"
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "mode", mode: "modify" })}\n\n`))
+                      buffer = trimmed.replace(/^\[UPDATE\]\s*/i, "")
+                    } else if (prefixBuffer.length >= 30) {
+                      // No recognised prefix — default to modify
+                      detectedMode = "modify"
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "mode", mode: "modify" })}\n\n`))
+                      buffer = prefixBuffer
+                    } else {
+                      continue
+                    }
+                    prefixBuffer = ""
+                  } else {
+                    buffer += event.delta
+                  }
+
+                  // ── Stream by mode ─────────────────────────────────────────
+                  if (detectedMode === "qa") {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "qa_response", content: buffer })}\n\n`))
+                    buffer = ""
+                  } else if (detectedMode === "modify" && buffer.length >= CHUNK_SIZE) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "code", content: Buffer.from(buffer).toString("base64") })}\n\n`))
+                    buffer = ""
+                  }
+
+                } else if (event.type === "response.completed") {
+                  // Flush remaining buffer
+                  if (buffer.length > 0) {
+                    if (detectedMode === "qa") {
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "qa_response", content: buffer })}\n\n`))
+                    } else {
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "code", content: Buffer.from(buffer).toString("base64") })}\n\n`))
+                    }
+                    buffer = ""
+                  }
+                }
+              }
+            })(),
+            timeoutPromise,
+          ])
+
+          // ── Q&A complete — no artifact update ─────────────────────────────
+          if (detectedMode === "qa") {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "qa_done" })}\n\n`))
+            controller.close()
+            return
+          }
+
+          // ── Modify complete — clean, save, notify ──────────────────────────
+          let generatedCode = fullText
+            .replace(/^\s*\[UPDATE\]\s*/i, "")
+            .replace(/^```html\n?/i, "")
+            .replace(/^```\n?/i, "")
+            .replace(/\n?```$/i, "")
+            .trim()
+
+          if (!generatedCode) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", error: "AI returned empty code. Please try again." })}\n\n`))
+            controller.close()
+            return
+          }
+
+          // Persist new uploaded files
+          if (uploadedFiles && uploadedFiles.length > 0) {
+            const existingFiles = (artifact.files as unknown as UploadedFile[]) || []
+            const existingUrls = new Set(existingFiles.map((f: UploadedFile) => f.url))
+            const merged = [...existingFiles, ...uploadedFiles.filter((f: UploadedFile) => !existingUrls.has(f.url))]
+            await prisma.assistantArtifact.update({ where: { id: artifactIdInt }, data: { files: merged as any, updatedAt: new Date() } })
+          }
+
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "artifact_updating" })}\n\n`))
+
+          const versionResult = await createArtifactVersion({
+            artifactId: artifactIdInt,
+            userId,
+            code: generatedCode,
+            description: `AI update: ${userPrompt?.substring(0, 100) || "Updated with files"}`,
+            changeType: "ai",
+            setAsActive: true,
+          })
+
+          if (!versionResult.success) throw new Error(versionResult.error || "Failed to create artifact version")
+
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: "done",
+            code: generatedCode,
+            message: `I've updated "${artifact.name}". Version ${versionResult.version?.versionNumber || ""} is now active.`,
+          })}\n\n`))
           controller.close()
 
         } catch (error) {
-          console.error("[Artifact Update Stream] Streaming error:", error)
-
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({
-              type: "error",
-              error: error instanceof Error ? error.message : "Unknown error"
-            })}\n\n`)
-          )
+          console.error("[Artifact Update Stream] Error:", error)
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", error: error instanceof Error ? error.message : "Unknown error" })}\n\n`))
           controller.close()
         }
-      }
+      },
     })
 
     return new Response(stream, {
       headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
       },
     })
 
@@ -487,7 +433,7 @@ ${allFiles.length > 0 ? 'IMPORTANT INSTRUCTIONS FOR FILES:\n- If images are prov
     console.error("[Artifact Update Stream] Setup error:", error)
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { status: 500, headers: { "Content-Type": "application/json" } }
     )
   }
 }

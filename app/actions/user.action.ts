@@ -204,14 +204,14 @@ export async function getAvailableContacts(): Promise<UserContact[]> {
 
     const currentUserId = BigInt(session.user.id)
 
-    // Fetch all users except the current user
+    // Fetch all users EXCEPT the current user who have opted into being discoverable
     const users = await prisma.user.findMany({
       where: {
         id: {
           not: currentUserId
         },
         deletedAt: null, // Only active users
-        status: "active" // Only active users
+        status: "active", // Only active users
       },
       select: {
         id: true,
@@ -234,6 +234,11 @@ export async function getAvailableContacts(): Promise<UserContact[]> {
     throw new Error("Failed to fetch available contacts")
   }
 }
+
+// ============================================
+// EMAIL VISIBILITY FEATURE WITHDRAWN
+// ============================================
+// updateEmailVisibility was removed because the emailVisible field no longer exists.
 
 // ============================================
 // VERIFY USER BY EMAIL

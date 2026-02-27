@@ -1,8 +1,12 @@
+"use client"
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { LoginForm } from "@/components/auth/login-form"
+import { useLocale } from "@/lib/i18n"
 
 export default function LoginPage() {
+    const { t } = useLocale()
     return (
         <div className="grid min-h-svh lg:grid-cols-2">
             <div className="flex flex-col gap-4 p-6 md:p-10">
@@ -41,38 +45,38 @@ export default function LoginPage() {
                     <div className="max-w-lg space-y-8 animate-fade-in text-white">
                         <div className="space-y-3">
                             <h1 className="text-5xl font-bold tracking-tight drop-shadow-lg animate-scale-in">
-                                Welcome Back!
+                                {t("auth.heroTitle")}
                             </h1>
                             <p className="text-xl drop-shadow-md animate-fade-in">
-                                We&apos;re so happy to see you again.
+                                {t("auth.heroSubtitle")}
                             </p>
                         </div>
 
                         <div className="space-y-6 pt-4">
                             <div className="space-y-2 border-l-4 border-white/80 pl-4 animate-fade-in-up animation-delay-200">
                                 <h2 className="text-xl font-semibold">
-                                    Quick Access
+                                    {t("auth.heroFeature1Title")}
                                 </h2>
                                 <p className="text-sm leading-relaxed">
-                                    Login to access all your favorite features.
+                                    {t("auth.heroFeature1Desc")}
                                 </p>
                             </div>
 
                             <div className="space-y-2 border-l-4 border-white/80 pl-4 animate-fade-in-up animation-delay-400">
                                 <h2 className="text-xl font-semibold">
-                                    Secure Login
+                                    {t("auth.heroFeature2Title")}
                                 </h2>
                                 <p className="text-sm leading-relaxed">
-                                    Your account is protected with best-in-class security.
+                                    {t("auth.heroFeature2Desc")}
                                 </p>
                             </div>
 
                             <div className="space-y-2 border-l-4 border-white/80 pl-4 animate-fade-in-up animation-delay-600">
                                 <h2 className="text-xl font-semibold">
-                                    Stay Updated
+                                    {t("auth.heroFeature3Title")}
                                 </h2>
                                 <p className="text-sm leading-relaxed">
-                                    Get notified about new features and updates.
+                                    {t("auth.heroFeature3Desc")}
                                 </p>
                             </div>
                         </div>

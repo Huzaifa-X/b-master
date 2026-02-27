@@ -4,10 +4,10 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { NotificationsDropdown } from "@/components/notifications/notifications-dropdown"
 import { ShareDialog } from "@/components/assistants/share-dialog"
 import { Button } from "@/components/ui/button"
-import { Share2, Pin, Loader2, Users } from "lucide-react"
+import { Share2, Pin, Loader2, Users, X } from "lucide-react"
 import { toast } from "sonner"
 import { useAssistantStore } from "@/lib/stores/assistant-store"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { usePinnedAssistants } from "@/hooks/usePinnedAssistants"
 import { useMemo } from "react"
 import { useSpecificChat } from "@/hooks/useSpecificChat"
@@ -16,6 +16,7 @@ import { Skeleton } from "../ui/skeleton"
 export function SiteHeader() {
   const assistantStore = useAssistantStore()
   const pathname = usePathname()
+  const router = useRouter()
   const isMessagesPage = pathname.includes("/messages")
   const { assistants, togglePin, isToggling } = usePinnedAssistants()
 
@@ -34,7 +35,7 @@ export function SiteHeader() {
     // Only treat as chat if the third segment is not a known non-chat route
     if (pathname.startsWith("/assistants/")) {
       const parts = pathname.split("/")
-      const nonChatRoutes = ["contacts", "messages", "news", "artifacts", "add", "profile"]
+      const nonChatRoutes = ["contacts", "messages", "news", "artifacts", "add", "profile", "b-coder"]
       const thirdSegment = parts.length >= 4 ? parts[3] : null
       const isChat = thirdSegment && !nonChatRoutes.includes(thirdSegment)
 
@@ -85,6 +86,16 @@ export function SiteHeader() {
   const handleTogglePin = async () => {
     if (!assistantStore.currentAssistantId) return
     togglePin(assistantStore.currentAssistantId)
+  }
+
+  const handleCloseChat = () => {
+    // Dispatch event so ChatPageView can call cancelStreaming/cleanup before unmount
+    window.dispatchEvent(new CustomEvent("close-chat-requested"))
+    if (isAskBMode) {
+      router.push("/ask-b")
+    } else if (assistantIdFromPath) {
+      router.push(`/assistants/${assistantIdFromPath}`)
+    }
   }
 
   const handleShareRegistration = async () => {
@@ -173,20 +184,31 @@ export function SiteHeader() {
 
           {/* Show chat share button when chat is open, otherwise notifications */}
           {isChatPage && chatId && !isAssistantAddPage ? (
-            <ShareDialog
-              shareableId={chatData?.shareableId || ""}
-              chatTopic={chatData?.topic}
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  title="Share conversation"
-                >
-                  <Share2 className="h-4 w-4" />
-                </Button>
-              }
-            />
+            <>
+              <ShareDialog
+                shareableId={chatData?.shareableId || ""}
+                chatTopic={chatData?.topic}
+                trigger={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    title="Share conversation"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </Button>
+                }
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
+                title="Close chat"
+                onClick={handleCloseChat}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </>
           ) : (
             <NotificationsDropdown />
           )}

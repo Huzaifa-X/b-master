@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Bell, X, Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Bell, X, Loader2, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -13,10 +14,12 @@ import { useUserNotifications, useUnreadCount, useMarkAsRead, useMarkAllAsRead }
 import { useNotifications } from "@/context/notificationContext"
 import { formatRelativeTime } from "@/lib/utils/date"
 import { Notification } from "@/types/notification"
+import { getNotificationUrl } from "@/lib/utils/notification-url"
 
 type FilterType = 'all' | 'unread'
 
 export function NotificationsDropdown() {
+  const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [filter, setFilter] = useState<FilterType>('all')
   
@@ -100,6 +103,18 @@ export function NotificationsDropdown() {
       } catch (error) {
         console.error('Failed to mark notification as read:', error)
       }
+    }
+  }
+
+  const handleNotificationClick = async (notification: Notification) => {
+    // Mark as read
+    await handleMarkAsRead(notification)
+
+    // Navigate if there is a destination URL
+    const url = getNotificationUrl(notification)
+    if (url) {
+      setIsOpen(false)
+      router.push(url)
     }
   }
 
@@ -192,42 +207,53 @@ export function NotificationsDropdown() {
               </p>
             </div>
           ) : (
-            displayedNotifications.map((notification) => (
-              <div
-                key={notification.id}
-                className={cn(
-                  "group relative px-4 sm:px-6 py-3 sm:py-4 hover:bg-muted/50 cursor-pointer transition-all duration-200 border-b last:border-b-0",
-                  !notification.isRead && "bg-primary/5"
-                )}
-                onClick={() => handleMarkAsRead(notification)}
-              >
-                <div className="flex gap-3 items-start">
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs sm:text-sm text-foreground leading-relaxed line-clamp-2 sm:line-clamp-3">
-                          {notification.title}
-                        </p>
-                        {notification.message && (
-                          <p className="text-xs sm:text-sm text-muted-foreground mt-1 whitespace-pre-wrap break-words">
-                            {notification.message}
+            displayedNotifications.map((notification) => {
+              const url = getNotificationUrl(notification)
+              const isNavigable = !!url
+              return (
+                <div
+                  key={notification.id}
+                  className={cn(
+                    "group relative px-4 sm:px-6 py-3 sm:py-4 hover:bg-muted/50 transition-all duration-200 border-b last:border-b-0",
+                    isNavigable ? "cursor-pointer" : "cursor-default",
+                    !notification.isRead && "bg-primary/5"
+                  )}
+                  onClick={() => handleNotificationClick(notification)}
+                >
+                  <div className="flex gap-3 items-start">
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className={cn(
+                            "text-xs sm:text-sm text-foreground leading-relaxed line-clamp-2 sm:line-clamp-3",
+                            isNavigable && "group-hover:text-primary transition-colors"
+                          )}>
+                            {notification.title}
                           </p>
-                        )}
-                      </div>
-                      <div className="flex items-start gap-1.5 sm:gap-2 flex-shrink-0">
-                        <span className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
-                          {formatRelativeTime(notification.createdAt)}
-                        </span>
-                        {!notification.isRead && (
-                          <div className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0 mt-0.5" />
-                        )}
+                          {notification.message && (
+                            <p className="text-xs sm:text-sm text-muted-foreground mt-1 whitespace-pre-wrap break-words">
+                              {notification.message}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                          <span className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
+                            {formatRelativeTime(notification.createdAt)}
+                          </span>
+                          {!notification.isRead && (
+                            <div className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0" />
+                          )}
+                          {isNavigable && (
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
       </DropdownMenuContent>

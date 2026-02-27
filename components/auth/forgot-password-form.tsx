@@ -13,6 +13,7 @@ import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useForgotPasswordMutation } from "@/hooks/useAuth"
+import { useLocale } from "@/lib/i18n"
 
 export function ForgotPasswordForm({
   className,
@@ -20,6 +21,7 @@ export function ForgotPasswordForm({
 }: React.ComponentProps<"form">) {
   const router = useRouter()
   const forgotPasswordMutation = useForgotPasswordMutation()
+  const { t } = useLocale()
   
   const [email, setEmail] = useState("")
   const [error, setError] = useState("")
@@ -49,18 +51,18 @@ export function ForgotPasswordForm({
     <form className={cn("flex flex-col gap-6", className)} {...props} onSubmit={handleSubmit}>
       <FieldGroup>
         <div className="flex flex-col items-center gap-1 text-center">
-          <h1 className="text-2xl font-bold">Reset your password</h1>
+          <h1 className="text-2xl font-bold">{t("auth.resetPassword")}</h1>
           <p className="text-muted-foreground text-sm text-balance">
-            Enter your email below to reset your password
+            {t("auth.resetSubtitle")}
           </p>
         </div>
         
         <Field>
-          <FieldLabel htmlFor="email">Email</FieldLabel>
+          <FieldLabel htmlFor="email">{t("auth.email")}</FieldLabel>
           <Input
             id="email"
             type="email"
-            placeholder="Enter your email address"
+            placeholder={t("auth.emailAddressPlaceholder")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className={cn(
@@ -84,22 +86,22 @@ export function ForgotPasswordForm({
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending...
+                {t("common.sending")}
               </>
             ) : (
-              "Send Verification Code"
+              t("auth.sendVerificationCode")
             )}
           </Button>
         </Field>
         
         <Field>
           <FieldDescription className="text-center">
-            Remember your password?{" "}
+            {t("auth.rememberPassword")}{" "}
             <a 
               href="/login" 
               className="underline underline-offset-4 hover:text-blue-600 transition-colors duration-200"
             >
-              Back to login
+              {t("auth.backToLogin")}
             </a>
           </FieldDescription>
         </Field>
