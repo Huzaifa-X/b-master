@@ -6,6 +6,7 @@ import { NavMain } from "@/components/layout/nav-main"
 import { NavList } from "@/components/layout/nav-list"
 import { NavUser } from "@/components/layout/nav-user"
 import { Header } from "@/components/layout/sidebar-header"
+import { SidebarPromotion } from "@/components/layout/sidebar/sidebar-promotion"
 import {
   Sidebar,
   SidebarContent,
@@ -37,6 +38,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <NavList />
         </div>
       </SidebarContent>
+      <SidebarPromotion />
       <SidebarFooter>
         <NavUser user={session?.user as NavUserType} />
       </SidebarFooter>
