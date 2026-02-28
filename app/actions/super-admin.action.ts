@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
 import { SA_EMAIL, SA_PASSWORD, SA_COOKIE, signToken, getSuperAdminSession } from "@/lib/super-admin-auth"
 import bcrypt from "bcryptjs"
+import { stripe } from "@/lib/stripe"
 
 // ─── Auth ────────────────────────────────────────────────────
 export async function loginSuperAdmin(formData: FormData) {
@@ -241,4 +242,240 @@ export async function getMessages(page = 1, search = "", msgType = "chat", limit
     ])
     return { messages: messages.map((m) => ({ ...m })), total, pages: Math.ceil(total / limit) }
   }
+}
+
+// ─── Coupons ─────────────────────────────────────────────────
+export async function getStripeCoupons(): Promise<{ coupons: any[]; error?: string }> {
+  await requireAdmin()
+  try {
+    const stripeKey = process.env.STRIPE_SECRET_KEY
+    console.log("[getStripeCoupons] key prefix:", stripeKey?.slice(0, 12))
+    const coupons = await stripe.coupons.list({ limit: 100 })
+    console.log("[getStripeCoupons] count:", coupons.data.length)
+    return {
+      coupons: coupons.data.map((c) => ({
+        id: c.id,
+        name: c.name ?? c.id,
+        percentOff: c.percent_off ?? null,
+        amountOff: c.amount_off ? c.amount_off / 100 : null,
+        currency: c.currency ?? null,
+        duration: c.duration,
+        durationInMonths: c.duration_in_months ?? null,
+        timesRedeemed: c.times_redeemed,
+        maxRedemptions: c.max_redemptions ?? null,
+        valid: c.valid,
+      })),
+    }
+  } catch (err: any) {
+    console.error("[getStripeCoupons] Stripe error:", err?.message)
+    return { coupons: [], error: err?.message ?? "Failed to fetch coupons from Stripe" }
+  }
+}
+
+export async function adminAssignCoupon(
+  userId: string,
+  stripeCouponId: string,
+  customCodePrefix = "GIFT"
+) {
+  await requireAdmin()
+  const targetUserId = BigInt(userId)
+
+  const user = await prisma.user.findUnique({ where: { id: targetUserId } })
+  if (!user) return { success: false, error: "User not found" }
+
+  const stripeCoupon = await stripe.coupons.retrieve(stripeCouponId)
+
+  const uniqueSuffix = Math.random().toString(36).substring(2, 8).toUpperCase()
+  const code = `${customCodePrefix}-${uniqueSuffix}`
+
+  const stripePromo = await stripe.promotionCodes.create({
+    coupon: stripeCouponId,
+    code,
+    max_redemptions: 1,
+    ...(user.stripeCustomerId ? { customer: user.stripeCustomerId } : {}),
+  } as any)
+
+  const promotion = await prisma.userPromotion.create({
+    data: {
+      userId: targetUserId,
+      stripeCouponId: stripeCoupon.id,
+      stripePromotionCodeId: stripePromo.id,
+      code: stripePromo.code,
+      discountPercent: stripeCoupon.percent_off ?? null,
+      discountAmount: stripeCoupon.amount_off ? stripeCoupon.amount_off / 100 : null,
+      isActive: true,
+    },
+  })
+
+  revalidatePath("/super-admin/coupons")
+  return {
+    success: true,
+    promotion: {
+      id: promotion.id,
+      code: promotion.code,
+      discountPercent: promotion.discountPercent ? Number(promotion.discountPercent) : null,
+      discountAmount: promotion.discountAmount ? Number(promotion.discountAmount) : null,
+    },
+  }
+}
+
+export async function getUserPromotions(page = 1, search = "", limit = 20) {
+  await requireAdmin()
+  const skip = (page - 1) * limit
+  const where = search
+    ? {
+        user: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" as const } },
+            { name: { contains: search, mode: "insensitive" as const } },
+          ],
+        },
+      }
+    : {}
+
+  const [promotions, total] = await Promise.all([
+    prisma.userPromotion.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: "desc" },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    }),
+    prisma.userPromotion.count({ where }),
+  ])
+
+  return {
+    promotions: promotions.map((p) => ({
+      id: p.id,
+      code: p.code,
+      stripeCouponId: p.stripeCouponId,
+      stripePromotionCodeId: p.stripePromotionCodeId,
+      discountPercent: p.discountPercent ? Number(p.discountPercent) : null,
+      discountAmount: p.discountAmount ? Number(p.discountAmount) : null,
+      isActive: p.isActive,
+      redeemedAt: p.redeemedAt,
+      expiresAt: p.expiresAt,
+      createdAt: p.createdAt,
+      user: { ...p.user, id: String(p.user.id) },
+    })),
+    total,
+    pages: Math.ceil(total / limit),
+  }
+}
+
+export async function revokeUserPromotion(promotionId: number) {
+  await requireAdmin()
+  const promo = await prisma.userPromotion.findUnique({ where: { id: promotionId } })
+  if (!promo) return { success: false, error: "Promotion not found" }
+
+  // Deactivate the Stripe promotion code
+  try {
+    await stripe.promotionCodes.update(promo.stripePromotionCodeId, { active: false })
+  } catch {
+    // Stripe code may already be inactive — continue
+  }
+
+  await prisma.userPromotion.update({ where: { id: promotionId }, data: { isActive: false } })
+  revalidatePath("/super-admin/coupons")
+  return { success: true }
+}
+
+// ─── Banners ──────────────────────────────────────────────────────────────────
+export async function getAdminBanners() {
+  await requireAdmin()
+  const banners = await prisma.banner.findMany({
+    where: { deletedAt: null },
+    orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+    include: { _count: { select: { dismissedBy: true } } },
+  })
+  return banners.map((b) => ({
+    ...b,
+    targetPlanIds: b.targetPlanIds as number[],
+    _count: b._count,
+  }))
+}
+
+export async function createBanner(data: {
+  name: string
+  message: string
+  buttonText?: string
+  buttonUrl?: string
+  type: "INFO" | "WARNING" | "PROMO" | "ANNOUNCEMENT"
+  targetAudience: "ALL" | "FREE_USERS" | "PAID_USERS" | "SPECIFIC_PLANS"
+  targetPlanIds?: number[]
+  isActive?: boolean
+  startDate?: string
+  endDate?: string
+  priority?: number
+}) {
+  await requireAdmin()
+  const banner = await prisma.banner.create({
+    data: {
+      name: data.name,
+      message: data.message,
+      buttonText: data.buttonText || null,
+      buttonUrl: data.buttonUrl || null,
+      type: data.type,
+      targetAudience: data.targetAudience,
+      targetPlanIds: data.targetPlanIds ?? [],
+      isActive: data.isActive ?? true,
+      startDate: data.startDate ? new Date(data.startDate) : null,
+      endDate: data.endDate ? new Date(data.endDate) : null,
+      priority: data.priority ?? 0,
+    },
+  })
+  revalidatePath("/super-admin/banners")
+  return { success: true, banner }
+}
+
+export async function updateBanner(
+  id: number,
+  data: {
+    name?: string
+    message?: string
+    buttonText?: string | null
+    buttonUrl?: string | null
+    type?: "INFO" | "WARNING" | "PROMO" | "ANNOUNCEMENT"
+    targetAudience?: "ALL" | "FREE_USERS" | "PAID_USERS" | "SPECIFIC_PLANS"
+    targetPlanIds?: number[]
+    isActive?: boolean
+    startDate?: string | null
+    endDate?: string | null
+    priority?: number
+  }
+) {
+  await requireAdmin()
+  await prisma.banner.update({
+    where: { id },
+    data: {
+      ...data,
+      startDate: data.startDate === null ? null : data.startDate ? new Date(data.startDate) : undefined,
+      endDate: data.endDate === null ? null : data.endDate ? new Date(data.endDate) : undefined,
+    },
+  })
+  revalidatePath("/super-admin/banners")
+  return { success: true }
+}
+
+export async function toggleBannerActive(id: number, isActive: boolean) {
+  await requireAdmin()
+  await prisma.banner.update({ where: { id }, data: { isActive } })
+  revalidatePath("/super-admin/banners")
+  return { success: true }
+}
+
+export async function deleteBanner(id: number) {
+  await requireAdmin()
+  await prisma.banner.update({ where: { id }, data: { deletedAt: new Date() } })
+  revalidatePath("/super-admin/banners")
+  return { success: true }
+}
+
+export async function getAdminPlansSimple() {
+  await requireAdmin()
+  return prisma.plan.findMany({
+    where: { isActive: true, deletedAt: null },
+    select: { id: true, title: true },
+    orderBy: { amount: "asc" },
+  })
 }

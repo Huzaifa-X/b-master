@@ -6,7 +6,7 @@ import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
   LayoutDashboard, FileText, Megaphone, BarChart3,
-  MessageSquare, Users, CreditCard, Shield, LogOut,
+  MessageSquare, Users, CreditCard, Shield, LogOut, Tag,
 } from "lucide-react"
 import { logoutSuperAdmin } from "@/app/actions/super-admin.action"
 import { cn } from "@/lib/utils"
@@ -19,6 +19,7 @@ const navItems = [
   { href: "/super-admin/analytics",  label: "Analytics",    icon: BarChart3 },
   { href: "/super-admin/messages",   label: "Messages",     icon: MessageSquare },
   { href: "/super-admin/banners",    label: "Banners",      icon: Megaphone },
+  { href: "/super-admin/coupons",    label: "Coupons",      icon: Tag },
 ]
 
 export function SaNav() {
