@@ -3,6 +3,7 @@ import { getArtifactById, getArtifacts, getArtifactVersions, setActiveArtifactVe
 import { updateArtifactWithAI, type UpdateArtifactParams, type UpdateArtifactResult } from "@/app/actions/update-artifact.action"
 import { getArtifactEditData, updateArtifact, type EditArtifactParams } from "@/app/actions/edit-artifact.action"
 import { toast } from "sonner"
+import { triggerArtifactJobsRefresh } from "@/hooks/useArtifactJobs"
 
 interface ArtifactData {
   id: string
@@ -511,8 +512,11 @@ export function useCreateArtifact(options?: UseCreateArtifactOptions) {
       queryClient.invalidateQueries({ queryKey: ["artifacts", variables.assistantId] })
       queryClient.invalidateQueries({ queryKey: ["artifacts"] })
 
+      // Kick the jobs tray so it picks up the new background job immediately
+      triggerArtifactJobsRefresh().catch(() => null)
+
       // Show success toast
-      toast.success("Artifact created successfully!")
+      toast.success("Artifact created — generating in background…")
 
       // Call custom success callback
       if (result.artifact) {

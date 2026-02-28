@@ -82,6 +82,7 @@ export const fr: TranslationKeys = {
     store: "Boutique Bmaster",
     contacts: "Contacts",
     addAssistants: "Ajouter des assistants",
+    apiSetupGuide: "Guide de configuration API",
     home: "Accueil",
     dashboard: "Tableau de bord",
     profile: "Profil",

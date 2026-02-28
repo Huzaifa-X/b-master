@@ -9,6 +9,7 @@ import { SiteHeader } from "@/components/layout/site-header"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { OnboardingTour } from "@/components/shared/onboarding-tour"
 import { PromotionBanner } from "@/components/layout/promotion-banner"
+import { ArtifactJobsTray } from "@/components/artifacts/artifact-jobs-tray"
 
 export default function DashboardLayout({
   children,
@@ -29,6 +30,7 @@ export default function DashboardLayout({
             </SidebarInset>
           </div>
           <OnboardingTour />
+          <ArtifactJobsTray />
         </SidebarProvider>
     </ProtectedRoute>
   )

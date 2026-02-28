@@ -702,12 +702,14 @@ export async function getArtifacts(assistantId: string) {
         const userId = BigInt(session.user.id)
         const assistantIdBigInt = BigInt(assistantId)
 
-        // Check if user has access to the assistant (purchased or is a contact)
-        const hasAssistantAccess = await prisma.assistant.findFirst({
+        const isAssistantOwner = await prisma.assistant.findFirst({
+            where: { id: assistantIdBigInt, userId: userId }
+        })
+
+        const hasAssistantAccess = isAssistantOwner || await prisma.assistant.findFirst({
             where: {
                 id: assistantIdBigInt,
                 OR: [
-                    { userId: userId }, // User is the assistant owner
                     {
                         purchases: {
                             some: {
@@ -735,22 +737,22 @@ export async function getArtifacts(assistantId: string) {
 
         // Build OR conditions dynamically
         const orConditions: any[] = [
-            { userId: userId }, // User is OWNER
+            { userId: userId }, // User is OWNER of the artifact (includes buyer's own copies)
             {
                 permissions: {
                     some: {
-                        userId: userId // User has explicit permission
+                        userId: userId // User has explicit permission (legacy: old purchases with VIEWER grants)
                     }
                 }
             },
             { isPublic: true } // Public artifacts
         ]
 
-        // If user has assistant access, add condition to match ALL artifacts
-        if (hasAssistantAccess) {
-            // Remove all other conditions and just match by assistantId
-            // This is handled by the parent where clause
-            orConditions.push({ id: { gt: 0 } }) // Match all artifacts (id > 0)
+        // ONLY the assistant owner sees all artifacts in the assistant.
+        // Buyers see only their own copies (userId = userId above) plus any
+        // explicit permissions, keeping creator originals private from buyers.
+        if (isAssistantOwner) {
+            orConditions.push({ id: { gt: 0 } }) // Match all artifacts in the assistant
         }
 
         console.log(`[Get Artifacts] Query conditions - hasAssistantAccess: ${!!hasAssistantAccess}, OR conditions count: ${orConditions.length}`)
@@ -879,12 +881,16 @@ export async function getArtifactById(artifactId: string) {
             }
         }
 
-        // Check if user has access to the assistant (purchased or is a contact)
-        const hasAssistantAccess = await prisma.assistant.findFirst({
+        // Check if user is the assistant owner
+        const isAssistantOwner = await prisma.assistant.findFirst({
+            where: { id: artifactLookup.assistantId, userId: userId }
+        })
+
+        // Check if user has any access to the assistant (for logging/audit)
+        const hasAssistantAccess = isAssistantOwner || await prisma.assistant.findFirst({
             where: {
                 id: artifactLookup.assistantId,
                 OR: [
-                    { userId: userId }, // User is the assistant owner
                     {
                         purchases: {
                             some: {
@@ -908,20 +914,21 @@ export async function getArtifactById(artifactId: string) {
 
         // Build OR conditions dynamically
         const orConditions: any[] = [
-            { userId: userId }, // OWNER
+            { userId: userId }, // OWNER of the artifact (includes buyer's own copies)
             {
                 permissions: {
                     some: {
-                        userId: userId // Has explicit permission
+                        userId: userId // Has explicit permission (legacy VIEWER grants)
                     }
                 }
             },
             { isPublic: true } // Public
         ]
 
-        // If user has assistant access, add condition to match ALL artifacts
-        if (hasAssistantAccess) {
-            orConditions.push({ id: { gt: 0 } }) // Match all artifacts (id > 0)
+        // Only the assistant owner can see all artifacts (including creator originals).
+        // Buyers see only their own copies or artifacts with explicit permissions.
+        if (isAssistantOwner) {
+            orConditions.push({ id: { gt: 0 } }) // Match all artifacts in the assistant
         }
 
         console.log(`[Get Artifact By ID] Artifact ${artifactIdInt} - hasAssistantAccess: ${!!hasAssistantAccess}, OR conditions: ${orConditions.length}`)

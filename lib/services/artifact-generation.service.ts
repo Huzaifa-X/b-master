@@ -21,6 +21,7 @@ import {
   markJobAsCompleted,
   markJobAsFailed,
 } from "@/lib/queues/artifact-generation.queue"
+import { sendNotification } from "@/lib/pusher"
 
 // ─── Generation parameters ───────────────────────────────────────────────────
 const GENERATION_TEMPERATURE = 0.3
@@ -283,6 +284,21 @@ CRITICAL: Output ONLY the complete HTML code starting with <!DOCTYPE html> and e
 
     console.log(`[ArtifactGenService] ✅ Completed job ${jobId}`)
 
+    // Notify the user via Pusher so the jobs tray and artifact list can refresh
+    if (userId) {
+      try {
+        await sendNotification(userId, "artifact-job-update", {
+          jobId,
+          artifactId,
+          artifactName: artifact.name,
+          status: "completed",
+          versionNumber: versionResult.version?.versionNumber,
+        })
+      } catch (pusherErr) {
+        console.warn("[ArtifactGenService] Pusher notification failed (non-fatal):", pusherErr)
+      }
+    }
+
     return {
       success: true,
       code: generatedCode,
@@ -291,6 +307,30 @@ CRITICAL: Output ONLY the complete HTML code starting with <!DOCTYPE html> and e
   } catch (error: any) {
     console.error(`[ArtifactGenService] ❌ Failed job ${jobId}:`, error)
     await markJobAsFailed(jobId, error.message || "Unknown error")
+
+    // Notify failure so the tray can show the error state
+    try {
+      const failJobRecord = await prisma.artifactGenerationJob.findUnique({
+        where: { id: jobId },
+        select: { metadata: true, artifact: { select: { name: true } } },
+      })
+      const failUserId =
+        failJobRecord?.metadata && typeof failJobRecord.metadata === "object"
+          ? (failJobRecord.metadata as any).userId
+          : null
+      if (failUserId) {
+        await sendNotification(failUserId, "artifact-job-update", {
+          jobId,
+          artifactId,
+          artifactName: failJobRecord?.artifact?.name ?? "Artifact",
+          status: "failed",
+          error: error.message || "Unknown error",
+        })
+      }
+    } catch {
+      // ignore secondary errors
+    }
+
     throw error
   }
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { MessageCircle, Sparkles, Store, Users, Plus } from "lucide-react"
+import { MessageCircle, Sparkles, Store, Users, Plus, Map } from "lucide-react"
 import Link from "next/link"
 
 import {
@@ -30,6 +30,7 @@ export function NavMainDefault({ currentPath }: { currentPath: string }) {
     { titleKey: "nav.store",        url: "/store",          icon: Store,    dataTour: "store" },
     { titleKey: "nav.contacts",     url: "/contacts",       icon: Users,    dataTour: "contacts" },
     { titleKey: "nav.addAssistants",url: "/assistants/add", icon: Plus,     dataTour: "add-assistant" },
+    { titleKey: "nav.apiSetupGuide", url: "/api-setup",      icon: Map,      dataTour: "api-setup" },
   ]
 
   return (

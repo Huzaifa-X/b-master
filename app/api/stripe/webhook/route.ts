@@ -166,6 +166,101 @@ export async function POST(req: NextRequest) {
                             });
                             console.log(`✅ AssistantContact created for buyer`);
                         }
+
+                        // -------------------------------------------------------
+                        // COPY ARTIFACTS FOR BUYER
+                        // Each buyer gets their own editable copy of every artifact
+                        // that the creator has published on this assistant.
+                        // -------------------------------------------------------
+                        try {
+                            const originalArtifacts = await prisma.assistantArtifact.findMany({
+                                where: {
+                                    assistantId: assistantIdBigInt,
+                                    userId: assistant.userId, // only the creator's original artifacts
+                                    deletedAt: null,
+                                },
+                                include: {
+                                    activeVersion: true,
+                                },
+                            });
+
+                            let copiedCount = 0;
+                            for (const artifact of originalArtifacts) {
+                                // Idempotency: skip if buyer already has a copy
+                                const existingCopy = await prisma.assistantArtifact.findFirst({
+                                    where: {
+                                        assistantId: assistantIdBigInt,
+                                        userId: userId,
+                                        name: artifact.name,
+                                        deletedAt: null,
+                                    },
+                                });
+                                if (existingCopy) continue;
+
+                                // Create the buyer's personal artifact copy
+                                const buyerArtifact = await prisma.assistantArtifact.create({
+                                    data: {
+                                        assistantId: assistantIdBigInt,
+                                        userId: userId,
+                                        name: artifact.name,
+                                        instructions: artifact.instructions,
+                                        category: artifact.category,
+                                        tools: artifact.tools as any,
+                                        apiKeys: artifact.apiKeys as any,
+                                        isPublic: false,
+                                        files: artifact.files as any,
+                                        images: artifact.images as any,
+                                        thumbnailUrl: artifact.thumbnailUrl,
+                                        videoMetadata: artifact.videoMetadata as any,
+                                        videoUrl: artifact.videoUrl,
+                                    },
+                                });
+
+                                // Copy the active version's code into version 1 of the copy
+                                if (artifact.activeVersion?.code) {
+                                    const buyerVersion = await prisma.artifactVersion.create({
+                                        data: {
+                                            artifactId: buyerArtifact.id,
+                                            userId: userId,
+                                            versionNumber: 1,
+                                            versionName: artifact.activeVersion.versionName ?? "Version 1",
+                                            code: artifact.activeVersion.code,
+                                            description: "Purchased copy",
+                                            changeType: "manual",
+                                            isSnapshot: false,
+                                        },
+                                    });
+
+                                    // Set the copied version as active
+                                    await prisma.assistantArtifact.update({
+                                        where: { id: buyerArtifact.id },
+                                        data: { activeVersionId: buyerVersion.id },
+                                    });
+                                }
+
+                                // Grant buyer ADMIN permission on their own copy so they can edit it
+                                await prisma.artifactPermission.create({
+                                    data: {
+                                        userId: userId,
+                                        assistantId: assistantIdBigInt,
+                                        artifactId: buyerArtifact.id,
+                                        access: "ADMIN",
+                                    },
+                                });
+
+                                copiedCount++;
+                            }
+
+                            if (copiedCount > 0) {
+                                console.log(`✅ Copied ${copiedCount} artifact(s) for buyer ${userId}`);
+                            } else {
+                                console.log(`ℹ️ No artifacts to copy for this assistant`);
+                            }
+                        } catch (artifactCopyError) {
+                            // Never fail the purchase over artifact copy errors
+                            console.error("❌ Error copying artifacts for buyer:", artifactCopyError);
+                        }
+
                         console.log(`✅ Assistant purchase completed: ${assistantId}`);
                         console.log(`💰 Creator wallet updated: +${netAmount} ${assistant.currency} (pending)`);
                         console.log(`🏦 Platform fee: ${platformFee} ${assistant.currency}`);

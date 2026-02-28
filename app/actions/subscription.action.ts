@@ -175,7 +175,11 @@ export async function createCheckoutSession(
     // ============================================
     // 7. CHECKOUT SESSION CREATION
     // ============================================
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000"
+    // Strip non-ASCII chars (em-dashes, curly quotes, zero-width spaces, etc.) that
+    // sometimes sneak in when a URL is copy-pasted into a .env file.  Stripe rejects
+    // success_url / cancel_url that contain any non-ASCII byte.
+    const rawBaseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000"
+    const baseUrl = rawBaseUrl.replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, "").trim() || "http://localhost:3000"
 
     const checkoutSessionParams: any = {
       customer: stripeCustomerId,

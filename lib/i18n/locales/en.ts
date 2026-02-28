@@ -80,6 +80,7 @@ export const en = {
     store: "Bmaster Store",
     contacts: "Contacts",
     addAssistants: "Add Assistants",
+    apiSetupGuide: "API Setup Guide",
     home: "Home",
     dashboard: "Dashboard",
     profile: "Profile",

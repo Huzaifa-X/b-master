@@ -2130,7 +2130,10 @@ export async function purchaseAssistant(assistantId: string) {
             })
             stripeCustomerId = customer.id
         }
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000"
+        // Strip non-ASCII chars that can sneak into copy-pasted .env values and
+        // cause Stripe to reject success_url / cancel_url with url_invalid.
+        const rawBaseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000"
+        const baseUrl = rawBaseUrl.replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, "").trim() || "http://localhost:3000"
         // ✅ CALCULATE PLATFORM FEE (15%)
         const amount = Number(assistant.price)
         const platformFeePercentage = 0.15 // 15%
