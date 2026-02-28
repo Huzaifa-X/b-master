@@ -858,3 +858,61 @@ enum ConnectorProvider {
   GOOGLE
   SUPABASE
 }
+
+// ============================================
+// BANNER SYSTEM - For targeted announcements
+// ============================================
+
+model Banner {
+  id              Int                   @id @default(autoincrement())
+  name            String                @db.VarChar(255)
+  message         String
+  buttonText      String?               @db.VarChar(100)
+  buttonUrl       String?               @db.VarChar(500)
+  type            BannerType            @default(INFO)
+  targetAudience  BannerAudience        @default(ALL)
+  targetPlanIds   Int[]                 // Empty array = all plans
+  isActive        Boolean               @default(true)
+  startDate       DateTime?
+  endDate         DateTime?
+  priority        Int                   @default(0) // Higher = more important
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  deletedAt       DateTime?
+  dismissedBy     UserDismissedBanner[]
+
+  @@index([isActive])
+  @@index([targetAudience])
+  @@index([startDate, endDate])
+  @@map("banners")
+}
+
+model UserDismissedBanner {
+  id          Int      @id @default(autoincrement())
+  userId      BigInt
+  visitorId   String?  @db.VarChar(255) // For tracking guest dismissals
+  bannerId    Int
+  dismissedAt DateTime @default(now())
+
+  banner Banner @relation(fields: [bannerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bannerId])
+  @@index([userId])
+  @@index([visitorId])
+  @@index([bannerId])
+  @@map("user_dismissed_banners")
+}
+
+enum BannerType {
+  INFO
+  WARNING
+  PROMO
+  ANNOUNCEMENT
+}
+
+enum BannerAudience {
+  ALL           // Show to everyone
+  FREE_USERS    // Only users without a paid plan
+  PAID_USERS    // Only users with any paid plan
+  SPECIFIC_PLANS // Only users with plans in targetPlanIds
+}
