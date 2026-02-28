@@ -4458,6 +4458,7 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
       apiKey: undefined,
       authType: undefined,
       customHeaderName: undefined,
+      customQueryParamName: undefined,
       clientId: undefined,
       clientSecret: undefined,
       authorizationUrl: undefined,
@@ -4745,6 +4746,9 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
                             } else if (scheme.type === 'http' && scheme.scheme === 'bearer') {
                               updates.authenticationType = 'api_key'
                               updates.authType = 'bearer'
+                            } else if (scheme.type === 'http' && scheme.scheme === 'basic') {
+                              updates.authenticationType = 'api_key'
+                              updates.authType = 'basic'
                             } else if (scheme.type === 'oauth2') {
                               updates.authenticationType = 'oauth'
                               // Auto-populate OAuth URLs if available

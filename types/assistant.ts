@@ -51,6 +51,7 @@ export interface AssistantFormData {
   apiKey?: string
   authType?: AuthType
   customHeaderName?: string
+  customQueryParamName?: string
 
   // OAuth Authentication fields
   clientId?: string

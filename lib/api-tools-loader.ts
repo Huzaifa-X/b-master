@@ -64,6 +64,7 @@ async function buildAuthConfig(config: any): Promise<AuthConfig> {
     clientSecret: config.clientSecret ? decrypt(config.clientSecret) : undefined,
     tokenUrl: config.tokenUrl || undefined,
     accessToken: accessToken,
+    scope: config.scope || undefined,
   }
 }
 

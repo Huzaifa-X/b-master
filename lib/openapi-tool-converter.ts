@@ -39,6 +39,7 @@ export interface AuthConfig {
   clientSecret?: string
   tokenUrl?: string
   accessToken?: string
+  scope?: string // OAuth scope(s)
 }
 
 /**
@@ -231,7 +232,9 @@ export async function executeAPICall(
         headers['Authorization'] = `Bearer ${authConfig.apiKey}`
         break
       case 'basic':
-        headers['Authorization'] = `Basic ${authConfig.apiKey}`
+        // Basic auth requires base64-encoded credentials.
+        // Users enter raw "username:password" (or just the key) — encode it here.
+        headers['Authorization'] = `Basic ${Buffer.from(authConfig.apiKey).toString('base64')}`
         break
       case 'custom':
         if (authConfig.customHeaderName) {
@@ -350,17 +353,19 @@ export async function getOAuthToken(authConfig: AuthConfig): Promise<string> {
     throw new Error('Missing OAuth configuration')
   }
 
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: authConfig.clientId,
+    client_secret: authConfig.clientSecret,
+  })
+  if (authConfig.scope) body.append('scope', authConfig.scope)
+
   const response = await fetch(authConfig.tokenUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: authConfig.clientId,
-      client_secret: authConfig.clientSecret,
-      scope: authConfig.tokenUrl || ''
-    })
+    body
   })
 
   if (!response.ok) {

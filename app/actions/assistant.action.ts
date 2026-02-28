@@ -134,6 +134,7 @@ interface CreateCompleteAssistantParams {
     apiKey?: string
     authType?: string
     customHeaderName?: string
+    customQueryParamName?: string
     clientId?: string
     clientSecret?: string
     authorizationUrl?: string
@@ -479,6 +480,9 @@ export async function createCompleteAssistant(
                         : null,
                     authType: params.authenticationType === 'api_key' ? params.authType : null,
                     customHeaderName: params.authenticationType === 'api_key' ? params.customHeaderName : null,
+                    customQueryParamName: params.authenticationType === 'api_key' && params.authType === 'query'
+                        ? (params.customQueryParamName || null)
+                        : null,
 
                     clientId: params.authenticationType === 'oauth' ? params.clientId : null,
 
@@ -1883,6 +1887,9 @@ export async function updateCompleteAssistant(
                         : null,
                     authType: params.authenticationType === 'api_key' ? params.authType : null,
                     customHeaderName: params.authenticationType === 'api_key' ? params.customHeaderName : null,
+                    customQueryParamName: params.authenticationType === 'api_key' && params.authType === 'query'
+                        ? (params.customQueryParamName || null)
+                        : null,
 
                     clientId: params.authenticationType === 'oauth' ? params.clientId : null,
 
