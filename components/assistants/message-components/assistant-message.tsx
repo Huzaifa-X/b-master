@@ -18,7 +18,7 @@
 import type { FC } from "react"
 import { useState, useMemo, useCallback, useRef } from "react"
 import Image from "next/image"
-import { Copy, Share2, Download, Eye, X, MessageSquare, ChevronDown, ExternalLink, Globe } from "lucide-react"
+import { Copy, Share2, Download, Eye, X, MessageSquare, ChevronDown, ExternalLink, Globe, Bookmark, Loader2, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AddFeedDialog } from "@/components/feed/add-feed-dialog"
 import { SelectContactDialog } from "@/components/assistants/select-contact-dialog"

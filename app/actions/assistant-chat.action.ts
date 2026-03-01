@@ -214,16 +214,16 @@ export async function initiateChat(data: {
                 id: chat.id.toString(),
                 assistantId: chat.assistantId.toString(),
                 initiatorId: chat.initiatorId.toString(),
-                participantId: chat.participantId.toString(),
+                participantId: chat.participantId?.toString() || null,
                 lastMessageId: chat.lastMessageId?.toString() || null,
                 initiator: {
                     ...chat.initiator,
                     id: chat.initiator.id.toString()
                 },
-                participant: {
+                participant: chat.participant ? {
                     ...chat.participant,
                     id: chat.participant.id.toString()
-                },
+                } : null,
                 lastMessage: lastMessage ? {
                     ...lastMessage,
                     id: lastMessage.id.toString(),
@@ -231,10 +231,10 @@ export async function initiateChat(data: {
                     assistantId: lastMessage.assistantId.toString(),
                     senderId: lastMessage.senderId.toString(),
                     attachmentSize: lastMessage.attachmentSize?.toString() || null,
-                    sender: {
+                    sender: lastMessage.sender ? {
                         ...lastMessage.sender,
                         id: lastMessage.sender.id.toString()
-                    }
+                    } : null
                 } : null
             }
         }
@@ -358,16 +358,16 @@ export async function getUserChats(data: {
                 id: chat.id.toString(),
                 assistantId: chat.assistantId.toString(),
                 initiatorId: chat.initiatorId.toString(),
-                participantId: chat.participantId.toString(),
+                participantId: chat.participantId?.toString() || null,
                 lastMessageId: chat.lastMessageId?.toString() || null,
                 initiator: {
                     ...chat.initiator,
                     id: chat.initiator.id.toString()
                 },
-                participant: {
+                participant: chat.participant ? {
                     ...chat.participant,
                     id: chat.participant.id.toString()
-                },
+                } : null,
                 lastMessage: lastMessage ? {
                     ...lastMessage,
                     id: lastMessage.id.toString(),
@@ -375,10 +375,10 @@ export async function getUserChats(data: {
                     assistantId: lastMessage.assistantId.toString(),
                     senderId: lastMessage.senderId.toString(),
                     attachmentSize: lastMessage.attachmentSize?.toString() || null,
-                    sender: {
+                    sender: lastMessage.sender ? {
                         ...lastMessage.sender,
                         id: lastMessage.sender.id.toString()
-                    }
+                    } : null
                 } : null,
                 unreadCount: chat.messages.length,
                 messages: undefined
