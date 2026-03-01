@@ -20,19 +20,19 @@ const pusher = new Pusher({
 // ================================================================
 
 async function checkGroupChatAccess(groupChatId: number, userId: bigint): Promise<boolean> {
-    const member = await prisma.assistantGroupChatMember.findFirst({
+    const member = await prisma.assistant_group_chat_members.findFirst({
         where: {
             groupChatId,
             userId,
             leftAt: null,
-            groupChat: { isActive: true }
+            assistant_group_chats: { isActive: true }
         }
     })
     return !!member
 }
 
 async function checkGroupChatAdmin(groupChatId: number, userId: bigint): Promise<boolean> {
-    const member = await prisma.assistantGroupChatMember.findFirst({
+    const member = await prisma.assistant_group_chat_members.findFirst({
         where: {
             groupChatId,
             userId,
@@ -51,10 +51,10 @@ function serializeMessage(message: any) {
         assistantId: message.assistantId.toString(),
         senderId: message.senderId.toString(),
         attachmentSize: message.attachmentSize?.toString() || null,
-        sender: message.sender
+        sender: message.users
             ? {
-                  ...message.sender,
-                  id: message.sender.id.toString()
+                  ...message.users,
+                  id: message.users.id.toString()
               }
             : null
     }
@@ -67,20 +67,20 @@ function serializeGroup(group: any) {
         assistantId: group.assistantId.toString(),
         createdById: group.createdById.toString(),
         lastMessageId: group.lastMessageId?.toString() || null,
-        members: group.members?.map((m: any) => ({
+        members: group.assistant_group_chat_members?.map((m: any) => ({
             ...m,
             id: m.id.toString(),
             groupChatId: m.groupChatId.toString(),
             userId: m.userId.toString(),
-            user: m.user
+            user: m.users
                 ? {
-                      ...m.user,
-                      id: m.user.id.toString()
+                      ...m.users,
+                      id: m.users.id.toString()
                   }
                 : null
         })) ?? [],
-        createdBy: group.createdBy
-            ? { ...group.createdBy, id: group.createdBy.id.toString() }
+        createdBy: group.users
+            ? { ...group.users, id: group.users.id.toString() }
             : null,
         lastMessage: group.lastMessage
             ? serializeMessage(group.lastMessage)
@@ -113,13 +113,14 @@ export async function createGroupChat(data: {
             return { success: false, error: 'A group chat requires at least one other member' }
         }
 
-        const group = await prisma.assistantGroupChat.create({
+        const group = await prisma.assistant_group_chats.create({
             data: {
                 assistantId,
                 name: data.name.trim(),
                 description: data.description?.trim() || null,
                 createdById: userId,
-                members: {
+                updatedAt: new Date(),
+                assistant_group_chat_members: {
                     create: [
                         // Creator is admin
                         { userId, role: 'admin' },
@@ -132,14 +133,14 @@ export async function createGroupChat(data: {
                 }
             },
             include: {
-                members: {
+                assistant_group_chat_members: {
                     include: {
-                        user: {
+                        users: {
                             select: { id: true, name: true, email: true, image: true }
                         }
                     }
                 },
-                createdBy: {
+                users: {
                     select: { id: true, name: true, email: true, image: true }
                 }
             }
@@ -171,11 +172,11 @@ export async function getGroupChats(assistantId: string) {
         const userId = BigInt(session.user.id)
         const assistantIdBigInt = BigInt(assistantId)
 
-        const groups = await prisma.assistantGroupChat.findMany({
+        const groups = await prisma.assistant_group_chats.findMany({
             where: {
                 assistantId: assistantIdBigInt,
                 isActive: true,
-                members: {
+                assistant_group_chat_members: {
                     some: {
                         userId,
                         leftAt: null
@@ -183,15 +184,15 @@ export async function getGroupChats(assistantId: string) {
                 }
             },
             include: {
-                members: {
+                assistant_group_chat_members: {
                     where: { leftAt: null },
                     include: {
-                        user: {
+                        users: {
                             select: { id: true, name: true, email: true, image: true }
                         }
                     }
                 },
-                createdBy: {
+                users: {
                     select: { id: true, name: true, email: true, image: true }
                 }
             },
@@ -242,13 +243,13 @@ export async function getGroupChatMessages(data: {
         }
 
         const [messages, total] = await Promise.all([
-            prisma.assistantGroupChatMessage.findMany({
+            prisma.assistant_group_chat_messages.findMany({
                 where: {
                     groupChatId,
                     deletedAt: null
                 },
                 include: {
-                    sender: {
+                    users: {
                         select: { id: true, name: true, email: true, image: true }
                     }
                 },
@@ -256,7 +257,7 @@ export async function getGroupChatMessages(data: {
                 take: limit,
                 skip
             }),
-            prisma.assistantGroupChatMessage.count({
+            prisma.assistant_group_chat_messages.count({
                 where: { groupChatId, deletedAt: null }
             })
         ])
@@ -309,7 +310,7 @@ export async function sendGroupChatMessage(data: {
             return { success: false, error: 'You do not have access to this group' }
         }
 
-        const message = await prisma.assistantGroupChatMessage.create({
+        const message = await prisma.assistant_group_chat_messages.create({
             data: {
                 groupChatId,
                 assistantId,
@@ -318,17 +319,18 @@ export async function sendGroupChatMessage(data: {
                 messageType: data.messageType || 'text',
                 attachmentUrl: data.attachmentUrl,
                 attachmentName: data.attachmentName,
-                attachmentSize: data.attachmentSize ? BigInt(data.attachmentSize) : null
+                attachmentSize: data.attachmentSize ? BigInt(data.attachmentSize) : null,
+                updatedAt: new Date()
             },
             include: {
-                sender: {
+                users: {
                     select: { id: true, name: true, email: true, image: true }
                 }
             }
         })
 
         // Update group's last message
-        await prisma.assistantGroupChat.update({
+        await prisma.assistant_group_chats.update({
             where: { id: groupChatId },
             data: {
                 lastMessageAt: new Date(),
@@ -353,11 +355,11 @@ export async function sendGroupChatMessage(data: {
         // Send notifications to all other group members
         try {
             const notificationService = (await import('@/lib/services/notifactionService')).default
-            const members = await prisma.assistantGroupChatMember.findMany({
+            const members = await prisma.assistant_group_chat_members.findMany({
                 where: { groupChatId, leftAt: null, userId: { not: userId } }
             })
 
-            const group = await prisma.assistantGroupChat.findUnique({
+            const group = await prisma.assistant_group_chats.findUnique({
                 where: { id: groupChatId },
                 select: { name: true }
             })
@@ -373,7 +375,7 @@ export async function sendGroupChatMessage(data: {
                 members.map(m =>
                     notificationService.createNotification({
                         userId: m.userId.toString(),
-                        title: `💬 ${message.sender.name || 'Someone'} in ${group?.name || 'Group'}`,
+                        title: `💬 ${message.users?.name || 'Someone'} in ${group?.name || 'Group'}`,
                         message: notificationMessage.length > 100
                             ? notificationMessage.substring(0, 100) + '...'
                             : notificationMessage,
@@ -384,7 +386,7 @@ export async function sendGroupChatMessage(data: {
                             groupChatId: groupChatId.toString(),
                             messageId: message.id.toString(),
                             senderId: userId.toString(),
-                            senderName: message.sender.name,
+                            senderName: message.users?.name,
                             assistantId: data.assistantId,
                             messageType: data.messageType || 'text'
                         }
@@ -432,12 +434,12 @@ export async function addGroupChatMember(data: {
         }
 
         // Upsert: re-add if they had left
-        const member = await prisma.assistantGroupChatMember.upsert({
+        const member = await prisma.assistant_group_chat_members.upsert({
             where: { groupChatId_userId: { groupChatId, userId: newUserId } },
             create: { groupChatId, userId: newUserId, role: 'member' },
             update: { leftAt: null, role: 'member' },
             include: {
-                user: { select: { id: true, name: true, email: true, image: true } }
+                users: { select: { id: true, name: true, email: true, image: true } }
             }
         })
 
@@ -450,7 +452,7 @@ export async function addGroupChatMember(data: {
                 id: member.id.toString(),
                 groupChatId: member.groupChatId.toString(),
                 userId: member.userId.toString(),
-                user: { ...member.user, id: member.user.id.toString() }
+                user: member.users ? { ...member.users, id: member.users.id.toString() } : null
             }
         }
     } catch (error) {
@@ -490,7 +492,7 @@ export async function removeGroupChatMember(data: {
             }
         }
 
-        await prisma.assistantGroupChatMember.update({
+        await prisma.assistant_group_chat_members.update({
             where: { groupChatId_userId: { groupChatId, userId: targetUserId } },
             data: { leftAt: new Date() }
         })
@@ -531,20 +533,20 @@ export async function updateGroupChat(data: {
             return { success: false, error: 'Only admins can update group settings' }
         }
 
-        const updated = await prisma.assistantGroupChat.update({
+        const updated = await prisma.assistant_group_chats.update({
             where: { id: groupChatId },
             data: {
                 ...(data.name ? { name: data.name.trim() } : {}),
                 ...(data.description !== undefined ? { description: data.description.trim() || null } : {})
             },
             include: {
-                members: {
+                assistant_group_chat_members: {
                     where: { leftAt: null },
                     include: {
-                        user: { select: { id: true, name: true, email: true, image: true } }
+                        users: { select: { id: true, name: true, email: true, image: true } }
                     }
                 },
-                createdBy: { select: { id: true, name: true, email: true, image: true } }
+                users: { select: { id: true, name: true, email: true, image: true } }
             }
         })
 
@@ -582,7 +584,7 @@ export async function deactivateGroupChat(data: {
             return { success: false, error: 'Only admins can delete the group' }
         }
 
-        await prisma.assistantGroupChat.update({
+        await prisma.assistant_group_chats.update({
             where: { id: groupChatId },
             data: { isActive: false }
         })
