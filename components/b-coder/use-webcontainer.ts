@@ -25,7 +25,43 @@ interface UseWebContainerReturn {
 
 let globalWebContainerPromise: Promise<WebContainer> | null = null
 
-export function useWebContainer(templateId: string): UseWebContainerReturn {
+// ── Persistence helpers ──────────────────────────────────────────────────────
+function getStorageKey(assistantId: string, templateId: string) {
+    return `bcoder_files_${assistantId}_${templateId}`
+}
+function loadSavedFiles(key: string): Record<string, string> {
+    try {
+        const raw = typeof window !== 'undefined' ? localStorage.getItem(key) : null
+        return raw ? JSON.parse(raw) : {}
+    } catch { return {} }
+}
+function persistFile(key: string, path: string, content: string) {
+    try {
+        const saved = loadSavedFiles(key)
+        saved[path] = content
+        localStorage.setItem(key, JSON.stringify(saved))
+    } catch { /* ignore quota errors */ }
+}
+function forgetFile(key: string, path: string) {
+    try {
+        const saved = loadSavedFiles(key)
+        delete saved[path]
+        localStorage.setItem(key, JSON.stringify(saved))
+    } catch {}
+}
+function forgetFolder(key: string, folderPath: string) {
+    try {
+        const saved = loadSavedFiles(key)
+        const prefix = folderPath.endsWith('/') ? folderPath : `${folderPath}/`
+        for (const p of Object.keys(saved)) {
+            if (p === folderPath || p.startsWith(prefix)) delete saved[p]
+        }
+        localStorage.setItem(key, JSON.stringify(saved))
+    } catch {}
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useWebContainer(assistantId: string, templateId: string): UseWebContainerReturn {
     const [isBooting, setIsBooting] = useState(true)
     const [isInstalling, setIsInstalling] = useState(false)
     const [isServerReady, setIsServerReady] = useState(false)
@@ -37,6 +73,7 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
     const webcontainerInstanceRef = useRef<WebContainer | null>(null)
     const devServerProcessRef = useRef<any | null>(null)
     const isBootingRef = useRef(false)
+    const storageKey = getStorageKey(assistantId, templateId)
 
     const addTerminalOutput = useCallback((message: string) => {
         setTerminalOutput((prev) => [...prev, message])
@@ -52,27 +89,32 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
                 await webcontainerInstanceRef.current.fs.mkdir(dir, { recursive: true })
             }
             await webcontainerInstanceRef.current.fs.writeFile(normalizedPath, content)
+            persistFile(storageKey, normalizedPath, content)
         } catch (err) {
             console.error('[writeFile] Failed to write', normalizedPath, err)
         }
-    }, [])
+    }, [storageKey])
 
     const createFile = useCallback(async (path: string, content: string = "") => {
         if (!webcontainerInstanceRef.current) throw new Error("WebContainer not ready")
         await webcontainerInstanceRef.current.fs.writeFile(path, content)
-    }, [])
+        persistFile(storageKey, path, content)
+    }, [storageKey])
 
     const deleteFile = useCallback(async (path: string) => {
         if (!webcontainerInstanceRef.current) throw new Error("WebContainer not ready")
         await webcontainerInstanceRef.current.fs.rm(path)
-    }, [])
+        forgetFile(storageKey, path)
+    }, [storageKey])
 
     const renameFile = useCallback(async (oldPath: string, newPath: string) => {
         if (!webcontainerInstanceRef.current) throw new Error("WebContainer not ready")
         const content = await webcontainerInstanceRef.current.fs.readFile(oldPath, "utf-8")
         await webcontainerInstanceRef.current.fs.writeFile(newPath, content)
         await webcontainerInstanceRef.current.fs.rm(oldPath)
-    }, [])
+        persistFile(storageKey, newPath, content)
+        forgetFile(storageKey, oldPath)
+    }, [storageKey])
 
     const readFile = useCallback(async (path: string): Promise<string> => {
         if (!webcontainerInstanceRef.current) throw new Error("WebContainer not ready")
@@ -87,7 +129,8 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
     const deleteFolder = useCallback(async (path: string) => {
         if (!webcontainerInstanceRef.current) throw new Error("WebContainer not ready")
         await webcontainerInstanceRef.current.fs.rm(path, { recursive: true })
-    }, [])
+        forgetFolder(storageKey, path)
+    }, [storageKey])
 
     const installDependencies = useCallback(async (webcontainer: WebContainer) => {
         setIsInstalling(true)
@@ -202,6 +245,24 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
                 addTerminalOutput("📁 Mounting template files...")
                 await webcontainer.mount(templateFiles)
                 addTerminalOutput("✅ Files mounted!")
+
+                // Restore any previously saved user edits over the template
+                const savedFiles = loadSavedFiles(storageKey)
+                const savedEntries = Object.entries(savedFiles)
+                if (savedEntries.length > 0) {
+                    addTerminalOutput(`♻️ Restoring ${savedEntries.length} saved file(s)...`)
+                    for (const [filePath, fileContent] of savedEntries) {
+                        try {
+                            const parts = filePath.split('/').filter(Boolean)
+                            if (parts.length > 1) {
+                                const dir = parts.slice(0, -1).join('/')
+                                await webcontainer.fs.mkdir(dir, { recursive: true }).catch(() => {})
+                            }
+                            await webcontainer.fs.writeFile(filePath, fileContent)
+                        } catch { /* best-effort */ }
+                    }
+                    addTerminalOutput("✅ Files restored!")
+                }
 
                 setIsBooting(false)
                 await installDependencies(webcontainer)

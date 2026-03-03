@@ -47,11 +47,12 @@ export function useBCoderContext() {
 
 interface BCoderProviderProps {
     children: ReactNode
+    assistantId: string
     templateId: string
 }
 
-export function BCoderProvider({ children, templateId }: BCoderProviderProps) {
-    const webContainer = useWebContainer(templateId)
+export function BCoderProvider({ children, assistantId, templateId }: BCoderProviderProps) {
+    const webContainer = useWebContainer(assistantId, templateId)
     const [fileStructure, setFileStructure] = useState<FileNode[]>([])
     const [selectedFilePath, setSelectedFilePath] = useState<string | null>("src/App.jsx")
     const [activeArtifact, setActiveArtifact] = useState<{ id: string, name: string, instructions: string, category: string } | null>(null)

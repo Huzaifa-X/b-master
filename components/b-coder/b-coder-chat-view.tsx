@@ -18,7 +18,7 @@ export function BCoderChatView({ assistantId, templateId, artifactId }: BCoderCh
 
     return (
         <div className="h-full flex flex-col bg-gradient-to-br from-emerald-50/30 via-background to-cyan-50/30 dark:from-emerald-950/10 dark:via-background dark:to-cyan-950/10">
-            <BCoderProvider templateId={templateId}>
+            <BCoderProvider assistantId={assistantId} templateId={templateId}>
 
                 {/* Mobile Tab Navigation */}
                 <div className="md:hidden flex p-2 border-b border-border/50 bg-background/50 backdrop-blur z-10 shrink-0">
