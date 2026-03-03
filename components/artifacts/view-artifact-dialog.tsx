@@ -130,19 +130,29 @@ export function ViewArtifactDialog({
   }
 
   // ── DOCX ──────────────────────────────────────────────────────────────────
+  const [isGeneratingDOCX, setIsGeneratingDOCX] = useState(false)
   const handleDownloadDOCX = async () => {
     if (!artifact?.htmlContent) { toast.error("No content to download"); return }
+    if (isGeneratingDOCX) return
+    setIsGeneratingDOCX(true)
+    toast.loading("Generating Word document…", { id: "docx-export" })
     try {
-      const HTMLtoDOCX = (await import("html-to-docx")).default
-      const blob = await HTMLtoDOCX(artifact.htmlContent, undefined, {
-        title: artifact.name,
-        margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
-      }) as Blob
-      triggerDownload(blob, `${safeName}.docx`)
-      toast.success("Word document downloaded")
-    } catch (e) {
+      const res = await fetch("/api/artifacts/generate-docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html: artifact.htmlContent, filename: safeName }),
+      })
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Server error") }
+      const { docxUrl } = await res.json()
+      const link = document.createElement("a")
+      link.href = docxUrl; link.download = `${safeName}.docx`; link.target = "_blank"
+      document.body.appendChild(link); link.click(); document.body.removeChild(link)
+      toast.success("Word document downloaded", { id: "docx-export" })
+    } catch (e: any) {
       console.error(e)
-      toast.error("Failed to export as DOCX")
+      toast.error(e?.message ?? "Failed to export as DOCX", { id: "docx-export" })
+    } finally {
+      setIsGeneratingDOCX(false)
     }
   }
 
@@ -272,9 +282,9 @@ export function ViewArtifactDialog({
                     <File className="h-4 w-4 mr-2" />
                     {isGeneratingPDF ? "Generating PDF…" : "PDF (.pdf)"}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleDownloadDOCX}>
+                  <DropdownMenuItem onClick={handleDownloadDOCX} disabled={isGeneratingDOCX}>
                     <FileText className="h-4 w-4 mr-2" />
-                    Word (.docx)
+                    {isGeneratingDOCX ? "Generating Word…" : "Word (.docx)"}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleDownloadPPTX}>
                     <Layers className="h-4 w-4 mr-2" />
