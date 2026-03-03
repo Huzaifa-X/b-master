@@ -106,16 +106,18 @@ export function NotificationsDropdown() {
     }
   }
 
-  const handleNotificationClick = async (notification: Notification) => {
-    // Mark as read
-    await handleMarkAsRead(notification)
-
-    // Navigate if there is a destination URL
+  const handleNotificationClick = (notification: Notification) => {
+    // Navigate immediately — don't wait for the mark-as-read round-trip
     const url = getNotificationUrl(notification)
     if (url) {
       setIsOpen(false)
       router.push(url)
     }
+
+    // Mark as read in the background (fire-and-forget)
+    handleMarkAsRead(notification).catch((err) =>
+      console.error('Failed to mark notification as read:', err)
+    )
   }
 
   const handleMarkAllAsRead = async () => {
