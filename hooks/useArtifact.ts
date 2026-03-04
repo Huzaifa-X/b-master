@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { getArtifactById, getArtifacts, getArtifactVersions, setActiveArtifactVersion, createArtifact, shareArtifact, deleteArtifactFile, deleteArtifact } from "@/app/actions/artifact.action"
+import { getArtifactById, getArtifacts, getArtifactVersions, setActiveArtifactVersion, createArtifact, shareArtifact, deleteArtifactFile } from "@/app/actions/artifact.action"
 import { updateArtifactWithAI, type UpdateArtifactParams, type UpdateArtifactResult } from "@/app/actions/update-artifact.action"
 import { getArtifactEditData, updateArtifact, type EditArtifactParams } from "@/app/actions/edit-artifact.action"
 import { toast } from "sonner"
@@ -660,9 +660,10 @@ export function useDeleteArtifact(options?: UseDeleteArtifactOptions) {
 
   const mutation = useMutation({
     mutationFn: async (artifactId: string) => {
-      const result = await deleteArtifact(artifactId)
+      const res = await fetch(`/api/artifacts/${artifactId}`, { method: "DELETE" })
+      const result = await res.json()
 
-      if (!result.success) {
+      if (!res.ok || !result.success) {
         throw new Error(result.error || "Failed to delete artifact")
       }
 
