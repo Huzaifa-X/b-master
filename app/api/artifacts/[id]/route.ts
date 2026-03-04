@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic"
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -24,7 +24,8 @@ export async function GET(
     }
 
     const userId = BigInt(session.user.id)
-    const artifactIdInt = parseInt(params.id)
+    const { id } = await params
+    const artifactIdInt = parseInt(id)
 
     if (isNaN(artifactIdInt)) {
       return NextResponse.json({ error: "Invalid artifact ID" }, { status: 400 })
@@ -118,7 +119,7 @@ export async function GET(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -127,7 +128,8 @@ export async function DELETE(
     }
 
     const userId = BigInt(session.user.id)
-    const artifactIdInt = parseInt(params.id)
+    const { id } = await params
+    const artifactIdInt = parseInt(id)
 
     if (isNaN(artifactIdInt)) {
       return NextResponse.json({ error: "Invalid artifact ID" }, { status: 400 })
