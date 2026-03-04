@@ -14,6 +14,23 @@ export type AssistantCategory =
 export type AuthenticationType = "none" | "api_key" | "oauth"
 export type AuthType = "basic" | "bearer" | "custom"
 export type TokenExchangeMethod = "post" | "basic_auth"
+
+// Single API connection configuration
+export interface ApiConnectionConfig {
+  authenticationType: AuthenticationType
+  apiKey?: string
+  authType?: AuthType
+  customHeaderName?: string
+  customQueryParamName?: string
+  clientId?: string
+  clientSecret?: string
+  authorizationUrl?: string
+  tokenUrl?: string
+  scope?: string
+  tokenExchangeMethod?: TokenExchangeMethod
+  schema?: any
+  schemaText?: string
+}
 export type PermissionLevel = "private" | "public"
 export type PermissionType = "chat" | "contact" | "messenger" | "artifact" | "newsFeed" | "library"
 
@@ -64,6 +81,9 @@ export interface AssistantFormData {
   // OpenAPI Schema
   schema?: any // JSON object
   schemaText?: string // Raw schema text for editing
+
+  // NEW: up to 2 API connections (replaces the flat fields above when populated)
+  apiConfigs?: ApiConnectionConfig[]
 
   // Step 6: Sharing & Permissions
   permissionLevel: PermissionLevel

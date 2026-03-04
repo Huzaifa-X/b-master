@@ -143,6 +143,22 @@ interface CreateCompleteAssistantParams {
     tokenExchangeMethod?: string
     schemaText?: string
     schema?: any
+    // NEW: up to 2 API connections
+    apiConfigs?: Array<{
+        authenticationType: string
+        apiKey?: string
+        authType?: string
+        customHeaderName?: string
+        customQueryParamName?: string
+        clientId?: string
+        clientSecret?: string
+        authorizationUrl?: string
+        tokenUrl?: string
+        scope?: string
+        tokenExchangeMethod?: string
+        schema?: any
+        schemaText?: string
+    }>
 
     // Step 6: Sharing
     permissionLevel: string
@@ -471,6 +487,65 @@ export async function createCompleteAssistant(
                 }
 
                 // Build API config data with encryption
+                // Check if secondary API config was provided
+                const secondaryConfig = params.apiConfigs?.[1]
+                let secondaryTools: any[] | null = null
+
+                if (secondaryConfig?.schema) {
+                    try {
+                        const secAuthConfig: AuthConfig = {
+                            type: secondaryConfig.authenticationType,
+                            apiKey: secondaryConfig.apiKey,
+                            authType: secondaryConfig.authType,
+                            customHeaderName: secondaryConfig.customHeaderName,
+                            clientId: secondaryConfig.clientId,
+                            clientSecret: secondaryConfig.clientSecret,
+                            tokenUrl: secondaryConfig.tokenUrl,
+                        }
+                        const parsedSecSchema = parseOpenAPISchema(secondaryConfig.schema)
+                        const secOpenAITools = convertToOpenAITools(parsedSecSchema, secAuthConfig)
+                        secondaryTools = secOpenAITools.map(tool => ({
+                            type: tool.openaiTool.type,
+                            name: tool.openaiTool.name,
+                            description: tool.openaiTool.description,
+                            parameters: tool.openaiTool.parameters,
+                            metadata: {
+                                method: tool.metadata.method,
+                                path: tool.metadata.path,
+                                baseUrl: tool.metadata.baseUrl,
+                                operationId: tool.metadata.operationId,
+                                parameterDefinitions: tool.metadata.parameterDefinitions || []
+                            }
+                        }))
+                        console.log(`✅ Generated ${secondaryTools.length} tools from secondary API schema`)
+                    } catch (secToolError) {
+                        console.error('Error generating tools from secondary API schema:', secToolError)
+                    }
+                }
+
+                // Compose final tools value - v2 format if secondary config present
+                const hasSecondary = secondaryConfig && (
+                    (secondaryConfig.authenticationType && secondaryConfig.authenticationType !== 'none') ||
+                    secondaryConfig.schema
+                )
+                const finalTools: any = hasSecondary ? {
+                    version: 2,
+                    primary: { tools: tools || [] },
+                    secondary: {
+                        authenticationType: secondaryConfig!.authenticationType,
+                        apiKey: secondaryConfig!.authenticationType === 'api_key' && secondaryConfig!.apiKey ? encrypt(secondaryConfig!.apiKey) : null,
+                        authType: secondaryConfig!.authenticationType === 'api_key' ? (secondaryConfig!.authType || null) : null,
+                        customHeaderName: secondaryConfig!.authenticationType === 'api_key' ? (secondaryConfig!.customHeaderName || null) : null,
+                        clientId: secondaryConfig!.authenticationType === 'oauth' ? (secondaryConfig!.clientId || null) : null,
+                        clientSecret: secondaryConfig!.authenticationType === 'oauth' && secondaryConfig!.clientSecret ? encrypt(secondaryConfig!.clientSecret) : null,
+                        tokenUrl: secondaryConfig!.authenticationType === 'oauth' ? (secondaryConfig!.tokenUrl || null) : null,
+                        scope: secondaryConfig!.authenticationType === 'oauth' ? (secondaryConfig!.scope || null) : null,
+                        tokenExchangeMethod: secondaryConfig!.authenticationType === 'oauth' ? (secondaryConfig!.tokenExchangeMethod || null) : null,
+                        schemaText: secondaryConfig!.schemaText || null,
+                        tools: secondaryTools || [],
+                    }
+                } : tools
+
                 const apiConfigData = {
                     authenticationType: params.authenticationType,
 
@@ -498,8 +573,8 @@ export async function createCompleteAssistant(
                     schemaText: params.schemaText || null,
                     schema: params.schema || null,
 
-                    // Store parsed tools (only if schema exists) - use undefined instead of null
-                    ...(tools && { tools }),
+                    // Store tools (v1 array OR v2 object with secondary config)
+                    ...(finalTools && { tools: finalTools }),
                 }
 
                 await prisma.assistantApiConfiguration.create({
@@ -509,7 +584,7 @@ export async function createCompleteAssistant(
                     }
                 })
 
-                console.log(`✅ API configuration created${tools ? ` with ${tools.length} tools` : ''}`)
+                console.log(`✅ API configuration created${tools ? ` with ${tools.length} primary tools` : ''}${secondaryTools ? ` + ${secondaryTools.length} secondary tools` : ''}`)
             } catch (apiConfigError) {
                 console.error('Error creating API configuration:', apiConfigError)
                 // Log the full error for debugging
@@ -1877,6 +1952,65 @@ export async function updateCompleteAssistant(
                     }
                 }
 
+                // Check if secondary API config was provided
+                const secondaryConfig = params.apiConfigs?.[1]
+                let secondaryTools: any[] | null = null
+
+                if (secondaryConfig?.schema) {
+                    try {
+                        const secAuthConfig: AuthConfig = {
+                            type: secondaryConfig.authenticationType,
+                            apiKey: secondaryConfig.apiKey,
+                            authType: secondaryConfig.authType,
+                            customHeaderName: secondaryConfig.customHeaderName,
+                            clientId: secondaryConfig.clientId,
+                            clientSecret: secondaryConfig.clientSecret,
+                            tokenUrl: secondaryConfig.tokenUrl,
+                        }
+                        const parsedSecSchema = parseOpenAPISchema(secondaryConfig.schema)
+                        const secOpenAITools = convertToOpenAITools(parsedSecSchema, secAuthConfig)
+                        secondaryTools = secOpenAITools.map(tool => ({
+                            type: tool.openaiTool.type,
+                            name: tool.openaiTool.name,
+                            description: tool.openaiTool.description,
+                            parameters: tool.openaiTool.parameters,
+                            metadata: {
+                                method: tool.metadata.method,
+                                path: tool.metadata.path,
+                                baseUrl: tool.metadata.baseUrl,
+                                operationId: tool.metadata.operationId,
+                                parameterDefinitions: tool.metadata.parameterDefinitions || []
+                            }
+                        }))
+                        console.log(`✅ Generated ${secondaryTools.length} tools from secondary API schema`)
+                    } catch (secToolError) {
+                        console.error('Error generating tools from secondary API schema:', secToolError)
+                    }
+                }
+
+                // Compose final tools value - v2 format if secondary config present
+                const hasSecondary = secondaryConfig && (
+                    (secondaryConfig.authenticationType && secondaryConfig.authenticationType !== 'none') ||
+                    secondaryConfig.schema
+                )
+                const finalTools: any = hasSecondary ? {
+                    version: 2,
+                    primary: { tools: tools || [] },
+                    secondary: {
+                        authenticationType: secondaryConfig!.authenticationType,
+                        apiKey: secondaryConfig!.authenticationType === 'api_key' && secondaryConfig!.apiKey ? encrypt(secondaryConfig!.apiKey) : null,
+                        authType: secondaryConfig!.authenticationType === 'api_key' ? (secondaryConfig!.authType || null) : null,
+                        customHeaderName: secondaryConfig!.authenticationType === 'api_key' ? (secondaryConfig!.customHeaderName || null) : null,
+                        clientId: secondaryConfig!.authenticationType === 'oauth' ? (secondaryConfig!.clientId || null) : null,
+                        clientSecret: secondaryConfig!.authenticationType === 'oauth' && secondaryConfig!.clientSecret ? encrypt(secondaryConfig!.clientSecret) : null,
+                        tokenUrl: secondaryConfig!.authenticationType === 'oauth' ? (secondaryConfig!.tokenUrl || null) : null,
+                        scope: secondaryConfig!.authenticationType === 'oauth' ? (secondaryConfig!.scope || null) : null,
+                        tokenExchangeMethod: secondaryConfig!.authenticationType === 'oauth' ? (secondaryConfig!.tokenExchangeMethod || null) : null,
+                        schemaText: secondaryConfig!.schemaText || null,
+                        tools: secondaryTools || [],
+                    }
+                } : tools
+
                 // Build API config data with encryption
                 const apiConfigData = {
                     authenticationType: params.authenticationType,
@@ -1905,8 +2039,8 @@ export async function updateCompleteAssistant(
                     schemaText: params.schemaText || null,
                     schema: params.schema || null,
 
-                    // Store parsed tools (only if schema exists) - use undefined instead of null
-                    ...(tools && { tools }),
+                    // Store tools (v1 array OR v2 object with secondary config)
+                    ...(finalTools && { tools: finalTools }),
                 }
 
                 if (existingApiConfig) {
@@ -1923,7 +2057,7 @@ export async function updateCompleteAssistant(
                     })
                 }
 
-                console.log(`✅ API configuration updated${tools ? ` with ${tools.length} tools` : ''}`)
+                console.log(`✅ API configuration updated${tools ? ` with ${tools.length} primary tools` : ''}${secondaryTools ? ` + ${secondaryTools.length} secondary tools` : ''}`)
             } catch (apiConfigError) {
                 console.error('Error updating API configuration:', apiConfigError)
                 // Log the full error for debugging

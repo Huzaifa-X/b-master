@@ -116,6 +116,58 @@ export async function loadAPITools(assistantId: string): Promise<{
 
     // ✅ NEW: Load from tools field if available (performance optimization)
     const storedTools = (apiConfig as any).tools
+
+    // ✅ v2 format: { version: 2, primary: { tools: [] }, secondary: { auth fields + tools: [] } }
+    if (storedTools && typeof storedTools === 'object' && !Array.isArray(storedTools) && (storedTools as any).version === 2) {
+      const v2 = storedTools as any
+      const primaryAuthConfig = await buildAuthConfig(apiConfig)
+
+      const makeTool = (toolDef: any, authCfg: AuthConfig): OpenAPITool => {
+        const executor = async (args: any) => {
+          const { executeAPICall } = await import('./openapi-tool-converter')
+          const paramDefinitions = toolDef.metadata?.parameterDefinitions || []
+          return await executeAPICall(
+            toolDef.metadata.baseUrl,
+            toolDef.metadata.method,
+            toolDef.metadata.path,
+            paramDefinitions,
+            args,
+            authCfg
+          )
+        }
+        return {
+          openaiTool: {
+            type: toolDef.type,
+            name: toolDef.name,
+            description: toolDef.description,
+            parameters: toolDef.parameters
+          },
+          executor,
+          metadata: toolDef.metadata
+        }
+      }
+
+      const primaryTools: OpenAPITool[] = (v2.primary?.tools || []).map((t: any) => makeTool(t, primaryAuthConfig))
+
+      // Build secondary auth config from stored (encrypted) fields
+      const sec = v2.secondary || {}
+      const secondaryAuthConfig: AuthConfig = {
+        type: sec.authenticationType,
+        apiKey: sec.apiKey ? decrypt(sec.apiKey) : undefined,
+        authType: sec.authType || undefined,
+        customHeaderName: sec.customHeaderName || undefined,
+        clientId: sec.clientId || undefined,
+        clientSecret: sec.clientSecret ? decrypt(sec.clientSecret) : undefined,
+        tokenUrl: sec.tokenUrl || undefined,
+        scope: sec.scope || undefined,
+      }
+      const secondaryTools: OpenAPITool[] = (sec.tools || []).map((t: any) => makeTool(t, secondaryAuthConfig))
+
+      const allTools = [...primaryTools, ...secondaryTools]
+      console.log(`[API Tools] v2 format: loaded ${primaryTools.length} primary + ${secondaryTools.length} secondary tools for assistant ${assistantId}`)
+      return { success: true, tools: allTools }
+    }
+
     if (storedTools && Array.isArray(storedTools) && storedTools.length > 0) {
       // Build auth config with auto-refresh (await it since it's async now)
       const authConfig = await buildAuthConfig(apiConfig)
