@@ -10,6 +10,109 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 /**
+ * GET /api/artifacts/[id]
+ * Fetches a single artifact by ID with permission check
+ */
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
+
+    const userId = BigInt(session.user.id)
+    const artifactIdInt = parseInt(params.id)
+
+    if (isNaN(artifactIdInt)) {
+      return NextResponse.json({ error: "Invalid artifact ID" }, { status: 400 })
+    }
+
+    const artifactLookup = await prisma.assistantArtifact.findUnique({
+      where: { id: artifactIdInt },
+      select: { assistantId: true, deletedAt: true },
+    })
+
+    if (!artifactLookup || artifactLookup.deletedAt) {
+      return NextResponse.json({ error: "Artifact not found" }, { status: 404 })
+    }
+
+    const isAssistantOwner = await prisma.assistant.findFirst({
+      where: { id: artifactLookup.assistantId, userId: userId },
+    })
+
+    const hasAssistantAccess =
+      isAssistantOwner ||
+      (await prisma.assistant.findFirst({
+        where: {
+          id: artifactLookup.assistantId,
+          OR: [
+            { purchases: { some: { buyerId: userId, paymentRecord: { status: "completed" } } } },
+            { contacts: { some: { userId: userId } } },
+          ],
+        },
+      }))
+
+    const orConditions: any[] = [
+      { userId: userId },
+      { permissions: { some: { userId: userId } } },
+      { isPublic: true },
+    ]
+    if (isAssistantOwner) orConditions.push({ id: { gt: 0 } })
+
+    const artifact = await prisma.assistantArtifact.findFirst({
+      where: { id: artifactIdInt, deletedAt: null, OR: orConditions },
+      include: {
+        user: { select: { id: true, name: true, email: true, image: true } },
+        permissions: { where: { userId: userId }, select: { access: true } },
+        activeVersion: { select: { id: true, versionNumber: true, code: true, description: true } },
+        versions: { select: { id: true, versionNumber: true }, orderBy: { versionNumber: "desc" } },
+      },
+    })
+
+    if (!artifact) {
+      return NextResponse.json({ error: "Artifact not found or access denied" }, { status: 404 })
+    }
+
+    const isOwner = artifact.userId === userId
+    const hasExplicitPermission = artifact.permissions.length > 0
+    const accessLevel = isOwner ? "ADMIN" : hasExplicitPermission ? artifact.permissions[0].access : "VIEWER"
+
+    return NextResponse.json({
+      success: true,
+      artifact: {
+        id: artifact.id.toString(),
+        name: artifact.name || "Untitled Artifact",
+        category: artifact.category || "others",
+        htmlContent: artifact.activeVersion?.code || "",
+        instructions: artifact.instructions || "",
+        createdAt: artifact.createdAt,
+        updatedAt: artifact.updatedAt,
+        activeVersionId: artifact.activeVersionId?.toString(),
+        activeVersionNumber: artifact.activeVersion?.versionNumber,
+        versionsCount: artifact.versions.length,
+        hasVersions: artifact.versions.length > 0,
+        creator: {
+          id: artifact.user.id.toString(),
+          name: artifact.user.name || "Unknown User",
+          email: artifact.user.email,
+          image: artifact.user.image,
+        },
+        isOwner,
+        access: accessLevel,
+        isPublic: artifact.isPublic,
+        apiKeys: artifact.apiKeys as Record<string, string> | null,
+      },
+    })
+  } catch (error) {
+    console.error("[GET Artifact API] Error:", error)
+    return NextResponse.json({ error: "Failed to fetch artifact" }, { status: 500 })
+  }
+}
+
+/**
  * DELETE /api/artifacts/[id]
  * Deletes an artifact with cascade cleanup (permissions, versions, jobs, S3 files)
  */

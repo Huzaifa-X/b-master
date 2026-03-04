@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { getArtifactById, getArtifacts, getArtifactVersions, setActiveArtifactVersion, createArtifact, shareArtifact, deleteArtifactFile } from "@/app/actions/artifact.action"
+import { getArtifactVersions, setActiveArtifactVersion, createArtifact, shareArtifact, deleteArtifactFile } from "@/app/actions/artifact.action"
 import { updateArtifactWithAI, type UpdateArtifactParams, type UpdateArtifactResult } from "@/app/actions/update-artifact.action"
 import { getArtifactEditData, updateArtifact, type EditArtifactParams } from "@/app/actions/edit-artifact.action"
 import { toast } from "sonner"
@@ -57,9 +57,10 @@ export function useArtifactById(
   } = useQuery({
     queryKey: ["artifact", artifactId],
     queryFn: async () => {
-      const result = await getArtifactById(artifactId)
+      const res = await fetch(`/api/artifacts/${artifactId}`)
+      const result = await res.json()
 
-      if (!result.success) {
+      if (!res.ok || !result.success) {
         throw new Error(result.error || "Failed to fetch artifact")
       }
 
@@ -128,9 +129,10 @@ export function useArtifacts(
   } = useQuery({
     queryKey: ["artifacts", assistantId],
     queryFn: async () => {
-      const result = await getArtifacts(assistantId)
+      const res = await fetch(`/api/artifacts?assistantId=${assistantId}`)
+      const result = await res.json()
 
-      if (!result.success) {
+      if (!res.ok || !result.success) {
         throw new Error(result.error || "Failed to fetch artifacts")
       }
 
