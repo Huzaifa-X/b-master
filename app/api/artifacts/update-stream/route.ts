@@ -292,7 +292,6 @@ export async function POST(req: NextRequest) {
               instructions: unifiedSystemPrompt,
               input: aiInput,
               stream: true,
-              max_output_tokens: 2000,
               ...(vectorStoreId && {
                 tools: [{ type: "file_search", vector_store_ids: [vectorStoreId] }],
               }),

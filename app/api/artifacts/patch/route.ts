@@ -88,7 +88,6 @@ export async function POST(req: NextRequest) {
       instructions: systemPrompt,
       input: userInput,
       stream: false,
-      max_output_tokens: 2000,
     })
 
     const patchedHtml = (response.output_text ?? "").trim()
