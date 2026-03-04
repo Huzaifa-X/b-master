@@ -51,8 +51,8 @@ async function getBrowser(): Promise<Browser> {
       executablePath,
       headless: true,
       defaultViewport: {
-        width: 850,
-        height: 1200,
+        width: 794,   // A4 width at 96 DPI
+        height: 1123, // A4 height at 96 DPI
         deviceScaleFactor: 2,
       },
     });
@@ -95,17 +95,18 @@ export async function generatePDFFromHTML({
     browser = await getBrowser();
     const page = await browser.newPage();
 
-    // 🔥 OPTIMIZED VIRTUAL DESKTOP: Render at 850px
-    const VIRTUAL_WIDTH = 850;
+    // A4 at 96 DPI = 794 × 1123px (CSS pixels)
+    const A4_WIDTH_PX = 794;
+    const A4_HEIGHT_PX = 1123;
 
     await page.setViewport({
-      width: VIRTUAL_WIDTH,
-      height: 1200,
+      width: A4_WIDTH_PX,
+      height: A4_HEIGHT_PX,
       deviceScaleFactor: 2,
     });
 
-    // Emulate 'screen' media to look exactly like the web view
-    await page.emulateMediaType('screen');
+    // Use 'print' media so CSS @media print rules and page breaks apply correctly
+    await page.emulateMediaType('print');
 
     // Set timeout for page operations
     page.setDefaultTimeout(30000);
@@ -118,36 +119,41 @@ export async function generatePDFFromHTML({
       timeout: 30000,
     });
 
-    // Force exact colors and ensure content expands to the 850px viewport
+    // Ensure full-width rendering and exact colour reproduction
     await page.addStyleTag({
       content: `
-        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
+        @page { size: A4; margin: 10mm; }
         html, body {
           width: 100% !important;
           max-width: 100% !important;
-          min-width: ${VIRTUAL_WIDTH}px !important;
           overflow-x: hidden !important;
           margin: 0 !important;
           padding: 0 !important;
         }
-        .invoice-container, [class*="container"] {
+        body > *,
+        .invoice-container,
+        .container, .wrapper,
+        [class*="container"], [class*="wrapper"] {
           max-width: 100% !important;
+          width: 100% !important;
           margin-left: 0 !important;
           margin-right: 0 !important;
+        }
+        /* Avoid cutting elements across pages */
+        tr, img, figure, .page-break-inside-avoid {
+          page-break-inside: avoid;
         }
       `
     });
 
     console.log('[PDF] Generating A4 PDF...');
 
-    // 🔥 HIGH-FILL SCALING: Fit 850px content into A4 width
-    const scale = 0.93;
-
     const pdfUint8Array = await page.pdf({
       format: 'A4',
       printBackground: true,
       preferCSSPageSize: false,
-      scale: scale,
+      scale: 1.0,
       margin: {
         top: '10mm',
         right: '10mm',
