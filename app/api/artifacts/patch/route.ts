@@ -84,10 +84,11 @@ export async function POST(req: NextRequest) {
     ].join("\n")
 
     const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
+      model: "gpt-4.1",
       instructions: systemPrompt,
       input: userInput,
       stream: false,
+      max_output_tokens: 2000,
     })
 
     const patchedHtml = (response.output_text ?? "").trim()
