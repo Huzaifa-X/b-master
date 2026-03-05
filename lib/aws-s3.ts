@@ -17,7 +17,11 @@ const s3Client = new S3Client({
     accessKeyId: process.env.S3_AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.S3_AWS_SECRET_ACCESS_KEY!,
   },
-  maxAttempts: 3, // Auto-retry on network errors
+  maxAttempts: 5, // Auto-retry on network errors (increased from 3)
+  requestHandler: {
+    requestTimeout: 20000,  // 20s per request (fail fast on stalled upload)
+    connectionTimeout: 5000, // 5s to establish connection
+  } as any,
   // Optional: Custom endpoint for S3-compatible services (DigitalOcean Spaces, MinIO, etc.)
   ...(process.env.S3_AWS_S3_ENDPOINT && {
     endpoint: process.env.S3_AWS_S3_ENDPOINT,

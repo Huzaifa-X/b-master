@@ -61,6 +61,7 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
       tokenExchangeMethod: "post",
       schema: null,
       schemaText: "",
+      apiConfigs: [{ authenticationType: "none" as const }],
       permissionLevel: "private",
       sharedUsers: [],
       buyerPermissions: {
@@ -175,6 +176,7 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
       tokenExchangeMethod: formData.tokenExchangeMethod,
       schemaText: formData.schemaText,
       schema: formData.schema,
+      apiConfigs: formData.apiConfigs,
 
       // Step 6: Sharing
       permissionLevel: formData.permissionLevel,

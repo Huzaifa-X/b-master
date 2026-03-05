@@ -13,9 +13,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { AdvancedConfigStepProps } from "@/types/assistant"
+import { AdvancedConfigStepProps, ApiConnectionConfig, AuthenticationType, AuthType, TokenExchangeMethod } from "@/types/assistant"
 import { SchemaPreview } from "@/app/(dashboard)/assistants/add/_components/schema-preview"
-import { Shield, Key, Lock, BookOpen } from "lucide-react"
+import { Shield, Key, Lock, BookOpen, Plus, Trash2 } from "lucide-react"
 import { parseSchemaText, parseOpenAPISchema } from "@/lib/openapi-parser"
 
 // Example OpenAPI schemas
@@ -4452,100 +4452,217 @@ paths:
 
 export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigStepProps) {
 
-  const handleAuthTypeChange = (value: "none" | "api_key" | "oauth") => {
-    updateFormData({
-      authenticationType: value,
-      apiKey: undefined,
-      authType: undefined,
-      customHeaderName: undefined,
-      customQueryParamName: undefined,
-      clientId: undefined,
-      clientSecret: undefined,
-      authorizationUrl: undefined,
-      tokenUrl: undefined,
-      scope: undefined,
-      tokenExchangeMethod: undefined,
-      schema: undefined,
-      schemaText: undefined,
-    })
-  }
-
-  const getAuthTypeLabel = () => {
-    switch (formData.authenticationType || "none") {
-      case "api_key":
-        return "API Key"
-      case "oauth":
-        return "OAuth"
-      default:
-        return "None"
+  // Normalize: use apiConfigs array if present, else migrate from legacy flat fields
+  const getApiConfigs = (): ApiConnectionConfig[] => {
+    if (formData.apiConfigs && formData.apiConfigs.length > 0) {
+      return formData.apiConfigs
     }
+    return [{
+      authenticationType: (formData.authenticationType ?? "none") as AuthenticationType,
+      apiKey: formData.apiKey,
+      authType: formData.authType as AuthType | undefined,
+      customHeaderName: formData.customHeaderName,
+      customQueryParamName: formData.customQueryParamName,
+      clientId: formData.clientId,
+      clientSecret: formData.clientSecret,
+      authorizationUrl: formData.authorizationUrl,
+      tokenUrl: formData.tokenUrl,
+      scope: formData.scope,
+      tokenExchangeMethod: formData.tokenExchangeMethod as TokenExchangeMethod | undefined,
+      schema: formData.schema,
+      schemaText: formData.schemaText,
+    }]
   }
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Advanced Configuration</h2>
-        <p className="text-muted-foreground">
-          Configure API settings and authentication for your assistant
-        </p>
-      </div>
+  const apiConfigs = getApiConfigs()
 
-      <div className="space-y-6">
+  const updateApiConfig = (index: number, updates: Partial<ApiConnectionConfig>) => {
+    const updated = [...apiConfigs]
+    updated[index] = { ...updated[index], ...updates }
+    // Keep legacy flat fields in sync with API 1 so the wizard submission still works
+    const legacySync: any = index === 0 ? {
+      authenticationType: updated[0].authenticationType,
+      apiKey: updated[0].apiKey,
+      authType: updated[0].authType,
+      customHeaderName: updated[0].customHeaderName,
+      customQueryParamName: updated[0].customQueryParamName,
+      clientId: updated[0].clientId,
+      clientSecret: updated[0].clientSecret,
+      authorizationUrl: updated[0].authorizationUrl,
+      tokenUrl: updated[0].tokenUrl,
+      scope: updated[0].scope,
+      tokenExchangeMethod: updated[0].tokenExchangeMethod,
+      schema: updated[0].schema,
+      schemaText: updated[0].schemaText,
+    } : {}
+    updateFormData({ apiConfigs: updated, ...legacySync })
+  }
+
+  const addSecondApi = () => {
+    updateFormData({ apiConfigs: [...apiConfigs, { authenticationType: "none" as AuthenticationType }] })
+  }
+
+  const removeSecondApi = () => {
+    updateFormData({ apiConfigs: [apiConfigs[0]] })
+  }
+
+  const renderPanel = (config: ApiConnectionConfig, index: number) => {
+    const handleAuthReset = (value: "none" | "api_key" | "oauth") => {
+      updateApiConfig(index, {
+        authenticationType: value,
+        apiKey: undefined,
+        authType: undefined,
+        customHeaderName: undefined,
+        customQueryParamName: undefined,
+        clientId: undefined,
+        clientSecret: undefined,
+        authorizationUrl: undefined,
+        tokenUrl: undefined,
+        scope: undefined,
+        tokenExchangeMethod: undefined,
+        schema: undefined,
+        schemaText: undefined,
+      })
+    }
+
+    const handleSchemaTextChange = (value: string) => {
+      if (!value.trim()) {
+        updateApiConfig(index, { schemaText: value, schema: undefined })
+        return
+      }
+      try {
+        const parseResult = parseSchemaText(value)
+        if (parseResult.success && parseResult.data) {
+          const parsedOpenAPI = parseOpenAPISchema(parseResult.data)
+          const updates: Partial<ApiConnectionConfig> = { schemaText: value, schema: parseResult.data }
+          if (parsedOpenAPI.securitySchemes && parsedOpenAPI.security && parsedOpenAPI.security.length > 0) {
+            const schemeName = Object.keys(parsedOpenAPI.security[0])[0]
+            const scheme = schemeName && parsedOpenAPI.securitySchemes[schemeName]
+            if (scheme) {
+              if (scheme.type === 'apiKey') {
+                updates.authenticationType = 'api_key'
+                updates.authType = scheme.in === 'header' ? 'bearer' : 'basic'
+                if (scheme.in === 'header') updates.customHeaderName = scheme.name
+              } else if (scheme.type === 'http' && scheme.scheme === 'bearer') {
+                updates.authenticationType = 'api_key'; updates.authType = 'bearer'
+              } else if (scheme.type === 'oauth2') {
+                updates.authenticationType = 'oauth'
+                if (scheme.flows?.authorizationCode) {
+                  updates.authorizationUrl = scheme.flows.authorizationCode.authorizationUrl
+                  updates.tokenUrl = scheme.flows.authorizationCode.tokenUrl
+                  updates.scope = scheme.flows.authorizationCode.scopes ? Object.keys(scheme.flows.authorizationCode.scopes).join(' ') : undefined
+                }
+              }
+            }
+          } else {
+            updates.authenticationType = 'none'
+          }
+          updateApiConfig(index, updates)
+        } else {
+          updateApiConfig(index, { schemaText: value, schema: undefined })
+        }
+      } catch {
+        updateApiConfig(index, { schemaText: value, schema: undefined })
+      }
+    }
+
+    const handleExampleSelect = (value: keyof typeof EXAMPLE_SCHEMAS) => {
+      if (!value || !EXAMPLE_SCHEMAS[value]) return
+      const selectedSchema = EXAMPLE_SCHEMAS[value].schema
+      try {
+        const parseResult = parseSchemaText(selectedSchema)
+        if (parseResult.success && parseResult.data) {
+          const parsedOpenAPI = parseOpenAPISchema(parseResult.data)
+          const updates: Partial<ApiConnectionConfig> = { schemaText: selectedSchema, schema: parseResult.data }
+          if (parsedOpenAPI.securitySchemes && parsedOpenAPI.security && parsedOpenAPI.security.length > 0) {
+            const schemeName = Object.keys(parsedOpenAPI.security[0])[0]
+            const scheme = schemeName && parsedOpenAPI.securitySchemes[schemeName]
+            if (scheme) {
+              if (scheme.type === 'apiKey') {
+                updates.authenticationType = 'api_key'
+                updates.authType = scheme.in === 'header' ? 'bearer' : 'basic'
+                if (scheme.in === 'header') updates.customHeaderName = scheme.name
+              } else if (scheme.type === 'http' && scheme.scheme === 'bearer') {
+                updates.authenticationType = 'api_key'; updates.authType = 'bearer'
+              } else if (scheme.type === 'oauth2') {
+                updates.authenticationType = 'oauth'
+                if (scheme.flows?.authorizationCode) {
+                  updates.authorizationUrl = scheme.flows.authorizationCode.authorizationUrl
+                  updates.tokenUrl = scheme.flows.authorizationCode.tokenUrl
+                  updates.scope = scheme.flows.authorizationCode.scopes ? Object.keys(scheme.flows.authorizationCode.scopes).join(' ') : undefined
+                }
+              }
+            }
+          } else {
+            updates.authenticationType = 'none'
+          }
+          updateApiConfig(index, updates)
+        } else {
+          updateApiConfig(index, { schemaText: selectedSchema, schema: undefined })
+        }
+      } catch {
+        updateApiConfig(index, { schemaText: selectedSchema, schema: undefined })
+      }
+    }
+
+    return (
+      <div key={index} className="space-y-6">
+        {/* Panel header when multiple APIs */}
+        {apiConfigs.length > 1 && (
+          <div className={`flex items-center justify-between${index === 1 ? " border-t pt-6" : ""}`}>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-semibold">API Connection {index + 1}</h3>
+              {index === 1 && (
+                <span className="text-xs font-normal bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Optional</span>
+              )}
+            </div>
+            {index === 1 && (
+              <Button variant="ghost" size="sm" onClick={removeSecondApi} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                <Trash2 className="h-4 w-4 mr-1" />
+                Remove
+              </Button>
+            )}
+          </div>
+        )}
+
         {/* Authentication Type Selection */}
         <div className="space-y-4">
           <Label>Authentication</Label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card
-              className={`cursor-pointer transition-all hover:shadow-md ${formData.authenticationType === "none"
-                  ? "ring-2 ring-primary bg-primary/5"
-                  : "hover:bg-muted/50"
-                }`}
-              onClick={() => handleAuthTypeChange("none")}
+              className={`cursor-pointer transition-all hover:shadow-md ${config.authenticationType === "none" ? "ring-2 ring-primary bg-primary/5" : "hover:bg-muted/50"}`}
+              onClick={() => handleAuthReset("none")}
             >
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                   <Shield className="h-5 w-5 text-muted-foreground" />
                   <CardTitle className="text-base">None</CardTitle>
                 </div>
-                <CardDescription className="text-sm">
-                  No authentication required
-                </CardDescription>
+                <CardDescription className="text-sm">No authentication required</CardDescription>
               </CardHeader>
             </Card>
-
             <Card
-              className={`cursor-pointer transition-all hover:shadow-md ${formData.authenticationType === "api_key"
-                  ? "ring-2 ring-primary bg-primary/5"
-                  : "hover:bg-muted/50"
-                }`}
-              onClick={() => handleAuthTypeChange("api_key")}
+              className={`cursor-pointer transition-all hover:shadow-md ${config.authenticationType === "api_key" ? "ring-2 ring-primary bg-primary/5" : "hover:bg-muted/50"}`}
+              onClick={() => handleAuthReset("api_key")}
             >
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                   <Key className="h-5 w-5 text-muted-foreground" />
                   <CardTitle className="text-base">API Key</CardTitle>
                 </div>
-                <CardDescription className="text-sm">
-                  Use API keys for authentication
-                </CardDescription>
+                <CardDescription className="text-sm">Use API keys for authentication</CardDescription>
               </CardHeader>
             </Card>
-
             <Card
-              className={`cursor-pointer transition-all hover:shadow-md ${formData.authenticationType === "oauth"
-                  ? "ring-2 ring-primary bg-primary/5"
-                  : "hover:bg-muted/50"
-                }`}
-              onClick={() => handleAuthTypeChange("oauth")}
+              className={`cursor-pointer transition-all hover:shadow-md ${config.authenticationType === "oauth" ? "ring-2 ring-primary bg-primary/5" : "hover:bg-muted/50"}`}
+              onClick={() => handleAuthReset("oauth")}
             >
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                   <Lock className="h-5 w-5 text-muted-foreground" />
                   <CardTitle className="text-base">OAuth</CardTitle>
                 </div>
-                <CardDescription className="text-sm">
-                  OAuth 2.0 authentication flow
-                </CardDescription>
+                <CardDescription className="text-sm">OAuth 2.0 authentication flow</CardDescription>
               </CardHeader>
             </Card>
           </div>
@@ -4555,152 +4672,85 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
         </div>
 
         {/* API Key Authentication Fields */}
-        {formData.authenticationType === "api_key" && (
+        {config.authenticationType === "api_key" && (
           <div className="space-y-4 border-t pt-4">
             <div className="space-y-2">
-              <Label htmlFor="apiKey">API Key</Label>
+              <Label>API Key</Label>
               <Input
-                id="apiKey"
                 type="password"
                 placeholder="Enter your API key"
-                value={formData.apiKey || ""}
-                onChange={(e) => updateFormData({ apiKey: e.target.value })}
+                value={config.apiKey || ""}
+                onChange={(e) => updateApiConfig(index, { apiKey: e.target.value })}
               />
-              <p className="text-sm text-muted-foreground">
-                Your API key for authentication (stored securely)
-              </p>
+              <p className="text-sm text-muted-foreground">Your API key for authentication (stored securely)</p>
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="authType">Auth Type</Label>
+              <Label>Auth Type</Label>
               <Select
-                value={formData.authType || "bearer"}
-                onValueChange={(value: "basic" | "bearer" | "custom") =>
-                  updateFormData({ authType: value })
-                }
+                value={config.authType || "bearer"}
+                onValueChange={(value: "basic" | "bearer" | "custom") => updateApiConfig(index, { authType: value })}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select auth type" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select auth type" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="basic" className="focus:bg-muted focus:text-foreground">
-                    Basic
-                  </SelectItem>
-                  <SelectItem value="bearer" className="focus:bg-muted focus:text-foreground">
-                    Bearer
-                  </SelectItem>
-                  <SelectItem value="custom" className="focus:bg-muted focus:text-foreground">
-                    Custom
-                  </SelectItem>
+                  <SelectItem value="basic" className="focus:bg-muted focus:text-foreground">Basic</SelectItem>
+                  <SelectItem value="bearer" className="focus:bg-muted focus:text-foreground">Bearer</SelectItem>
+                  <SelectItem value="custom" className="focus:bg-muted focus:text-foreground">Custom</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-sm text-muted-foreground">
-                Select how the API key should be sent in requests
-              </p>
+              <p className="text-sm text-muted-foreground">Select how the API key should be sent in requests</p>
             </div>
-
-            {formData.authType === "custom" && (
+            {config.authType === "custom" && (
               <div className="space-y-2">
-                <Label htmlFor="customHeaderName">Custom Header Name</Label>
+                <Label>Custom Header Name</Label>
                 <Input
-                  id="customHeaderName"
                   placeholder="e.g., X-API-Key, Authorization"
-                  value={formData.customHeaderName || ""}
-                  onChange={(e) => updateFormData({ customHeaderName: e.target.value })}
+                  value={config.customHeaderName || ""}
+                  onChange={(e) => updateApiConfig(index, { customHeaderName: e.target.value })}
                 />
-                <p className="text-sm text-muted-foreground">
-                  Specify the custom header name to send the API key
-                </p>
+                <p className="text-sm text-muted-foreground">Specify the custom header name to send the API key</p>
               </div>
             )}
           </div>
         )}
 
         {/* OAuth Authentication Fields */}
-        {formData.authenticationType === "oauth" && (
+        {config.authenticationType === "oauth" && (
           <div className="space-y-4 border-t pt-4">
             <div className="space-y-2">
-              <Label htmlFor="clientId">Client ID</Label>
-              <Input
-                id="clientId"
-                placeholder="Enter client ID"
-                value={formData.clientId || ""}
-                onChange={(e) => updateFormData({ clientId: e.target.value })}
-              />
+              <Label>Client ID</Label>
+              <Input placeholder="Enter client ID" value={config.clientId || ""} onChange={(e) => updateApiConfig(index, { clientId: e.target.value })} />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="clientSecret">Client Secret</Label>
-              <Input
-                id="clientSecret"
-                type="password"
-                placeholder="Enter client secret"
-                value={formData.clientSecret || ""}
-                onChange={(e) => updateFormData({ clientSecret: e.target.value })}
-              />
-              <p className="text-sm text-muted-foreground">
-                Client secret (stored securely)
-              </p>
+              <Label>Client Secret</Label>
+              <Input type="password" placeholder="Enter client secret" value={config.clientSecret || ""} onChange={(e) => updateApiConfig(index, { clientSecret: e.target.value })} />
+              <p className="text-sm text-muted-foreground">Client secret (stored securely)</p>
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="authorizationUrl">Authorization URL</Label>
-              <Input
-                id="authorizationUrl"
-                type="url"
-                placeholder="https://example.com/oauth/authorize"
-                value={formData.authorizationUrl || ""}
-                onChange={(e) => updateFormData({ authorizationUrl: e.target.value })}
-              />
+              <Label>Authorization URL</Label>
+              <Input type="url" placeholder="https://example.com/oauth/authorize" value={config.authorizationUrl || ""} onChange={(e) => updateApiConfig(index, { authorizationUrl: e.target.value })} />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="tokenUrl">Token URL</Label>
-              <Input
-                id="tokenUrl"
-                type="url"
-                placeholder="https://example.com/oauth/token"
-                value={formData.tokenUrl || ""}
-                onChange={(e) => updateFormData({ tokenUrl: e.target.value })}
-              />
+              <Label>Token URL</Label>
+              <Input type="url" placeholder="https://example.com/oauth/token" value={config.tokenUrl || ""} onChange={(e) => updateApiConfig(index, { tokenUrl: e.target.value })} />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="scope">Scope</Label>
-              <Input
-                id="scope"
-                placeholder="read write"
-                value={formData.scope || ""}
-                onChange={(e) => updateFormData({ scope: e.target.value })}
-              />
-              <p className="text-sm text-muted-foreground">
-                OAuth scopes (space-separated)
-              </p>
+              <Label>Scope</Label>
+              <Input placeholder="read write" value={config.scope || ""} onChange={(e) => updateApiConfig(index, { scope: e.target.value })} />
+              <p className="text-sm text-muted-foreground">OAuth scopes (space-separated)</p>
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="tokenExchangeMethod">Token Exchange Method</Label>
+              <Label>Token Exchange Method</Label>
               <Select
-                value={formData.tokenExchangeMethod || "post"}
-                onValueChange={(value: "post" | "basic_auth") =>
-                  updateFormData({ tokenExchangeMethod: value })
-                }
+                value={config.tokenExchangeMethod || "post"}
+                onValueChange={(value: "post" | "basic_auth") => updateApiConfig(index, { tokenExchangeMethod: value })}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select method" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="post" className="focus:bg-muted focus:text-foreground">
-                    POST
-                  </SelectItem>
-                  <SelectItem value="basic_auth" className="focus:bg-muted focus:text-foreground">
-                    Basic Auth
-                  </SelectItem>
+                  <SelectItem value="post" className="focus:bg-muted focus:text-foreground">POST</SelectItem>
+                  <SelectItem value="basic_auth" className="focus:bg-muted focus:text-foreground">Basic Auth</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-sm text-muted-foreground">
-                Method used for token exchange
-              </p>
+              <p className="text-sm text-muted-foreground">Method used for token exchange</p>
             </div>
           </div>
         )}
@@ -4708,112 +4758,23 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
         {/* OpenAPI Schema Field */}
         <div className="space-y-2 border-t pt-4">
           <div className="flex items-center justify-between">
-            <Label htmlFor="schema">OpenAPI Schema (JSON or YAML)</Label>
+            <Label htmlFor={`schema-${index}`}>OpenAPI Schema (JSON or YAML)</Label>
             <div className="flex items-center gap-2">
-              <Label htmlFor="examples" className="text-sm text-muted-foreground">Examples:</Label>
-              <Select
-                value=""
-                onValueChange={(value: keyof typeof EXAMPLE_SCHEMAS) => {
-                  if (value && EXAMPLE_SCHEMAS[value]) {
-                    const selectedSchema = EXAMPLE_SCHEMAS[value].schema
-
-                    // Trigger the same parsing logic as manual input
-                    try {
-                      const parseResult = parseSchemaText(selectedSchema)
-                      if (parseResult.success && parseResult.data) {
-                        const parsedOpenAPI = parseOpenAPISchema(parseResult.data)
-
-                        // Prepare update object
-                        const updates: any = {
-                          schemaText: selectedSchema,
-                          schema: parseResult.data
-                        }
-
-                        // Auto-populate authentication based on security schemes
-                        if (parsedOpenAPI.securitySchemes && parsedOpenAPI.security && parsedOpenAPI.security.length > 0) {
-                          const firstSecurityReq = parsedOpenAPI.security[0]
-                          const securitySchemeName = Object.keys(firstSecurityReq)[0]
-
-                          if (securitySchemeName && parsedOpenAPI.securitySchemes[securitySchemeName]) {
-                            const scheme = parsedOpenAPI.securitySchemes[securitySchemeName]
-
-                            if (scheme.type === 'apiKey') {
-                              updates.authenticationType = 'api_key'
-                              updates.authType = scheme.in === 'header' ? 'bearer' : 'basic'
-                              if (scheme.in === 'header') {
-                                updates.customHeaderName = scheme.name
-                              }
-                            } else if (scheme.type === 'http' && scheme.scheme === 'bearer') {
-                              updates.authenticationType = 'api_key'
-                              updates.authType = 'bearer'
-                            } else if (scheme.type === 'http' && scheme.scheme === 'basic') {
-                              updates.authenticationType = 'api_key'
-                              updates.authType = 'basic'
-                            } else if (scheme.type === 'oauth2') {
-                              updates.authenticationType = 'oauth'
-                              // Auto-populate OAuth URLs if available
-                              if (scheme.flows?.authorizationCode) {
-                                updates.authorizationUrl = scheme.flows.authorizationCode.authorizationUrl
-                                updates.tokenUrl = scheme.flows.authorizationCode.tokenUrl
-                                if (scheme.flows.authorizationCode.scopes) {
-                                  updates.scope = Object.keys(scheme.flows.authorizationCode.scopes).join(' ')
-                                }
-                              }
-                            }
-                          }
-                        } else {
-                          // No security schemes detected - set to none
-                          updates.authenticationType = 'none'
-                        }
-
-                        // Apply all updates at once
-                        updateFormData(updates)
-                      } else {
-                        updateFormData({
-                          schemaText: selectedSchema,
-                          schema: undefined
-                        })
-                      }
-                    } catch {
-                      updateFormData({
-                        schemaText: selectedSchema,
-                        schema: undefined
-                      })
-                    }
-                  }
-                }}
-              >
+              <Label className="text-sm text-muted-foreground">Examples:</Label>
+              <Select value="" onValueChange={handleExampleSelect}>
                 <SelectTrigger className="w-[200px]">
                   <SelectValue placeholder="Choose example..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="sharepoint" className="focus:bg-muted focus:text-foreground">
-                    Microsoft SharePoint API
-                  </SelectItem>
-                  <SelectItem value="weather" className="focus:bg-muted focus:text-foreground">
-                    Weather API
-                  </SelectItem>
-                  <SelectItem value="advice" className="focus:bg-muted focus:text-foreground">
-                    Advice Slip API
-                  </SelectItem>
-                  <SelectItem value="seo" className="focus:bg-muted focus:text-foreground">
-                    SEO Assistant API (DataForSEO)
-                  </SelectItem>
-                  <SelectItem value="trading" className="focus:bg-muted focus:text-foreground">
-                    Trading Assistant API (Alpaca)
-                  </SelectItem>
-                  <SelectItem value="diese" className="focus:bg-muted focus:text-foreground">
-                    Diese Integration API (Pipedream)
-                  </SelectItem>
-                  <SelectItem value="onenote" className="focus:bg-muted focus:text-foreground">
-                    OneNote Integration API
-                  </SelectItem>
-                  <SelectItem value="teams" className="focus:bg-muted focus:text-foreground">
-                    Microsoft Teams Integration API
-                  </SelectItem>
-                  <SelectItem value="project" className="focus:bg-muted focus:text-foreground">
-                    Microsoft Project Integration API
-                  </SelectItem>
+                  <SelectItem value="sharepoint" className="focus:bg-muted focus:text-foreground">Microsoft SharePoint API</SelectItem>
+                  <SelectItem value="weather" className="focus:bg-muted focus:text-foreground">Weather API</SelectItem>
+                  <SelectItem value="advice" className="focus:bg-muted focus:text-foreground">Advice Slip API</SelectItem>
+                  <SelectItem value="seo" className="focus:bg-muted focus:text-foreground">SEO Assistant API (DataForSEO)</SelectItem>
+                  <SelectItem value="trading" className="focus:bg-muted focus:text-foreground">Trading Assistant API (Alpaca)</SelectItem>
+                  <SelectItem value="diese" className="focus:bg-muted focus:text-foreground">Diese Integration API (Pipedream)</SelectItem>
+                  <SelectItem value="onenote" className="focus:bg-muted focus:text-foreground">OneNote Integration API</SelectItem>
+                  <SelectItem value="teams" className="focus:bg-muted focus:text-foreground">Microsoft Teams Integration API</SelectItem>
+                  <SelectItem value="project" className="focus:bg-muted focus:text-foreground">Microsoft Project Integration API</SelectItem>
                 </SelectContent>
               </Select>
               <a
@@ -4829,102 +4790,65 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
             </div>
           </div>
           <Textarea
-            id="schema"
-            placeholder='Paste your OpenAPI schema here (JSON or YAML format)...'
-            value={formData.schemaText || ""}
-            onChange={(e) => {
-              const value = e.target.value
-              updateFormData({ schemaText: value })
-
-              if (!value.trim()) {
-                // Clear schema when empty
-                updateFormData({ schema: undefined })
-                return
-              }
-
-              try {
-                // Parse the schema text (supports both JSON and YAML)
-                const parseResult = parseSchemaText(value)
-
-                if (parseResult.success && parseResult.data) {
-                  // Check for security requirements and auto-populate authentication
-                  const parsedOpenAPI = parseOpenAPISchema(parseResult.data)
-
-                  // Auto-populate authentication if security schemes are detected
-                  if (parsedOpenAPI.securitySchemes && parsedOpenAPI.security && parsedOpenAPI.security.length > 0) {
-                    // Get the first security requirement
-                    const firstSecurityReq = parsedOpenAPI.security[0]
-                    const securitySchemeName = Object.keys(firstSecurityReq)[0]
-
-                    if (securitySchemeName && parsedOpenAPI.securitySchemes[securitySchemeName]) {
-                      const scheme = parsedOpenAPI.securitySchemes[securitySchemeName]
-
-                      if (scheme.type === 'apiKey') {
-                        // Auto-populate API key authentication
-                        updateFormData({
-                          authenticationType: 'api_key',
-                          authType: scheme.in === 'header' ? 'bearer' : 'basic',
-                          customHeaderName: scheme.in === 'header' ? scheme.name : undefined,
-                          // Note: API key value still needs to be entered by user
-                        })
-                      } else if (scheme.type === 'http' && scheme.scheme === 'bearer') {
-                        // Auto-populate bearer token authentication
-                        updateFormData({
-                          authenticationType: 'api_key',
-                          authType: 'bearer',
-                        })
-                      } else if (scheme.type === 'oauth2') {
-                        // Auto-populate OAuth authentication
-                        updateFormData({
-                          authenticationType: 'oauth',
-                          authorizationUrl: scheme.flows?.authorizationCode?.authorizationUrl,
-                          tokenUrl: scheme.flows?.authorizationCode?.tokenUrl,
-                          scope: scheme.flows?.authorizationCode?.scopes ? Object.keys(scheme.flows.authorizationCode.scopes).join(' ') : undefined,
-                        })
-                      }
-                    }
-                  }
-
-                  updateFormData({ schema: parseResult.data })
-                } else {
-                  updateFormData({ schema: undefined })
-                }
-              } catch {
-                // Invalid JSON - keep the schema as undefined until valid
-                updateFormData({ schema: undefined })
-              }
-            }}
+            id={`schema-${index}`}
+            placeholder="Paste your OpenAPI schema here (JSON or YAML format)..."
+            value={config.schemaText || ""}
+            onChange={(e) => handleSchemaTextChange(e.target.value)}
             rows={20}
-            style={{ height: '300px' }}
+            style={{ height: "300px" }}
             className="resize-none font-mono text-sm overflow-y-auto"
           />
-          <p className="text-sm text-muted-foreground">
-            Supports both JSON and YAML formats
-          </p>
+          <p className="text-sm text-muted-foreground">Supports both JSON and YAML formats</p>
         </div>
 
         {/* Schema Preview */}
-        {formData.schemaText && (
+        {config.schemaText && (
           <div className="space-y-2">
             <SchemaPreview
-              schemaText={formData.schemaText}
+              schemaText={config.schemaText}
               authConfig={{
-                authenticationType: formData.authenticationType,
-                apiKey: formData.apiKey,
-                authType: formData.authType,
-                customHeaderName: formData.customHeaderName,
-                clientId: formData.clientId,
-                clientSecret: formData.clientSecret,
-                authorizationUrl: formData.authorizationUrl,
-                tokenUrl: formData.tokenUrl,
-                scope: formData.scope,
-                tokenExchangeMethod: formData.tokenExchangeMethod,
+                authenticationType: config.authenticationType,
+                apiKey: config.apiKey,
+                authType: config.authType,
+                customHeaderName: config.customHeaderName,
+                clientId: config.clientId,
+                clientSecret: config.clientSecret,
+                authorizationUrl: config.authorizationUrl,
+                tokenUrl: config.tokenUrl,
+                scope: config.scope,
+                tokenExchangeMethod: config.tokenExchangeMethod,
               }}
             />
           </div>
         )}
       </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold mb-2">Advanced Configuration</h2>
+        <p className="text-muted-foreground">
+          Configure API settings and authentication for your assistant
+        </p>
+      </div>
+
+      <div className="space-y-6">
+        {apiConfigs.map((config, index) => renderPanel(config, index))}
+
+        {/* Add Second API Connection button */}
+        {apiConfigs.length < 2 && (
+          <button
+            type="button"
+            onClick={addSecondApi}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground transition-colors hover:border-primary/60 hover:bg-muted/40 hover:text-foreground"
+          >
+            <Plus className="h-4 w-4" />
+            Add Second API Connection (Optional)
+          </button>
+        )}
+      </div>
     </div>
   )
 }
-

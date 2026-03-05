@@ -7,9 +7,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Download, X } from "lucide-react"
+import { AlignLeft, ChevronDown, Download, File, FileCode, FileText, Layers, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import type { Artifact } from "./artifact-card"
@@ -18,6 +26,43 @@ interface ViewArtifactDialogProps {
   artifact: Artifact | null
   open: boolean
   onOpenChange: (open: boolean) => void
+}
+
+// ── Export helpers ───────────────────────────────────────────────────────────
+
+/** Strip all HTML tags and return plain text */
+function htmlToPlainText(html: string): string {
+  if (typeof window === "undefined") return ""
+  const doc = new DOMParser().parseFromString(html, "text/html")
+  return (doc.body as HTMLElement).innerText ?? doc.body.textContent ?? ""
+}
+
+/** Split HTML into heading-based sections for PPTX slides */
+function parseHtmlSections(html: string): { title: string; body: string }[] {
+  if (typeof window === "undefined") return []
+  const doc = new DOMParser().parseFromString(html, "text/html")
+  const sections: { title: string; body: string }[] = []
+
+  const headings = doc.querySelectorAll("h1, h2, h3")
+  if (headings.length === 0) {
+    const text = htmlToPlainText(html)
+    sections.push({ title: "Content", body: text.slice(0, 800) })
+    return sections
+  }
+
+  headings.forEach((heading, i) => {
+    const title = heading.textContent?.trim() ?? `Slide ${i + 1}`
+    const bodyParts: string[] = []
+    let sibling = heading.nextElementSibling
+    while (sibling && !["H1", "H2", "H3"].includes(sibling.tagName)) {
+      const txt = sibling.textContent?.trim()
+      if (txt) bodyParts.push(txt)
+      sibling = sibling.nextElementSibling
+    }
+    sections.push({ title, body: bodyParts.join("\n").slice(0, 800) })
+  })
+
+  return sections
 }
 
 const getCategoryColor = (category: string) => {
@@ -54,27 +99,142 @@ export function ViewArtifactDialog({
     }
   }, [artifact?.htmlContent, open])
 
-  // Handle download artifact as HTML file
-  const handleDownload = () => {
-    if (!artifact?.htmlContent) {
-      toast.error("No content to download")
-      return
-    }
+  const safeName = (artifact?.name ?? "artifact")
+    .replace(/[^a-z0-9]/gi, "_")
+    .toLowerCase()
 
+  const triggerDownload = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  // ── HTML ───────────────────────────────────────────────────────────────────
+  const handleDownloadHTML = () => {
+    if (!artifact?.htmlContent) { toast.error("No content to download"); return }
     try {
-      const blob = new Blob([artifact.htmlContent], { type: "text/html" })
-      const url = URL.createObjectURL(blob)
+      triggerDownload(
+        new Blob([artifact.htmlContent], { type: "text/html" }),
+        `${safeName}.html`,
+      )
+      toast.success("HTML downloaded")
+    } catch (e) {
+      console.error(e)
+      toast.error("Failed to download HTML")
+    }
+  }
+
+  // ── DOCX ──────────────────────────────────────────────────────────────────
+  const [isGeneratingDOCX, setIsGeneratingDOCX] = useState(false)
+  const handleDownloadDOCX = async () => {
+    if (!artifact?.htmlContent) { toast.error("No content to download"); return }
+    if (isGeneratingDOCX) return
+    setIsGeneratingDOCX(true)
+    toast.loading("Generating Word document…", { id: "docx-export" })
+    try {
+      const res = await fetch("/api/artifacts/generate-docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html: artifact.htmlContent, filename: safeName }),
+      })
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Server error") }
+      const { docxUrl } = await res.json()
       const link = document.createElement("a")
-      link.href = url
-      link.download = `${artifact.name.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.html`
+      link.href = docxUrl; link.download = `${safeName}.docx`; link.target = "_blank"
+      document.body.appendChild(link); link.click(); document.body.removeChild(link)
+      toast.success("Word document downloaded", { id: "docx-export" })
+    } catch (e: any) {
+      console.error(e)
+      toast.error(e?.message ?? "Failed to export as DOCX", { id: "docx-export" })
+    } finally {
+      setIsGeneratingDOCX(false)
+    }
+  }
+
+  // ── PPTX ──────────────────────────────────────────────────────────────────
+  const handleDownloadPPTX = async () => {
+    if (!artifact?.htmlContent) { toast.error("No content to download"); return }
+    try {
+      const pptxgen = (await import("pptxgenjs")).default
+      const pres = new pptxgen()
+      pres.layout = "LAYOUT_WIDE"
+
+      const sections = parseHtmlSections(artifact.htmlContent)
+      sections.forEach(({ title, body }) => {
+        const slide = pres.addSlide()
+        slide.addText(title, {
+          x: 0.5, y: 0.4, w: "90%", h: 1.2,
+          fontSize: 28, bold: true, color: "363636", wrap: true,
+        })
+        if (body) {
+          slide.addText(body, {
+            x: 0.5, y: 1.9, w: "90%", h: "60%",
+            fontSize: 16, color: "555555", wrap: true, valign: "top",
+          })
+        }
+      })
+
+      await pres.writeFile({ fileName: `${safeName}.pptx` })
+      toast.success("PowerPoint downloaded")
+    } catch (e) {
+      console.error(e)
+      toast.error("Failed to export as PPTX")
+    }
+  }
+
+  // ── PDF ───────────────────────────────────────────────────────────────────
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
+
+  const handleDownloadPDF = async () => {
+    if (!artifact?.htmlContent) { toast.error("No content to download"); return }
+    if (isGeneratingPDF) return
+    setIsGeneratingPDF(true)
+    toast.loading("Generating PDF…", { id: "pdf-export" })
+    try {
+      const res = await fetch("/api/artifacts/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html: artifact.htmlContent, filename: safeName }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || "Server error")
+      }
+      const { pdfUrl } = await res.json()
+      const link = document.createElement("a")
+      link.href = pdfUrl
+      link.download = `${safeName}.pdf`
+      link.target = "_blank"
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-      toast.success("Artifact downloaded successfully")
-    } catch (error) {
-      console.error("Download error:", error)
-      toast.error("Failed to download artifact")
+      toast.success("PDF downloaded", { id: "pdf-export" })
+    } catch (e: any) {
+      console.error(e)
+      toast.error(e?.message ?? "Failed to export as PDF", { id: "pdf-export" })
+    } finally {
+      setIsGeneratingPDF(false)
+    }
+  }
+
+  // ── TXT ───────────────────────────────────────────────────────────────────
+  const handleDownloadTXT = () => {
+    if (!artifact?.htmlContent) { toast.error("No content to download"); return }
+    try {
+      const text = htmlToPlainText(artifact.htmlContent)
+      triggerDownload(
+        new Blob([text], { type: "text/plain;charset=utf-8" }),
+        `${safeName}.txt`,
+      )
+      toast.success("Text file downloaded")
+    } catch (e) {
+      console.error(e)
+      toast.error("Failed to export as TXT")
     }
   }
 
@@ -102,15 +262,40 @@ export function ViewArtifactDialog({
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Download Button */}
-              <Button
-                onClick={handleDownload}
-                variant="outline"
-                size="icon"
-                className="flex-shrink-0"
-              >
-                <Download className="h-4 w-4" />
-              </Button>
+              {/* Export Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="flex items-center gap-1.5 flex-shrink-0">
+                    <Download className="h-4 w-4" />
+                    Export
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Download as</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleDownloadHTML}>
+                    <FileCode className="h-4 w-4 mr-2" />
+                    HTML
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleDownloadPDF} disabled={isGeneratingPDF}>
+                    <File className="h-4 w-4 mr-2" />
+                    {isGeneratingPDF ? "Generating PDF…" : "PDF (.pdf)"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleDownloadDOCX} disabled={isGeneratingDOCX}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    {isGeneratingDOCX ? "Generating Word…" : "Word (.docx)"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleDownloadPPTX}>
+                    <Layers className="h-4 w-4 mr-2" />
+                    PowerPoint (.pptx)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleDownloadTXT}>
+                    <AlignLeft className="h-4 w-4 mr-2" />
+                    Plain Text (.txt)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Close Button */}
               <Button

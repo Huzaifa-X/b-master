@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { createCompleteAssistant, updateCompleteAssistant, hardDeleteAssistant } from "@/app/actions/assistant.action"
-import { AssistantCategory } from "@/types/assistant"
+import { AssistantCategory, ApiConnectionConfig } from "@/types/assistant"
 import { toast } from "sonner"
 
 interface CreateAssistantParams {
@@ -40,6 +40,7 @@ interface CreateAssistantParams {
     tokenExchangeMethod?: string
     schemaText?: string
     schema?: any
+    apiConfigs?: ApiConnectionConfig[]
 
     // Step 6: Sharing
     permissionLevel: string
