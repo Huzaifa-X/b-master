@@ -34,7 +34,11 @@ interface UseWebContainerReturn {
 
 let globalWebContainerPromise: Promise<WebContainer> | null = null
 
-export function useWebContainer(templateId: string): UseWebContainerReturn {
+export function useWebContainer(assistantId: string, templateId: string): UseWebContainerReturn {
+    // Create a unique storage key combining assistantId and templateId
+    // This allows each assistant to have its own saved workspace per template
+    const storageKey = `${assistantId}-${templateId}`
+
     const [isBooting, setIsBooting] = useState(true)
     const [isInstalling, setIsInstalling] = useState(false)
     const [isServerReady, setIsServerReady] = useState(false)
@@ -42,12 +46,13 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
     const [terminalOutput, setTerminalOutput] = useState<string[]>([])
     const [error, setError] = useState<string | null>(null)
     const [webcontainerInstance, setWebcontainerInstance] = useState<WebContainer | null>(null)
-    const [hasStoredChanges, setHasStoredChanges] = useState(() => hasStoredWorkspace(templateId))
+    const [hasStoredChanges, setHasStoredChanges] = useState(() => hasStoredWorkspace(storageKey))
 
     const webcontainerInstanceRef = useRef<WebContainer | null>(null)
     const devServerProcessRef = useRef<any | null>(null)
     const isBootingRef = useRef(false)
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+    const storageKeyRef = useRef(storageKey)
     const templateIdRef = useRef(templateId)
 
     const addTerminalOutput = useCallback((message: string) => {
@@ -63,7 +68,7 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
             if (!webcontainerInstanceRef.current) return
             try {
                 const files = await exportFilesAsJsonInternal(webcontainerInstanceRef.current)
-                const success = saveWorkspaceToStorage(templateIdRef.current, files)
+                const success = saveWorkspaceToStorage(storageKeyRef.current, files)
                 if (success) {
                     setHasStoredChanges(true)
                 }
@@ -247,10 +252,11 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
 
                 webcontainerInstanceRef.current = webcontainer
                 setWebcontainerInstance(webcontainer)
+                storageKeyRef.current = storageKey
                 templateIdRef.current = templateId
 
                 // Check for saved workspace in localStorage first
-                const savedFiles = loadWorkspaceFromStorage(templateId)
+                const savedFiles = loadWorkspaceFromStorage(storageKey)
                 let filesToMount: { [path: string]: string }
 
                 if (savedFiles && Object.keys(savedFiles).length > 0) {
@@ -311,7 +317,7 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [templateId]) // Added templateId as dependency to re-run if it changes dynamically
+    }, [storageKey]) // Re-run if storageKey (assistantId-templateId combo) changes
 
     const runCommand = useCallback(async (commandString: string) => {
         if (!webcontainerInstanceRef.current) return
@@ -348,7 +354,7 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
         if (!webcontainerInstanceRef.current) return false
         try {
             const files = await exportFilesAsJsonInternal(webcontainerInstanceRef.current)
-            const success = saveWorkspaceToStorage(templateIdRef.current, files)
+            const success = saveWorkspaceToStorage(storageKeyRef.current, files)
             if (success) {
                 setHasStoredChanges(true)
                 addTerminalOutput('💾 Workspace saved to browser storage')
@@ -367,7 +373,7 @@ export function useWebContainer(templateId: string): UseWebContainerReturn {
         addTerminalOutput('🔄 Resetting workspace to default template...')
 
         // Clear stored workspace
-        clearWorkspaceStorage(templateIdRef.current)
+        clearWorkspaceStorage(storageKeyRef.current)
         setHasStoredChanges(false)
 
         // Clean up current files
