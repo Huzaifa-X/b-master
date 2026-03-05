@@ -33,6 +33,10 @@ interface BCoderContextValue {
     getCurrentFileContent: () => Promise<string | null>
     activeArtifact: { id: string, name: string, instructions: string, category: string } | null
     setActiveArtifact: (artifact: { id: string, name: string, instructions: string, category: string } | null) => void
+    // Workspace persistence
+    saveWorkspace: () => Promise<boolean>
+    resetWorkspace: () => Promise<void>
+    hasStoredChanges: boolean
 }
 
 const BCoderContext = createContext<BCoderContextValue | null>(null)
