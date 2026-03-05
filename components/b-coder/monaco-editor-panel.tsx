@@ -18,12 +18,24 @@ import {
   Edit3,
   Trash2,
   Folder,
-  Globe
+  Globe,
+  RotateCcw,
+  HardDrive
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -194,6 +206,7 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
   const [createFolderDialog, setCreateFolderDialog] = useState<{ open: boolean; parentPath: string }>({ open: false, parentPath: "" })
   const [renameDialog, setRenameDialog] = useState<{ open: boolean; path: string; name: string; type: "file" | "folder" }>({ open: false, path: "", name: "", type: "file" })
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; path: string; name: string; type: "file" | "folder" }>({ open: false, path: "", name: "", type: "file" })
+  const [resetDialogOpen, setResetDialogOpen] = useState(false)
 
   const {
     isBooting,
@@ -214,6 +227,8 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
     activeArtifact,
     webcontainerInstance,
     exportFilesAsJson,
+    resetWorkspace,
+    hasStoredChanges,
   } = useBCoderContext()
 
   const isUpdateMode = useMemo(() => {
@@ -508,6 +523,32 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
             </div>
 
             <div className="flex items-center gap-1 sm:gap-2">
+              {/* Persistence indicator */}
+              {hasStoredChanges && (
+                <div
+                  className="flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 text-xs font-medium"
+                  title="Your changes are saved in browser storage"
+                >
+                  <HardDrive className="h-3 w-3" />
+                  <span className="hidden sm:inline">Saved</span>
+                </div>
+              )}
+
+              {/* Reset to default button */}
+              {hasStoredChanges && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setResetDialogOpen(true)}
+                  className="h-7 sm:h-8 px-1.5 sm:px-2 gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-transparent hover:text-amber-600 dark:hover:text-amber-400"
+                  title="Reset to default template"
+                  disabled={isBooting || isInstalling}
+                >
+                  <RotateCcw className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
+                  <span className="hidden lg:inline truncate">Reset</span>
+                </Button>
+              )}
+
               <Button
                 variant="outline"
                 size="sm"
@@ -699,6 +740,29 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
         initialRepoName={initialRepoName}
         isUpdateMode={isUpdateMode}
       />
+
+      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Workspace</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to reset the workspace to the default template? All your changes will be permanently lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-gray-200 hover:bg-gray-300 text-gray-800">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                await resetWorkspace()
+                await contextBuildFileTree()
+              }}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              Reset Workspace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
