@@ -32,7 +32,43 @@ interface UseWebContainerReturn {
     hasStoredChanges: boolean
 }
 
-let globalWebContainerPromise: Promise<WebContainer> | null = null
+// Extend Window interface for TypeScript
+declare global {
+    interface Window {
+        __webcontainerPromise?: Promise<WebContainer>
+        __webcontainerInstance?: WebContainer
+    }
+}
+
+// Use window to persist WebContainer across hot reloads and module re-evaluations
+// This prevents the "Only a single WebContainer instance can be booted" error
+function getGlobalWebContainerPromise(): Promise<WebContainer> | null {
+    if (typeof window !== 'undefined') {
+        return window.__webcontainerPromise || null
+    }
+    return null
+}
+
+function setGlobalWebContainerPromise(promise: Promise<WebContainer>) {
+    if (typeof window !== 'undefined') {
+        window.__webcontainerPromise = promise
+        // Also cache the resolved instance for quick access
+        promise.then(instance => {
+            window.__webcontainerInstance = instance
+        }).catch(() => {
+            // Clear on error so we can retry
+            window.__webcontainerPromise = undefined
+            window.__webcontainerInstance = undefined
+        })
+    }
+}
+
+function getGlobalWebContainerInstance(): WebContainer | null {
+    if (typeof window !== 'undefined') {
+        return window.__webcontainerInstance || null
+    }
+    return null
+}
 
 export function useWebContainer(assistantId: string, templateId: string): UseWebContainerReturn {
     // Create a unique storage key combining assistantId and templateId
@@ -235,19 +271,60 @@ export function useWebContainer(assistantId: string, templateId: string): UseWeb
             try {
                 let webcontainer: WebContainer;
 
-                // SINGLETON LOGIC
-                if (!globalWebContainerPromise) {
-                    addTerminalOutput("⏳ Booting fresh WebContainer instance (this only happens once)...")
-                    globalWebContainerPromise = WebContainer.boot()
-                    webcontainer = await globalWebContainerPromise
-                    addTerminalOutput("✅ Fresh WebContainer booted!")
-                } else {
+                // SINGLETON LOGIC - Use window-persisted promise to survive hot reloads
+                const existingPromise = getGlobalWebContainerPromise()
+                const existingInstance = getGlobalWebContainerInstance()
+
+                if (existingInstance) {
+                    // Fast path: we have a cached instance ready
                     addTerminalOutput("🔄 Reusing existing WebContainer instance...")
-                    webcontainer = await globalWebContainerPromise
+                    webcontainer = existingInstance
                     addTerminalOutput("✅ Existing WebContainer connected!")
 
                     addTerminalOutput("🧹 Cleaning up old workspace files...")
                     await cleanupFileSystem(webcontainer)
+                } else if (existingPromise) {
+                    // We have a promise but no instance yet (still booting)
+                    addTerminalOutput("🔄 Waiting for existing WebContainer to finish booting...")
+                    try {
+                        webcontainer = await existingPromise
+                        addTerminalOutput("✅ Existing WebContainer connected!")
+
+                        addTerminalOutput("🧹 Cleaning up old workspace files...")
+                        await cleanupFileSystem(webcontainer)
+                    } catch (existingErr) {
+                        // Existing promise failed - clear it and boot fresh
+                        addTerminalOutput("⚠️ Previous boot failed, starting fresh...")
+                        if (typeof window !== 'undefined') {
+                            window.__webcontainerPromise = undefined
+                            window.__webcontainerInstance = undefined
+                        }
+                        const bootPromise = WebContainer.boot()
+                        setGlobalWebContainerPromise(bootPromise)
+                        webcontainer = await bootPromise
+                        addTerminalOutput("✅ Fresh WebContainer booted!")
+                    }
+                } else {
+                    // No existing instance - boot a fresh one
+                    addTerminalOutput("⏳ Booting fresh WebContainer instance (this only happens once)...")
+                    try {
+                        const bootPromise = WebContainer.boot()
+                        setGlobalWebContainerPromise(bootPromise)
+                        webcontainer = await bootPromise
+                        addTerminalOutput("✅ Fresh WebContainer booted!")
+                    } catch (bootErr) {
+                        // Boot failed - check if it's the singleton error
+                        const errMsg = bootErr instanceof Error ? bootErr.message : String(bootErr)
+                        if (errMsg.includes('single') && errMsg.includes('instance')) {
+                            // There's already a WebContainer but we lost the reference
+                            // This shouldn't happen with window caching, but as a fallback
+                            // we need to ask the user to refresh the page
+                            addTerminalOutput("⚠️ WebContainer instance exists but reference was lost.")
+                            addTerminalOutput("🔄 Please refresh the page to reconnect.")
+                            throw new Error("WebContainer reference lost. Please refresh the page.")
+                        }
+                        throw bootErr
+                    }
                 }
 
                 webcontainerInstanceRef.current = webcontainer

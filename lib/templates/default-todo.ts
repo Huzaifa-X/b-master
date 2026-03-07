@@ -70,31 +70,244 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )`,
 
-    "src/App.jsx": `import { useState, useEffect } from 'react';
-import { 
-  CheckCircle2, 
-  Circle, 
-  Trash2, 
-  Plus, 
-  Calendar, 
-  ListTodo,
-  Sparkles
-} from 'lucide-react';
-import './App.css';
-
-const INITIAL_TODOS = [
+    // --- DATA ---
+    "src/data/todos.js": `export const INITIAL_TODOS = [
   { id: 1, text: "Review Q4 design mocks", completed: false, category: "Work" },
   { id: 2, text: "Book flights for conference", completed: false, category: "Personal" },
   { id: 3, text: "Update subscription billing", completed: true, category: "Finance" },
-];
+];`,
+
+    // --- LAYOUT COMPONENTS ---
+    "src/components/layout/Sidebar.jsx": `import { CheckCircle2, ListTodo, Calendar } from 'lucide-react';
+import ProgressCard from '../ui/ProgressCard';
+
+export default function Sidebar({ activeTab, setActiveTab, totalCount, activeCount, progressPercentage }) {
+  return (
+    <aside className="sidebar">
+      <div className="brand">
+        <div className="brand-icon"><CheckCircle2 size={24} color="white" /></div>
+        <h2>TaskMaster</h2>
+      </div>
+
+      <nav className="nav-menu">
+        <button
+          className={\`nav-item \${activeTab === 'all' ? 'active' : ''}\`}
+          onClick={() => setActiveTab('all')}
+        >
+          <ListTodo size={18} />
+          <span>All Tasks</span>
+          <span className="badge">{totalCount}</span>
+        </button>
+        <button
+          className={\`nav-item \${activeTab === 'active' ? 'active' : ''}\`}
+          onClick={() => setActiveTab('active')}
+        >
+          <Calendar size={18} />
+          <span>Active</span>
+          <span className="badge blue">{activeCount}</span>
+        </button>
+        <button
+          className={\`nav-item \${activeTab === 'completed' ? 'active' : ''}\`}
+          onClick={() => setActiveTab('completed')}
+        >
+          <CheckCircle2 size={18} />
+          <span>Completed</span>
+        </button>
+      </nav>
+
+      <div className="sidebar-footer">
+        <ProgressCard percentage={progressPercentage} showComplete={totalCount > 0} />
+      </div>
+    </aside>
+  );
+}`,
+
+    "src/components/layout/PageHeader.jsx": `export default function PageHeader({ activeTab, activeCount }) {
+  const getTitle = () => {
+    if (activeTab === 'all') return 'Good Morning';
+    if (activeTab === 'active') return "Let's Get Done";
+    return 'Completed Tasks';
+  };
+
+  const getSubtitle = () => {
+    if (activeTab === 'completed') return "You've crushed these tasks.";
+    return \`You have \${activeCount} tasks to complete today.\`;
+  };
+
+  const formattedDate = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric'
+  });
+
+  return (
+    <header className="page-header">
+      <div>
+        <h1 className="page-title">{getTitle()}</h1>
+        <p className="page-subtitle">{getSubtitle()}</p>
+      </div>
+
+      <div className="header-actions">
+        <span className="date-chip">{formattedDate}</span>
+      </div>
+    </header>
+  );
+}`,
+
+    // --- UI COMPONENTS ---
+    "src/components/ui/ProgressCard.jsx": `import { Sparkles } from 'lucide-react';
+
+export default function ProgressCard({ percentage, showComplete }) {
+  return (
+    <div className="progress-card">
+      <div className="progress-header">
+        <span className="progress-title">Daily Progress</span>
+        <span className="progress-percent">{percentage}%</span>
+      </div>
+      <div className="progress-bar-bg">
+        <div className="progress-bar-fill" style={{ width: \`\${percentage}%\` }}></div>
+      </div>
+      {percentage === 100 && showComplete && (
+        <p className="progress-cheer"><Sparkles size={14} className="text-yellow" /> All caught up!</p>
+      )}
+    </div>
+  );
+}`,
+
+    // --- TODO COMPONENTS ---
+    "src/components/todo/TodoForm.jsx": `import { Plus } from 'lucide-react';
+
+export default function TodoForm({ input, setInput, onSubmit }) {
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit();
+  };
+
+  return (
+    <form className="add-todo-form" onSubmit={handleSubmit}>
+      <div className="input-wrapper">
+        <Plus size={20} className="input-icon" />
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="What needs to be done? Press Enter to add."
+          className="todo-input"
+        />
+      </div>
+      <button type="submit" className="btn-primary" disabled={!input.trim()}>
+        Add Task
+      </button>
+    </form>
+  );
+}`,
+
+    "src/components/todo/TodoItem.jsx": `import { CheckCircle2, Circle, Trash2 } from 'lucide-react';
+
+export default function TodoItem({ todo, onToggle, onDelete }) {
+  return (
+    <div className={\`todo-item \${todo.completed ? 'is-completed' : ''}\`}>
+      <button
+        className="checkbox-btn"
+        onClick={() => onToggle(todo.id)}
+        aria-label="Toggle completion"
+      >
+        {todo.completed ? (
+          <CheckCircle2 size={24} className="icon-checked" />
+        ) : (
+          <Circle size={24} className="icon-unchecked" />
+        )}
+      </button>
+
+      <div className="todo-content">
+        <span className="todo-text">{todo.text}</span>
+        {todo.category && (
+          <span className="todo-category">{todo.category}</span>
+        )}
+      </div>
+
+      <button
+        className="delete-btn"
+        onClick={() => onDelete(todo.id)}
+        aria-label="Delete task"
+      >
+        <Trash2 size={18} />
+      </button>
+    </div>
+  );
+}`,
+
+    "src/components/todo/EmptyState.jsx": `import { CheckCircle2 } from 'lucide-react';
+
+export default function EmptyState({ activeTab }) {
+  const getMessage = () => {
+    if (activeTab === 'completed') {
+      return "You haven't completed any tasks yet.";
+    }
+    return "You're all caught up! Enjoy your day or add a new task.";
+  };
+
+  return (
+    <div className="empty-state">
+      <div className="empty-icon-wrapper">
+        <CheckCircle2 size={48} className="text-muted opacity-50" />
+      </div>
+      <h3>No tasks found</h3>
+      <p className="text-muted">{getMessage()}</p>
+    </div>
+  );
+}`,
+
+    "src/components/todo/TodoList.jsx": `import TodoItem from './TodoItem';
+import EmptyState from './EmptyState';
+
+export default function TodoList({ todos, activeTab, onToggle, onDelete }) {
+  if (todos.length === 0) {
+    return <EmptyState activeTab={activeTab} />;
+  }
+
+  return (
+    <div className="task-group animate-stagger">
+      {todos.map(todo => (
+        <TodoItem
+          key={todo.id}
+          todo={todo}
+          onToggle={onToggle}
+          onDelete={onDelete}
+        />
+      ))}
+    </div>
+  );
+}`,
+
+    "src/components/todo/ListFooter.jsx": `export default function ListFooter({ hasCompleted, onClearCompleted }) {
+  if (!hasCompleted) return null;
+
+  return (
+    <div className="list-footer">
+      <button className="btn-text" onClick={onClearCompleted}>
+        Clear completed tasks
+      </button>
+    </div>
+  );
+}`,
+
+    // --- MAIN APP ---
+    "src/App.jsx": `import { useState } from 'react';
+import { INITIAL_TODOS } from './data/todos';
+import Sidebar from './components/layout/Sidebar';
+import PageHeader from './components/layout/PageHeader';
+import TodoForm from './components/todo/TodoForm';
+import TodoList from './components/todo/TodoList';
+import ListFooter from './components/todo/ListFooter';
+import './App.css';
 
 function App() {
   const [todos, setTodos] = useState(INITIAL_TODOS);
   const [input, setInput] = useState('');
-  const [activeTab, setActiveTab] = useState('all'); // all, active, completed
+  const [activeTab, setActiveTab] = useState('all');
 
-  const addTodo = (e) => {
-    e.preventDefault();
+  const addTodo = () => {
     if (input.trim()) {
       setTodos([{ id: Date.now(), text: input, completed: false, category: "Inbox" }, ...todos]);
       setInput('');
@@ -102,7 +315,7 @@ function App() {
   };
 
   const toggleTodo = (id) => {
-    setTodos(todos.map(todo => 
+    setTodos(todos.map(todo =>
       todo.id === id ? { ...todo, completed: !todo.completed } : todo
     ));
   };
@@ -122,149 +335,39 @@ function App() {
   });
 
   const activeCount = todos.filter(t => !t.completed).length;
-  const progressPercentage = todos.length === 0 ? 0 : Math.round((todos.filter(t => t.completed).length / todos.length) * 100);
+  const completedCount = todos.filter(t => t.completed).length;
+  const progressPercentage = todos.length === 0 ? 0 : Math.round((completedCount / todos.length) * 100);
 
   return (
     <div className="app-layout">
-      {/* Sidebar Layout */}
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-icon"><CheckCircle2 size={24} color="white" /></div>
-          <h2>TaskMaster</h2>
-        </div>
-        
-        <nav className="nav-menu">
-          <button className={\`nav-item \${activeTab === 'all' ? 'active' : ''}\`} onClick={() => setActiveTab('all')}>
-            <ListTodo size={18} />
-            <span>All Tasks</span>
-            <span className="badge">{todos.length}</span>
-          </button>
-          <button className={\`nav-item \${activeTab === 'active' ? 'active' : ''}\`} onClick={() => setActiveTab('active')}>
-            <Calendar size={18} />
-            <span>Active</span>
-            <span className="badge blue">{activeCount}</span>
-          </button>
-          <button className={\`nav-item \${activeTab === 'completed' ? 'active' : ''}\`} onClick={() => setActiveTab('completed')}>
-            <CheckCircle2 size={18} />
-            <span>Completed</span>
-          </button>
-        </nav>
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        totalCount={todos.length}
+        activeCount={activeCount}
+        progressPercentage={progressPercentage}
+      />
 
-        <div className="sidebar-footer">
-          <div className="progress-card">
-            <div className="progress-header">
-              <span className="progress-title">Daily Progress</span>
-              <span className="progress-percent">{progressPercentage}%</span>
-            </div>
-            <div className="progress-bar-bg">
-              <div className="progress-bar-fill" style={{ width: \`\${progressPercentage}%\` }}></div>
-            </div>
-            {progressPercentage === 100 && todos.length > 0 && (
-              <p className="progress-cheer"><Sparkles size={14} className="text-yellow" /> All caught up!</p>
-            )}
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
       <main className="main-content">
         <div className="content-wrapper">
-          
-          <header className="page-header">
-            <div>
-              <h1 className="page-title">
-                {activeTab === 'all' ? 'Good Morning' : activeTab === 'active' ? "Let's Get Done" : 'Completed Tasks'}
-              </h1>
-              <p className="page-subtitle">
-                {activeTab === 'completed' ? "You've crushed these tasks." : \`You have \${activeCount} tasks to complete today.\`}
-              </p>
-            </div>
-            
-            <div className="header-actions">
-              <span className="date-chip">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
-            </div>
-          </header>
+          <PageHeader activeTab={activeTab} activeCount={activeCount} />
 
-          {/* Add Todo Form */}
-          <form className="add-todo-form" onSubmit={addTodo}>
-            <div className="input-wrapper">
-              <Plus size={20} className="input-icon" />
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="What needs to be done? Press Enter to add."
-                className="todo-input"
-              />
-            </div>
-            <button type="submit" className="btn-primary" disabled={!input.trim()}>
-              Add Task
-            </button>
-          </form>
+          <TodoForm input={input} setInput={setInput} onSubmit={addTodo} />
 
-          {/* Todo List */}
           <div className="todo-list">
-            {filteredTodos.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon-wrapper">
-                  <CheckCircle2 size={48} className="text-muted opacity-50" />
-                </div>
-                <h3>No tasks found</h3>
-                <p className="text-muted">
-                  {activeTab === 'completed' 
-                    ? "You haven't completed any tasks yet." 
-                    : "You're all caught up! Enjoy your day or add a new task."}
-                </p>
-              </div>
-            ) : (
-              <div className="task-group animate-stagger">
-                {filteredTodos.map(todo => (
-                  <div key={todo.id} className={\`todo-item \${todo.completed ? 'is-completed' : ''}\`}>
-                    <button 
-                      className="checkbox-btn" 
-                      onClick={() => toggleTodo(todo.id)}
-                      aria-label="Toggle completion"
-                    >
-                      {todo.completed ? (
-                        <CheckCircle2 size={24} className="icon-checked" />
-                      ) : (
-                        <Circle size={24} className="icon-unchecked" />
-                      )}
-                    </button>
-                    
-                    <div className="todo-content">
-                      <span className="todo-text">{todo.text}</span>
-                      {todo.category && (
-                        <span className="todo-category">{todo.category}</span>
-                      )}
-                    </div>
-
-                    <button 
-                      className="delete-btn" 
-                      onClick={() => deleteTodo(todo.id)}
-                      aria-label="Delete task"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <TodoList
+              todos={filteredTodos}
+              activeTab={activeTab}
+              onToggle={toggleTodo}
+              onDelete={deleteTodo}
+            />
           </div>
 
-          {/* Footer Actions */}
-          {todos.some(t => t.completed) && (
-            <div className="list-footer">
-              <button className="btn-text" onClick={clearCompleted}>
-                Clear completed tasks
-              </button>
-            </div>
-          )}
-
+          <ListFooter hasCompleted={completedCount > 0} onClearCompleted={clearCompleted} />
         </div>
       </main>
     </div>
-  )
+  );
 }
 
 export default App`,

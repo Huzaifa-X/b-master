@@ -104,6 +104,8 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
 
     const [input, setInput] = useState("")
     const [currentFileContent, setCurrentFileContent] = useState<string | null>(null)
+    const [filesReady, setFilesReady] = useState(false)
+    const [filesError, setFilesError] = useState<string | null>(null)
 
     const { artifact } = useArtifactById(artifactId || "", { enabled: !!artifactId })
     const [hasImported, setHasImported] = useState(false)
@@ -160,21 +162,71 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
         fileStructureRef.current = fileStructure
     }, [fileStructure])
 
-    // Update current files cache when file structure changes
+    // Export files immediately when server is ready (for initial load)
+    // This ensures currentFilesRef is populated before the user sends their first message
+    const hasInitializedFilesRef = useRef(false)
+    useEffect(() => {
+        if (!isServerReady || hasInitializedFilesRef.current) return
+
+        const initializeFiles = async (retryCount = 0): Promise<void> => {
+            const MAX_RETRIES = 3
+            const RETRY_DELAY = 1000 // 1 second
+
+            try {
+                setFilesError(null)
+                const files = await exportFilesAsJson()
+
+                // Validate that we got actual files
+                if (!files || Object.keys(files).length === 0) {
+                    throw new Error('No files exported from workspace')
+                }
+
+                currentFilesRef.current = files
+                hasInitializedFilesRef.current = true
+                setFilesReady(true)
+                console.log('[BCoderChat] Initial files exported:', Object.keys(files).length, 'files')
+            } catch (err) {
+                console.warn(`[BCoderChat] Failed to export initial files (attempt ${retryCount + 1}/${MAX_RETRIES}):`, err)
+
+                if (retryCount < MAX_RETRIES - 1) {
+                    // Retry after delay
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+                    return initializeFiles(retryCount + 1)
+                } else {
+                    // Max retries reached - set error but allow user to proceed
+                    // The backend has fallback logic to use template files
+                    setFilesError('Could not load workspace files. Using template defaults.')
+                    setFilesReady(true) // Allow sending, backend will use fallback
+                    console.error('[BCoderChat] Max retries reached for file export')
+                }
+            }
+        }
+
+        initializeFiles()
+    }, [isServerReady, exportFilesAsJson])
+
+    // Update current files cache when file structure changes (debounced for subsequent updates)
     useEffect(() => {
         if (!isServerReady || fileStructure.length === 0) return
+        // Skip if this is the initial load (already handled above)
+        if (!hasInitializedFilesRef.current) return
 
         const updateCurrentFiles = async () => {
             try {
                 const files = await exportFilesAsJson()
-                currentFilesRef.current = files
+                if (files && Object.keys(files).length > 0) {
+                    currentFilesRef.current = files
+                    setFilesError(null) // Clear any previous error
+                    console.log('[BCoderChat] Files updated:', Object.keys(files).length, 'files')
+                }
             } catch (err) {
                 console.warn('[BCoderChat] Failed to export files for context:', err)
+                // Don't clear currentFilesRef - keep the last known good state
             }
         }
 
-        // Debounce the export to avoid excessive calls
-        const timeoutId = setTimeout(updateCurrentFiles, 500)
+        // Debounce subsequent updates to avoid excessive calls (reduced from 500ms to 200ms)
+        const timeoutId = setTimeout(updateCurrentFiles, 200)
         return () => clearTimeout(timeoutId)
     }, [isServerReady, fileStructure, exportFilesAsJson])
 
@@ -211,15 +263,26 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
         error,
     } = useResponsesChat({
         api: '/api/b-coder/chat',
-        getExtraBody: () => ({
-            templateId,
-            fileStructure: fileStructureRef.current,
-            currentFile: selectedFilePathRef.current ? {
-                path: selectedFilePathRef.current,
-                content: currentFileContentRef.current,
-            } : null,
-            currentFiles: currentFilesRef.current,
-        }),
+        getExtraBody: () => {
+            const extraBody = {
+                templateId,
+                fileStructure: fileStructureRef.current,
+                currentFile: selectedFilePathRef.current ? {
+                    path: selectedFilePathRef.current,
+                    content: currentFileContentRef.current,
+                } : null,
+                currentFiles: currentFilesRef.current,
+            }
+            // Debug log to verify files are being sent
+            console.log('[BCoderChat] Sending message with context:', {
+                templateId,
+                hasFileStructure: !!fileStructureRef.current?.length,
+                hasCurrentFile: !!extraBody.currentFile,
+                hasCurrentFiles: !!extraBody.currentFiles,
+                currentFilesCount: extraBody.currentFiles ? Object.keys(extraBody.currentFiles).length : 0
+            })
+            return extraBody
+        },
     })
 
     const handleAction = useCallback(async (action: BoltActionData, messageId: string) => {
@@ -374,6 +437,7 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
         const readyFiles = attachedFiles.filter(f => f.status === 'ready')
         if (!input.trim() && readyFiles.length === 0) return
         if (isLoading) return
+        if (!filesReady) return // Block sending until files are loaded
 
         if (readyFiles.length > 0) {
             // Build multi-part content: text + image/PDF parts
@@ -602,6 +666,8 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                     onFilesSelected={uploadFiles}
                     onRemoveAttachment={removeAttachment}
                     assistantId={_assistantId}
+                    filesReady={filesReady}
+                    filesError={filesError}
                 />
             </div>
         </div>
@@ -617,7 +683,9 @@ function BCoderInput({
     fileInputRef,
     onFilesSelected,
     onRemoveAttachment,
-    assistantId
+    assistantId,
+    filesReady,
+    filesError
 }: {
     input: string
     handleInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
@@ -628,6 +696,8 @@ function BCoderInput({
     onFilesSelected: (files: FileList) => void
     onRemoveAttachment: (id: string) => void
     assistantId: string
+    filesReady: boolean
+    filesError: string | null
 }) {
     const [isDragging, setIsDragging] = useState(false)
     const dragCounterRef = useRef(0)
@@ -789,11 +859,18 @@ function BCoderInput({
                         />
 
                         <div className="absolute right-2 bottom-2 flex items-center gap-2">
+                            {/* Loading indicator when files aren't ready */}
+                            {!filesReady && (
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <span>Loading...</span>
+                                </div>
+                            )}
                             {/* Attachment button */}
                             <button
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}
-                                disabled={isLoading}
+                                disabled={isLoading || !filesReady}
                                 className="flex items-center justify-center h-[34px] w-[34px] rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
                                 title="Attach image or PDF"
                             >
@@ -801,11 +878,11 @@ function BCoderInput({
                             </button>
                             <DictateButton
                                 onTranscript={handleDictate}
-                                disabled={isLoading}
+                                disabled={isLoading || !filesReady}
                             />
                             <PromptInputSubmit
                                 status={isLoading ? "streaming" : "ready"}
-                                disabled={!input && attachedFiles.filter(f => f.status === 'ready').length === 0 && !isLoading}
+                                disabled={!filesReady || (!input && attachedFiles.filter(f => f.status === 'ready').length === 0 && !isLoading)}
                                 className="size-[34px] rounded-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 text-white transition-all duration-200"
                             />
                         </div>
@@ -813,7 +890,12 @@ function BCoderInput({
                 </div>
             </div>
 
-            <div className="mt-2 px-1 text-center">
+            <div className="mt-2 px-1 text-center space-y-1">
+                {filesError && (
+                    <div className="text-xs text-amber-600 dark:text-amber-400">
+                        ⚠️ {filesError}
+                    </div>
+                )}
                 <span className="text-xs text-muted-foreground/50">
                     Press <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-muted border border-border rounded">Enter</kbd> to send • <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-muted border border-border rounded">Shift</kbd> + <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-muted border border-border rounded">Enter</kbd> for new line
                 </span>

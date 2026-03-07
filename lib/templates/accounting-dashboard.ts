@@ -170,15 +170,199 @@ export default function Header() {
   );
 }`,
 
-    // --- PAGES ---
-    "src/pages/Dashboard.jsx": `import { ArrowUpRight, ArrowDownRight, DollarSign, CreditCard, TrendingUp, Download, Eye } from 'lucide-react';
-
-const recentTransactions = [
+    // --- DATA ---
+    "src/data/transactions.js": `export const recentTransactions = [
   { id: 'TRX-8572', date: 'Oct 24, 2023', name: 'Stripe Payout', category: 'Income', amount: '+$4,500.00', status: 'Completed' },
   { id: 'TRX-8571', date: 'Oct 23, 2023', name: 'AWS Services', category: 'Infrastructure', amount: '-$342.50', status: 'Completed' },
   { id: 'TRX-8570', date: 'Oct 21, 2023', name: 'WeWork Office', category: 'Real Estate', amount: '-$1,200.00', status: 'Pending' },
   { id: 'TRX-8569', date: 'Oct 20, 2023', name: 'Client Retainer', category: 'Income', amount: '+$2,500.00', status: 'Completed' }
 ];
+
+export const cashFlowData = [
+  { month: 'May', income: 60, expense: 40 },
+  { month: 'Jun', income: 70, expense: 45 },
+  { month: 'Jul', income: 85, expense: 50 },
+  { month: 'Aug', income: 65, expense: 55 },
+  { month: 'Sep', income: 90, expense: 40 },
+  { month: 'Oct', income: 100, expense: 35 }
+];
+
+export const kpiData = [
+  {
+    id: 'revenue',
+    label: 'Total Revenue',
+    value: '$124,563.00',
+    trend: '+12.5%',
+    trendType: 'positive',
+    iconType: 'dollar',
+    colorScheme: 'blue'
+  },
+  {
+    id: 'expenses',
+    label: 'Total Expenses',
+    value: '$42,120.50',
+    trend: '+4.2%',
+    trendType: 'negative',
+    iconType: 'card',
+    colorScheme: 'rose'
+  },
+  {
+    id: 'profit',
+    label: 'Net Profit',
+    value: '$82,442.50',
+    trend: '+8.4%',
+    trendType: 'positive',
+    iconType: 'trending',
+    colorScheme: 'emerald'
+  }
+];`,
+
+    // --- DASHBOARD COMPONENTS ---
+    "src/components/dashboard/KpiCard.jsx": `import { ArrowUpRight, DollarSign, CreditCard, TrendingUp } from 'lucide-react';
+
+const iconMap = {
+  dollar: DollarSign,
+  card: CreditCard,
+  trending: TrendingUp
+};
+
+export default function KpiCard({ label, value, trend, trendType, iconType, colorScheme }) {
+  const Icon = iconMap[iconType] || DollarSign;
+
+  return (
+    <div className="kpi-card card">
+      <div className="kpi-header">
+        <div className={\`kpi-icon-wrapper bg-\${colorScheme}-subtle text-\${colorScheme}\`}>
+          <Icon size={20} />
+        </div>
+        <span className={\`badge-trend \${trendType}\`}>
+          <ArrowUpRight size={14} /> {trend}
+        </span>
+      </div>
+      <div className="kpi-body">
+        <span className="kpi-label">{label}</span>
+        <h2 className="kpi-value">{value}</h2>
+      </div>
+    </div>
+  );
+}`,
+
+    "src/components/dashboard/KpiGrid.jsx": `import KpiCard from './KpiCard';
+import { kpiData } from '../../data/transactions';
+
+export default function KpiGrid() {
+  return (
+    <div className="kpi-grid">
+      {kpiData.map((kpi) => (
+        <KpiCard
+          key={kpi.id}
+          label={kpi.label}
+          value={kpi.value}
+          trend={kpi.trend}
+          trendType={kpi.trendType}
+          iconType={kpi.iconType}
+          colorScheme={kpi.colorScheme}
+        />
+      ))}
+    </div>
+  );
+}`,
+
+    "src/components/dashboard/CashFlowChart.jsx": `import { cashFlowData } from '../../data/transactions';
+
+export default function CashFlowChart() {
+  return (
+    <div className="chart-section card lg-col-span-2">
+      <div className="card-header">
+        <h3 className="card-title">Cash Flow</h3>
+        <select className="select-sm">
+          <option>Last 6 Months</option>
+          <option>This Year</option>
+        </select>
+      </div>
+      <div className="chart-container mock-bar-chart">
+        <div className="y-axis">
+          <span>$50k</span><span>$40k</span><span>$30k</span><span>$20k</span><span>$10k</span><span>$0</span>
+        </div>
+        <div className="bars-area">
+          {cashFlowData.map((data, idx) => (
+            <div key={idx} className="bar-group">
+              <div className="bar income" style={{ height: \`\${data.income}%\` }}></div>
+              <div className="bar expense" style={{ height: \`\${data.expense}%\` }}></div>
+              <span className="bar-label">{data.month}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}`,
+
+    "src/components/dashboard/TransactionRow.jsx": `import { Eye } from 'lucide-react';
+
+export default function TransactionRow({ transaction }) {
+  const { id, date, name, category, amount, status } = transaction;
+  const isPositive = amount.startsWith('+');
+
+  return (
+    <tr>
+      <td className="font-medium text-muted">{id}</td>
+      <td>{date}</td>
+      <td className="font-semibold">{name}</td>
+      <td><span className="category-pill">{category}</span></td>
+      <td className={\`text-right font-semibold \${isPositive ? 'text-emerald' : 'text-main'}\`}>
+        {amount}
+      </td>
+      <td className="text-center">
+        <span className={\`status-badge \${status.toLowerCase()}\`}>{status}</span>
+      </td>
+      <td className="text-right">
+        <button className="icon-btn-sm"><Eye size={16} /></button>
+      </td>
+    </tr>
+  );
+}`,
+
+    "src/components/dashboard/TransactionsTable.jsx": `import TransactionRow from './TransactionRow';
+import { recentTransactions } from '../../data/transactions';
+
+export default function TransactionsTable() {
+  return (
+    <div className="recent-section card lg-col-span-3">
+      <div className="card-header">
+        <h3 className="card-title">Recent Transactions</h3>
+        <button className="btn-link">View All</button>
+      </div>
+
+      <div className="table-responsive">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Transaction ID</th>
+              <th>Date</th>
+              <th>Description</th>
+              <th>Category</th>
+              <th className="text-right">Amount</th>
+              <th className="text-center">Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {recentTransactions.map((trx) => (
+              <TransactionRow key={trx.id} transaction={trx} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}`,
+
+    // --- PAGES ---
+    "src/pages/Dashboard.jsx": `import { Download } from 'lucide-react';
+import KpiGrid from '../components/dashboard/KpiGrid';
+import CashFlowChart from '../components/dashboard/CashFlowChart';
+import TransactionsTable from '../components/dashboard/TransactionsTable';
 
 export default function Dashboard() {
   return (
@@ -193,121 +377,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="kpi-grid">
-        <div className="kpi-card card">
-          <div className="kpi-header">
-            <div className="kpi-icon-wrapper bg-blue-subtle text-blue">
-              <DollarSign size={20} />
-            </div>
-            <span className="badge-trend positive"><ArrowUpRight size={14} /> 12.5%</span>
-          </div>
-          <div className="kpi-body">
-            <span className="kpi-label">Total Revenue</span>
-            <h2 className="kpi-value">$124,563.00</h2>
-          </div>
-        </div>
-        
-        <div className="kpi-card card">
-          <div className="kpi-header">
-            <div className="kpi-icon-wrapper bg-rose-subtle text-rose">
-              <CreditCard size={20} />
-            </div>
-            <span className="badge-trend negative"><ArrowUpRight size={14} /> 4.2%</span>
-          </div>
-          <div className="kpi-body">
-            <span className="kpi-label">Total Expenses</span>
-            <h2 className="kpi-value">$42,120.50</h2>
-          </div>
-        </div>
-
-        <div className="kpi-card card">
-          <div className="kpi-header">
-            <div className="kpi-icon-wrapper bg-emerald-subtle text-emerald">
-              <TrendingUp size={20} />
-            </div>
-            <span className="badge-trend positive"><ArrowUpRight size={14} /> 8.4%</span>
-          </div>
-          <div className="kpi-body">
-            <span className="kpi-label">Net Profit</span>
-            <h2 className="kpi-value">$82,442.50</h2>
-          </div>
-        </div>
-      </div>
+      <KpiGrid />
 
       <div className="dashboard-grid">
-        <div className="chart-section card lg-col-span-2">
-          <div className="card-header">
-            <h3 className="card-title">Cash Flow</h3>
-            <select className="select-sm">
-              <option>Last 6 Months</option>
-              <option>This Year</option>
-            </select>
-          </div>
-          <div className="chart-container mock-bar-chart">
-             {/* Mock CSS Bar Chart */}
-             <div className="y-axis">
-               <span>$50k</span><span>$40k</span><span>$30k</span><span>$20k</span><span>$10k</span><span>$0</span>
-             </div>
-             <div className="bars-area">
-               {[
-                 { m: 'May', i: 60, e: 40 },
-                 { m: 'Jun', i: 70, e: 45 },
-                 { m: 'Jul', i: 85, e: 50 },
-                 { m: 'Aug', i: 65, e: 55 },
-                 { m: 'Sep', i: 90, e: 40 },
-                 { m: 'Oct', i: 100, e: 35 }
-               ].map((data, idx) => (
-                 <div key={idx} className="bar-group">
-                   <div className="bar income" style={{ height: \`\${data.i}%\`}}></div>
-                   <div className="bar expense" style={{ height: \`\${data.e}%\`}}></div>
-                   <span className="bar-label">{data.m}</span>
-                 </div>
-               ))}
-             </div>
-          </div>
-        </div>
-
-        <div className="recent-section card lg-col-span-3">
-          <div className="card-header">
-            <h3 className="card-title">Recent Transactions</h3>
-            <button className="btn-link">View All</button>
-          </div>
-          
-          <div className="table-responsive">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Transaction ID</th>
-                  <th>Date</th>
-                  <th>Description</th>
-                  <th>Category</th>
-                  <th className="text-right">Amount</th>
-                  <th className="text-center">Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentTransactions.map((trx) => (
-                  <tr key={trx.id}>
-                    <td className="font-medium text-muted">{trx.id}</td>
-                    <td>{trx.date}</td>
-                    <td className="font-semibold">{trx.name}</td>
-                    <td><span className="category-pill">{trx.category}</span></td>
-                    <td className={\`text-right font-semibold \${trx.amount.startsWith('+') ? 'text-emerald' : 'text-main'}\`}>
-                      {trx.amount}
-                    </td>
-                    <td className="text-center">
-                      <span className={\`status-badge \${trx.status.toLowerCase()}\`}>{trx.status}</span>
-                    </td>
-                    <td className="text-right">
-                      <button className="icon-btn-sm"><Eye size={16} /></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <CashFlowChart />
+        <TransactionsTable />
       </div>
     </div>
   );

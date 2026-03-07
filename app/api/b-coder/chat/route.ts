@@ -59,6 +59,76 @@ async function extractPdfText(url: string): Promise<string | null> {
 }
 
 /**
+ * Build context from current files only (when template is not found).
+ * This ensures the AI still has file context even without template info.
+ */
+function buildCurrentFilesOnlyContext(currentFiles: Record<string, string>): string {
+    const currentFilePaths = Object.keys(currentFiles)
+
+    // Source file patterns to include
+    const sourceFilePatterns = [/\.jsx$/, /\.tsx$/, /\.js$/, /\.ts$/, /index\.html$/]
+    const excludePatterns = [/node_modules/, /\.config\./, /vite\.config/, /tsconfig/, /\.css$/, /\.json$/]
+
+    const availableKeyFiles = currentFilePaths.filter(filePath => {
+        const isSourceFile = sourceFilePatterns.some(pattern => pattern.test(filePath))
+        const isExcluded = excludePatterns.some(pattern => pattern.test(filePath))
+        return isSourceFile && !isExcluded
+    }).sort((a, b) => {
+        const priority = ['App.jsx', 'App.tsx', 'main.jsx', 'main.tsx', 'index.html']
+        const aIdx = priority.findIndex(p => a.includes(p))
+        const bIdx = priority.findIndex(p => b.includes(p))
+        if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx
+        if (aIdx !== -1) return -1
+        if (bIdx !== -1) return 1
+        return a.localeCompare(b)
+    })
+
+    if (availableKeyFiles.length === 0) return ''
+
+    const fileList = currentFilePaths.slice(0, 20).map(f => `  - ${f}`).join('\n')
+    const moreFiles = currentFilePaths.length > 20 ? `  ... and ${currentFilePaths.length - 20} more` : ''
+
+    let context = `
+<current_workspace>
+Note: Template information unavailable. Showing current workspace files.
+
+Files in workspace (${currentFilePaths.length} total):
+${fileList}
+${moreFiles}
+
+<current_file_contents>
+IMPORTANT: Below is the CURRENT content of source files. When editing these files, you MUST preserve ALL existing code, imports, classes, and structure. Only change the SPECIFIC text/value requested.
+
+`
+    let totalSize = 0
+    const maxTotalSize = 15000
+    const maxPerFile = 3000
+
+    for (const filePath of availableKeyFiles) {
+        if (totalSize >= maxTotalSize) break
+
+        const content = currentFiles[filePath]
+        if (content) {
+            const remainingBudget = Math.min(maxPerFile, maxTotalSize - totalSize)
+            const truncated = content.length > remainingBudget
+                ? content.slice(0, remainingBudget) + '\n... (truncated)'
+                : content
+
+            context += `--- CURRENT ${filePath} ---
+\`\`\`
+${truncated}
+\`\`\`
+
+`
+            totalSize += truncated.length
+        }
+    }
+    context += '</current_file_contents>\n</current_workspace>'
+
+    return context
+}
+
+/**
  * Build context about the initial template code and analyze changes.
  * This helps the AI understand the baseline and what modifications have been made.
  */
@@ -67,7 +137,15 @@ function buildTemplateContext(
     currentFiles: Record<string, string> | null
 ): string {
     const template = getTemplateById(templateId)
-    if (!template) return ''
+    if (!template) {
+        console.warn(`[b-coder/chat] Template not found: "${templateId}". AI will have limited context.`)
+
+        // If we have current files but no template, still provide them as context
+        if (currentFiles && Object.keys(currentFiles).length > 0) {
+            return buildCurrentFilesOnlyContext(currentFiles)
+        }
+        return ''
+    }
 
     const originalFiles = template.files
     const originalFilePaths = Object.keys(originalFiles)
@@ -138,41 +216,72 @@ ${modifiedFiles.map(f => `  ~ ${f}`).join('\n')}
 </changes_since_initial>`
         }
 
-        // Include CURRENT content of key files so AI can make minimal edits
+        // Include CURRENT content of source files so AI can make minimal edits
         // This is critical - AI needs to see exact current state to preserve it
-        const keyFilesToShow = [
-            'src/App.jsx', 'src/App.tsx',
-            'src/components/Sidebar.jsx', 'src/components/Sidebar.tsx',
-            'src/components/Sidebar/Sidebar.jsx', 'src/components/Sidebar/Sidebar.tsx',
-            'src/components/Header.jsx', 'src/components/Header.tsx',
-            'src/components/Layout.jsx', 'src/components/Layout.tsx',
-            'src/components/Navbar.jsx', 'src/components/Navbar.tsx',
-            'src/components/Nav.jsx', 'src/components/Nav.tsx',
-            'src/main.jsx', 'src/main.tsx',
-            'index.html'
+        // Dynamically include all JSX/TSX/HTML files (not config files or CSS)
+        const sourceFilePatterns = [
+            /\.jsx$/,
+            /\.tsx$/,
+            /\.js$/,
+            /\.ts$/,
+            /index\.html$/
         ]
 
-        const availableKeyFiles = keyFilesToShow.filter(f => currentFilePaths.includes(f))
+        // Exclude patterns (config, node_modules, etc.)
+        const excludePatterns = [
+            /node_modules/,
+            /\.config\./,
+            /vite\.config/,
+            /tsconfig/,
+            /\.css$/,
+            /\.json$/
+        ]
+
+        // Get all source files from current workspace
+        const availableKeyFiles = currentFilePaths.filter(filePath => {
+            const isSourceFile = sourceFilePatterns.some(pattern => pattern.test(filePath))
+            const isExcluded = excludePatterns.some(pattern => pattern.test(filePath))
+            return isSourceFile && !isExcluded
+        }).sort((a, b) => {
+            // Prioritize main files first
+            const priority = ['App.jsx', 'App.tsx', 'main.jsx', 'main.tsx', 'index.html']
+            const aIdx = priority.findIndex(p => a.includes(p))
+            const bIdx = priority.findIndex(p => b.includes(p))
+            if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx
+            if (aIdx !== -1) return -1
+            if (bIdx !== -1) return 1
+            return a.localeCompare(b)
+        })
 
         if (availableKeyFiles.length > 0) {
             context += `
 
 <current_file_contents>
-IMPORTANT: Below is the CURRENT content of key files. When editing these files, you MUST preserve ALL existing code, imports, classes, and structure. Only change the SPECIFIC text/value requested.
+IMPORTANT: Below is the CURRENT content of source files. When editing these files, you MUST preserve ALL existing code, imports, classes, and structure. Only change the SPECIFIC text/value requested.
 
 `
-            for (const filePath of availableKeyFiles.slice(0, 4)) {
+            // Show up to 8 files, with smarter truncation based on total context size
+            let totalSize = 0
+            const maxTotalSize = 15000 // Max ~15KB of file content
+            const maxPerFile = 3000 // Max ~3KB per file
+
+            for (const filePath of availableKeyFiles) {
+                if (totalSize >= maxTotalSize) break
+
                 const content = currentFiles[filePath]
                 if (content) {
-                    const truncated = content.length > 2000
-                        ? content.slice(0, 2000) + '\n... (truncated)'
+                    const remainingBudget = Math.min(maxPerFile, maxTotalSize - totalSize)
+                    const truncated = content.length > remainingBudget
+                        ? content.slice(0, remainingBudget) + '\n... (truncated)'
                         : content
+
                     context += `--- CURRENT ${filePath} ---
 \`\`\`
 ${truncated}
 \`\`\`
 
 `
+                    totalSize += truncated.length
                 }
             }
             context += '</current_file_contents>'
@@ -320,6 +429,16 @@ export async function POST(req: Request) {
         const body = await req.json()
         const { messages, fileStructure, currentFile, templateId, currentFiles } = body
 
+        // Debug logging to verify context is being received
+        console.log('[b-coder/chat] Request received:', {
+            templateId,
+            hasFileStructure: !!fileStructure?.length,
+            hasCurrentFile: !!currentFile,
+            hasCurrentFiles: !!currentFiles,
+            currentFilesCount: currentFiles ? Object.keys(currentFiles).length : 0,
+            currentFilesList: currentFiles ? Object.keys(currentFiles).slice(0, 10) : []
+        })
+
         if (!messages || messages.length === 0) {
             return new Response(
                 JSON.stringify({ error: 'No messages provided' }),
@@ -330,8 +449,34 @@ export async function POST(req: Request) {
         const input = buildResponsesInput(messages)
 
         // ── Template & Conversation Context ─────────────────────────────────
-        const templateContext = buildTemplateContext(templateId, currentFiles)
+        // Fallback: If currentFiles is null/empty, use original template files
+        // This ensures the AI always has file context even on first message
+        let filesForContext = currentFiles
+        let usingFallback = false
+        if (!filesForContext || Object.keys(filesForContext).length === 0) {
+            const template = getTemplateById(templateId)
+            if (template) {
+                filesForContext = template.files
+                usingFallback = true
+                console.log('[b-coder/chat] Using original template files as fallback')
+            } else {
+                console.warn(`[b-coder/chat] WARNING: No currentFiles provided and template "${templateId}" not found. AI will have NO file context!`)
+            }
+        }
+
+        const templateContext = buildTemplateContext(templateId, filesForContext)
         const conversationSummary = buildConversationSummary(messages)
+
+        // Log context status for debugging
+        if (!templateContext) {
+            console.warn('[b-coder/chat] WARNING: templateContext is empty! AI may claim it has no file context.')
+        } else {
+            console.log('[b-coder/chat] Template context built successfully:', {
+                contextLength: templateContext.length,
+                usingFallback,
+                filesCount: filesForContext ? Object.keys(filesForContext).length : 0
+            })
+        }
 
         // ── Supabase MCP ────────────────────────────────────────────────────
         // If the user has connected their Supabase project, add the native MCP tool.
