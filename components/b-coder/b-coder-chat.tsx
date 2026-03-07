@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, memo } from "react"
 import Link from "next/link"
-import { Loader2, FileCode, Terminal, CheckCircle2, Sparkles, Paperclip, X, FileText, Image } from "lucide-react"
+import { Loader2, FileCode, Terminal, CheckCircle2, Sparkles, Paperclip, X, FileText, Image, Upload } from "lucide-react"
 import {
     Message,
     MessageContent,
@@ -98,7 +98,8 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
         isServerReady,
         webcontainerInstance,
         createFile,
-        setActiveArtifact
+        setActiveArtifact,
+        exportFilesAsJson
     } = useBCoderContext()
 
     const [input, setInput] = useState("")
@@ -153,10 +154,29 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
     const fileStructureRef = useRef(fileStructure)
     const currentFileContentRef = useRef(currentFileContent)
     const selectedFilePathRef = useRef(selectedFilePath)
+    const currentFilesRef = useRef<Record<string, string> | null>(null)
 
     useEffect(() => {
         fileStructureRef.current = fileStructure
     }, [fileStructure])
+
+    // Update current files cache when file structure changes
+    useEffect(() => {
+        if (!isServerReady || fileStructure.length === 0) return
+
+        const updateCurrentFiles = async () => {
+            try {
+                const files = await exportFilesAsJson()
+                currentFilesRef.current = files
+            } catch (err) {
+                console.warn('[BCoderChat] Failed to export files for context:', err)
+            }
+        }
+
+        // Debounce the export to avoid excessive calls
+        const timeoutId = setTimeout(updateCurrentFiles, 500)
+        return () => clearTimeout(timeoutId)
+    }, [isServerReady, fileStructure, exportFilesAsJson])
 
     useEffect(() => {
         if (isServerReady && fileStructure.length === 0) {
@@ -198,6 +218,7 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                 path: selectedFilePathRef.current,
                 content: currentFileContentRef.current,
             } : null,
+            currentFiles: currentFilesRef.current,
         }),
     })
 
@@ -608,6 +629,9 @@ function BCoderInput({
     onRemoveAttachment: (id: string) => void
     assistantId: string
 }) {
+    const [isDragging, setIsDragging] = useState(false)
+    const dragCounterRef = useRef(0)
+
     const handleDictate = useCallback((text: string) => {
         const syntheticEvent = {
             target: { value: text }
@@ -623,8 +647,73 @@ function BCoderInput({
         }
     }, [onFilesSelected])
 
+    const handleDragEnter = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        dragCounterRef.current++
+        if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+            setIsDragging(true)
+        }
+    }, [])
+
+    const handleDragLeave = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        dragCounterRef.current--
+        if (dragCounterRef.current === 0) {
+            setIsDragging(false)
+        }
+    }, [])
+
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+    }, [])
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDragging(false)
+        dragCounterRef.current = 0
+
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            // Filter for accepted file types
+            const acceptedTypes = ['image/', 'application/pdf']
+            const validFiles = Array.from(e.dataTransfer.files).filter(file =>
+                acceptedTypes.some(type => file.type.startsWith(type))
+            )
+
+            if (validFiles.length > 0) {
+                // Create a FileList-like object
+                const dt = new DataTransfer()
+                validFiles.forEach(file => dt.items.add(file))
+                onFilesSelected(dt.files)
+            }
+        }
+    }, [onFilesSelected])
+
     return (
-        <div className="relative w-full max-w-4xl mx-auto space-y-2">
+        <div
+            className="relative w-full max-w-4xl mx-auto space-y-2"
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+        >
+            {/* Drag overlay */}
+            {isDragging && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-emerald-50/95 dark:bg-emerald-950/95 border-2 border-dashed border-emerald-500 rounded-3xl backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="flex flex-col items-center gap-3 text-emerald-600 dark:text-emerald-400">
+                        <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 rounded-full">
+                            <Upload className="h-4 w-4" />
+                        </div>
+                        <div className="text-center">
+                            <p className="font-semibold text-sm sm:text-md">Drop files here</p>
+                            <p className="text-xs sm:text-sm text-emerald-500 dark:text-emerald-500">Images and PDFs supported</p>
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* Hidden file input */}
             <input
                 ref={fileInputRef}

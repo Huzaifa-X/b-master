@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import upstageService from '@/lib/services/upstageService'
+import { getTemplateById } from '@/lib/templates'
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -55,6 +56,185 @@ async function extractPdfText(url: string): Promise<string | null> {
         console.warn('[b-coder/chat] Upstage PDF extraction failed (non-blocking):', err)
         return null
     }
+}
+
+/**
+ * Build context about the initial template code and analyze changes.
+ * This helps the AI understand the baseline and what modifications have been made.
+ */
+function buildTemplateContext(
+    templateId: string,
+    currentFiles: Record<string, string> | null
+): string {
+    const template = getTemplateById(templateId)
+    if (!template) return ''
+
+    const originalFiles = template.files
+    const originalFilePaths = Object.keys(originalFiles)
+
+    // Key files to always show (main entry points)
+    const keyFiles = ['src/App.jsx', 'src/App.tsx', 'src/main.jsx', 'src/main.tsx', 'src/index.jsx', 'src/index.tsx']
+    const importantOriginalFiles = keyFiles
+        .filter(f => originalFilePaths.includes(f))
+        .slice(0, 3) // Limit to 3 key files
+
+    let context = `
+<initial_template>
+Template: ${template.name} (${templateId})
+Description: ${template.description}
+
+Original Files (${originalFilePaths.length} total):
+${originalFilePaths.map(f => `  - ${f}`).join('\n')}
+`
+
+    // Show key original file contents (truncated)
+    for (const filePath of importantOriginalFiles) {
+        const content = originalFiles[filePath]
+        if (content) {
+            const truncated = content.length > 1500
+                ? content.slice(0, 1500) + '\n... (truncated)'
+                : content
+            context += `
+--- Original ${filePath} ---
+\`\`\`
+${truncated}
+\`\`\`
+`
+        }
+    }
+    context += '</initial_template>'
+
+    // Analyze changes if current files are provided
+    if (currentFiles && Object.keys(currentFiles).length > 0) {
+        const currentFilePaths = Object.keys(currentFiles)
+
+        // Find new files (added)
+        const newFiles = currentFilePaths.filter(f => !originalFilePaths.includes(f))
+
+        // Find deleted files
+        const deletedFiles = originalFilePaths.filter(f => !currentFilePaths.includes(f))
+
+        // Find modified files (content changed)
+        const modifiedFiles = currentFilePaths.filter(f => {
+            if (!originalFilePaths.includes(f)) return false
+            return originalFiles[f] !== currentFiles[f]
+        })
+
+        if (newFiles.length > 0 || deletedFiles.length > 0 || modifiedFiles.length > 0) {
+            context += `
+
+<changes_since_initial>
+Changes made to the project since the initial template:
+
+${newFiles.length > 0 ? `New Files Added (${newFiles.length}):
+${newFiles.map(f => `  + ${f}`).join('\n')}
+` : ''}
+${deletedFiles.length > 0 ? `Files Deleted (${deletedFiles.length}):
+${deletedFiles.map(f => `  - ${f}`).join('\n')}
+` : ''}
+${modifiedFiles.length > 0 ? `Files Modified (${modifiedFiles.length}):
+${modifiedFiles.map(f => `  ~ ${f}`).join('\n')}
+` : ''}
+</changes_since_initial>`
+        }
+
+        // Include CURRENT content of key files so AI can make minimal edits
+        // This is critical - AI needs to see exact current state to preserve it
+        const keyFilesToShow = [
+            'src/App.jsx', 'src/App.tsx',
+            'src/components/Sidebar.jsx', 'src/components/Sidebar.tsx',
+            'src/components/Sidebar/Sidebar.jsx', 'src/components/Sidebar/Sidebar.tsx',
+            'src/components/Header.jsx', 'src/components/Header.tsx',
+            'src/components/Layout.jsx', 'src/components/Layout.tsx',
+            'src/components/Navbar.jsx', 'src/components/Navbar.tsx',
+            'src/components/Nav.jsx', 'src/components/Nav.tsx',
+            'src/main.jsx', 'src/main.tsx',
+            'index.html'
+        ]
+
+        const availableKeyFiles = keyFilesToShow.filter(f => currentFilePaths.includes(f))
+
+        if (availableKeyFiles.length > 0) {
+            context += `
+
+<current_file_contents>
+IMPORTANT: Below is the CURRENT content of key files. When editing these files, you MUST preserve ALL existing code, imports, classes, and structure. Only change the SPECIFIC text/value requested.
+
+`
+            for (const filePath of availableKeyFiles.slice(0, 4)) {
+                const content = currentFiles[filePath]
+                if (content) {
+                    const truncated = content.length > 2000
+                        ? content.slice(0, 2000) + '\n... (truncated)'
+                        : content
+                    context += `--- CURRENT ${filePath} ---
+\`\`\`
+${truncated}
+\`\`\`
+
+`
+                }
+            }
+            context += '</current_file_contents>'
+        }
+    }
+
+    return context
+}
+
+/**
+ * Summarize conversation history for context awareness.
+ * Extracts key actions and decisions from past messages.
+ */
+function buildConversationSummary(messages: any[]): string {
+    if (messages.length <= 2) return '' // Not enough history to summarize
+
+    // Count message types
+    const userMessages = messages.filter(m => m.role === 'user').length
+    const assistantMessages = messages.filter(m => m.role === 'assistant').length
+
+    // Extract file operations mentioned in assistant responses
+    const fileOperations: string[] = []
+    const shellCommands: string[] = []
+
+    for (const msg of messages) {
+        if (msg.role !== 'assistant') continue
+        const content = typeof msg.content === 'string' ? msg.content : ''
+
+        // Extract file paths from boltAction tags
+        const fileMatches = content.matchAll(/<boltAction[^>]*type="file"[^>]*filePath="([^"]+)"[^>]*>/g)
+        for (const match of fileMatches) {
+            if (match[1] && !fileOperations.includes(match[1])) {
+                fileOperations.push(match[1])
+            }
+        }
+
+        // Extract shell commands
+        const shellMatches = content.matchAll(/<boltAction[^>]*type="shell"[^>]*>([\s\S]*?)<\/boltAction>/g)
+        for (const match of shellMatches) {
+            if (match[1]) {
+                const cmd = match[1].trim().slice(0, 50)
+                if (!shellCommands.includes(cmd)) {
+                    shellCommands.push(cmd)
+                }
+            }
+        }
+    }
+
+    if (fileOperations.length === 0 && shellCommands.length === 0) return ''
+
+    return `
+<conversation_history_summary>
+Conversation Stats: ${userMessages} user messages, ${assistantMessages} assistant responses
+
+${fileOperations.length > 0 ? `Files Created/Modified in This Session (${fileOperations.length}):
+${fileOperations.slice(-10).map(f => `  • ${f}`).join('\n')}
+${fileOperations.length > 10 ? `  ... and ${fileOperations.length - 10} more` : ''}
+` : ''}
+${shellCommands.length > 0 ? `Shell Commands Executed:
+${shellCommands.slice(-5).map(c => `  $ ${c}`).join('\n')}
+` : ''}
+</conversation_history_summary>`
 }
 
 // ─── Message Conversion ──────────────────────────────────────────────────────
@@ -138,7 +318,7 @@ function buildResponsesInput(messages: any[]): any[] {
 export async function POST(req: Request) {
     try {
         const body = await req.json()
-        const { messages, fileStructure, currentFile, templateId } = body
+        const { messages, fileStructure, currentFile, templateId, currentFiles } = body
 
         if (!messages || messages.length === 0) {
             return new Response(
@@ -148,6 +328,10 @@ export async function POST(req: Request) {
         }
 
         const input = buildResponsesInput(messages)
+
+        // ── Template & Conversation Context ─────────────────────────────────
+        const templateContext = buildTemplateContext(templateId, currentFiles)
+        const conversationSummary = buildConversationSummary(messages)
 
         // ── Supabase MCP ────────────────────────────────────────────────────
         // If the user has connected their Supabase project, add the native MCP tool.
@@ -259,6 +443,8 @@ Current Project Context:
 - Current File: ${currentFile?.path || 'None'}
 ${fileStructure ? `\nFile Structure:\n${JSON.stringify(fileStructure, null, 2)}` : ''}
 ${currentFile?.content ? `\nCurrent File Content (${currentFile.path}):\n\`\`\`\n${currentFile.content.slice(0, 2000)}${currentFile.content.length > 2000 ? '\n... (truncated)' : ''}\n\`\`\`` : ''}
+${templateContext}
+${conversationSummary}
 ${supabaseContext}
 ${assetContext}
 `
