@@ -117,7 +117,7 @@ export async function generatePDFFromHTML({
     await page.addStyleTag({
       content: `
         * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
-        @page { size: A4; margin: 10mm; }
+        @page { size: A4; margin: 8mm; }
         html, body {
           width: 100% !important;
           max-width: 100% !important;
@@ -147,12 +147,12 @@ export async function generatePDFFromHTML({
       format: 'A4',
       printBackground: true,
       preferCSSPageSize: false,
-      scale: 1.0,
+      scale: 0.88,  // Reduced from 1.0 to fit content on single page
       margin: {
-        top: '10mm',
-        right: '10mm',
-        bottom: '10mm',
-        left: '10mm',
+        top: '8mm',   // Reduced from 10mm for more content space
+        right: '8mm',
+        bottom: '8mm',
+        left: '8mm',
       },
       timeout: 30000,
     });
