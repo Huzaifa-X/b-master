@@ -20,7 +20,9 @@ import {
   Folder,
   Globe,
   RotateCcw,
-  HardDrive
+  HardDrive,
+  Maximize2,
+  Minimize2
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
@@ -106,10 +108,12 @@ function FileTreeItem({
         <ContextMenuTrigger>
           <div
             className={cn(
-              "flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-950/20 rounded-sm transition-colors",
-              isSelected && "bg-emerald-50 dark:bg-emerald-950/30"
+              "group flex items-center gap-2 h-7 px-2 cursor-pointer transition-colors relative",
+              isSelected
+                ? "bg-emerald-100/60 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
+                : "text-foreground/80 hover:bg-muted/60"
             )}
-            style={{ paddingLeft: `${level * 12 + 8}px` }}
+            style={{ paddingLeft: `${level * 14 + 8}px` }}
             onClick={() => {
               if (node.type === "folder") {
                 toggleFolder(node.path)
@@ -118,32 +122,53 @@ function FileTreeItem({
               }
             }}
           >
-            {node.type === "folder" ? <Folder className="h-4 w-4 text-blue-500" /> : getIcon()}
-            <span className={cn("text-sm", isSelected && "font-semibold text-emerald-600 dark:text-emerald-400")}>
+            {/* Selection indicator bar */}
+            {isSelected && (
+              <div className="absolute left-0 top-1 bottom-1 w-0.5 bg-emerald-500 rounded-full" />
+            )}
+
+            {/* Folder chevron or file icon */}
+            {node.type === "folder" ? (
+              <div className="flex items-center gap-1">
+                {isOpen ? (
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+                <Folder className={cn("h-4 w-4", isOpen ? "text-blue-500" : "text-blue-400")} />
+              </div>
+            ) : (
+              <div className="ml-4">{getIcon()}</div>
+            )}
+
+            <span className={cn(
+              "text-[13px] truncate",
+              isSelected ? "font-medium" : "font-normal"
+            )}>
               {node.name}
             </span>
           </div>
         </ContextMenuTrigger>
 
-        <ContextMenuContent>
+        <ContextMenuContent className="w-48">
           {node.type === "folder" && (
             <>
-              <ContextMenuItem onClick={() => onCreateFile(node.path)}>
+              <ContextMenuItem onClick={() => onCreateFile(node.path)} className="gap-2">
                 <FilePlus className="h-4 w-4" />
                 New File
               </ContextMenuItem>
-              <ContextMenuItem onClick={() => onCreateFolder(node.path)}>
+              <ContextMenuItem onClick={() => onCreateFolder(node.path)} className="gap-2">
                 <FolderPlus className="h-4 w-4" />
                 New Folder
               </ContextMenuItem>
               <ContextMenuSeparator />
             </>
           )}
-          <ContextMenuItem onClick={() => onRename(node.path, node.type)}>
+          <ContextMenuItem onClick={() => onRename(node.path, node.type)} className="gap-2">
             <Edit3 className="h-4 w-4" />
             Rename
           </ContextMenuItem>
-          <ContextMenuItem variant="destructive" onClick={() => onDelete(node.path, node.type)}>
+          <ContextMenuItem onClick={() => onDelete(node.path, node.type)} className="gap-2 text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400">
             <Trash2 className="h-4 w-4" />
             Delete
           </ContextMenuItem>
@@ -151,7 +176,12 @@ function FileTreeItem({
       </ContextMenu>
 
       {node.type === "folder" && isOpen && node.children && (
-        <div>
+        <div className="relative">
+          {/* Indent guide line */}
+          <div
+            className="absolute top-0 bottom-0 w-px bg-border/40"
+            style={{ left: `${level * 14 + 18}px` }}
+          />
           {node.children.map((child) => (
             <FileTreeItem
               key={child.path}
@@ -187,6 +217,7 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
   const [supabaseDialogOpen, setSupabaseDialogOpen] = useState(false)
   const [deployDialogOpen, setDeployDialogOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // Mobile sidebar toggle state
+  const [isFullscreen, setIsFullscreen] = useState(false) // Preview fullscreen mode
   const { resolvedTheme } = useTheme()
   const { connection: supabaseConn } = useBCoderSupabase()
 
@@ -341,6 +372,17 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
     return () => clearTimeout(timeoutId)
   }, [editorContent, selectedFilePath, writeFile, webcontainerInstance, isBooting])
 
+  // Handle escape key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isFullscreen])
+
   const handleEditorChange = useCallback((value: string | undefined) => {
     setEditorContent(value || "")
   }, [])
@@ -457,130 +499,155 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
 
   return (
     <div className="h-full flex flex-col bg-background relative overflow-hidden">
-      <div className="border-b bg-gradient-to-r from-emerald-50/50 to-cyan-50/50 dark:from-emerald-950/20 dark:to-cyan-950/20 z-10">
-        <div className="px-2 sm:px-4 py-2 sm:py-3 flex items-center justify-between">
-          <div className="flex items-center gap-1 sm:gap-2">
+      {/* Modern Header */}
+      <div className="border-b border-border/60 bg-background z-10">
+        <div className="h-12 px-3 flex items-center justify-between">
+          {/* Left Section - Toggle & Tabs */}
+          <div className="flex items-center gap-3">
             {!isPreview && (
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className="md:hidden h-7 w-7 p-0 mr-1 shrink-0"
+                className="md:hidden h-8 w-8 p-0 hover:bg-muted"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 title="Toggle File Explorer"
               >
-                <Folder className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <Folder className="h-4 w-4 text-muted-foreground" />
               </Button>
             )}
-            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-              <Button
-                variant={!isPreview ? "secondary" : "ghost"}
-                size="sm"
-                className={cn(
-                  "h-7 text-xs transition-colors px-2 sm:px-3",
-                  !isPreview
-                    ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/40"
-                    : "text-foreground hover:text-foreground hover:bg-amber-50 dark:hover:bg-amber-950/20"
-                )}
+
+            {/* Code/Preview Toggle - Modern Pill Style */}
+            <div className="flex items-center h-8 p-0.5 bg-muted/60 rounded-lg border border-border/50">
+              <button
                 onClick={() => {
                   setIsPreview(false)
                   setSidebarOpen(false)
                 }}
-              >
-                <Code className="h-3 w-3 sm:mr-1 shrink-0" />
-                <span className="hidden sm:inline">Code</span>
-              </Button>
-              <Button
-                variant={isPreview ? "secondary" : "ghost"}
-                size="sm"
                 className={cn(
-                  "h-7 text-xs transition-colors px-2 sm:px-3",
-                  isPreview
-                    ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/40"
-                    : "text-foreground hover:text-foreground hover:bg-amber-50 dark:hover:bg-amber-950/20"
+                  "flex items-center gap-1.5 h-7 px-3 rounded-md text-sm font-medium transition-all duration-200",
+                  !isPreview
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
+              >
+                <Code className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Code</span>
+              </button>
+              <button
                 onClick={() => setIsPreview(true)}
                 disabled={!isServerReady}
+                className={cn(
+                  "flex items-center gap-1.5 h-7 px-3 rounded-md text-sm font-medium transition-all duration-200",
+                  isPreview
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                  !isServerReady && "opacity-50 cursor-not-allowed"
+                )}
               >
-                <Eye className="h-3 w-3 sm:mr-1 shrink-0" />
+                <Eye className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Preview</span>
-              </Button>
+              </button>
+            </div>
+
+            {/* Divider */}
+            <div className="hidden sm:block h-5 w-px bg-border/60" />
+
+            {/* Status Indicator - Modern Pill */}
+            <div className={cn(
+              "hidden sm:flex items-center gap-1.5 h-6 px-2.5 rounded-full text-xs font-medium transition-all",
+              isBooting && "bg-muted text-muted-foreground",
+              isInstalling && "bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400",
+              isServerReady && "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400",
+              !isBooting && !isInstalling && !isServerReady && "bg-muted text-muted-foreground"
+            )}>
+              {isBooting && (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Booting...</span>
+                </>
+              )}
+              {isInstalling && (
+                <>
+                  <Package className="h-3 w-3" />
+                  <span>Installing...</span>
+                </>
+              )}
+              {isServerReady && (
+                <>
+                  <div className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                  <span>Ready</span>
+                </>
+              )}
+              {!isBooting && !isInstalling && !isServerReady && (
+                <>
+                  <div className="h-1.5 w-1.5 bg-gray-400 rounded-full" />
+                  <span>Idle</span>
+                </>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-muted/50 shrink-0">
-              {isBooting && <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin text-muted-foreground" />}
-              {isInstalling && <Package className="h-3 w-3 sm:h-4 sm:w-4 animate-pulse text-amber-500" />}
-              {isServerReady && (
-                <div className="relative">
-                  <div className="absolute inset-0 bg-emerald-500/20 blur-sm rounded-full animate-pulse" />
-                  <div className="relative h-2 w-2 sm:h-3 sm:w-3 bg-emerald-500 rounded-full" />
-                </div>
-              )}
-              {!isBooting && !isInstalling && !isServerReady && (
-                <div className="h-2 w-2 sm:h-3 sm:w-3 bg-gray-300 dark:bg-gray-600 rounded-full" />
-              )}
-            </div>
+          {/* Right Section - Actions */}
+          <div className="flex items-center gap-2">
+            {/* Saved Indicator */}
+            {hasStoredChanges && (
+              <div className="hidden sm:flex items-center gap-1.5 h-6 px-2 rounded-md bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 text-xs font-medium">
+                <HardDrive className="h-3 w-3" />
+                <span className="hidden md:inline">Saved</span>
+              </div>
+            )}
 
-            <div className="flex items-center gap-1 sm:gap-2">
-              {/* Persistence indicator */}
-              {hasStoredChanges && (
-                <div
-                  className="flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 text-xs font-medium"
-                  title="Your changes are saved in browser storage"
-                >
-                  <HardDrive className="h-3 w-3" />
-                  <span className="hidden sm:inline">Saved</span>
-                </div>
-              )}
-
-              {/* Reset to default button */}
-              {hasStoredChanges && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setResetDialogOpen(true)}
-                  className="h-7 sm:h-8 px-1.5 sm:px-2 gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-transparent hover:text-amber-600 dark:hover:text-amber-400"
-                  title="Reset to default template"
-                  disabled={isBooting || isInstalling}
-                >
-                  <RotateCcw className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
-                  <span className="hidden lg:inline truncate">Reset</span>
-                </Button>
-              )}
-
+            {/* Reset Button */}
+            {hasStoredChanges && (
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                onClick={() => setSupabaseDialogOpen(true)}
-                className={cn(
-                  "h-7 sm:h-8 px-1.5 sm:px-2 gap-1.5 text-xs font-medium transition-all max-w-[120px]",
-                  supabaseConn.connected
-                    ? "bg-emerald-500 hover:bg-emerald-600 border-emerald-600 text-white"
-                    : "bg-muted hover:bg-muted/80 opacity-80 hover:text-black dark:hover:text-white"
-                )}
-                title={supabaseConn.connected ? `Supabase: ${supabaseConn.projectRef}` : "Connect Supabase"}
+                onClick={() => setResetDialogOpen(true)}
+                className="h-8 px-2 gap-1.5 text-xs font-medium text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                title="Reset to default template"
+                disabled={isBooting || isInstalling}
               >
-                <svg className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M13.277 21.998c-.403.02-.806-.102-1.124-.34a1.74 1.74 0 0 1-.627-1.084L10.47 10.47H3.03c-.522 0-1.01-.267-1.29-.707a1.49 1.49 0 0 1-.154-1.386l.002-.004C2.31 6.658 5.257 1.027 5.257 1.027c.23-.407.636-.7 1.103-.793a1.74 1.74 0 0 1 1.29.34c.38.295.627.73.627 1.084l1.056 10.105h7.44c.522 0 1.01.267 1.29.707.28.44.312.99.154 1.386l-.002.004c-.722 1.715-3.669 7.346-3.669 7.346-.23.407-.636.7-1.103.793-.09.018-.18.027-.27.027l.104-.028Z" />
-                </svg>
-                {supabaseConn.connected ? (
-                  <span className="hidden lg:inline truncate">Connected</span>
-                ) : (
-                  <span className="hidden lg:inline truncate">Supabase</span>
-                )}
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span className="hidden lg:inline">Reset</span>
               </Button>
+            )}
 
-              <Button
-                size="sm"
-                onClick={() => setDeployDialogOpen(true)}
-                className="h-7 sm:h-8 px-2 sm:px-3 gap-1.5 text-xs font-medium transition-all bg-emerald-500 hover:bg-emerald-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] border-0 ml-1"
-                title="Deploy Project to Vercel"
-              >
-                <Globe className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
-                <span className="hidden lg:inline truncate">Deploy</span>
-              </Button>
-            </div>
+            {/* Divider */}
+            <div className="h-5 w-px bg-border/60" />
+
+            {/* Supabase Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSupabaseDialogOpen(true)}
+              className={cn(
+                "h-8 px-2 gap-1.5 text-xs font-medium transition-all",
+                supabaseConn.connected
+                  ? "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              )}
+              title={supabaseConn.connected ? `Supabase: ${supabaseConn.projectRef}` : "Connect Supabase"}
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M13.277 21.998c-.403.02-.806-.102-1.124-.34a1.74 1.74 0 0 1-.627-1.084L10.47 10.47H3.03c-.522 0-1.01-.267-1.29-.707a1.49 1.49 0 0 1-.154-1.386l.002-.004C2.31 6.658 5.257 1.027 5.257 1.027c.23-.407.636-.7 1.103-.793a1.74 1.74 0 0 1 1.29.34c.38.295.627.73.627 1.084l1.056 10.105h7.44c.522 0 1.01.267 1.29.707.28.44.312.99.154 1.386l-.002.004c-.722 1.715-3.669 7.346-3.669 7.346-.23.407-.636.7-1.103.793-.09.018-.18.027-.27.027l.104-.028Z" />
+              </svg>
+              {supabaseConn.connected ? (
+                <span className="hidden md:inline">Connected</span>
+              ) : (
+                <span className="hidden md:inline">Supabase</span>
+              )}
+            </Button>
+
+            {/* Deploy Button - Accent */}
+            <Button
+              size="sm"
+              onClick={() => setDeployDialogOpen(true)}
+              className="h-8 px-3 gap-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+              title="Deploy Project to Vercel"
+            >
+              <Globe className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Deploy</span>
+            </Button>
           </div>
         </div>
       </div>
@@ -605,22 +672,36 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
 
             {/* File Explorer Sidebar */}
             <div className={cn(
-              "absolute md:relative top-0 bottom-0 left-0 z-30 w-64 border-r bg-background md:bg-muted/30 overflow-y-auto transition-transform duration-300 md:duration-0 h-full shadow-2xl md:shadow-none",
+              "absolute md:relative top-0 bottom-0 left-0 z-30 w-60 border-r border-border/60 bg-background overflow-hidden transition-transform duration-200 h-full shadow-xl md:shadow-none",
               sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
             )}>
-              <div className="p-2 h-full flex flex-col">
-                <div className="flex items-center justify-between mb-2 px-2 shrink-0">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase">Explorer</span>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setCreateFileDialog({ open: true, parentPath: "" })} title="New File">
-                      <FilePlus className="h-3 w-3" />
+              <div className="h-full flex flex-col">
+                {/* Explorer Header */}
+                <div className="h-9 flex items-center justify-between px-3 border-b border-border/40 bg-muted/30 shrink-0">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Explorer</span>
+                  <div className="flex gap-0.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 hover:bg-muted text-muted-foreground hover:text-foreground"
+                      onClick={() => setCreateFileDialog({ open: true, parentPath: "" })}
+                      title="New File"
+                    >
+                      <FilePlus className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setCreateFolderDialog({ open: true, parentPath: "" })} title="New Folder">
-                      <FolderPlus className="h-3 w-3" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 hover:bg-muted text-muted-foreground hover:text-foreground"
+                      onClick={() => setCreateFolderDialog({ open: true, parentPath: "" })}
+                      title="New Folder"
+                    >
+                      <FolderPlus className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto">
+                {/* File Tree */}
+                <div className="flex-1 overflow-y-auto py-1">
                   {localFileStructure.map((node) => (
                     <FileTreeItem
                       key={node.path}
@@ -647,10 +728,23 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
 
             {/* Monaco Editor Wrapper */}
             <div className="flex-1 flex flex-col min-w-0 h-full w-full">
-              <div className="border-b px-2 sm:px-4 py-2 bg-muted/20 shrink-0 flex items-center overflow-x-auto scroolbar-hide">
-                <div className="flex items-center gap-2 whitespace-nowrap min-w-0 w-full">
-                  <FileCode className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-500 shrink-0" />
-                  <span className="text-xs sm:text-sm font-medium truncate w-full pr-4">{selectedFilePath || "No file selected"}</span>
+              {/* File Tab Bar */}
+              <div className="h-9 border-b border-border/40 bg-muted/20 shrink-0 flex items-center px-3 overflow-x-auto">
+                <div className="flex items-center gap-2 min-w-0">
+                  {/* Active File Tab */}
+                  <div className="flex items-center gap-2 h-7 px-3 bg-background rounded-md border border-border/50 shadow-sm">
+                    <FileCode className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                    <span className="text-xs font-medium truncate max-w-[200px]">
+                      {selectedFilePath ? selectedFilePath.split('/').pop() : "No file"}
+                    </span>
+                  </div>
+                  {/* Breadcrumb Path */}
+                  {selectedFilePath && selectedFilePath.includes('/') && (
+                    <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
+                      <ChevronRight className="h-3 w-3" />
+                      <span className="truncate max-w-[300px]">{selectedFilePath}</span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex-1 min-h-0 relative">
@@ -675,21 +769,53 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col w-full min-w-0">
-            <div className="border-b px-4 py-2 bg-muted/20 shrink-0">
+          <div className={cn(
+            "flex flex-col w-full min-w-0",
+            isFullscreen ? "fixed inset-0 z-50 bg-background" : "flex-1"
+          )}>
+            {/* Preview Header */}
+            <div className="h-9 border-b border-border/40 bg-muted/20 shrink-0 flex items-center justify-between px-3">
               <div className="flex items-center gap-2">
-                <Eye className="h-4 w-4 text-emerald-500 shrink-0" />
-                <span className="text-sm font-medium">Live Preview</span>
+                <div className="flex items-center gap-2 h-7 px-3 bg-background rounded-md border border-border/50 shadow-sm">
+                  <Eye className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                  <span className="text-xs font-medium">Live Preview</span>
+                </div>
+                {/* {serverUrl && (
+                  <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
+                    <ChevronRight className="h-3 w-3" />
+                    <span className="truncate max-w-[300px]">{serverUrl}</span>
+                  </div>
+                )} */}
+              </div>
+              {/* Preview Actions */}
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="h-7 w-7 p-0 hover:bg-muted text-muted-foreground hover:text-foreground"
+                  title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                >
+                  {isFullscreen ? (
+                    <Minimize2 className="h-3.5 w-3.5" />
+                  ) : (
+                    <Maximize2 className="h-3.5 w-3.5" />
+                  )}
+                </Button>
               </div>
             </div>
-            <div className="flex-1 bg-white dark:bg-gray-900 overflow-hidden relative w-full h-full">
+            {/* Preview Content */}
+            <div className="flex-1 bg-white dark:bg-zinc-950 overflow-hidden relative w-full h-full">
               {serverUrl ? (
                 <iframe src={serverUrl} className="w-full h-full absolute inset-0 border-0" title="Preview" />
               ) : (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center text-muted-foreground">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-emerald-500" />
-                    <p className="text-sm animate-pulse">Running build step...</p>
+                <div className="flex items-center justify-center h-full bg-muted/10">
+                  <div className="text-center">
+                    <div className="relative inline-flex">
+                      <div className="absolute inset-0 bg-emerald-500/20 blur-xl rounded-full animate-pulse" />
+                      <Loader2 className="relative h-8 w-8 animate-spin text-emerald-500" />
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-3">Starting dev server...</p>
                   </div>
                 </div>
               )}

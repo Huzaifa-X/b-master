@@ -99,7 +99,9 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
         webcontainerInstance,
         createFile,
         setActiveArtifact,
-        exportFilesAsJson
+        exportFilesAsJson,
+        readFile,
+        pushFileVersion
     } = useBCoderContext()
 
     const [input, setInput] = useState("")
@@ -300,6 +302,16 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                     return newMap
                 })
 
+                // Smart Rollback: Save current version before overwriting
+                try {
+                    const currentContent = await readFile(action.filePath)
+                    if (currentContent) {
+                        pushFileVersion(action.filePath, currentContent)
+                    }
+                } catch {
+                    // File doesn't exist yet, no version to save
+                }
+
                 await writeFile(action.filePath, action.content)
                 await buildFileTree()
 
@@ -335,7 +347,7 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
         } catch {
             // Silently handle errors
         }
-    }, [writeFile, runCommand, buildFileTree])
+    }, [writeFile, runCommand, buildFileTree, readFile, pushFileVersion])
 
     const handleActionRef = useRef(handleAction)
     useEffect(() => {
@@ -863,7 +875,6 @@ function BCoderInput({
                             {!filesReady && (
                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                     <Loader2 className="h-3 w-3 animate-spin" />
-                                    <span>Loading...</span>
                                 </div>
                             )}
                             {/* Attachment button */}

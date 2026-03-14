@@ -12,6 +12,70 @@ export const maxDuration = 300
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/**
+ * Smart model routing: Determine if a message requires heavy coding model or can use faster model.
+ * Returns 'fast' for simple questions/greetings, 'full' for complex coding tasks.
+ */
+function classifyMessageComplexity(messages: any[]): 'fast' | 'full' {
+    const lastUserMessage = messages.filter(m => m.role === 'user').pop()
+    if (!lastUserMessage) return 'full'
+
+    // Extract text from the last user message
+    let messageText = ''
+    if (typeof lastUserMessage.content === 'string') {
+        messageText = lastUserMessage.content.toLowerCase()
+    } else if (Array.isArray(lastUserMessage.parts)) {
+        messageText = lastUserMessage.parts
+            .filter((p: any) => p.type === 'text')
+            .map((p: any) => p.text || '')
+            .join(' ')
+            .toLowerCase()
+    }
+
+    // If there are images or files attached, use full model
+    if (Array.isArray(lastUserMessage.parts)) {
+        const hasMedia = lastUserMessage.parts.some((p: any) => p.type === 'image' || p.type === 'file')
+        if (hasMedia) return 'full'
+    }
+
+    // Short messages that are likely greetings or simple questions
+    const simplePatterns = [
+        /^(hi|hey|hello|yo|sup|what'?s? up)[\s!?]*$/,
+        /^how are you/,
+        /^what can you do/,
+        /^help$/,
+        /^thanks?[\s!]*$/,
+        /^thank you/,
+        /^ok(ay)?[\s!]*$/,
+        /^(yes|no|sure|nope)[\s!]*$/,
+        /^what is this/,
+        /^explain/,
+        /^tell me about/,
+    ]
+
+    // Check if message matches simple patterns
+    if (simplePatterns.some(pattern => pattern.test(messageText.trim()))) {
+        return 'fast'
+    }
+
+    // Short messages without coding keywords -> fast
+    const codingKeywords = [
+        'create', 'build', 'add', 'implement', 'fix', 'change', 'update', 'modify',
+        'delete', 'remove', 'rename', 'refactor', 'component', 'function', 'api',
+        'button', 'form', 'page', 'route', 'database', 'style', 'css', 'tailwind',
+        'import', 'export', 'react', 'hook', 'state', 'props', 'supabase'
+    ]
+
+    const hasCodeKeywords = codingKeywords.some(kw => messageText.includes(kw))
+    const isShortMessage = messageText.length < 50
+
+    if (isShortMessage && !hasCodeKeywords) {
+        return 'fast'
+    }
+
+    return 'full'
+}
+
 /** Collect all image URLs attached by the user across all messages */
 function extractAttachedImages(messages: any[]): string[] {
     const seen = new Set<string>()
@@ -594,11 +658,18 @@ ${supabaseContext}
 ${assetContext}
 `
 
+        // ── Smart Model Selection ─────────────────────────────────────────────
+        // Use faster Codex for simple questions/greetings, GPT-5.4 for complex coding tasks
+        const complexity = classifyMessageComplexity(messages)
+        const selectedModel = complexity === 'fast' ? 'codex' : 'gpt-5'
+
+        console.log('[b-coder/chat] Smart routing:', { complexity, selectedModel })
+
         // ── Stream response via OpenAI Responses API ─────────────────────────
         // The Responses API handles MCP tool calls server-side in a single request.
-        // gpt-5 reasons, calls MCP tools, and streams the final response — all in one.
+        // GPT-5.4 reasons, calls MCP tools, and streams the final response — all in one.
         const stream = await openai.responses.create({
-            model: 'gpt-5',
+            model: selectedModel,
             instructions,
             input,
             tools: tools.length > 0 ? tools : undefined,

@@ -10,6 +10,15 @@ interface FileNode {
     children?: FileNode[]
 }
 
+interface FileVersion {
+    content: string
+    timestamp: number
+}
+
+interface FileHistory {
+    [path: string]: FileVersion[]
+}
+
 interface BCoderContextValue {
     isBooting: boolean
     isInstalling: boolean
@@ -37,6 +46,13 @@ interface BCoderContextValue {
     saveWorkspace: () => Promise<boolean>
     resetWorkspace: () => Promise<void>
     hasStoredChanges: boolean
+    // Smart Rollback
+    fileHistory: FileHistory
+    pushFileVersion: (path: string, content: string) => void
+    rollbackFile: (path: string) => Promise<boolean>
+    rollbackAllFiles: () => Promise<boolean>
+    getFileVersionCount: (path: string) => number
+    clearFileHistory: () => void
 }
 
 const BCoderContext = createContext<BCoderContextValue | null>(null)
@@ -60,6 +76,7 @@ export function BCoderProvider({ children, assistantId, templateId }: BCoderProv
     const [fileStructure, setFileStructure] = useState<FileNode[]>([])
     const [selectedFilePath, setSelectedFilePath] = useState<string | null>("src/App.jsx")
     const [activeArtifact, setActiveArtifact] = useState<{ id: string, name: string, instructions: string, category: string } | null>(null)
+    const [fileHistory, setFileHistory] = useState<FileHistory>({})
 
     const buildFileTree = useCallback(async () => {
         if (!webContainer.webcontainerInstance) return
@@ -97,6 +114,65 @@ export function BCoderProvider({ children, assistantId, templateId }: BCoderProv
         }
     }, [webContainer.webcontainerInstance])
 
+    // Smart Rollback: Push a version to history before modifying
+    const pushFileVersion = useCallback((path: string, content: string) => {
+        setFileHistory(prev => {
+            const versions = prev[path] || []
+            // Limit history to last 10 versions per file
+            const newVersions = [...versions, { content, timestamp: Date.now() }].slice(-10)
+            return { ...prev, [path]: newVersions }
+        })
+    }, [])
+
+    // Smart Rollback: Restore file to previous version
+    const rollbackFile = useCallback(async (path: string): Promise<boolean> => {
+        const versions = fileHistory[path]
+        if (!versions || versions.length === 0) return false
+
+        try {
+            // Get the last saved version
+            const lastVersion = versions[versions.length - 1]
+            await webContainer.writeFile(path, lastVersion.content)
+
+            // Remove the used version from history
+            setFileHistory(prev => {
+                const newVersions = [...(prev[path] || [])]
+                newVersions.pop()
+                return { ...prev, [path]: newVersions }
+            })
+
+            await buildFileTree()
+            return true
+        } catch {
+            return false
+        }
+    }, [fileHistory, webContainer, buildFileTree])
+
+    // Smart Rollback: Rollback all recently modified files
+    const rollbackAllFiles = useCallback(async (): Promise<boolean> => {
+        const paths = Object.keys(fileHistory).filter(path => fileHistory[path].length > 0)
+        if (paths.length === 0) return false
+
+        try {
+            for (const path of paths) {
+                await rollbackFile(path)
+            }
+            return true
+        } catch {
+            return false
+        }
+    }, [fileHistory, rollbackFile])
+
+    // Get version count for a file
+    const getFileVersionCount = useCallback((path: string): number => {
+        return fileHistory[path]?.length || 0
+    }, [fileHistory])
+
+    // Clear all file history
+    const clearFileHistory = useCallback(() => {
+        setFileHistory({})
+    }, [])
+
     const getCurrentFileContent = useCallback(async (): Promise<string | null> => {
         if (!selectedFilePath || !webContainer.webcontainerInstance) return null
         try {
@@ -120,7 +196,14 @@ export function BCoderProvider({ children, assistantId, templateId }: BCoderProv
         setSelectedFilePath,
         getCurrentFileContent,
         activeArtifact,
-        setActiveArtifact
+        setActiveArtifact,
+        // Smart Rollback
+        fileHistory,
+        pushFileVersion,
+        rollbackFile,
+        rollbackAllFiles,
+        getFileVersionCount,
+        clearFileHistory
     }
 
     return (

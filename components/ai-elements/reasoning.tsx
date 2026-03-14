@@ -152,12 +152,12 @@ export const ReasoningTrigger = memo(
           <>
             <BrainIcon className="size-4" />
             {getThinkingMessage(isStreaming, duration)}
-            <ChevronDownIcon
+            {/* <ChevronDownIcon
               className={cn(
                 "size-4 transition-transform",
                 isOpen ? "rotate-180" : "rotate-0"
               )}
-            />
+            /> */}
           </>
         )}
       </CollapsibleTrigger>

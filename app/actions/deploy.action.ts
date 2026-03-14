@@ -22,7 +22,7 @@ export async function deployToGithubAndVercel(input: any) {
             }
         }
 
-        const { repoName, description, isPrivate, files, isUpdate, activeArtifactId } = parseResult.data
+        let { repoName, description, isPrivate, files, isUpdate, activeArtifactId } = parseResult.data
         const assistantId = input.assistantId
 
         if (!assistantId) {
@@ -73,6 +73,8 @@ export async function deployToGithubAndVercel(input: any) {
                     private: isPrivate,
                     auto_init: true, // we need an initial commit to get a branch to push to
                 })
+                // Use the actual name from GitHub (it may have been slugified)
+                repoName = repoResponse.data.name
             } catch (err: any) {
                 // handle repo already exists
                 if (err.status === 422 && err.message?.includes('already exists')) {
@@ -94,6 +96,7 @@ export async function deployToGithubAndVercel(input: any) {
                     owner,
                     repo: repoName,
                 })
+                repoName = existingRepo.name
                 defaultBranch = existingRepo.default_branch || "main"
             } catch (err: any) {
                 return { success: false, error: { message: `Repository '${repoName}' not found or inaccessible.` } }
