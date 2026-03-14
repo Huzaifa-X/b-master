@@ -375,7 +375,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                                 isStreaming={isLoading}
                             >
                                 <ReasoningTrigger />
-                                <ReasoningContent>{reasoning || thinkingMessage}</ReasoningContent>
+                                {/* <ReasoningContent>{reasoning || thinkingMessage}</ReasoningContent> */}
                             </Reasoning>
                         </div>
                     )}

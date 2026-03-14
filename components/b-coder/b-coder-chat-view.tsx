@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { BCoderChat } from "@/components/b-coder/b-coder-chat"
 import { MonacoEditorPanel } from "@/components/b-coder/monaco-editor-panel"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
 import { BCoderProvider } from "@/components/b-coder/b-coder-context"
+import { useSidebar } from "@/components/ui/sidebar"
 import { MessageSquare, Code2 } from "lucide-react"
 
 interface BCoderChatViewProps {
@@ -15,6 +16,12 @@ interface BCoderChatViewProps {
 
 export function BCoderChatView({ assistantId, templateId, artifactId }: BCoderChatViewProps) {
     const [activeTab, setActiveTab] = useState<'chat' | 'code'>('chat')
+    const { setOpen } = useSidebar()
+
+    // Auto-close sidebar when b-coder opens
+    useEffect(() => {
+        setOpen(false)
+    }, [setOpen])
 
     return (
         <div className="h-full flex flex-col bg-gradient-to-br from-emerald-50/30 via-background to-cyan-50/30 dark:from-emerald-950/10 dark:via-background dark:to-cyan-950/10">
@@ -50,7 +57,7 @@ export function BCoderChatView({ assistantId, templateId, artifactId }: BCoderCh
                     <ResizablePanelGroup direction="horizontal">
                         {/* Left Panel - Chat */}
                         <ResizablePanel
-                            defaultSize={60}
+                            defaultSize={30}
                             minSize={30}
                             className={`transition-all duration-300 ${activeTab !== 'chat' ? 'hidden md:block' : ''}`}
                         >
@@ -67,8 +74,8 @@ export function BCoderChatView({ assistantId, templateId, artifactId }: BCoderCh
 
                         {/* Right Panel - Monaco Editor */}
                         <ResizablePanel
-                            defaultSize={40}
-                            minSize={25}
+                            defaultSize={70}
+                            minSize={50}
                             className={`transition-all duration-300 ${activeTab !== 'code' ? 'hidden md:block' : ''}`}
                         >
                             <MonacoEditorPanel templateId={templateId} assistantId={assistantId} />
