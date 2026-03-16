@@ -7,32 +7,77 @@ import { defaultTodoTemplate } from "./default-todo"
 import { bookingSystemTemplate } from "./booking-system"
 import { accountingDashboardTemplate } from "./accounting-dashboard"
 import { analyticsDashboardTemplate } from "./analytics-dashboard"
+import { fromScratchTemplate } from "./from-scratch"
+import { websiteTemplate } from "./website"
+import { ecommerceTemplate } from "./e-commerce"
+import { seoContentTemplate } from "./seo-content"
+import { copywritingTemplate } from "./copywriting"
+import { visualAdsTemplate } from "./visual-ads"
+import { tradingTemplate } from "./trading"
 
-export interface Template {
+export interface TemplateDefinition {
     id: string
     name: string
     description: string
-    category: "default" | "booking" | "accounting" | "analytics"
+    category: string
+    icon?: string
     files: Record<string, string>
+}
+
+export interface Template extends TemplateDefinition {
     isEnabled: boolean
 }
 
 // Template registry
 const templates: Record<string, Template> = {
+    // Starter Templates
+    "from-scratch": {
+        ...fromScratchTemplate,
+        isEnabled: true,
+    } as Template,
     "default-todo": {
         ...defaultTodoTemplate,
         isEnabled: true,
     } as Template,
+    // Website & Landing Pages
+    "website": {
+        ...websiteTemplate,
+        isEnabled: true,
+    } as Template,
+    // E-Commerce
+    "e-commerce": {
+        ...ecommerceTemplate,
+        isEnabled: true,
+    } as Template,
+    // Booking & Scheduling
     "booking-system": {
         ...bookingSystemTemplate,
         isEnabled: true,
     } as Template,
+    // Finance & Analytics
     "accounting-dashboard": {
         ...accountingDashboardTemplate,
         isEnabled: true,
     } as Template,
     "analytics-dashboard": {
         ...analyticsDashboardTemplate,
+        isEnabled: true,
+    } as Template,
+    "trading": {
+        ...tradingTemplate,
+        isEnabled: true,
+    } as Template,
+    // Marketing & Content
+    "seo-content": {
+        ...seoContentTemplate,
+        isEnabled: true,
+    } as Template,
+    "copywriting": {
+        ...copywritingTemplate,
+        isEnabled: true,
+    } as Template,
+    "visual-ads": {
+        ...visualAdsTemplate,
         isEnabled: true,
     } as Template,
 }
