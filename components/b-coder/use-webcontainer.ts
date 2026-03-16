@@ -29,6 +29,7 @@ interface UseWebContainerReturn {
     exportFilesAsJson: () => Promise<{ [path: string]: string }>
     saveWorkspace: () => Promise<boolean>
     resetWorkspace: () => Promise<void>
+    retrySetup: () => Promise<void>
     hasStoredChanges: boolean
 }
 
@@ -199,21 +200,41 @@ export function useWebContainer(assistantId: string, templateId: string): UseWeb
         scheduleSave()
     }, [scheduleSave])
 
-    const installDependencies = useCallback(async (webcontainer: WebContainer) => {
+    const installDependencies = useCallback(async (webcontainer: WebContainer, retryCount = 0): Promise<void> => {
+        const MAX_RETRIES = 2
         setIsInstalling(true)
-        addTerminalOutput("📦 Running npm install...")
+        addTerminalOutput(retryCount > 0 ? `📦 Retrying npm install (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...` : "📦 Running npm install...")
 
         try {
             const installProcess = await webcontainer.spawn("npm", ["install"])
             installProcess.output.pipeTo(new WritableStream({ write(data) { addTerminalOutput(data) } }))
             const exitCode = await installProcess.exit
 
-            if (exitCode !== 0) throw new Error(`npm install failed with exit code ${exitCode}`)
+            // Exit code 4294967257 is -39 (signal termination) - retry on this
+            if (exitCode !== 0) {
+                const isRetryableError = exitCode === 4294967257 || exitCode < 0
+                if (isRetryableError && retryCount < MAX_RETRIES) {
+                    addTerminalOutput(`⚠️ npm install was interrupted (exit code ${exitCode}). Retrying...`)
+                    // Wait a bit before retrying
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)))
+                    return installDependencies(webcontainer, retryCount + 1)
+                }
+                throw new Error(`npm install failed with exit code ${exitCode}`)
+            }
 
             addTerminalOutput("✅ Dependencies installed!")
             setIsInstalling(false)
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err)
+
+            // Check if it's a retryable error
+            const isRetryableError = errorMsg.includes('4294967257') || errorMsg.includes('signal') || errorMsg.includes('killed')
+            if (isRetryableError && retryCount < MAX_RETRIES) {
+                addTerminalOutput(`⚠️ Installation interrupted. Retrying in ${retryCount + 1}s...`)
+                await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)))
+                return installDependencies(webcontainer, retryCount + 1)
+            }
+
             addTerminalOutput(`❌ Installation failed: ${errorMsg}`)
             setError(errorMsg)
             setIsInstalling(false)
@@ -490,6 +511,25 @@ export function useWebContainer(assistantId: string, templateId: string): UseWeb
         await installDependencies(webcontainerInstanceRef.current)
     }, [addTerminalOutput, installDependencies])
 
+    // Retry setup (npm install + dev server) - useful when initial setup fails
+    const retrySetup = useCallback(async () => {
+        if (!webcontainerInstanceRef.current) {
+            addTerminalOutput('❌ Cannot retry: WebContainer not available')
+            return
+        }
+
+        setError(null)
+        addTerminalOutput('🔄 Retrying setup...')
+
+        try {
+            await installDependencies(webcontainerInstanceRef.current)
+            await startDevServer(webcontainerInstanceRef.current)
+        } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : String(err)
+            addTerminalOutput(`❌ Retry failed: ${errorMsg}`)
+        }
+    }, [addTerminalOutput, installDependencies, startDevServer])
+
     // Cleanup save timeout on unmount
     useEffect(() => {
         return () => {
@@ -518,6 +558,7 @@ export function useWebContainer(assistantId: string, templateId: string): UseWeb
         exportFilesAsJson,
         saveWorkspace,
         resetWorkspace,
+        retrySetup,
         hasStoredChanges,
     }
 }

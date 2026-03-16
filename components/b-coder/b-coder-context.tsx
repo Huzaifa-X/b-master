@@ -45,6 +45,7 @@ interface BCoderContextValue {
     // Workspace persistence
     saveWorkspace: () => Promise<boolean>
     resetWorkspace: () => Promise<void>
+    retrySetup: () => Promise<void>
     hasStoredChanges: boolean
     // Smart Rollback
     fileHistory: FileHistory
