@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils"
 const MAX_CONNECTED_APIS = 2
 
 interface ApiConnectPickerProps {
-  /** The currently open assistant – it will be excluded from the list */
+  /** The currently open assistant */
   currentAssistantId?: string
   /** The currently selected API assistant IDs */
   selectedIds: string[]
@@ -94,7 +94,7 @@ export function ApiConnectPicker({
               "h-7 w-7 rounded-full",
               hasSelections && "text-primary"
             )}
-            title="Connect external APIs (max 2)"
+            title="Enable API connectors (max 2)"
           >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -106,7 +106,7 @@ export function ApiConnectPicker({
 
         <PopoverContent className="w-64 p-2" side="top" align="start">
           <p className="text-xs font-medium text-muted-foreground mb-2 px-1">
-            Connect APIs (max {MAX_CONNECTED_APIS})
+            Your API connectors (max {MAX_CONNECTED_APIS})
           </p>
 
           {isLoading ? (
@@ -115,7 +115,7 @@ export function ApiConnectPicker({
             </div>
           ) : apiAssistants.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-3 px-1">
-              No other assistants with active API configurations.
+              No assistants with active API configurations found. Set one up in an assistant&apos;s API settings.
             </p>
           ) : (
             <div className="flex flex-col gap-1">

@@ -14,11 +14,17 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  Link,
+  StickyNote,
+  ChevronDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,12 +40,21 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import {
   useAssistantLibrary,
   useUploadLibraryFile,
   useDeleteLibraryFile,
+  useAddLibraryUrl,
+  useAddLibraryNote,
 } from "@/hooks/useAssistantLibrary"
 import type { LibraryFile } from "@/app/actions/library.action"
 
@@ -97,9 +112,10 @@ interface FileRowProps {
   file: LibraryFile
   assistantId: string
   onDeleteRequest: (file: LibraryFile) => void
+  readonly?: boolean
 }
 
-function FileRow({ file, assistantId, onDeleteRequest }: FileRowProps) {
+function FileRow({ file, assistantId, onDeleteRequest, readonly = false }: FileRowProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
 
   // Proxy URL routes through our Next.js server – browser never connects to S3 directly
@@ -160,15 +176,17 @@ function FileRow({ file, assistantId, onDeleteRequest }: FileRowProps) {
             </Button>
           )}
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-destructive hover:text-destructive"
-            onClick={() => onDeleteRequest(file)}
-            title="Delete"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {!readonly && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-destructive hover:text-destructive"
+              onClick={() => onDeleteRequest(file)}
+              title="Delete"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -220,6 +238,157 @@ function FileRow({ file, assistantId, onDeleteRequest }: FileRowProps) {
 }
 
 // ---------------------------------------------------------------
+// Add URL Dialog
+// ---------------------------------------------------------------
+
+interface AddUrlDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  assistantId: string
+}
+
+function AddUrlDialog({ open, onOpenChange, assistantId }: AddUrlDialogProps) {
+  const [url, setUrl] = useState("")
+  const { addUrl, isAdding } = useAddLibraryUrl(assistantId, {
+    onSuccess: () => {
+      setUrl("")
+      onOpenChange(false)
+    },
+  })
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!url.trim()) return
+    addUrl(url.trim())
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add URL</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="lib-url">URL</Label>
+            <Input
+              id="lib-url"
+              placeholder="https://example.com/page"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              autoFocus
+              disabled={isAdding}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={isAdding}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isAdding || !url.trim()}>
+              {isAdding ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  Adding…
+                </>
+              ) : (
+                "Add URL"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------
+// Add Note Dialog
+// ---------------------------------------------------------------
+
+interface AddNoteDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  assistantId: string
+}
+
+function AddNoteDialog({ open, onOpenChange, assistantId }: AddNoteDialogProps) {
+  const [title, setTitle] = useState("")
+  const [content, setContent] = useState("")
+  const { addNote, isAdding } = useAddLibraryNote(assistantId, {
+    onSuccess: () => {
+      setTitle("")
+      setContent("")
+      onOpenChange(false)
+    },
+  })
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!content.trim()) return
+    addNote({ title: title.trim(), content: content.trim() })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Add Note</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="lib-note-title">Title <span className="text-muted-foreground">(optional)</span></Label>
+            <Input
+              id="lib-note-title"
+              placeholder="Note title…"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              autoFocus
+              disabled={isAdding}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="lib-note-content">Content</Label>
+            <Textarea
+              id="lib-note-content"
+              placeholder="Enter the note content to add to the assistant's knowledge base…"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              rows={6}
+              disabled={isAdding}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={isAdding}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isAdding || !content.trim()}>
+              {isAdding ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  Adding…
+                </>
+              ) : (
+                "Add Note"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------
 
@@ -244,7 +413,7 @@ const ACCEPTED_TYPES = [
 
 interface AssistantLibraryProps {
   assistantId: string
-  /** When true the component only shows view/delete (no upload) */
+  /** When true the component only shows view (no add/delete) */
   readonly?: boolean
 }
 
@@ -255,6 +424,8 @@ export function AssistantLibrary({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<LibraryFile | null>(null)
+  const [addUrlOpen, setAddUrlOpen] = useState(false)
+  const [addNoteOpen, setAddNoteOpen] = useState(false)
 
   const { files, isLoading } = useAssistantLibrary(assistantId)
   const { uploadFile, isUploading } = useUploadLibraryFile(assistantId)
@@ -315,20 +486,38 @@ export function AssistantLibrary({
         </div>
 
         {!readonly && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 gap-1 text-xs px-2"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-          >
-            {isUploading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Plus className="h-3.5 w-3.5" />
-            )}
-            Upload
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 gap-1 text-xs px-2"
+                disabled={isUploading}
+              >
+                {isUploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Plus className="h-3.5 w-3.5" />
+                )}
+                Add
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                <Upload className="h-3.5 w-3.5 mr-2" />
+                File
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setAddUrlOpen(true)}>
+                <Link className="h-3.5 w-3.5 mr-2" />
+                URL
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setAddNoteOpen(true)}>
+                <StickyNote className="h-3.5 w-3.5 mr-2" />
+                Note
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
 
@@ -383,10 +572,10 @@ export function AssistantLibrary({
                   <Upload className="h-8 w-8 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">
-                      No files yet
+                      No items yet
                     </p>
                     <p className="text-xs text-muted-foreground/70 mt-0.5">
-                      Drag &amp; drop files or click Upload
+                      Add files, URLs, or notes using the Add button
                     </p>
                   </div>
                   <Button
@@ -435,6 +624,7 @@ export function AssistantLibrary({
                         file={f}
                         assistantId={assistantId}
                         onDeleteRequest={setDeleteTarget}
+                        readonly={readonly}
                       />
                     ))}
                   </div>
@@ -453,6 +643,7 @@ export function AssistantLibrary({
                         file={f}
                         assistantId={assistantId}
                         onDeleteRequest={setDeleteTarget}
+                        readonly={readonly}
                       />
                     ))}
                   </div>
@@ -475,6 +666,7 @@ export function AssistantLibrary({
                         file={f}
                         assistantId={assistantId}
                         onDeleteRequest={setDeleteTarget}
+                        readonly={readonly}
                       />
                     ))}
                   </div>
@@ -484,6 +676,18 @@ export function AssistantLibrary({
           )}
         </div>
       </ScrollArea>
+
+      {/* Add Dialogs */}
+      <AddUrlDialog
+        open={addUrlOpen}
+        onOpenChange={setAddUrlOpen}
+        assistantId={assistantId}
+      />
+      <AddNoteDialog
+        open={addNoteOpen}
+        onOpenChange={setAddNoteOpen}
+        assistantId={assistantId}
+      />
 
       {/* Delete confirmation */}
       <AlertDialog

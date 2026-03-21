@@ -868,6 +868,7 @@ function BCoderInput({
                             className="min-h-[60px] pr-32 text-[15px] leading-relaxed"
                             onChange={handleInputChange}
                             value={input}
+                            autoFocus
                         />
 
                         <div className="absolute right-2 bottom-2 flex items-center gap-2">

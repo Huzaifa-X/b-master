@@ -12,6 +12,7 @@ import { OpenAPITool } from "@/lib/openapi-tool-converter"
 import { executeAPITool, loadAPITools } from "@/lib/api-tools-loader"
 import { decrypt } from "@/lib/encryption"
 import { createStripeConnectInvoice } from "@/lib/services/stripe-connect-invoice.service"
+import { swissQRInvoiceInstructions } from "@/lib/templates/swiss-qr-invoice"
 import {
     streamText,
     tool,
@@ -294,9 +295,7 @@ export async function POST(req: NextRequest) {
             systemPrompt += `\n\nIMPORTANT: The user has enabled Dropbox integration.`
         }
 
-        if (canvas) {
-            systemPrompt += `\n\nIMPORTANT: Canvas mode is active. The user wants rich visual HTML output. You MUST respond with a complete, self-contained HTML page that includes all CSS and JavaScript inline. Wrap the entire HTML document in a single \`\`\`html code block. Do not explain — just output the HTML code block directly.`
-        }
+        // Canvas mode system prompt is injected after intent detection (see below)
 
         // STRIPE CONNECT INSTRUCTIONS
         systemPrompt += `\n\n## 💳 IMPORTANT: Stripe Connect Invoice Creation\n\n**CRITICAL: Use the create_stripe_connect_invoice FUNCTION to create invoices (NOT Stripe MCP).**\n\nWhen creating invoices, call the create_stripe_connect_invoice function with:\n- customerName (required)\n- customerEmail (required)\n- amount (required - in dollars, e.g., 100.50)\n- description (required)\n- currency (optional - defaults to "chf")\n- daysUntilDue (optional - defaults to 7)\n\n**What happens:**\n1. Checks if user has connected Stripe account\n2. Creates invoice on THEIR connected account\n3. Returns both Stripe payment link AND PDF\n\n**Key Points:**\n- Invoices created on USER's Stripe Connect account\n- If no Stripe Connect, prompts user to connect\n- Always gather ALL required info before calling`
@@ -343,6 +342,82 @@ export async function POST(req: NextRequest) {
 
         const previousResponseId = lastAssistantMessage?.openaiResponseId || null
 
+        // ============================================
+        // FAST INTENT DETECTION (Pattern-based, no API call)
+        // ============================================
+        type UserIntent = 'QUESTION' | 'CREATE_CANVAS' | 'CREATE_IMAGE' | 'UNCLEAR';
+
+        function detectIntentFast(message: string): UserIntent {
+            const msg = message.toLowerCase().trim()
+
+            // Obvious questions - has question mark or starts with question words
+            if (msg.endsWith('?') || /^(what|how|why|when|where|who|is |are |can you explain|tell me about)/i.test(msg)) {
+                return 'QUESTION'
+            }
+
+            // Obvious image creation
+            if (/\b(draw|sketch|image of|picture of|photo of|generate.*image|create.*image|make.*image|design.*logo|illustrat)/i.test(msg)) {
+                return 'CREATE_IMAGE'
+            }
+
+            // STRIPE INVOICE DETECTION - Don't auto-canvas for payment invoices
+            // If message mentions payment-related terms with invoice, let AI handle with Stripe tool
+            if (/invoice/i.test(msg) && /(\$|€|£|\d+\s*(dollars?|euros?|chf|usd|eur)|payment|charge|bill|send.*to|email.*to|customer)/i.test(msg)) {
+                return 'QUESTION' // Let AI decide - it will use Stripe tool
+            }
+
+            // Obvious canvas/visual creation (excluding payment invoices handled above)
+            if (/^(create|make|build|design|draft|generate|write me)\s+(a |an |me )?(quote|invoice|contract|proposal|dashboard|landing page|webpage|website|page|document|letter|report|presentation|form|calculator|app|tool)/i.test(msg)) {
+                return 'CREATE_CANVAS'
+            }
+
+            // Strong creation signals without specific type
+            if (/^(create|make|build|design|draft|generate)\s+(a |an |me )/i.test(msg)) {
+                return 'CREATE_CANVAS' // Default creation to canvas
+            }
+
+            return 'UNCLEAR'
+        }
+
+        // Use fast detection first
+        const fastIntent = detectIntentFast(lastUserMessage)
+        let userIntent: UserIntent = fastIntent
+
+        // Only call classifier if unclear (saves API calls and time)
+        if (fastIntent === 'UNCLEAR') {
+            try {
+                const intentResponse = await openaiClient.responses.create({
+                    model: "gpt-5-nano",
+                    input: [
+                        {
+                            role: "system",
+                            content: "Classify intent as exactly one of: QUESTION, CREATE_CANVAS, CREATE_IMAGE. Respond with just the category name."
+                        },
+                        { role: "user", content: lastUserMessage }
+                    ],
+                })
+                const classifiedIntent = intentResponse.output_text?.trim().toUpperCase()
+                if (['QUESTION', 'CREATE_CANVAS', 'CREATE_IMAGE'].includes(classifiedIntent || '')) {
+                    userIntent = classifiedIntent as UserIntent
+                }
+            } catch (e) {
+                console.log('[Chat] Intent classifier failed, defaulting to QUESTION')
+                userIntent = 'QUESTION'
+            }
+        }
+
+        console.log(`[Chat] Detected intent: ${userIntent} (fast: ${fastIntent})`)
+
+        // Determine effective modes based on intent
+        const isCanvasIntent = userIntent === 'CREATE_CANVAS'
+        const isImageIntentFromPattern = userIntent === 'CREATE_IMAGE'
+
+        // Auto-enable canvas for canvas creation intents (unless manually disabled)
+        const effectiveCanvasMode = canvas || isCanvasIntent
+
+        // ============================================
+        // IMAGE INTENT (existing classifier for iterative editing)
+        // ============================================
         // Classify image edit intent
         const classifierResponse = await openaiClient.responses.create({
             model: "gpt-5-nano",
@@ -358,9 +433,60 @@ export async function POST(req: NextRequest) {
             ],
         })
 
-        const hasImageIntent = classifierResponse.output_text?.trim().toLowerCase() === "true"
+        const hasImageIntent = classifierResponse.output_text?.trim().toLowerCase() === "true" || isImageIntentFromPattern
         const hasImageAttachments = attachments?.some((att: { type: string }) => att.type.startsWith('image/'))
         const shouldUseIterativeEditing = hasImageIntent && previousResponseId && lastAssistantMessage?.hasImages && !hasImageAttachments
+
+        // Final intent determination for headers
+        const finalCanvasIntent = isCanvasIntent && !hasImageIntent // Canvas only if not image
+
+        // ============================================
+        // CANVAS MODE SYSTEM PROMPT (manual or auto-detected)
+        // ============================================
+        if (effectiveCanvasMode) {
+            systemPrompt += `\n\n## 🎨 CANVAS MODE IS ACTIVE - MANDATORY HTML OUTPUT
+
+**⚠️ THIS IS A HARD REQUIREMENT - YOU MUST FOLLOW THESE RULES:**
+
+${isCanvasIntent && !canvas ? '**Note: Canvas mode was auto-enabled based on your creation request.**\n\n' : ''}The user wants a VISUAL HTML output, NOT a text explanation.
+
+**ABSOLUTE RULES (NO EXCEPTIONS):**
+1. You MUST ALWAYS output a complete, self-contained HTML page - NO MATTER WHAT the user asks
+2. Even if the request seems simple (like "make a small contract"), you MUST create it as a beautifully designed HTML page
+3. NEVER respond with just text when Canvas mode is active
+4. NEVER say "here's a template" and provide plain text - create the HTML version instead
+5. Wrap the HTML in a markdown code block: \`\`\`html ... \`\`\`
+
+**TECHNICAL REQUIREMENTS:**
+- Start with <!DOCTYPE html>
+- Include ALL CSS inline within <style> tags in the <head>
+- Include ALL JavaScript inline within <script> tags before </body>
+- Do NOT use external CDN links - write custom CSS
+- Make it visually appealing with proper styling, colors, spacing, and typography
+
+**OUTPUT FORMAT (follow exactly):**
+\`\`\`html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Title</title>
+  <style>
+    /* Beautiful, modern CSS styling here */
+    body { font-family: system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <!-- Your beautifully designed content here -->
+</body>
+</html>
+\`\`\`
+
+**REMEMBER: Canvas mode = HTML output. ALWAYS. No exceptions. Even for documents, contracts, letters, etc. - create them as styled HTML pages.**
+
+${swissQRInvoiceInstructions}`
+        }
 
         // Add artifact context
         if (artifact) {
@@ -390,7 +516,7 @@ export async function POST(req: NextRequest) {
         if (Array.isArray(connectedApiIds) && connectedApiIds.length > 0) {
             const idsToLoad = connectedApiIds.slice(0, 2)
             for (const cId of idsToLoad) {
-                if (!cId || cId === assistantId?.toString()) continue
+                if (!cId) continue
                 const extraResult = await loadAPITools(cId.toString())
                 if (extraResult.success && extraResult.tools) {
                     apiTools.push(...extraResult.tools)
@@ -720,6 +846,11 @@ export async function POST(req: NextRequest) {
         // STREAM TEXT WITH AI SDK
         // ============================================
 
+        // Track partial content for abort handling
+        let partialContent = ""
+        let partialReasoning = ""
+        let streamAborted = false
+
         const result = streamText({
             model: ai_sdk_openai(model),
             system: systemPrompt,
@@ -727,10 +858,70 @@ export async function POST(req: NextRequest) {
             tools,
             providerOptions,
             stopWhen: stepCountIs(5),
+            abortSignal: req.signal, // Pass abort signal from request
             experimental_telemetry: {
                 isEnabled: true,
                 functionId: 'stream-text',
             },
+            // Track content as it streams for abort recovery
+            onChunk: async ({ chunk }) => {
+                if (chunk.type === 'text-delta') {
+                    partialContent += chunk.textDelta
+                } else if (chunk.type === 'reasoning') {
+                    partialReasoning += (chunk as any).textDelta || ""
+                }
+            },
+        })
+
+        // Handle abort signal - save partial content when user navigates away
+        req.signal.addEventListener('abort', async () => {
+            streamAborted = true
+            console.log("[Chat] Stream aborted by client, saving partial content...")
+
+            if (partialContent.trim() && chatIdInt) {
+                try {
+                    // Check if response already exists (race condition protection)
+                    const existingResponse = await prisma.assistantUserChatMessage.findFirst({
+                        where: {
+                            assistantUserChatId: chatIdInt,
+                            role: "assistant",
+                            createdAt: { gt: lastUserMessageRecord?.createdAt || new Date(0) }
+                        }
+                    })
+
+                    if (!existingResponse) {
+                        await prisma.assistantUserChatMessage.create({
+                            data: {
+                                assistantUserChatId: chatIdInt,
+                                role: "assistant",
+                                message: partialContent,
+                                userId: null,
+                                assistantId: assistantId ? BigInt(assistantId) : null,
+                                openaiResponseId: null,
+                                hasImages: false,
+                                documents: null,
+                            }
+                        })
+                        console.log("[Chat] ⚠️ Partial response saved (stream aborted)")
+                    }
+
+                    // Update user message status
+                    if (lastUserMessageRecord) {
+                        await prisma.assistantUserChatMessage.update({
+                            where: { id: lastUserMessageRecord.id },
+                            data: { status: "COMPLETED" }
+                        })
+                    }
+
+                    // Update chat timestamp
+                    await prisma.assistantUserChat.update({
+                        where: { id: chatIdInt },
+                        data: { updatedAt: new Date() }
+                    })
+                } catch (error) {
+                    console.error("[Chat] Error saving partial content on abort:", error)
+                }
+            }
         })
 
         const getUsage = async () => await result.usage
@@ -740,7 +931,18 @@ export async function POST(req: NextRequest) {
         return result.toUIMessageStreamResponse({
             sendReasoning: true,
             sendSources: true,
+            headers: {
+                'X-User-Intent': userIntent,
+                'X-Auto-Canvas': finalCanvasIntent ? 'true' : 'false',
+                'X-Auto-Image': hasImageIntent ? 'true' : 'false'
+            },
             onFinish: async ({ messages, responseMessage }) => {
+                // Skip if stream was already aborted and content saved
+                if (streamAborted) {
+                    console.log("[Chat] Stream was aborted, skipping onFinish (partial content already saved)")
+                    return
+                }
+
                 console.log("[Chat] Stream finished, saving to DB")
 
                 let assistantContent = ""

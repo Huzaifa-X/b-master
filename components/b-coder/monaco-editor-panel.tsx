@@ -638,15 +638,15 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
               )}
             </Button>
 
-            {/* Deploy Button - Accent */}
+            {/* Publish Button - Accent */}
             <Button
               size="sm"
               onClick={() => setDeployDialogOpen(true)}
               className="h-8 px-3 gap-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-              title="Deploy Project to Vercel"
+              title="Publish Project Live"
             >
               <Globe className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Deploy</span>
+              <span className="hidden sm:inline">Publish</span>
             </Button>
           </div>
         </div>

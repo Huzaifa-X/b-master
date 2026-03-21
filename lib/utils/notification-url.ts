@@ -68,6 +68,13 @@ export function getNotificationUrl(notification: Notification): string | null {
     case "subscription_purchased":
       return `/pricing`
 
+    // ── News Feed notifications ──────────────────────────────────────
+    case "news_feed_post": {
+      const assistantId = data?.assistantId || relatedId
+      if (assistantId) return `/assistants/${assistantId}/news`
+      return null
+    }
+
     // ── Generic / welcome ────────────────────────────────────────────
     case "welcome_notification":
     case "notification":

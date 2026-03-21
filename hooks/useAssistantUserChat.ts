@@ -274,6 +274,18 @@ export function useAIChat(options: UseAIChatOptions) {
                             // Not JSON or parsing failed, continue normally
                         }
                     }
+
+                    // Parse intent headers for workflow orchestration
+                    const intentHeader = response.headers.get('X-User-Intent')
+                    const autoCanvas = response.headers.get('X-Auto-Canvas') === 'true'
+                    const autoImage = response.headers.get('X-Auto-Image') === 'true'
+
+                    if (intentHeader && (autoCanvas || autoImage)) {
+                        console.log(`[useAIChat] Intent detected: ${intentHeader}, autoCanvas: ${autoCanvas}, autoImage: ${autoImage}`)
+                        window.dispatchEvent(new CustomEvent('intent-detected', {
+                            detail: { intent: intentHeader, autoCanvas, autoImage }
+                        }))
+                    }
                 }
 
                 return response

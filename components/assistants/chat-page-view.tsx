@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { StopCircle, Loader2, ChevronDown } from "lucide-react"
 import Image from "next/image"
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle, ImperativePanelGroupHandle } from "@/components/ui/resizable"
 import { useArtifactStore } from "@/lib/stores/artifact-store"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -28,7 +28,8 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [isAtBottom, setIsAtBottom] = useState(false) // Start as false, will be updated when viewport is found
   const viewportRef = useRef<HTMLElement | null>(null)
-  const { setArtifact, isPanelOpen, closePanel } = useArtifactStore()
+  const panelGroupRef = useRef<ImperativePanelGroupHandle>(null)
+  const { setArtifact, isPanelOpen, closePanel, isFullscreen, setFullscreen, setDetectedIntent, setAutoOpened, restoreFromAutoOpen } = useArtifactStore()
   const [isCreating, setIsCreating] = useState(false)
   const isMobile = useIsMobile()
 
@@ -36,6 +37,53 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
   useEffect(() => {
     closePanel()
   }, [chatId, closePanel])
+
+  // Handle fullscreen mode changes
+  useEffect(() => {
+    if (panelGroupRef.current && isPanelOpen) {
+      if (isFullscreen) {
+        panelGroupRef.current.setLayout([0, 100]) // Hide chat, expand artifact
+      } else {
+        panelGroupRef.current.setLayout([60, 40]) // Restore default
+      }
+    }
+  }, [isFullscreen, isPanelOpen])
+
+  // Reset fullscreen when panel closes
+  useEffect(() => {
+    if (!isPanelOpen && isFullscreen) {
+      setFullscreen(false)
+    }
+  }, [isPanelOpen, isFullscreen, setFullscreen])
+
+  // Listen for intent detection events (from transport fetch)
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      const { intent, autoCanvas } = e.detail
+      setDetectedIntent(intent)
+
+      if (autoCanvas && panelGroupRef.current) {
+        // Store current layout for back button
+        const currentLayout = panelGroupRef.current.getLayout()
+        setAutoOpened(true, currentLayout)
+      }
+    }
+    window.addEventListener('intent-detected', handler as EventListener)
+    return () => window.removeEventListener('intent-detected', handler as EventListener)
+  }, [setDetectedIntent, setAutoOpened])
+
+  // Listen for restore-chat-layout events (from back button)
+  useEffect(() => {
+    const handler = () => {
+      const state = useArtifactStore.getState()
+      if (panelGroupRef.current && state.previousChatLayout) {
+        panelGroupRef.current.setLayout(state.previousChatLayout)
+      }
+      restoreFromAutoOpen()
+    }
+    window.addEventListener('restore-chat-layout', handler)
+    return () => window.removeEventListener('restore-chat-layout', handler)
+  }, [restoreFromAutoOpen])
 
   const {
     context,
@@ -234,21 +282,27 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
   // Listen for code preview events
   useEffect(() => {
     const handler = (e: CustomEvent) => {
-      const { content, language, type } = e.detail
+      const { content, language, type, autoCollapse } = e.detail
       setArtifact({
         type: type || "code",
         language: language || "text",
         content: content,
-        title: `Code Preview (${language || "text"})`
+        title: `Generated Content`
       })
-      // On mobile, the Sheet will be controlled by isPanelOpen state
+
+      // Auto-collapse chat for creation intents (desktop only)
+      if (autoCollapse && panelGroupRef.current && !isMobile) {
+        setTimeout(() => {
+          panelGroupRef.current?.setLayout([0, 100])
+        }, 300)
+      }
     }
 
     window.addEventListener("open-code-preview", handler as EventListener)
     return () => {
       window.removeEventListener("open-code-preview", handler as EventListener)
     }
-  }, [setArtifact])
+  }, [setArtifact, isMobile])
 
   const scrollToBottom = () => {
     if (viewportRef.current) {
@@ -488,9 +542,14 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
   }
 
   return (
-    <ResizablePanelGroup direction="horizontal" className="h-full">
+    <ResizablePanelGroup ref={panelGroupRef} direction="horizontal" className="h-full">
       {/* Main Chat Area */}
-      <ResizablePanel defaultSize={70} minSize={20}>
+      <ResizablePanel
+        defaultSize={70}
+        minSize={0}
+        collapsible={true}
+        collapsedSize={0}
+      >
         {chatContent}
       </ResizablePanel>
 
@@ -500,7 +559,7 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
       />
 
       {/* Artifact Panel */}
-      <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
+      <ResizablePanel defaultSize={30} minSize={20} maxSize={80}>
         <ArtifactPanel onClose={closePanel} />
       </ResizablePanel>
     </ResizablePanelGroup>

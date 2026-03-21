@@ -16,12 +16,13 @@
  */
 
 import type { FC } from "react"
-import { useState, useMemo, useCallback, useRef } from "react"
+import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import Image from "next/image"
-import { Copy, Share2, Download, Eye, X, MessageSquare, ChevronDown, ExternalLink, Globe, Bookmark, Loader2, Check } from "lucide-react"
+import { Copy, Share2, Download, Eye, X, MessageSquare, ChevronDown, ExternalLink, Globe, Bookmark, Loader2, Check, Palette, Code2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AddFeedDialog } from "@/components/feed/add-feed-dialog"
 import { SelectContactDialog } from "@/components/assistants/select-contact-dialog"
+import { ShareArtifactDialog } from "@/components/artifacts/share-artifact-dialog"
 import {
     Dialog,
     DialogContent,
@@ -46,6 +47,7 @@ import { useCreatePost } from "@/hooks/use-newFeed"
 import { useInitiateChat, useSendMessage } from "@/hooks/use-assistant-chat"
 import { useParams, usePathname } from "next/navigation"
 import { saveCodeAsArtifact } from "@/app/actions/artifact.action"
+import { useArtifactStore } from "@/lib/stores/artifact-store"
 import {
     Reasoning,
     ReasoningContent,
@@ -89,10 +91,17 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
     // Track save state per code block keyed by first 40 chars of code
     const [savingBlocks, setSavingBlocks] = useState<Record<string, 'idle' | 'saving' | 'saved'>>({})
     // Save-name dialog state
-    const [saveDialog, setSaveDialog] = useState<{ open: boolean; code: string; language: string; name: string }>({
-        open: false, code: '', language: '', name: ''
+    const [saveDialog, setSaveDialog] = useState<{ open: boolean; code: string; language: string; name: string; shareAfter?: boolean }>({
+        open: false, code: '', language: '', name: '', shareAfter: false
     })
     const nameInputRef = useRef<HTMLInputElement>(null)
+    // Track if canvas HTML has been auto-opened in the preview panel
+    const [canvasAutoOpened, setCanvasAutoOpened] = useState(false)
+    const canvasOpenedRef = useRef(false) // Prevent multiple dispatches
+    // Share artifact state (for Canvas Output Card)
+    const [shareArtifactDialogOpen, setShareArtifactDialogOpen] = useState(false)
+    const [savedCanvasArtifactId, setSavedCanvasArtifactId] = useState<string | null>(null)
+    const [savedCanvasArtifactName, setSavedCanvasArtifactName] = useState<string>("")
 
     const pathname = usePathname()
     const isAskBMode = pathname.startsWith("/ask-b")
@@ -107,12 +116,23 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
     }, [])
 
     /** Open the name dialog pre-filled with the auto-derived name */
-    const openSaveDialog = useCallback((code: string, language: string) => {
-        setSaveDialog({ open: true, code, language, name: deriveDefaultName(code, language) })
+    const openSaveDialog = useCallback((code: string, language: string, shareAfter = false) => {
+        setSaveDialog({ open: true, code, language, name: deriveDefaultName(code, language), shareAfter })
     }, [deriveDefaultName])
 
+    /** Handle share button click - save first if not saved, then open share dialog */
+    const handleShareCanvas = useCallback((code: string, language: string) => {
+        if (savedCanvasArtifactId) {
+            // Already saved, open share dialog directly
+            setShareArtifactDialogOpen(true)
+        } else {
+            // Need to save first, then share
+            openSaveDialog(code, language, true)
+        }
+    }, [savedCanvasArtifactId, openSaveDialog])
+
     const handleSaveAsArtifact = useCallback(async () => {
-        const { code, language, name } = saveDialog
+        const { code, language, name, shareAfter } = saveDialog
         if (!name.trim()) return
         const blockKey = code.slice(0, 40)
         setSaveDialog(prev => ({ ...prev, open: false }))
@@ -129,6 +149,15 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                 toast.success('Saved as artifact!')
                 setSavingBlocks(prev => ({ ...prev, [blockKey]: 'saved' }))
                 setTimeout(() => setSavingBlocks(prev => ({ ...prev, [blockKey]: 'idle' })), 3000)
+                // Track saved canvas artifact for sharing (for HTML content)
+                if (result.artifactId && (language === 'html' || language === 'htm')) {
+                    setSavedCanvasArtifactId(result.artifactId)
+                    setSavedCanvasArtifactName(name.trim())
+                }
+                // Open share dialog if this was a "Save & Share" action
+                if (shareAfter && result.artifactId) {
+                    setShareArtifactDialogOpen(true)
+                }
             } else {
                 toast.error(result.error || 'Failed to save artifact')
                 setSavingBlocks(prev => ({ ...prev, [blockKey]: 'idle' }))
@@ -349,6 +378,113 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
         return { sources: parsedSources, contentWithoutSources: cleanContent }
     }, [content, parts])
 
+    // 🎨 Detect Canvas HTML output (code blocks OR raw HTML)
+    const canvasHtmlData = useMemo(() => {
+        if (!contentWithoutSources) return null
+
+        // Strategy 1: Match ```html ... ``` code blocks
+        const htmlCodeBlockRegex = /```html\s*\n([\s\S]*?)```/gi
+        const codeBlockMatches = [...contentWithoutSources.matchAll(htmlCodeBlockRegex)]
+
+        for (const match of codeBlockMatches) {
+            const htmlContent = match[1]?.trim() || ''
+            if (htmlContent.length > 2000) {
+                const isCanvasOutput = (
+                    htmlContent.includes('<!DOCTYPE') ||
+                    htmlContent.includes('<!doctype') ||
+                    htmlContent.includes('<html') ||
+                    htmlContent.includes('<head') ||
+                    htmlContent.includes('<style')
+                )
+                if (isCanvasOutput) {
+                    return {
+                        fullMatch: match[0],
+                        htmlContent,
+                        isCanvasOutput: true,
+                        type: 'codeblock'
+                    }
+                }
+            }
+        }
+
+        // Strategy 2: Detect raw HTML output (not in code block)
+        // Look for HTML that starts with <!DOCTYPE or <html
+        const rawHtmlRegex = /(<!doctype\s+html[\s\S]*?<\/html>)/gi
+        const rawMatches = [...contentWithoutSources.matchAll(rawHtmlRegex)]
+
+        for (const match of rawMatches) {
+            const htmlContent = match[1]?.trim() || ''
+            if (htmlContent.length > 1500) {
+                return {
+                    fullMatch: match[0],
+                    htmlContent,
+                    isCanvasOutput: true,
+                    type: 'raw'
+                }
+            }
+        }
+
+        // Strategy 3: Look for HTML starting with <html (without doctype)
+        const htmlTagRegex = /(<html[\s\S]*?<\/html>)/gi
+        const htmlTagMatches = [...contentWithoutSources.matchAll(htmlTagRegex)]
+
+        for (const match of htmlTagMatches) {
+            const htmlContent = match[1]?.trim() || ''
+            if (htmlContent.length > 1500) {
+                return {
+                    fullMatch: match[0],
+                    htmlContent,
+                    isCanvasOutput: true,
+                    type: 'raw'
+                }
+            }
+        }
+
+        return null
+    }, [contentWithoutSources])
+
+    // Get detected intent for auto-open decision
+    const detectedIntent = useArtifactStore((state) => state.detectedIntent)
+
+    // Auto-open canvas panel when HTML is detected and intent is creation
+    useEffect(() => {
+        if (
+            canvasHtmlData?.isCanvasOutput &&
+            !canvasOpenedRef.current &&
+            !isLoading
+        ) {
+            canvasOpenedRef.current = true
+            setCanvasAutoOpened(true)
+
+            // Auto-open panel for creation intents
+            const shouldAutoCollapse = detectedIntent === 'CREATE_CANVAS'
+
+            if (detectedIntent && ['CREATE_CANVAS', 'CREATE_IMAGE'].includes(detectedIntent)) {
+                // Auto-dispatch the open-code-preview event
+                window.dispatchEvent(
+                    new CustomEvent("open-code-preview", {
+                        detail: {
+                            content: canvasHtmlData.htmlContent,
+                            language: "html",
+                            type: "code",
+                            autoCollapse: shouldAutoCollapse
+                        },
+                    })
+                )
+            }
+            // If no intent detected (manual canvas toggle), user must click "View Preview" button
+        }
+    }, [canvasHtmlData, isLoading, detectedIntent])
+
+    // Content without the canvas HTML block (to show card instead)
+    const contentForDisplay = useMemo(() => {
+        if (!canvasHtmlData?.isCanvasOutput || !contentWithoutSources) {
+            return contentWithoutSources
+        }
+        // Remove the canvas HTML block from content - will show card instead
+        return contentWithoutSources.replace(canvasHtmlData.fullMatch, '').trim()
+    }, [contentWithoutSources, canvasHtmlData])
+
     // Helper to get favicon URL
     const getFaviconUrl = (url: string) => {
         try {
@@ -380,7 +516,90 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                         </div>
                     )}
 
-                {(contentWithoutSources && contentWithoutSources.trim().length > 0) && (
+                {/* 🎨 Canvas Output Card - Show when canvas HTML is detected */}
+                {canvasHtmlData?.isCanvasOutput && canvasAutoOpened && (
+                    <div className="flex gap-4 px-2 mb-4">
+                        <div className="flex-shrink-0 pt-1">
+                            <div className="flex size-8 items-center justify-center rounded-full">
+                                <Image src="/bmaster-icon.png" alt="Assistant" width={24} height={24} style={{ width: "auto", height: "24px" }} unoptimized />
+                            </div>
+                        </div>
+                        <div className="flex-1">
+                            <div className="rounded-xl border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 p-4 shadow-sm">
+                                <div className="flex items-start gap-3">
+                                    <div className="flex-shrink-0 p-2 rounded-lg bg-violet-100 dark:bg-violet-900/50">
+                                        <Palette className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="font-semibold text-sm text-violet-900 dark:text-violet-100 mb-1">
+                                            Canvas Output Generated
+                                        </h4>
+                                        <p className="text-xs text-violet-600 dark:text-violet-300 mb-3">
+                                            Your HTML page is ready. View it in the preview panel on the right.
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="default"
+                                                className="h-8 gap-1.5 bg-violet-600 hover:bg-violet-700 text-white"
+                                                onClick={() => {
+                                                    window.dispatchEvent(
+                                                        new CustomEvent("open-code-preview", {
+                                                            detail: {
+                                                                content: canvasHtmlData.htmlContent,
+                                                                language: "html",
+                                                                type: "code"
+                                                            },
+                                                        })
+                                                    )
+                                                }}
+                                            >
+                                                <Eye className="h-3.5 w-3.5" />
+                                                View Preview
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 gap-1.5 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/50 hover:text-black"
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(canvasHtmlData.htmlContent)
+                                                    toast.success("HTML code copied to clipboard")
+                                                }}
+                                            >
+                                                <Copy className="h-3.5 w-3.5" />
+                                                Copy Code
+                                            </Button>
+                                            {isAskBMode ? (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-8 gap-1.5 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/50 hover:text-black"
+                                                    onClick={() => openSaveDialog(canvasHtmlData.htmlContent, 'html')}
+                                                >
+                                                    <Bookmark className="h-3.5 w-3.5" />
+                                                    Save as Artifact
+                                                </Button>
+                                            ) : (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-8 gap-1.5 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/50 hover:text-black"
+                                                    onClick={() => handleShareCanvas(canvasHtmlData.htmlContent, 'html')}
+                                                    title={savedCanvasArtifactId ? "Share with contacts" : "Save and share with contacts"}
+                                                >
+                                                    <Share2 className="h-3.5 w-3.5" />
+                                                    {savedCanvasArtifactId ? "Share" : "Save & Share"}
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {((contentForDisplay && contentForDisplay.trim().length > 0) || (canvasHtmlData?.isCanvasOutput && !canvasAutoOpened)) && (
                     <div className="flex gap-4 px-2">
                         {/* Avatar */}
                         <div className="flex-shrink-0 pt-1">
@@ -433,6 +652,9 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
 
                                                 if (match) {
                                                     const language = match[1]
+                                                    // Skip SyntaxHighlighter for large code blocks to prevent performance issues
+                                                    const isLargeBlock = rawCode.length > 5000
+
                                                     return (
                                                         <div className="not-prose my-3 w-full">
                                                             <div className="relative group/codeblock">
@@ -469,21 +691,39 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                                                                     )
                                                                 })()}
                                                                 <div className="w-full overflow-x-auto rounded-lg border border-border bg-white">
-                                                                    <SyntaxHighlighter
-                                                                        language={language}
-                                                                        style={oneLight}
-                                                                        PreTag="pre"
-                                                                        customStyle={{
-                                                                            margin: 0,
-                                                                            padding: "1rem",
-                                                                            fontSize: "0.875rem",
-                                                                            background: "#ffffff",
-                                                                            width: "fit-content",
-                                                                            minWidth: "max-content",
-                                                                        }}
-                                                                    >
-                                                                        {rawCode}
-                                                                    </SyntaxHighlighter>
+                                                                    {/* Use plain pre/code for large blocks to prevent browser freezing */}
+                                                                    {isLargeBlock ? (
+                                                                        <pre
+                                                                            style={{
+                                                                                margin: 0,
+                                                                                padding: "1rem",
+                                                                                fontSize: "0.875rem",
+                                                                                background: "#ffffff",
+                                                                                overflow: "auto",
+                                                                                maxHeight: "400px",
+                                                                            }}
+                                                                        >
+                                                                            <code className="text-sm font-mono text-gray-800 whitespace-pre">
+                                                                                {rawCode}
+                                                                            </code>
+                                                                        </pre>
+                                                                    ) : (
+                                                                        <SyntaxHighlighter
+                                                                            language={language}
+                                                                            style={oneLight}
+                                                                            PreTag="pre"
+                                                                            customStyle={{
+                                                                                margin: 0,
+                                                                                padding: "1rem",
+                                                                                fontSize: "0.875rem",
+                                                                                background: "#ffffff",
+                                                                                width: "fit-content",
+                                                                                minWidth: "max-content",
+                                                                            }}
+                                                                        >
+                                                                            {rawCode}
+                                                                        </SyntaxHighlighter>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -520,7 +760,7 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                                             },
                                         }}
                                     >
-                                        {contentWithoutSources || (isLoading ? " " : "")}
+                                        {contentForDisplay || (isLoading ? " " : "")}
                                     </ReactMarkdown>
 
                                 </div>
@@ -634,11 +874,23 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                 <DialogContent className="sm:max-w-md" onOpenAutoFocus={(e) => { e.preventDefault(); nameInputRef.current?.focus() }}>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <Bookmark className="h-4 w-4 text-primary" />
-                            Save as Artifact
+                            {saveDialog.shareAfter ? (
+                                <>
+                                    <Share2 className="h-4 w-4 text-primary" />
+                                    Save & Share Artifact
+                                </>
+                            ) : (
+                                <>
+                                    <Bookmark className="h-4 w-4 text-primary" />
+                                    Save as Artifact
+                                </>
+                            )}
                         </DialogTitle>
                         <DialogDescription>
-                            Give your artifact a name. You can rename it later from the artifacts page.
+                            {saveDialog.shareAfter
+                                ? "Name your artifact. After saving, you can share it with your contacts."
+                                : "Give your artifact a name. You can rename it later from the artifacts page."
+                            }
                         </DialogDescription>
                     </DialogHeader>
 
@@ -675,8 +927,17 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                             onClick={handleSaveAsArtifact}
                             className="gap-1.5"
                         >
-                            <Bookmark className="h-3.5 w-3.5" />
-                            Save Artifact
+                            {saveDialog.shareAfter ? (
+                                <>
+                                    <Share2 className="h-3.5 w-3.5" />
+                                    Save & Share
+                                </>
+                            ) : (
+                                <>
+                                    <Bookmark className="h-3.5 w-3.5" />
+                                    Save Artifact
+                                </>
+                            )}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -700,6 +961,17 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                 onSelectContact={handleShareToContact}
                 assistantId={assistantId}
             />
+
+            {/* Share Artifact Dialog (for Canvas Output) */}
+            {savedCanvasArtifactId && assistantId && (
+                <ShareArtifactDialog
+                    open={shareArtifactDialogOpen}
+                    onOpenChange={setShareArtifactDialogOpen}
+                    artifactId={savedCanvasArtifactId}
+                    artifactName={savedCanvasArtifactName}
+                    assistantId={assistantId}
+                />
+            )}
         </>
     )
 }

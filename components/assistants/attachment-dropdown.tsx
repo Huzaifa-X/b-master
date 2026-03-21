@@ -1,7 +1,7 @@
 // components/assistants/attachment-dropdown.tsx
 "use client"
 
-import { FileIcon, PlusIcon, X, Globe, Search, Sparkles, Code } from "lucide-react"
+import { FileIcon, PlusIcon, X, Globe, Search, Sparkles } from "lucide-react"
 import type { ArtifactData } from "@/components/assistants/select-artifact-dialog"
 import type { FC } from "react"
 import { useState, useRef, useEffect } from "react"
@@ -54,19 +54,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
 }) => {
     const [isOpen, setIsOpen] = useState(false)
     const [selectedMode, setSelectedMode] = useState<"webSearch" | "research" | "chatWithAPI" | "dropbox" | "artifact" | null>(null)
-    const [isCheckingDropbox, setIsCheckingDropbox] = useState(true)
-    const [hasDropboxConnected, setHasDropboxConnected] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
-
-    const DropboxIcon = ({ className }: { className?: string }) => (
-        <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-            <path d="M6 1.807L0 5.629l6 3.822 6.001-3.822L6 1.807zM18 1.807l-6 3.822 6 3.822 6-3.822-6-3.822zM0 13.274l6 3.822 6.001-3.822L6 9.452 0 13.274zM18 9.452l-6 3.822 6 3.822 6-3.822-6-3.822zM6 18.371l6.001 3.822 6-3.822-6-3.822L6 18.371z" />
-        </svg>
-    )
-
-    useEffect(() => {
-        checkDropboxConnection()
-    }, [])
 
     // Update selected mode when artifact props change
     useEffect(() => {
@@ -124,48 +112,6 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
 
     // Note: ChatInput component now handles sessionStorage with assistant-scoped keys
     // This component just reflects the current state via props
-
-    const checkDropboxConnection = async () => {
-        setIsCheckingDropbox(true)
-        try {
-            const res = await fetch('/api/dropbox')
-            const data = await res.json()
-            const hasConnection = !!data.connector && data.connector.status === 'ACTIVE'
-            setHasDropboxConnected(hasConnection)
-        } catch (error) {
-            console.error('Failed to check Dropbox connection:', error)
-            setHasDropboxConnected(false)
-        } finally {
-            setIsCheckingDropbox(false)
-        }
-    }
-
-    // Handle Dropbox click
-    const handleDropboxClick = async () => {
-        setIsOpen(false)
-
-        // If not connected, redirect to OAuth
-        if (!hasDropboxConnected) {
-            toast.info('Connecting to Dropbox...')
-            const currentUrl = encodeURIComponent(window.location.href)
-            window.location.href = `/api/dropbox/connect?returnUrl=${currentUrl}`
-            return
-        }
-
-        // Toggle Dropbox
-        const newState = selectedMode !== "dropbox"
-        if (newState) {
-            setSelectedMode("dropbox")
-            // Note: ChatInput handles sessionStorage internally
-            onDropbox?.(true)
-            toast.success('Dropbox enabled for this chat')
-        } else {
-            setSelectedMode(null)
-            // Note: ChatInput handles sessionStorage internally
-            onDropbox?.(false)
-            toast.info('Dropbox disabled')
-        }
-    }
 
     const handleAttachFile = () => {
         fileInputRef.current?.click()
@@ -354,28 +300,8 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                                     <Sparkles className="mr-2 size-4" />
                                     <span>Chat with Artifact</span>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    onClick={handleChatWithAPI}
-                                    className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
-                                >
-                                    <Code className="mr-2 size-4" />
-                                    <span>Chat with API</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    onClick={handleDropboxClick}
-                                    disabled={isCheckingDropbox}
-                                    className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
-                                >
-                                    <DropboxIcon className="mr-2 size-4" />
-                                    <span>
-                                        {isCheckingDropbox
-                                            ? "Checking..."
-                                            : hasDropboxConnected
-                                                ? (selectedMode === "dropbox" ? "Disable Dropbox" : "Enable Dropbox")
-                                                : "Connect Dropbox"
-                                        }
-                                    </span>
-                                </DropdownMenuItem>
+
+
                             </>
                         )}
                     </DropdownMenuContent>
@@ -383,11 +309,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
 
                 {/* Non-artifact single-mode badge */}
                 {selectedMode && selectedMode !== "artifact" && (
-                    <div className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm ${
-                        selectedMode === "dropbox"
-                            ? "border-blue-500 bg-blue-500/10"
-                            : "border-primary bg-primary/10"
-                    }`}>
+                    <div className="flex items-center gap-1.5 rounded-full border border-primary bg-primary/10 px-3 py-1.5 text-sm">
                         {selectedMode === "webSearch" ? (
                             <>
                                 <Globe className="size-3.5" />
@@ -398,22 +320,10 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                                 <Search className="size-3.5" />
                                 <span className="font-medium">Research</span>
                             </>
-                        ) : selectedMode === "chatWithAPI" ? (
-                            <>
-                                <Code className="size-3.5" />
-                                <span className="font-medium">Chat with API</span>
-                            </>
-                        ) : selectedMode === "dropbox" ? (
-                            <>
-                                <DropboxIcon className="size-3.5 text-blue-600" />
-                                <span className="font-medium text-blue-600">Dropbox</span>
-                            </>
                         ) : null}
                         <button
                             onClick={handleRemoveMode}
-                            className={`ml-1 rounded-full disabled:opacity-50 disabled:cursor-not-allowed ${
-                                selectedMode === "dropbox" ? "hover:bg-blue-500/20" : "hover:bg-primary/20"
-                            }`}
+                            className="ml-1 rounded-full hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                             aria-label="Remove mode"
                             disabled={disabled}
                         >

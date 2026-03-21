@@ -5,6 +5,11 @@
 
 import { defaultTodoTemplate } from "./default-todo"
 import { bookingSystemTemplate } from "./booking-system"
+import { calendarBookingTemplate } from "./calendar-booking"
+import { eventRegistrationTemplate } from "./event-registration"
+import { meetingSchedulerTemplate } from "./meeting-scheduler"
+import { officeBookingTemplate } from "./office-booking"
+import { reservationSystemTemplate } from "./reservation-system"
 import { accountingDashboardTemplate } from "./accounting-dashboard"
 import { analyticsDashboardTemplate } from "./analytics-dashboard"
 import { fromScratchTemplate } from "./from-scratch"
@@ -14,6 +19,7 @@ import { seoContentTemplate } from "./seo-content"
 import { copywritingTemplate } from "./copywriting"
 import { visualAdsTemplate } from "./visual-ads"
 import { tradingTemplate } from "./trading"
+
 
 export interface TemplateDefinition {
     id: string
@@ -52,6 +58,26 @@ const templates: Record<string, Template> = {
     // Booking & Scheduling
     "booking-system": {
         ...bookingSystemTemplate,
+        isEnabled: true,
+    } as Template,
+    "calendar-booking": {
+        ...calendarBookingTemplate,
+        isEnabled: true,
+    } as Template,
+    "event-registration": {
+        ...eventRegistrationTemplate,
+        isEnabled: true,
+    } as Template,
+    "meeting-scheduler": {
+        ...meetingSchedulerTemplate,
+        isEnabled: true,
+    } as Template,
+    "office-booking": {
+        ...officeBookingTemplate,
+        isEnabled: true,
+    } as Template,
+    "reservation-system": {
+        ...reservationSystemTemplate,
         isEnabled: true,
     } as Template,
     // Finance & Analytics

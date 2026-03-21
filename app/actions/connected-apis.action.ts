@@ -35,9 +35,6 @@ export async function getUserAssistantsWithAPI(excludeAssistantId?: string): Pro
         apiConfiguration: {
           isActive: true,
         },
-        ...(excludeAssistantId
-          ? { id: { not: BigInt(excludeAssistantId) } }
-          : {}),
       },
       select: {
         id: true,

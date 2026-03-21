@@ -15,7 +15,8 @@ export type NotificationType =
   | 'notification'
   | 'chat_message'
   | 'group_message'
-  | 'artifact_deleted';
+  | 'artifact_deleted'
+  | 'news_feed_post';
 
 export interface NotificationData {
   [key: string]: any;

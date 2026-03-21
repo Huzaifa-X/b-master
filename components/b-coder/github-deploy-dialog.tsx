@@ -74,7 +74,7 @@ export function GithubDeployDialog({
             })
 
             if (!response.success || response.error) {
-                setError(response.error?.message || "An unknown error occurred during deployment.")
+                setError(response.error?.message || "An unknown error occurred during publishing.")
                 setStep("idle")
                 return
             }
@@ -107,12 +107,12 @@ export function GithubDeployDialog({
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Globe className="h-5 w-5 text-emerald-500" />
-                        {isUpdateMode ? "Update Deployed Project" : "Deploy Project"}
+                        {isUpdateMode ? "Update Published Project" : "Publish Project"}
                     </DialogTitle>
                     <DialogDescription>
                         {isUpdateMode
-                            ? "Push new commits to your GitHub repository and trigger a Vercel redeployment."
-                            : "Publish your code to a new GitHub repository and deploy it to Vercel instantly."}
+                            ? "Push new commits to your GitHub repository and trigger a live update."
+                            : "Publish your code to a new GitHub repository and make it live instantly."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -122,7 +122,7 @@ export function GithubDeployDialog({
                             <CheckCircle2 className="h-6 w-6" />
                         </div>
                         <div className="space-y-1">
-                            <h3 className="font-semibold text-lg text-emerald-600">Deployment Successful!</h3>
+                            <h3 className="font-semibold text-lg text-emerald-600">Published Successfully!</h3>
                             <p className="text-sm text-muted-foreground">Your project is now live on the world wide web.</p>
                         </div>
 
@@ -200,12 +200,12 @@ export function GithubDeployDialog({
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                         {step === "packaging" ? "Packaging Files..." :
                                             step === "github" ? "Pushing to GitHub..." :
-                                                "Deploying to Vercel..."}
+                                                "Publishing to Vercel..."}
                                     </>
                                 ) : (
                                     <>
                                         <Globe className="mr-2 h-4 w-4" />
-                                        {isUpdateMode ? "Update Deployment" : "Deploy Now"}
+                                        {isUpdateMode ? "Update Published Project" : "Publish Now"}
                                     </>
                                 )}
                             </Button>
