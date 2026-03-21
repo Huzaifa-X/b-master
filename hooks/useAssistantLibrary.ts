@@ -5,6 +5,8 @@ import {
   getAssistantLibrary,
   uploadLibraryFile,
   deleteLibraryFile,
+  addLibraryUrl,
+  addLibraryNote,
   getLibraryFilePresignedUrl,
   type LibraryFile,
 } from "@/app/actions/library.action"
@@ -110,6 +112,80 @@ export function useDeleteLibraryFile(
     deleteFile: mutation.mutate,
     deleteFileAsync: mutation.mutateAsync,
     isDeleting: mutation.isPending,
+  }
+}
+
+// ---------------------------------------------------------------
+// Add a URL
+// ---------------------------------------------------------------
+
+export function useAddLibraryUrl(
+  assistantId: string,
+  options?: {
+    onSuccess?: (file: LibraryFile) => void
+  }
+) {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async (url: string) => {
+      const result = await addLibraryUrl(assistantId, url)
+      if (!result.success || !result.file) {
+        throw new Error(result.error ?? "Failed to add URL")
+      }
+      return result.file
+    },
+    onSuccess: (file) => {
+      queryClient.invalidateQueries({ queryKey: ["assistant-library", assistantId] })
+      toast.success(`URL added to library`)
+      options?.onSuccess?.(file)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message ?? "Failed to add URL")
+    },
+  })
+
+  return {
+    addUrl: mutation.mutate,
+    addUrlAsync: mutation.mutateAsync,
+    isAdding: mutation.isPending,
+  }
+}
+
+// ---------------------------------------------------------------
+// Add a Note
+// ---------------------------------------------------------------
+
+export function useAddLibraryNote(
+  assistantId: string,
+  options?: {
+    onSuccess?: (file: LibraryFile) => void
+  }
+) {
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async ({ title, content }: { title: string; content: string }) => {
+      const result = await addLibraryNote(assistantId, title, content)
+      if (!result.success || !result.file) {
+        throw new Error(result.error ?? "Failed to add note")
+      }
+      return result.file
+    },
+    onSuccess: (file) => {
+      queryClient.invalidateQueries({ queryKey: ["assistant-library", assistantId] })
+      toast.success(`Note added to library`)
+      options?.onSuccess?.(file)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message ?? "Failed to add note")
+    },
+  })
+
+  return {
+    addNote: mutation.mutate,
+    addNoteAsync: mutation.mutateAsync,
+    isAdding: mutation.isPending,
   }
 }
 

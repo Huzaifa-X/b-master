@@ -287,10 +287,33 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     }
   }, [prefilledPrompt, setPrefilledPrompt])
 
-  const handleSend = async () => {
-    if ((!input.trim() && selectedFiles.length === 0) || isStreaming) return
+  // Listen for trigger-chat-send event from artifact panel inline edit
+  // This is used when user submits an inline edit request from visual edit mode
+  const handleSendRef = useRef<(msg?: string) => void>(() => {})
+  useEffect(() => {
+    handleSendRef.current = handleSend
+  })
 
-    const userPrompt = input.trim()
+  useEffect(() => {
+    const handler = (e: CustomEvent<{ message: string }>) => {
+      const message = e.detail?.message
+      if (message) {
+        // Set the input for visual feedback, then call handleSend with the message directly
+        setInput(message)
+        // Pass message directly to handleSend to avoid state timing issues
+        handleSendRef.current(message)
+      }
+    }
+    window.addEventListener('trigger-chat-send', handler as EventListener)
+    return () => window.removeEventListener('trigger-chat-send', handler as EventListener)
+  }, [])
+
+  const handleSend = async (directMessage?: string) => {
+    // Use direct message if provided (from trigger-chat-send event), otherwise use input state
+    const messageToSend = directMessage || input
+    if ((!messageToSend.trim() && selectedFiles.length === 0) || isStreaming) return
+
+    const userPrompt = messageToSend.trim()
 
     // Upload files first if any
     let uploadedFiles: UploadedFileData[] | undefined
@@ -401,11 +424,11 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
           prev.map((msg) =>
             msg.id === patchingMsg.id
               ? {
-                  ...msg,
-                  content: patchData.warning
-                    ? `⚠️ ${patchData.warning}`
-                    : `✅ Done! Applied your change instantly.${patchData.versionNumber ? ` (v${patchData.versionNumber})` : ""}`,
-                }
+                ...msg,
+                content: patchData.warning
+                  ? `⚠️ ${patchData.warning}`
+                  : `✅ Done! Applied your change instantly.${patchData.versionNumber ? ` (v${patchData.versionNumber})` : ""}`,
+              }
               : msg
           )
         )

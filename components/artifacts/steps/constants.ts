@@ -18,12 +18,7 @@ import {
   Ticket,
   LineChart,
   Activity,
-  CalendarCheck,
-  UserCheck,
-  MonitorPlay,
   LayoutDashboard,
-  CalendarDays,
-  ClipboardCheck,
 } from "lucide-react"
 import type { Template } from "@/types/artifacts"
 
@@ -246,79 +241,14 @@ export const TEMPLATES: Template[] = [
     prefilledInstructions: "",
     isCustom: true,
   },
-
-  // Scheduling & Booking
-  {
-    id: "sch-1",
-    name: "Business Management Suite",
-    description: "All-in-one suite: marketing, projects, invoicing, and tasks",
-    category: "scheduling",
-    icon: "Building2",
-    prefilledInstructions:
-      "Create a comprehensive business management suite with tabs for marketing campaigns, project tracker, invoice management, and task board. Include KPI widgets, team overview, and an evolving action center.",
-  },
-  {
-    id: "sch-2",
-    name: "Calendar Booking",
-    description: "Appointment scheduling and availability management",
-    category: "scheduling",
-    icon: "Calendar",
-    prefilledInstructions:
-      "Build a calendar booking artifact with monthly/weekly view, appointment slots, availability toggling, booking form, and upcoming appointments list.",
-  },
-  {
-    id: "sch-3",
-    name: "Event Registration",
-    description: "Event sign-up form with attendee management",
-    category: "scheduling",
-    icon: "UserCheck",
-    prefilledInstructions:
-      "Create an event registration artifact with event details, registration form, attendee counter, confirmation summary, and a printable ticket section.",
-  },
-  {
-    id: "sch-4",
-    name: "Meeting Scheduler",
-    description: "Team meeting planner with time zone support",
-    category: "scheduling",
-    icon: "CalendarCheck",
-    prefilledInstructions:
-      "Build a meeting scheduler with time slot picker, attendee invites, agenda editor, time zone conversion, and a meeting summary card.",
-  },
-  {
-    id: "sch-5",
-    name: "Office Space Booking",
-    description: "Reserve desks, rooms, and office resources",
-    category: "scheduling",
-    icon: "ClipboardCheck",
-    prefilledInstructions:
-      "Create an office space booking system with floor plan view, desk/room availability, booking form, current reservations list, and cancellation option.",
-  },
-  {
-    id: "sch-6",
-    name: "Reservation System",
-    description: "General-purpose reservation management for any service",
-    category: "scheduling",
-    icon: "CalendarDays",
-    prefilledInstructions:
-      "Build a reservation system with date/time picker, service selection, customer information form, reservation confirmation, and a management panel for upcoming bookings.",
-  },
-  {
-    id: "sch-custom",
-    name: "Start from Scratch",
-    description: "Create a custom scheduling or booking artifact from scratch",
-    category: "scheduling",
-    icon: "Sparkles",
-    prefilledInstructions: "",
-    isCustom: true,
-  },
 ]
+
 
 export const CATEGORIES = [
   { id: "presentation", label: "Presentations", icon: Presentation },
   { id: "documentation", label: "Documentations", icon: BookOpen },
   { id: "invoice", label: "Invoices", icon: Receipt },
   { id: "crm", label: "CRM & Business", icon: TrendingUp },
-  { id: "scheduling", label: "Scheduling & Booking", icon: Calendar },
   { id: "video_generation", label: "Video Generation", icon: Video },
   { id: "others", label: "Others", icon: HelpCircle },
 ] as const
@@ -343,12 +273,7 @@ export const ICON_MAP: Record<string, any> = {
   Ticket,
   LineChart,
   Activity,
-  CalendarCheck,
-  UserCheck,
-  MonitorPlay,
   LayoutDashboard,
-  CalendarDays,
-  ClipboardCheck,
 }
 
 export const TEMPLATE_FILES: Record<string, string> = {
@@ -376,13 +301,5 @@ export const TEMPLATE_FILES: Record<string, string> = {
   "crm-8": "/artifcatTemplates/performanceAnalysis.html",
   "crm-9": "/artifcatTemplates/masterDashboard.html",
   "crm-10": "/artifcatTemplates/fullCrmSuite.html",
-
-  // Scheduling & Booking
-  "sch-1": "/artifcatTemplates/salesDashboard.html",
-  "sch-2": "/artifcatTemplates/calendarBooking.html",
-  "sch-3": "/artifcatTemplates/eventRegistration.html",
-  "sch-4": "/artifcatTemplates/meetingScheduler.html",
-  "sch-5": "/artifcatTemplates/officeBooking.html",
-  "sch-6": "/artifcatTemplates/reservationSystem.html",
 }
 

@@ -20,7 +20,7 @@ interface MessageBubbleProps {
   messageType: string
   attachmentUrl?: string | null
   attachmentName?: string | null
-  createdAt: string
+  createdAt: string | Date
   isOwn: boolean
   /** Optional sender name shown above bubble (for group chats) */
   senderName?: string | null

@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { Loader2, ArrowUp, X, Sparkles, Palette } from "lucide-react"
+import { useArtifactStore } from "@/lib/stores/artifact-store"
 import { Button } from "@/components/ui/button"
 import {
   PromptInputActions,
@@ -153,6 +154,78 @@ export function ChatInput({
     textarea.style.height = "auto"
     textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`
   }, [value])
+
+  // Auto-focus textarea on mount
+  useEffect(() => {
+    if (textareaRef.current && !disabled && !isLoading) {
+      textareaRef.current.focus()
+    }
+  }, [disabled, isLoading])
+
+  // Handle prefilled prompt from artifact panel text selection or visual edit mode
+  const prefilledPrompt = useArtifactStore((state) => state.prefilledPrompt)
+  const setPrefilledPrompt = useArtifactStore((state) => state.setPrefilledPrompt)
+
+  useEffect(() => {
+    if (prefilledPrompt) {
+      onValueChange(prefilledPrompt)
+      setPrefilledPrompt(null) // Clear after using
+      // Focus the input field
+      setTimeout(() => {
+        textareaRef.current?.focus()
+      }, 100)
+    }
+  }, [prefilledPrompt, setPrefilledPrompt, onValueChange])
+
+  // Listen for trigger-chat-send event from artifact panel inline edit
+  // This is used when user submits an inline edit request from visual edit mode
+  // Use ref to always have latest state values in event handler
+  const currentStateRef = useRef({ selectedArtifacts, connectedApiIds })
+  useEffect(() => {
+    currentStateRef.current = { selectedArtifacts, connectedApiIds }
+  }, [selectedArtifacts, connectedApiIds])
+
+  useEffect(() => {
+    const handler = (e: CustomEvent<{ message: string }>) => {
+      const message = e.detail?.message
+      if (message) {
+        const { selectedArtifacts: artifacts, connectedApiIds: apiIds } = currentStateRef.current
+        // Set the value in the input (for visual feedback)
+        onValueChange(message)
+        // Submit with canvas mode enabled and preserve artifact selection
+        setTimeout(() => {
+          onSubmit(message, undefined, {
+            webSearch: false,
+            research: false,
+            chatWithAPI: false,
+            dropbox: false,
+            canvas: true, // Enable canvas mode for visual edits
+            artifacts: artifacts.length > 0 ? artifacts : undefined,
+            connectedApiIds: apiIds.length > 0 ? apiIds : undefined,
+          })
+          // Clear the input after sending
+          onValueChange("")
+        }, 50)
+      }
+    }
+    window.addEventListener('trigger-chat-send', handler as EventListener)
+    return () => window.removeEventListener('trigger-chat-send', handler as EventListener)
+  }, [onSubmit, onValueChange])
+
+  // Focus textarea when clicking on the container
+  const handleContainerClick = useCallback((e: React.MouseEvent) => {
+    // Don't focus if clicking on a button or interactive element
+    const target = e.target as HTMLElement
+    if (
+      target.closest('button') ||
+      target.closest('[role="button"]') ||
+      target.closest('input') ||
+      target.closest('[data-radix-collection-item]')
+    ) {
+      return
+    }
+    textareaRef.current?.focus()
+  }, [])
 
   // Drag and drop handlers
   const handleDragEnter = (e: React.DragEvent) => {
@@ -679,6 +752,7 @@ export function ChatInput({
               key={mentionKey}
               trigger="@"
               value={mentionedUsers.map(u => u.name)}
+              onClick={handleContainerClick}
               onValueChange={(newMentions) => {
                 // Update mentionedUsers based on the new mentions array
                 setMentionedUsers(prev => {
@@ -898,6 +972,7 @@ export function ChatInput({
           <TooltipProvider>
             <div
               ref={containerRef}
+              onClick={handleContainerClick}
               onDragEnter={handleDragEnter}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}

@@ -28,7 +28,7 @@ type PromptInputContextType = {
 const PromptInputContext = createContext<PromptInputContextType>({
   isLoading: false,
   value: "",
-  setValue: () => {},
+  setValue: () => { },
   maxHeight: 240,
   onSubmit: undefined,
   disabled: false,
@@ -134,7 +134,7 @@ function PromptInput({
           )}
         >
           {children}
-          
+
           {/* Drag and drop overlay */}
           {isDragging && (
             <div className="absolute inset-0 rounded-3xl bg-primary/10 dark:bg-primary/20 border-2 border-dashed border-primary flex items-center justify-center pointer-events-none z-10">
@@ -155,44 +155,45 @@ export type PromptInputTextareaProps = {
 
 const PromptInputTextarea = React.forwardRef<HTMLTextAreaElement, PromptInputTextareaProps>(
   ({ className, onKeyDown, disableAutosize = false, ...props }, forwardedRef) => {
-  const { value, setValue, maxHeight, onSubmit, disabled } = usePromptInput()
+    const { value, setValue, maxHeight, onSubmit, disabled } = usePromptInput()
     const internalRef = useRef<HTMLTextAreaElement>(null)
     const ref = (forwardedRef || internalRef) as React.RefObject<HTMLTextAreaElement>
 
-  useEffect(() => {
-    if (disableAutosize) return
+    useEffect(() => {
+      if (disableAutosize) return
       if (!ref.current) return
       ref.current.style.height = "auto"
       ref.current.style.height =
-      typeof maxHeight === "number"
+        typeof maxHeight === "number"
           ? `${Math.min(ref.current.scrollHeight, maxHeight)}px`
           : `min(${ref.current.scrollHeight}px, ${maxHeight})`
     }, [value, maxHeight, disableAutosize, ref])
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      onSubmit?.()
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault()
+        onSubmit?.()
+      }
+      onKeyDown?.(e)
     }
-    onKeyDown?.(e)
-  }
 
-  return (
-    <Textarea
+    return (
+      <Textarea
         ref={ref}
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onKeyDown={handleKeyDown}
-      className={cn(
-        "text-primary min-h-[44px] w-full resize-none border-none bg-transparent shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
-        className
-      )}
-      rows={1}
-      disabled={disabled}
-      {...props}
-    />
-  )
-}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        className={cn(
+          "text-primary min-h-[44px] w-full resize-none border-none bg-transparent shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
+          className
+        )}
+        rows={1}
+        autoFocus={true}
+        disabled={disabled}
+        {...props}
+      />
+    )
+  }
 )
 
 PromptInputTextarea.displayName = "PromptInputTextarea"

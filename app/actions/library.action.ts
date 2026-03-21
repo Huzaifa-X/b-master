@@ -331,6 +331,169 @@ export async function deleteLibraryFile(
 }
 
 // ============================================================
+// ADD URL TO LIBRARY
+// ============================================================
+
+export async function addLibraryUrl(
+  assistantId: string,
+  url: string
+): Promise<{
+  success: boolean
+  file?: LibraryFile
+  error?: string
+}> {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return { success: false, error: "Authentication required" }
+    }
+
+    if (!url || !url.trim()) {
+      return { success: false, error: "URL is required" }
+    }
+
+    const trimmedUrl = url.trim()
+
+    const assistantBigInt = BigInt(assistantId)
+
+    const assistant = await prisma.assistant.findUnique({
+      where: { id: assistantBigInt, deletedAt: null },
+      select: { id: true, vectorStoreId: true, userId: true },
+    })
+
+    if (!assistant) return { success: false, error: "Assistant not found" }
+    if (assistant.userId.toString() !== session.user.id) {
+      return { success: false, error: "Access denied" }
+    }
+
+    const kbEntry = await prisma.assistantKnowledgebase.create({
+      data: {
+        assistantId: assistantBigInt,
+        url: trimmedUrl,
+        type: "url",
+        isCrawled: false,
+      },
+    })
+
+    const libraryFile: LibraryFile = {
+      id: kbEntry.id,
+      type: "url",
+      name: trimmedUrl,
+      url: trimmedUrl,
+      vectorFileId: null,
+      vectorStatus: null,
+      isCrawled: false,
+      createdAt: kbEntry.createdAt,
+    }
+
+    return { success: true, file: libraryFile }
+  } catch (error) {
+    console.error("❌ addLibraryUrl error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
+  }
+}
+
+// ============================================================
+// ADD NOTE TO LIBRARY
+// ============================================================
+
+export async function addLibraryNote(
+  assistantId: string,
+  title: string,
+  content: string
+): Promise<{
+  success: boolean
+  file?: LibraryFile
+  error?: string
+}> {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return { success: false, error: "Authentication required" }
+    }
+
+    if (!content || !content.trim()) {
+      return { success: false, error: "Note content is required" }
+    }
+
+    const assistantBigInt = BigInt(assistantId)
+
+    const assistant = await prisma.assistant.findUnique({
+      where: { id: assistantBigInt, deletedAt: null },
+      select: { id: true, vectorStoreId: true, userId: true },
+    })
+
+    if (!assistant) return { success: false, error: "Assistant not found" }
+    if (assistant.userId.toString() !== session.user.id) {
+      return { success: false, error: "Access denied" }
+    }
+
+    const noteText = content.trim()
+    const noteName = title.trim() || noteText.substring(0, 60) + (noteText.length > 60 ? "…" : "")
+
+    // Optionally index to vector store
+    let vectorStoreId = assistant.vectorStoreId
+    let vectorFileId: string | null = null
+
+    if (!vectorStoreId) {
+      try {
+        const vs = await createVectorStore(`assistant_${assistantId}`)
+        vectorStoreId = vs
+        await prisma.assistant.update({
+          where: { id: assistantBigInt },
+          data: { vectorStoreId },
+        })
+      } catch (err) {
+        console.warn("Vector store creation failed (non-fatal):", err)
+      }
+    }
+
+    if (vectorStoreId) {
+      try {
+        const buffer = Buffer.from(noteText, "utf-8")
+        vectorFileId = await uploadAndAddToVectorStoreNoPoll(
+          vectorStoreId,
+          buffer,
+          `${noteName.substring(0, 40)}.txt`
+        )
+      } catch (vsErr) {
+        console.warn("Vector store upload failed (non-fatal):", vsErr)
+      }
+    }
+
+    const kbEntry = await prisma.assistantKnowledgebase.create({
+      data: {
+        assistantId: assistantBigInt,
+        note: noteText,
+        vectorFileId,
+        type: "text",
+      },
+    })
+
+    const libraryFile: LibraryFile = {
+      id: kbEntry.id,
+      type: "text",
+      name: noteName,
+      url: null,
+      vectorFileId,
+      vectorStatus: null,
+      createdAt: kbEntry.createdAt,
+    }
+
+    return { success: true, file: libraryFile }
+  } catch (error) {
+    console.error("❌ addLibraryNote error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
+  }
+}
+
+// ============================================================
 // GET PRESIGNED DOWNLOAD URL
 // ============================================================
 

@@ -66,7 +66,18 @@ export function PromotionBanner() {
         <p className="text-sm font-medium">{banner.message}</p>
         {banner.buttonText && banner.buttonUrl && (
           <button
-            onClick={() => router.push(banner.buttonUrl!)}
+            onClick={() => {
+              const url = banner.buttonUrl!;
+              // Check if external URL (starts with http, https, or www)
+              const isExternal = /^(https?:\/\/|www\.)/i.test(url);
+              if (isExternal) {
+                // Add https:// if URL starts with www
+                const fullUrl = url.startsWith('www.') ? `https://${url}` : url;
+                window.open(fullUrl, '_blank', 'noopener,noreferrer');
+              } else {
+                router.push(url);
+              }
+            }}
             className="ml-2 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-gray-800 transition-transform hover:scale-105"
           >
             {banner.buttonText}

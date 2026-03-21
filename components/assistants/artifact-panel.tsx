@@ -1,8 +1,10 @@
 "use client";
 
 import { FC, useEffect, useState, useRef, useCallback } from "react";
+import Editor from "@monaco-editor/react";
+import { useTheme } from "next-themes";
 
-import { X, Copy, Code2, FileCode, Eye, Code, Download, Share2, FileText, FileDown, MessageSquare, FileType, Presentation, MousePointer2 } from "lucide-react";
+import { X, Copy, Code2, FileCode, Eye, Code, Download, Share2, FileText, FileDown, MessageSquare, FileType, Presentation, MousePointer2, Edit3, Maximize2, Minimize2, ArrowLeft, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +19,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
 
 import { useArtifactStore } from "@/lib/stores/artifact-store";
 
@@ -46,7 +49,8 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
   onVersionSelect
 }) => {
 
-  const { artifactContent, isPreviewMode, togglePreview, setPrefilledPrompt, setSurgicalEditOuterHtml } = useArtifactStore();
+  const { artifactContent, isPreviewMode, togglePreview, setPrefilledPrompt, setSurgicalEditOuterHtml, isEditMode, toggleEditMode, updateArtifactContent, closePanel, isFullscreen, toggleFullscreen, wasAutoOpened } = useArtifactStore();
+  const { theme } = useTheme();
   const params = useParams()
   const assistantId = params?.id as string
 
@@ -71,6 +75,22 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
   // Visual edit mode (click-to-edit like Lovable)
   const [isVisualEditMode, setIsVisualEditMode] = useState(false);
+
+  // Inline edit input state (appears when clicking element in visual edit mode)
+  const [inlineEditState, setInlineEditState] = useState<{
+    visible: boolean;
+    position: { x: number; y: number };
+    description: string;
+    outerHtml: string;
+    value: string;
+  }>({
+    visible: false,
+    position: { x: 0, y: 0 },
+    description: "",
+    outerHtml: "",
+    value: "",
+  });
+  const inlineEditInputRef = useRef<HTMLInputElement>(null);
 
   // Check if the code is HTML
   const isHtmlCode = artifactContent?.language?.toLowerCase() === 'html' ||
@@ -280,10 +300,35 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     toast.success("Artifact downloaded successfully");
   };
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
+    // Close the panel in the store (resets modes and isPanelOpen)
+    closePanel();
+  }, [closePanel]);
 
-    onClose?.();
+  // Handle Monaco editor content changes
+  const handleEditorChange = useCallback((value: string | undefined) => {
+    if (value !== undefined) {
+      updateArtifactContent(value);
+    }
+  }, [updateArtifactContent]);
 
+  // Get Monaco language from artifact language
+  const getMonacoLanguage = () => {
+    const lang = artifactContent?.language?.toLowerCase() || "html";
+    const languageMap: Record<string, string> = {
+      "html": "html",
+      "css": "css",
+      "javascript": "javascript",
+      "js": "javascript",
+      "typescript": "typescript",
+      "ts": "typescript",
+      "json": "json",
+      "python": "python",
+      "py": "python",
+      "jsx": "javascript",
+      "tsx": "typescript",
+    };
+    return languageMap[lang] || lang;
   };
 
   // Handle text selection in code view
@@ -308,14 +353,62 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     }
   }, []);
 
-  // Handle keyboard shortcut to exit visual edit mode (Escape)
+  // Handle keyboard shortcut to exit visual edit mode (Escape) or close inline edit
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isVisualEditMode) setIsVisualEditMode(false);
+      if (e.key === "Escape") {
+        if (inlineEditState.visible) {
+          setInlineEditState(prev => ({ ...prev, visible: false }));
+        } else if (isVisualEditMode) {
+          setIsVisualEditMode(false);
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isVisualEditMode]);
+  }, [isVisualEditMode, inlineEditState.visible]);
+
+  // Handle inline edit submission
+  const handleInlineEditSubmit = useCallback(() => {
+    if (!inlineEditState.value.trim()) return;
+
+    // Store the outerHTML so the chatbot can do a surgical patch
+    setSurgicalEditOuterHtml(inlineEditState.outerHtml || null);
+
+    // Create the full prompt
+    const prompt = `Edit the ${inlineEditState.description}: ${inlineEditState.value}`;
+
+    // Close inline edit and visual edit mode
+    setInlineEditState(prev => ({ ...prev, visible: false, value: "" }));
+    setIsVisualEditMode(false);
+
+    // Dispatch event with the message to send directly (avoids timing issues with prefilledPrompt)
+    window.dispatchEvent(new CustomEvent('trigger-chat-send', {
+      detail: { message: prompt }
+    }));
+  }, [inlineEditState, setSurgicalEditOuterHtml]);
+
+  // Close inline edit when clicking outside
+  useEffect(() => {
+    if (!inlineEditState.visible) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-inline-edit-input]')) {
+        setInlineEditState(prev => ({ ...prev, visible: false }));
+      }
+    };
+
+    // Small delay to prevent immediate close
+    const timer = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [inlineEditState.visible]);
 
   // Handle Ask-B button click
   const handleAskB = useCallback(() => {
@@ -368,14 +461,30 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
         }
       } else if (event.data?.type === "elementClick") {
         // Visual edit mode: user clicked an element inside the iframe
-        const { description, outerHtml } = event.data;
-        if (description) {
-          // Store the outerHTML so the chatbot can do a surgical patch
-          setSurgicalEditOuterHtml(outerHtml || null);
-          const prompt = `Edit the ${description}: `;
-          setPrefilledPrompt(prompt);
-          // Turn off visual edit mode after a selection
-          setIsVisualEditMode(false);
+        const { description, outerHtml, position } = event.data;
+        if (description && position) {
+          // Get iframe position to calculate absolute position
+          const iframe = iframeRef.current;
+          if (iframe) {
+            const iframeRect = iframe.getBoundingClientRect();
+            // Position the input below the clicked element
+            const inputX = iframeRect.left + position.x;
+            const inputY = iframeRect.top + position.y;
+
+            // Show inline edit input instead of immediately setting prompt
+            setInlineEditState({
+              visible: true,
+              position: { x: inputX, y: inputY },
+              description: description,
+              outerHtml: outerHtml || "",
+              value: "",
+            });
+
+            // Focus the input after a short delay
+            setTimeout(() => {
+              inlineEditInputRef.current?.focus();
+            }, 50);
+          }
         }
       }
     };
@@ -392,7 +501,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     const send = () => {
       try {
         iframe.contentWindow?.postMessage({ type: "toggleVisualEdit", enabled: isVisualEditMode }, "*");
-      } catch (_) {}
+      } catch (_) { }
     };
     const t = setTimeout(send, 100);
     return () => clearTimeout(t);
@@ -539,11 +648,19 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
             var el = e.target;
             if (el === document.body || el === document.documentElement) return;
             var description = getElementDescription(el);
+            var rect = el.getBoundingClientRect();
             window.parent.postMessage({
               type: 'elementClick',
               description: description,
               tag: el.tagName.toLowerCase(),
-              outerHtml: el.outerHTML
+              outerHtml: el.outerHTML,
+              // Position info for inline edit input
+              position: {
+                x: rect.left + rect.width / 2,
+                y: rect.bottom + 8,
+                elementTop: rect.top,
+                elementBottom: rect.bottom
+              }
             }, '*');
           }
 
@@ -608,10 +725,24 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
         {/* Right Section: Action Buttons */}
         <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Back Button - Show when panel was auto-opened */}
+          {wasAutoOpened && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 mr-1 text-muted-foreground hover:text-foreground"
+              onClick={() => window.dispatchEvent(new CustomEvent('restore-chat-layout'))}
+              title="Return to chat"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="hidden sm:inline text-xs">Back</span>
+            </Button>
+          )}
+
           {/* Preview/Code Toggle - Always show for HTML */}
           {isHtmlCode && (
             <Button
-              variant={isPreviewMode ? "default" : "ghost"}
+              variant={isPreviewMode && !isEditMode ? "default" : "ghost"}
               size="icon"
               className="h-7 w-7 md:h-8 md:w-8"
               title={isPreviewMode ? "Show code" : "Preview"}
@@ -620,7 +751,23 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
                 togglePreview();
               }}
             >
-              {isPreviewMode ? <Code className="h-3 w-3 md:h-4 md:w-4" /> : <Eye className="h-3 w-3 md:h-4 md:w-4" />}
+              {isPreviewMode && !isEditMode ? <Code className="h-3 w-3 md:h-4 md:w-4" /> : <Eye className="h-3 w-3 md:h-4 md:w-4" />}
+            </Button>
+          )}
+
+          {/* Edit Code Button */}
+          {displayContent && (
+            <Button
+              variant={isEditMode ? "default" : "ghost"}
+              size="icon"
+              className={`h-7 w-7 md:h-8 md:w-8 ${isEditMode
+                ? "bg-green-500 hover:bg-green-600 text-white"
+                : ""
+                }`}
+              title={isEditMode ? "Exit edit mode" : "Edit code"}
+              onClick={toggleEditMode}
+            >
+              <Edit3 className="h-3 w-3 md:h-4 md:w-4" />
             </Button>
           )}
 
@@ -629,17 +776,32 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
             <Button
               variant={isVisualEditMode ? "default" : "ghost"}
               size="icon"
-              className={`h-7 w-7 md:h-8 md:w-8 ${
-                isVisualEditMode
-                  ? "bg-indigo-500 hover:bg-indigo-600 text-white"
-                  : "text-muted-foreground"
-              }`}
+              className={`h-7 w-7 md:h-8 md:w-8 ${isVisualEditMode
+                ? "bg-indigo-500 hover:bg-indigo-600 text-white"
+                : "text-muted-foreground"
+                }`}
               title={isVisualEditMode ? "Exit visual edit mode" : "Click any element to edit it"}
               onClick={() => setIsVisualEditMode((v) => !v)}
             >
               <MousePointer2 className="h-3 w-3 md:h-4 md:w-4" />
             </Button>
           )}
+
+          {/* Fullscreen Toggle Button - Desktop only */}
+          <Button
+            variant={isFullscreen ? "default" : "ghost"}
+            size="icon"
+            className={`h-7 w-7 md:h-8 md:w-8 hidden md:flex ${isFullscreen ? "bg-blue-500 hover:bg-blue-600 text-white" : ""
+              }`}
+            title={isFullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
+            onClick={toggleFullscreen}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="h-3 w-3 md:h-4 md:w-4" />
+            ) : (
+              <Maximize2 className="h-3 w-3 md:h-4 md:w-4" />
+            )}
+          </Button>
 
           {/* Download Dropdown - Hide on mobile */}
           {displayContent && (
@@ -723,18 +885,16 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
             />
           )}
 
-          {/* Close Button */}
-          {onClose && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 md:h-8 md:w-8"
-              onClick={handleClose}
-              title="Close panel"
-            >
-              <X className="h-3 w-3 md:h-4 md:w-4" />
-            </Button>
-          )}
+          {/* Close Button - Always visible */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 md:h-8 md:w-8"
+            onClick={handleClose}
+            title="Close panel"
+          >
+            <X className="h-3 w-3 md:h-4 md:w-4" />
+          </Button>
         </div>
       </div>
 
@@ -769,9 +929,29 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
           <div className="h-full">
 
-            {/* HTML Preview Mode */}
-
-            {isPreviewMode && isHtmlCode ? (
+            {/* Edit Mode with Monaco Editor */}
+            {isEditMode ? (
+              <div className="h-full w-full">
+                <Editor
+                  height="100%"
+                  language={getMonacoLanguage()}
+                  value={displayContent}
+                  theme={theme === "dark" ? "vs-dark" : "light"}
+                  onChange={handleEditorChange}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    lineNumbers: "on",
+                    wordWrap: "on",
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                    tabSize: 2,
+                    padding: { top: 16 },
+                  }}
+                />
+              </div>
+            ) : isPreviewMode && isHtmlCode ? (
+              /* HTML Preview Mode */
 
               blobUrl ? (
 
@@ -905,6 +1085,46 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
             <MessageSquare className="h-4 w-4" />
             Ask-B
           </Button>
+        </div>
+      )}
+
+      {/* Inline Edit Input (appears when clicking element in visual edit mode) */}
+      {inlineEditState.visible && (
+        <div
+          data-inline-edit-input
+          className="fixed z-50 animate-in fade-in-0 zoom-in-95 duration-150"
+          style={{
+            left: inlineEditState.position.x,
+            top: inlineEditState.position.y,
+            transform: "translateX(-50%)",
+          }}
+        >
+          <div className="flex flex-col gap-2 bg-background border rounded-lg shadow-xl p-2.5 min-w-[280px] max-w-[400px]">
+            <p className="text-[10px] text-muted-foreground px-1 truncate">
+              Edit: {inlineEditState.description}
+            </p>
+            <Input
+              ref={inlineEditInputRef}
+              value={inlineEditState.value}
+              onChange={(e) => setInlineEditState(prev => ({ ...prev, value: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleInlineEditSubmit();
+                }
+              }}
+              placeholder="What changes do you want?"
+              className="h-9 text-sm"
+            />
+            <Button
+              className="w-fit bg-indigo-500 hover:bg-indigo-600 gap-2 ml-auto"
+              onClick={handleInlineEditSubmit}
+              disabled={!inlineEditState.value.trim()}
+            >
+              <Send className="h-4 w-4" />
+              Send
+            </Button>
+          </div>
         </div>
       )}
 

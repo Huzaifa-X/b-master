@@ -26,6 +26,10 @@ import {
     PenTool,
     Image,
     TrendingUp,
+    Tag,
+    UserCircle2,
+    Building2,
+    Clipboard,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -77,9 +81,49 @@ const templates: TemplateOption[] = [
     // Booking
     {
         id: "booking-system",
-        name: "Booking System",
-        description: "Complete booking and scheduling management",
+        name: "Appointment Scheduler",
+        description: "Personal meeting scheduler (Calendly-style)",
         icon: <Calendar className="h-8 w-8" />,
+        isEnabled: true,
+        category: "Business",
+    },
+    {
+        id: "calendar-booking",
+        name: "Calendar Booking",
+        description: "Multi-step appointment booking with calendar & time slots",
+        icon: <Calendar className="h-8 w-8" />,
+        isEnabled: true,
+        category: "Business",
+    },
+    {
+        id: "event-registration",
+        name: "Event Registration",
+        description: "Event sign-up form with ticket selection & e-ticket",
+        icon: <Tag className="h-8 w-8" />,
+        isEnabled: true,
+        category: "Business",
+    },
+    {
+        id: "meeting-scheduler",
+        name: "Meeting Scheduler",
+        description: "Team meeting planner with time slots, agenda & timezone",
+        icon: <UserCircle2 className="h-8 w-8" />,
+        isEnabled: true,
+        category: "Business",
+    },
+    {
+        id: "office-booking",
+        name: "Office Space Booking",
+        description: "Reserve desks, rooms and office resources",
+        icon: <Building2 className="h-8 w-8" />,
+        isEnabled: true,
+        category: "Business",
+    },
+    {
+        id: "reservation-system",
+        name: "Reservation System",
+        description: "General-purpose reservations for any venue or service",
+        icon: <Clipboard className="h-8 w-8" />,
         isEnabled: true,
         category: "Business",
     },
