@@ -26,13 +26,46 @@ interface ConvertResult {
 }
 
 /**
- * Get browser instance - uses @sparticuz/chromium in production (Vercel/Lambda)
- * and regular puppeteer in development
+ * Get browser instance.
+ *
+ * Priority:
+ * 1. CHROME_EXECUTABLE_PATH — system Chrome/Chromium (e.g. Docker / Coolify containers)
+ * 2. VERCEL / AWS_LAMBDA_FUNCTION_NAME — @sparticuz/chromium for serverless environments
+ * 3. Fallback — puppeteer with its own bundled Chrome (local development)
  */
 async function getBrowser(): Promise<Browser> {
-  if (process.env.NODE_ENV === 'production' || process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    // Production: Use @sparticuz/chromium for serverless
-    console.log('[PDF] Production mode: Using @sparticuz/chromium');
+  const systemChromePath = process.env.CHROME_EXECUTABLE_PATH;
+
+  if (systemChromePath) {
+    // Docker containers (Coolify, etc.) with a real Chrome/Chromium binary on disk
+    console.log('[PDF] Using system Chrome at:', systemChromePath);
+
+    const puppeteer = await import('puppeteer-core');
+
+    return puppeteer.default.launch({
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor',
+      ],
+      executablePath: systemChromePath,
+      headless: true,
+      defaultViewport: {
+        width: 794,   // A4 width at 96 DPI
+        height: 1123, // A4 height at 96 DPI
+        deviceScaleFactor: 2,
+      },
+    });
+  }
+
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    // Serverless (Vercel / AWS Lambda): use @sparticuz/chromium bundled binary
+    console.log('[PDF] Serverless mode: Using @sparticuz/chromium');
 
     const chromium = (await import('@sparticuz/chromium')).default;
     const puppeteer = await import('puppeteer-core');
@@ -50,27 +83,27 @@ async function getBrowser(): Promise<Browser> {
         deviceScaleFactor: 2,
       },
     });
-  } else {
-    // Development: Use regular puppeteer with bundled Chrome
-    console.log('[PDF] Development mode: Using puppeteer');
-
-    const puppeteer = await import('puppeteer');
-
-    return puppeteer.default.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--disable-extensions',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor',
-      ],
-      timeout: 30000,
-    });
   }
+
+  // Local development: use puppeteer with its bundled Chrome
+  console.log('[PDF] Development mode: Using puppeteer');
+
+  const puppeteer = await import('puppeteer');
+
+  return puppeteer.default.launch({
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+      '--disable-extensions',
+      '--disable-web-security',
+      '--disable-features=VizDisplayCompositor',
+    ],
+    timeout: 30000,
+  });
 }
 
 /**

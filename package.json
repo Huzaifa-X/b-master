@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "prisma:generate": "prisma generate",
-    "build": "prisma generate && NODE_OPTIONS='--max-old-space-size=8192' next build",
+    "build": "prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 next build",
     "start": "concurrently \"next start\" \"npm run worker\"",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
@@ -130,6 +130,7 @@
     "@types/react-dom": "^19",
     "@types/react-syntax-highlighter": "^15.5.13",
     "autoprefixer": "^10.4.21",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.4",
     "postcss": "^8.5.6",

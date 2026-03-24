@@ -1,0 +1,33 @@
+[phases.setup]
+# Override apt packages to exclude 'chromium', which on Ubuntu 24.04 (Noble) is a
+# snap stub that pulls in snapd/systemd — broken inside Docker build containers.
+# Google Chrome stable is installed directly from Google's official .deb instead.
+aptPkgs = [
+  "wget",
+  "gnupg",
+  "ca-certificates",
+  "fonts-ipafont-gothic",
+  "fonts-wqy-zenhei",
+  "fonts-thai-tlwg",
+  "fonts-kacst",
+  "fonts-freefont-ttf",
+  "libnss3",
+  "libatk1.0-0",
+  "libatk-bridge2.0-0",
+  "libcups2",
+  "libgbm1",
+  "libasound2t64",
+  "libpangocairo-1.0-0",
+  "libxss1",
+  "libgtk-3-0",
+  "libxshmfence1",
+  "libglu1-mesa",
+  "curl"
+]
+cmds = [
+  "wget -q -O /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt-get install -y /tmp/google-chrome.deb && rm -f /tmp/google-chrome.deb"
+]
+
+[variables]
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
+CHROME_EXECUTABLE_PATH = "/usr/bin/google-chrome-stable"
