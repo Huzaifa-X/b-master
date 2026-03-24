@@ -1,6 +1,4 @@
-import { TemplateDefinition } from './index';
-
-export const seoContentTemplate: TemplateDefinition = {
+export const seoContentTemplate = {
   id: "seo-content",
   name: "SEO Content",
   description: "SEO analysis and content optimization tool powered by AI",
@@ -67,16 +65,32 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )`,
 
-    "src/App.jsx": `import { useState } from 'react'
-import {
-  Search, TrendingUp, Target, FileText, CheckCircle, AlertCircle,
-  Lightbulb, BarChart2, Globe, Hash, Zap, ArrowRight, RefreshCw,
-  Sparkles
-} from 'lucide-react'
-import './App.css'
+    "src/index.css": `* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+`,
 
-// SEO Score Component
-function SEOScore({ score }) {
+    // --- DATA ---
+    "src/data/mockData.js": `export const sampleKeywords = [
+  { keyword: 'seo optimization', volume: 12500, difficulty: 45, trend: 'up' },
+  { keyword: 'content marketing', volume: 8900, difficulty: 62, trend: 'up' },
+  { keyword: 'keyword research', volume: 6700, difficulty: 38, trend: 'stable' },
+  { keyword: 'search engine ranking', volume: 4200, difficulty: 55, trend: 'up' },
+]
+
+export const seoChecklist = [
+  { text: 'Meta title is optimized (55 characters)', passed: true, priority: 'High' },
+  { text: 'Meta description includes target keyword', passed: true, priority: 'High' },
+  { text: 'H1 tag contains primary keyword', passed: true, priority: 'High' },
+  { text: 'Images have alt text', passed: false, priority: 'Medium' },
+  { text: 'Internal links present', passed: true, priority: 'Medium' },
+  { text: 'Page loads under 3 seconds', passed: false, priority: 'High' },
+]`,
+
+    // --- COMPONENTS ---
+    "src/components/SEOScore.jsx": `export default function SEOScore({ score }) {
   const getColorClass = () => {
     if (score >= 80) return 'score-good'
     if (score >= 60) return 'score-warning'
@@ -111,10 +125,11 @@ function SEOScore({ score }) {
       </div>
     </div>
   )
-}
+}`,
 
-// Keyword Analysis Item
-function KeywordItem({ keyword, volume, difficulty, trend }) {
+    "src/components/KeywordItem.jsx": `import { Hash, TrendingUp } from 'lucide-react'
+
+export default function KeywordItem({ keyword, volume, difficulty, trend }) {
   const getDifficultyClass = () => {
     if (difficulty <= 30) return 'difficulty-easy'
     if (difficulty <= 60) return 'difficulty-medium'
@@ -139,10 +154,11 @@ function KeywordItem({ keyword, volume, difficulty, trend }) {
       </div>
     </div>
   )
-}
+}`,
 
-// Checklist Item
-function ChecklistItem({ text, passed, priority }) {
+    "src/components/ChecklistItem.jsx": `import { CheckCircle, AlertCircle } from 'lucide-react'
+
+export default function ChecklistItem({ text, passed, priority }) {
   return (
     <div className={\`checklist-item \${passed ? 'passed' : 'warning'}\`}>
       <div className={\`checklist-icon \${passed ? 'passed' : 'warning'}\`}>
@@ -158,10 +174,9 @@ function ChecklistItem({ text, passed, priority }) {
       </div>
     </div>
   )
-}
+}`,
 
-// Content Suggestion Card
-function SuggestionCard({ title, description, icon: Icon }) {
+    "src/components/SuggestionCard.jsx": `export default function SuggestionCard({ title, description, icon: Icon }) {
   return (
     <div className="suggestion-card">
       <div className="suggestion-icon">
@@ -171,41 +186,55 @@ function SuggestionCard({ title, description, icon: Icon }) {
       <p className="suggestion-desc">{description}</p>
     </div>
   )
-}
+}`,
 
-// Main App
+    // --- MAIN APP ---
+    "src/App.jsx": `import { useState } from 'react'
+import {
+  Search, Target, FileText, Lightbulb, BarChart2, Globe, Hash, Zap, ArrowRight, RefreshCw,
+  Sparkles
+} from 'lucide-react'
+import SEOScore from './components/SEOScore'
+import KeywordItem from './components/KeywordItem'
+import ChecklistItem from './components/ChecklistItem'
+import SuggestionCard from './components/SuggestionCard'
+import { sampleKeywords, seoChecklist } from './data/mockData'
+import './App.css'
+
 export default function App() {
   const [url, setUrl] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [hasResults, setHasResults] = useState(true) // Show demo data
+  const [hasResults, setHasResults] = useState(true)
+  const [activeAction, setActiveAction] = useState(null)
+  const [score, setScore] = useState(72)
+  const [notification, setNotification] = useState(null)
 
   const handleAnalyze = () => {
+    if (!url.trim()) return
     setIsAnalyzing(true)
     setTimeout(() => {
       setIsAnalyzing(false)
       setHasResults(true)
+      setScore(Math.floor(Math.random() * 20) + 75) // New score between 75-95
+      showNotification('Analysis Complete!')
     }, 2000)
   }
 
-  const sampleKeywords = [
-    { keyword: 'seo optimization', volume: 12500, difficulty: 45, trend: 'up' },
-    { keyword: 'content marketing', volume: 8900, difficulty: 62, trend: 'up' },
-    { keyword: 'keyword research', volume: 6700, difficulty: 38, trend: 'stable' },
-    { keyword: 'search engine ranking', volume: 4200, difficulty: 55, trend: 'up' },
-  ]
+  const handleAction = (actionName) => {
+    setActiveAction(actionName)
+    setTimeout(() => {
+      setActiveAction(null)
+      showNotification(\`\${actionName} Generated!\`)
+    }, 1500)
+  }
 
-  const checklist = [
-    { text: 'Meta title is optimized (55 characters)', passed: true, priority: 'High' },
-    { text: 'Meta description includes target keyword', passed: true, priority: 'High' },
-    { text: 'H1 tag contains primary keyword', passed: true, priority: 'High' },
-    { text: 'Images have alt text', passed: false, priority: 'Medium' },
-    { text: 'Internal links present', passed: true, priority: 'Medium' },
-    { text: 'Page loads under 3 seconds', passed: false, priority: 'High' },
-  ]
+  const showNotification = (msg) => {
+    setNotification(msg)
+    setTimeout(() => setNotification(null), 3000)
+  }
 
   return (
     <div className="app">
-      {/* Header */}
       <header className="header">
         <div className="header-container">
           <div className="header-content">
@@ -218,7 +247,10 @@ export default function App() {
                 <p className="brand-subtitle">AI-Powered Content Analysis</p>
               </div>
             </div>
-            <button className="upgrade-btn">
+            <button 
+              onClick={() => showNotification('Upgrade to Pro started!')}
+              className="upgrade-btn font-bold active:scale-95 transition-all"
+            >
               <Sparkles className="icon-sm" />
               Upgrade Pro
             </button>
@@ -227,7 +259,13 @@ export default function App() {
       </header>
 
       <main className="main-content">
-        {/* URL Input */}
+        {notification && (
+          <div className="notification">
+            <Zap className="icon-sm" />
+            {notification}
+          </div>
+        )}
+
         <div className="card input-card">
           <h2 className="card-title">Analyze Your Content</h2>
           <div className="input-row">
@@ -263,37 +301,41 @@ export default function App() {
 
         {hasResults && (
           <div className="results-grid">
-            {/* Main Content */}
             <div className="main-column">
-              {/* Overall Score */}
               <div className="card score-card">
                 <div className="score-content">
-                  <SEOScore score={72} />
+                  <SEOScore score={score} />
                   <div className="score-info">
-                    <h3 className="score-title">Good SEO Score</h3>
-                    <p className="score-desc">Your content is well-optimized but has room for improvement. Focus on the issues below to boost your ranking.</p>
+                    <h3 className="score-title">
+                      {score > 80 ? 'Excellent SEO Score' : 'Good SEO Score'}
+                    </h3>
+                    <p className="score-desc">
+                      {score > 80 
+                        ? 'Great job! Your content is highly optimized for search engines.' 
+                        : 'Your content is well-optimized but has room for improvement.'}
+                    </p>
                     <div className="score-badges">
-                      <span className="badge passed">4 Passed</span>
+                      <span className="badge passed">
+                        {score > 85 ? '6' : '4'} Passed
+                      </span>
                       <span className="badge warning">2 Warnings</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* SEO Checklist */}
               <div className="card">
                 <h3 className="section-title">
                   <Target className="icon-md text-teal" />
                   SEO Checklist
                 </h3>
                 <div className="checklist">
-                  {checklist.map((item, index) => (
+                  {seoChecklist.map((item, index) => (
                     <ChecklistItem key={index} {...item} />
                   ))}
                 </div>
               </div>
 
-              {/* Keyword Analysis */}
               <div className="card">
                 <h3 className="section-title">
                   <Hash className="icon-md text-teal" />
@@ -307,28 +349,37 @@ export default function App() {
               </div>
             </div>
 
-            {/* Sidebar */}
             <div className="sidebar">
-              {/* Quick Actions */}
               <div className="card">
                 <h3 className="section-title">Quick Actions</h3>
                 <div className="quick-actions">
-                  <button className="action-btn">
-                    <FileText className="icon-md text-teal" />
-                    <span>Generate Meta Tags</span>
+                  <button 
+                    onClick={() => handleAction('Meta Tags')} 
+                    className={\`action-btn \${activeAction === 'Meta Tags' ? 'active' : ''}\`}
+                    disabled={activeAction}
+                  >
+                    {activeAction === 'Meta Tags' ? <RefreshCw className="icon-md spinning" /> : <FileText className="icon-md text-teal" />}
+                    <span>{activeAction === 'Meta Tags' ? 'Generating...' : 'Generate Meta Tags'}</span>
                   </button>
-                  <button className="action-btn">
-                    <Lightbulb className="icon-md text-amber" />
-                    <span>Get Content Ideas</span>
+                  <button 
+                    onClick={() => handleAction('Content Ideas')} 
+                    className={\`action-btn \${activeAction === 'Content Ideas' ? 'active' : ''}\`}
+                    disabled={activeAction}
+                  >
+                    {activeAction === 'Content Ideas' ? <RefreshCw className="icon-md spinning" /> : <Lightbulb className="icon-md text-amber" />}
+                    <span>{activeAction === 'Content Ideas' ? 'Thinking...' : 'Get Content Ideas'}</span>
                   </button>
-                  <button className="action-btn">
-                    <BarChart2 className="icon-md text-purple" />
-                    <span>Competitor Analysis</span>
+                  <button 
+                    onClick={() => handleAction('Competitors')} 
+                    className={\`action-btn \${activeAction === 'Competitors' ? 'active' : ''}\`}
+                    disabled={activeAction}
+                  >
+                    {activeAction === 'Competitors' ? <RefreshCw className="icon-md spinning" /> : <BarChart2 className="icon-md text-purple" />}
+                    <span>{activeAction === 'Competitors' ? 'Analyzing...' : 'Competitor Analysis'}</span>
                   </button>
                 </div>
               </div>
 
-              {/* AI Suggestions */}
               <div className="ai-suggestions">
                 <div className="ai-header">
                   <Zap className="icon-md" />
@@ -348,10 +399,14 @@ export default function App() {
                     Optimize images to improve page speed
                   </li>
                 </ul>
-                <button className="view-all-btn">View All Suggestions</button>
+                <button 
+                  onClick={() => showNotification('Loading more suggestions...')}
+                  className="view-all-btn active:opacity-80 transition-opacity"
+                >
+                  View All Suggestions
+                </button>
               </div>
 
-              {/* Content Ideas */}
               <div className="card">
                 <h3 className="section-title">Content Ideas</h3>
                 <div className="suggestions">
@@ -421,6 +476,31 @@ body {
 .app {
   min-height: 100vh;
   background: var(--bg);
+  position: relative;
+}
+
+/* Notification */
+.notification {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: var(--text);
+  color: white;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  animation: slideUp 0.3s ease-out;
+  z-index: 100;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 /* Header */
@@ -799,17 +879,12 @@ body {
   margin-bottom: 4px;
 }
 
-.checklist-item.passed .checklist-text { color: #166534; }
-.checklist-item.warning .checklist-text { color: #92400E; }
-
 .checklist-priority {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
 }
 
-.checklist-item.passed .checklist-priority { color: #16A34A; }
-.checklist-item.warning .checklist-priority { color: #D97706; }
-
-/* Keywords */
+/* Keywords List */
 .keywords-list {
   display: flex;
   flex-direction: column;
@@ -820,27 +895,27 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem;
-  background: var(--surface);
+  padding: 12px;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 12px;
   transition: all 0.2s;
 }
 
 .keyword-item:hover {
-  border-color: rgba(20, 184, 166, 0.3);
-  box-shadow: var(--shadow-sm);
+  border-color: var(--teal);
+  transform: translateX(4px);
 }
 
 .keyword-left {
   display: flex;
   align-items: center;
-  gap: 12px;
-  color: var(--text-light);
+  gap: 8px;
+  color: var(--teal);
 }
 
 .keyword-text {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -855,9 +930,9 @@ body {
 }
 
 .volume-value {
-  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text);
+  line-height: 1;
 }
 
 .volume-label {
@@ -867,25 +942,14 @@ body {
 
 .difficulty-badge {
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
 }
 
-.difficulty-easy {
-  background: rgba(34, 197, 94, 0.1);
-  color: #16A34A;
-}
-
-.difficulty-medium {
-  background: rgba(245, 158, 11, 0.1);
-  color: #D97706;
-}
-
-.difficulty-hard {
-  background: rgba(239, 68, 68, 0.1);
-  color: #DC2626;
-}
+.difficulty-easy { background: rgba(34, 197, 94, 0.1); color: #16A34A; }
+.difficulty-medium { background: rgba(245, 158, 11, 0.1); color: #D97706; }
+.difficulty-hard { background: rgba(239, 68, 68, 0.1); color: #DC2626; }
 
 .trend-icon {
   width: 16px;
@@ -893,11 +957,11 @@ body {
   color: var(--green);
 }
 
-/* Quick Actions */
+/* Sidebar Actions */
 .quick-actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .action-btn {
@@ -907,23 +971,25 @@ body {
   width: 100%;
   padding: 12px;
   background: var(--bg);
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 12px;
-  font-family: inherit;
-  font-weight: 500;
   color: var(--text);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
   cursor: pointer;
-  text-align: left;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
 
 .action-btn:hover {
-  background: #F1F5F9;
+  border-color: var(--teal);
+  background: white;
+  box-shadow: var(--shadow-sm);
 }
 
 /* AI Suggestions */
 .ai-suggestions {
-  background: linear-gradient(135deg, var(--teal) 0%, var(--cyan) 100%);
+  background: linear-gradient(135deg, #14B8A6 0%, #06B6D4 100%);
   border-radius: 16px;
   padding: 1.5rem;
   color: white;
@@ -937,39 +1003,42 @@ body {
 }
 
 .ai-header h3 {
+  font-size: 1.125rem;
   font-weight: 600;
 }
 
 .ai-list {
+  list-style: none;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  list-style: none;
+  margin-bottom: 1.5rem;
 }
 
 .ai-item {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.9375rem;
+  line-height: 1.5;
 }
 
-.ai-item svg {
+.ai-item .icon-sm {
   flex-shrink: 0;
   margin-top: 2px;
+  opacity: 0.8;
 }
 
 .view-all-btn {
   width: 100%;
-  margin-top: 1rem;
-  padding: 10px;
+  padding: 8px;
   background: rgba(255, 255, 255, 0.2);
+  color: white;
   border: none;
   border-radius: 8px;
   font-family: inherit;
+  font-size: 0.875rem;
   font-weight: 500;
-  color: white;
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -986,61 +1055,42 @@ body {
 }
 
 .suggestion-card {
-  padding: 1rem;
-  background: linear-gradient(135deg, var(--bg) 0%, #F1F5F9 100%);
-  border: 1px solid var(--border);
+  padding: 12px;
+  background: var(--bg);
+  border: 1px dashed var(--border);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .suggestion-card:hover {
-  border-color: rgba(20, 184, 166, 0.3);
+  border-color: var(--teal);
+  background: white;
 }
 
 .suggestion-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--teal) 0%, var(--cyan) 100%);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(20, 184, 166, 0.1);
+  color: var(--teal);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  margin-bottom: 12px;
-  transition: transform 0.2s;
-}
-
-.suggestion-card:hover .suggestion-icon {
-  transform: scale(1.1);
+  margin-bottom: 8px;
 }
 
 .suggestion-title {
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text);
   margin-bottom: 4px;
 }
 
 .suggestion-desc {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: var(--text-muted);
 }
-`,
-
-    "src/index.css": `* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-#root {
-  min-height: 100vh;
-}`
+`
   }
 };

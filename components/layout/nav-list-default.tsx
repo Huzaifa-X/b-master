@@ -73,7 +73,7 @@ export function NavListDefault() {
   if (loading) {
     return (
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-        <SidebarGroupLabel>Assistants</SidebarGroupLabel>
+        <SidebarGroupLabel>{t("nav.pinnedAssistants")}</SidebarGroupLabel>
         <SidebarMenu>
           {/* Show 3 skeleton items while loading */}
           {Array.from({ length: 3 }).map((_, i) => (
@@ -92,7 +92,7 @@ export function NavListDefault() {
   return (
     <>
       <SidebarGroup className="group-data-[collapsible=icon]:hidden" data-tour="assistants-list">
-        <SidebarGroupLabel>Assistants</SidebarGroupLabel>
+        <SidebarGroupLabel>{t("nav.pinnedAssistants")}</SidebarGroupLabel>
         <SidebarMenu>
           {assistants.length === 0 ? (
             <SidebarMenuItem>

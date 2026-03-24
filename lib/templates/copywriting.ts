@@ -1,6 +1,4 @@
-import { TemplateDefinition } from './index';
-
-export const copywritingTemplate: TemplateDefinition = {
+export const copywritingTemplate = {
   id: "copywriting",
   name: "Copywriting",
   description: "AI-powered social media copy generator for powerful marketing texts",
@@ -67,16 +65,17 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )`,
 
-    "src/App.jsx": `import { useState } from 'react'
-import {
-  PenTool, Sparkles, Copy, RefreshCw, Check, Twitter, Instagram,
-  Linkedin, Facebook, Mail, MessageSquare, Megaphone, Target,
-  Zap, ArrowRight, Heart, Share2
-} from 'lucide-react'
-import './App.css'
+    "src/index.css": `* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+`,
 
-// Platform Icons
-const platforms = [
+    // --- DATA ---
+    "src/data/constants.js": `import { Twitter, Instagram, Linkedin, Facebook, Mail } from 'lucide-react'
+
+export const platforms = [
   { id: 'twitter', name: 'Twitter/X', icon: Twitter, colorClass: 'platform-twitter', charLimit: 280 },
   { id: 'instagram', name: 'Instagram', icon: Instagram, colorClass: 'platform-instagram', charLimit: 2200 },
   { id: 'linkedin', name: 'LinkedIn', icon: Linkedin, colorClass: 'platform-linkedin', charLimit: 3000 },
@@ -84,8 +83,7 @@ const platforms = [
   { id: 'email', name: 'Email Subject', icon: Mail, colorClass: 'platform-email', charLimit: 60 },
 ]
 
-// Copy Tones
-const tones = [
+export const tones = [
   { id: 'professional', name: 'Professional', emoji: '💼' },
   { id: 'casual', name: 'Casual', emoji: '😊' },
   { id: 'witty', name: 'Witty', emoji: '😏' },
@@ -94,8 +92,7 @@ const tones = [
   { id: 'friendly', name: 'Friendly', emoji: '👋' },
 ]
 
-// Generated Copy Examples
-const sampleCopies = {
+export const sampleCopies = {
   twitter: [
     "🚀 Just launched our new feature and it's a game-changer! Say goodbye to manual work and hello to automation. Your productivity will thank you. #ProductivityHacks #TechNews",
     "The secret to success? It's not working harder—it's working smarter. Here's how we helped 10,000+ teams save 5 hours/week 👇 #WorkSmarter",
@@ -107,11 +104,26 @@ const sampleCopies = {
   linkedin: [
     "I've spent 10 years in this industry, and I've never seen anything like this.\\n\\nLast month, our team was drowning in manual processes. Today, we've automated 80% of our workflow.\\n\\nThe result?\\n→ 5 hours saved per team member, weekly\\n→ 40% reduction in errors\\n→ Team morale at an all-time high\\n\\nThe best investment isn't always money—it's finding the right tools.\\n\\nWhat's one tool that transformed your work? 👇"
   ]
-}
+}`,
 
-// Copy Card Component
-function CopyCard({ text, platform, onCopy, copied }) {
+    // --- COMPONENTS ---
+    "src/components/CopyCard.jsx": `import { useState } from 'react'
+import { Check, Copy, Heart, Share2 } from 'lucide-react'
+import { platforms } from '../data/constants'
+
+export default function CopyCard({ text, platform, onCopy, copied, isSaved, onToggleSave }) {
   const platformData = platforms.find(p => p.id === platform)
+  const [sharing, setSharing] = useState(false)
+
+  const handleShare = () => {
+    setSharing(true)
+    setTimeout(() => setSharing(false), 2000)
+    if (navigator.share) {
+      navigator.share({ title: 'Generated Copy', text: text })
+    } else {
+      navigator.clipboard.writeText(text)
+    }
+  }
 
   return (
     <div className="copy-card">
@@ -125,20 +137,22 @@ function CopyCard({ text, platform, onCopy, copied }) {
       </div>
       <p className="copy-text">{text}</p>
       <div className="copy-card-footer">
-        <button className="action-btn">
-          <Heart className="icon-sm" />
+        <button 
+          onClick={onToggleSave} 
+          className={\`action-btn \${isSaved ? 'active text-error' : ''}\`}
+        >
+          <Heart className={\`icon-sm \${isSaved ? 'fill-error' : ''}\`} />
         </button>
-        <button className="action-btn">
-          <Share2 className="icon-sm" />
+        <button onClick={handleShare} className="action-btn">
+          {sharing ? <Check className="icon-sm text-success" /> : <Share2 className="icon-sm" />}
         </button>
         <span className="char-count">{text.length} chars</span>
       </div>
     </div>
   )
-}
+}`,
 
-// Template Card
-function TemplateCard({ title, description, icon: Icon, onClick }) {
+    "src/components/TemplateCard.jsx": `export default function TemplateCard({ title, description, icon: Icon, onClick }) {
   return (
     <button onClick={onClick} className="template-card">
       <div className="template-icon">
@@ -148,22 +162,36 @@ function TemplateCard({ title, description, icon: Icon, onClick }) {
       <p className="template-desc">{description}</p>
     </button>
   )
-}
+}`,
 
-// Main App
+    // --- MAIN APP ---
+    "src/App.jsx": `import { useState } from 'react'
+import {
+  PenTool, Sparkles, RefreshCw, MessageSquare, Megaphone, Target,
+  Zap, ArrowRight
+} from 'lucide-react'
+import { platforms, tones, sampleCopies } from './data/constants'
+import CopyCard from './components/CopyCard'
+import TemplateCard from './components/TemplateCard'
+import './App.css'
+
 export default function App() {
   const [topic, setTopic] = useState('')
   const [selectedPlatform, setSelectedPlatform] = useState('twitter')
   const [selectedTone, setSelectedTone] = useState('professional')
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedCopies, setGeneratedCopies] = useState([])
+  const [savedCopies, setSavedCopies] = useState([])
+  const [activeTab, setActiveTab] = useState('generate') // 'generate' or 'saved'
   const [copiedIndex, setCopiedIndex] = useState(null)
 
   const handleGenerate = () => {
+    if (!topic.trim()) return
     setIsGenerating(true)
     setTimeout(() => {
       setGeneratedCopies(sampleCopies[selectedPlatform] || sampleCopies.twitter)
       setIsGenerating(false)
+      setActiveTab('generate')
     }, 1500)
   }
 
@@ -173,9 +201,17 @@ export default function App() {
     setTimeout(() => setCopiedIndex(null), 2000)
   }
 
+  const toggleSave = (text, platform) => {
+    const existing = savedCopies.find(s => s.text === text)
+    if (existing) {
+      setSavedCopies(savedCopies.filter(s => s.text !== text))
+    } else {
+      setSavedCopies([{ text, platform, savedAt: Date.now() }, ...savedCopies])
+    }
+  }
+
   return (
     <div className="app-container">
-      {/* Header */}
       <header className="header">
         <div className="header-content">
           <div className="brand">
@@ -187,7 +223,10 @@ export default function App() {
               <p className="brand-subtitle">AI-Powered Copywriting</p>
             </div>
           </div>
-          <button className="pro-btn">
+          <button 
+            onClick={() => alert('Pro Plan billing modal would open here!')}
+            className="pro-btn active:scale-95 transition-all"
+          >
             <Sparkles className="icon-sm" />
             Pro Plan
           </button>
@@ -196,9 +235,7 @@ export default function App() {
 
       <main className="main-content">
         <div className="content-grid">
-          {/* Input Section */}
           <div className="input-section">
-            {/* Topic Input */}
             <div className="card">
               <h2 className="card-title">
                 <Target className="icon-md text-primary" />
@@ -212,7 +249,6 @@ export default function App() {
               />
             </div>
 
-            {/* Platform Selection */}
             <div className="card">
               <h2 className="card-title">Choose Platform</h2>
               <div className="platform-grid">
@@ -231,7 +267,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Tone Selection */}
             <div className="card">
               <h2 className="card-title">Select Tone</h2>
               <div className="tone-grid">
@@ -248,7 +283,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Generate Button */}
             <button
               onClick={handleGenerate}
               disabled={isGenerating}
@@ -267,7 +301,6 @@ export default function App() {
               )}
             </button>
 
-            {/* Quick Templates */}
             <div className="card">
               <h2 className="card-title">Quick Templates</h2>
               <div className="templates-grid">
@@ -299,11 +332,27 @@ export default function App() {
             </div>
           </div>
 
-          {/* Output Section */}
           <div className="output-section">
+            <div className="output-tabs">
+              <button 
+                onClick={() => setActiveTab('generate')} 
+                className={\`tab-btn \${activeTab === 'generate' ? 'active' : ''}\`}
+              >
+                Generated
+              </button>
+              <button 
+                onClick={() => setActiveTab('saved')} 
+                className={\`tab-btn \${activeTab === 'saved' ? 'active' : ''}\`}
+              >
+                Saved ({savedCopies.length})
+              </button>
+            </div>
+
             <div className="output-header">
-              <h2 className="section-title">Generated Copy</h2>
-              {generatedCopies.length > 0 && (
+              <h2 className="section-title">
+                {activeTab === 'generate' ? 'Results' : 'Saved Collection'}
+              </h2>
+              {activeTab === 'generate' && generatedCopies.length > 0 && (
                 <button onClick={handleGenerate} className="regenerate-btn">
                   <RefreshCw className="icon-sm" />
                   Regenerate
@@ -311,31 +360,60 @@ export default function App() {
               )}
             </div>
 
-            {generatedCopies.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">
-                  <Sparkles className="icon-lg" />
+            {activeTab === 'generate' ? (
+              generatedCopies.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">
+                    <Sparkles className="icon-lg" />
+                  </div>
+                  <h3 className="empty-title">Ready to Create</h3>
+                  <p className="empty-desc">
+                    Enter your topic, choose a platform and tone, then click generate.
+                  </p>
                 </div>
-                <h3 className="empty-title">Ready to Create</h3>
-                <p className="empty-desc">
-                  Enter your topic, choose a platform and tone, then click generate to create engaging copy.
-                </p>
-              </div>
+              ) : (
+                <div className="copies-list">
+                  {generatedCopies.map((copy, index) => (
+                    <CopyCard
+                      key={index}
+                      text={copy}
+                      platform={selectedPlatform}
+                      onCopy={() => handleCopy(copy, index)}
+                      copied={copiedIndex === index}
+                      isSaved={savedCopies.some(s => s.text === copy)}
+                      onToggleSave={() => toggleSave(copy, selectedPlatform)}
+                    />
+                  ))}
+                </div>
+              )
             ) : (
-              <div className="copies-list">
-                {generatedCopies.map((copy, index) => (
-                  <CopyCard
-                    key={index}
-                    text={copy}
-                    platform={selectedPlatform}
-                    onCopy={() => handleCopy(copy, index)}
-                    copied={copiedIndex === index}
-                  />
-                ))}
-              </div>
+              savedCopies.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon text-muted">
+                    <Heart className="icon-lg" />
+                  </div>
+                  <h3 className="empty-title">No Saved Copies</h3>
+                  <p className="empty-desc">
+                    Click the heart icon on any generated copy to save it for later.
+                  </p>
+                </div>
+              ) : (
+                <div className="copies-list">
+                  {savedCopies.map((item, index) => (
+                    <CopyCard
+                      key={index}
+                      text={item.text}
+                      platform={item.platform}
+                      onCopy={() => handleCopy(item.text, index)}
+                      copied={copiedIndex === index}
+                      isSaved={true}
+                      onToggleSave={() => toggleSave(item.text, item.platform)}
+                    />
+                  ))}
+                </div>
+              )
             )}
 
-            {/* Tips Section */}
             <div className="tips-card">
               <h3 className="tips-title">
                 <Zap className="icon-md" />
@@ -754,6 +832,40 @@ body {
   gap: 1.5rem;
 }
 
+.output-tabs {
+  display: flex;
+  gap: 8px;
+  background: var(--surface);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: var(--text);
+  background: var(--border-light);
+}
+
+.tab-btn.active {
+  background: var(--bg);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
 .output-header {
   display: flex;
   align-items: center;
@@ -798,12 +910,12 @@ body {
   width: 64px;
   height: 64px;
   margin: 0 auto 1rem;
-  border-radius: var(--radius-lg);
+  border-radius: 50%;
   background: var(--primary-bg);
+  color: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--primary);
 }
 
 .empty-title {
@@ -814,13 +926,14 @@ body {
 }
 
 .empty-desc {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
-  max-width: 320px;
+  max-width: 250px;
   margin: 0 auto;
+  line-height: 1.5;
 }
 
-/* Copy Cards */
+/* Copies List */
 .copies-list {
   display: flex;
   flex-direction: column;
@@ -830,26 +943,21 @@ body {
 .copy-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  padding: 1.25rem;
-  transition: all 0.2s;
-}
-
-.copy-card:hover {
-  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
 }
 
 .copy-card-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 1rem;
 }
 
 .platform-icon {
   width: 32px;
   height: 32px;
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -858,76 +966,81 @@ body {
 
 .copy-btn {
   padding: 8px;
-  background: transparent;
+  background: var(--border-light);
   border: none;
-  border-radius: var(--radius-sm);
-  color: var(--text-light);
+  border-radius: 8px;
+  color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .copy-btn:hover {
-  color: var(--primary);
-  background: var(--primary-bg);
+  background: var(--border);
+  color: var(--text);
 }
 
 .copy-text {
   font-size: 0.9375rem;
   line-height: 1.6;
   color: var(--text);
-  white-space: pre-line;
+  white-space: pre-wrap;
+  margin-bottom: 1.5rem;
 }
 
 .copy-card-footer {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-top: 1rem;
+  gap: 12px;
   padding-top: 1rem;
-  border-top: 1px solid var(--border-light);
+  border-top: 1px solid var(--border);
 }
 
 .action-btn {
-  padding: 6px;
+  padding: 8px;
   background: transparent;
   border: none;
-  color: var(--text-light);
+  border-radius: 8px;
+  color: var(--text-muted);
   cursor: pointer;
-  transition: color 0.2s;
+  transition: all 0.2s;
 }
 
 .action-btn:hover {
-  color: var(--primary);
+  background: var(--border-light);
+  color: var(--text);
 }
 
 .char-count {
   margin-left: auto;
-  font-size: 0.75rem;
-  color: var(--text-light);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
-/* Tips Card */
+/* Tips */
 .tips-card {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  background: linear-gradient(135deg, var(--bg) 0%, #EFF6FF 100%);
+  border: 1px solid #BFDBFE;
   border-radius: var(--radius-xl);
   padding: 1.5rem;
-  color: white;
+  margin-top: 1rem;
 }
 
 .tips-title {
-  font-size: 1rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1E3A8A;
+  margin-bottom: 1rem;
 }
 
 .tips-list {
+  list-style: none;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  list-style: none;
 }
 
 .tip-item {
@@ -935,48 +1048,14 @@ body {
   align-items: flex-start;
   gap: 8px;
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: #1E40AF;
+  line-height: 1.5;
 }
 
-.tip-item svg {
+.tip-item .icon-sm {
   flex-shrink: 0;
   margin-top: 2px;
 }
-
-/* Responsive */
-@media (max-width: 640px) {
-  .header-content {
-    padding: 0 1rem;
-  }
-
-  .main-content {
-    padding: 1rem;
-  }
-
-  .card {
-    padding: 1rem;
-  }
-
-  .templates-grid {
-    grid-template-columns: 1fr;
-  }
-}
-`,
-
-    "src/index.css": `* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Sora', system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-#root {
-  min-height: 100vh;
-}`
+`
   }
 };

@@ -659,9 +659,9 @@ ${assetContext}
 `
 
         // ── Smart Model Selection ─────────────────────────────────────────────
-        // Use faster Codex for simple questions/greetings, GPT-5.4 for complex coding tasks
+        // Use faster nano model for simple questions/greetings, GPT-5 for complex coding tasks
         const complexity = classifyMessageComplexity(messages)
-        const selectedModel = complexity === 'fast' ? 'codex' : 'gpt-5'
+        const selectedModel = complexity === 'fast' ? 'gpt-5-nano' : 'gpt-5'
 
         console.log('[b-coder/chat] Smart routing:', { complexity, selectedModel })
 
@@ -720,6 +720,10 @@ ${assetContext}
         })
 
     } catch (error) {
+        console.error('[b-coder/chat] ❌ Request failed:', error instanceof Error ? error.message : error)
+        if (error instanceof Error && error.stack) {
+            console.error('[b-coder/chat] Stack:', error.stack)
+        }
         return new Response(
             JSON.stringify({
                 error: 'Failed to process chat request',

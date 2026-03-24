@@ -142,7 +142,7 @@ export default function Sidebar() {
           <NavLink to="/settings" className="nav-item">
             <Settings size={20} /> <span>Settings</span>
           </NavLink>
-          <button className="nav-item logout-btn">
+          <button className="nav-item logout-btn" onClick={() => alert('Logging out...')}>
             <LogOut size={20} /> <span>Logout</span>
           </button>
         </div>
@@ -162,11 +162,11 @@ export default function Header() {
       </div>
       
       <div className="header-actions">
-        <button className="btn btn-primary shadow-sm">
+        <button className="btn btn-primary shadow-sm" onClick={() => alert('Add transaction modal coming soon!')}>
           <Plus size={16} /> New Transaction
         </button>
         <div className="action-divider"></div>
-        <button className="icon-btn relative">
+        <button className="icon-btn relative" onClick={() => alert('Showing recent activities')}>
           <Bell size={20} />
           <span className="badge">3</span>
         </button>
@@ -343,7 +343,7 @@ export default function TransactionsTable() {
     <div className="recent-section card lg-col-span-3">
       <div className="card-header">
         <h3 className="card-title">Recent Transactions</h3>
-        <button className="btn-link">View All</button>
+        <button className="btn-link" onClick={() => alert('Redirecting to full history...')}>View All</button>
       </div>
 
       <div className="table-responsive">
@@ -385,7 +385,7 @@ export default function Dashboard() {
           <p className="page-subtitle">Track your revenue and expenses in real-time.</p>
         </div>
         <div className="header-buttons">
-          <button className="btn btn-outline"><Download size={16} /> Export CSV</button>
+          <button className="btn btn-outline" onClick={() => alert('CSV file prepared for download!')}><Download size={16} /> Export CSV</button>
         </div>
       </div>
 

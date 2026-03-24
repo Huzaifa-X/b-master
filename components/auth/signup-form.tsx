@@ -97,7 +97,7 @@ export function SignupForm({
       } else {
         // Handle other errors
         console.error("Registration error:", error)
-        setErrors({ email: "An unexpected error occurred. Please try again." })
+        setErrors({ email: t("auth.errors.somethingWentWrong") })
       }
     }
   }
@@ -222,7 +222,7 @@ export function SignupForm({
           {errors.confirmPassword ? (
             <p className="text-sm text-red-600 mt-1 animate-fade-in">{errors.confirmPassword}</p>
           ) : (
-            <FieldDescription>Please confirm your password.</FieldDescription>
+            <FieldDescription>{t("auth.confirmPasswordHint")}</FieldDescription>
           )}
         </Field>
 

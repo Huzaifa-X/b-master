@@ -20,6 +20,7 @@ import { useSession } from "next-auth/react"
 import { useCreateGroupChat } from "@/hooks/use-assistant-group-chat"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { useLocale } from "@/lib/i18n"
 
 interface CreateGroupDialogProps {
   open: boolean
@@ -34,6 +35,7 @@ export function CreateGroupDialog({
   assistantId,
   onGroupCreated
 }: CreateGroupDialogProps) {
+  const { t } = useLocale()
   const [searchQuery, setSearchQuery] = useState("")
   const [groupName, setGroupName] = useState("")
   const [description, setDescription] = useState("")
@@ -71,11 +73,11 @@ export function CreateGroupDialog({
 
   const handleCreate = async () => {
     if (!groupName.trim()) {
-      toast.error("Please enter a group name")
+      toast.error(t("group.enterGroupName"))
       return
     }
     if (selectedIds.size < 1) {
-      toast.error("Please select at least one member")
+      toast.error(t("group.atLeastOneMember"))
       return
     }
 
@@ -86,11 +88,11 @@ export function CreateGroupDialog({
     })
 
     if (result.success && result.group) {
-      toast.success(`Group "${result.group.name}" created`)
+      toast.success(t("group.groupCreated", { name: result.group.name }))
       onGroupCreated?.(result.group.id)
       handleClose()
     } else {
-      toast.error(result.error || "Failed to create group")
+      toast.error(result.error || t("group.failedToCreate"))
     }
   }
 
@@ -108,20 +110,20 @@ export function CreateGroupDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            New Group Chat
+            {t("group.newGroupChat")}
           </DialogTitle>
           <DialogDescription>
-            Create a group conversation with multiple contacts.
+            {t("group.createDescription")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Group name */}
           <div className="space-y-1">
-            <Label htmlFor="group-name">Group Name *</Label>
+            <Label htmlFor="group-name">{t("group.groupNameLabel")}</Label>
             <Input
               id="group-name"
-              placeholder="e.g. Project Alpha Team"
+              placeholder={t("group.groupNamePlaceholder")}
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
             />
@@ -129,10 +131,10 @@ export function CreateGroupDialog({
 
           {/* Description (optional) */}
           <div className="space-y-1">
-            <Label htmlFor="description">Description (optional)</Label>
+            <Label htmlFor="description">{t("group.groupDescriptionLabel")}</Label>
             <Input
               id="description"
-              placeholder="What is this group about?"
+              placeholder={t("group.groupDescriptionPlaceholder")}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
@@ -163,11 +165,11 @@ export function CreateGroupDialog({
 
           {/* Contact search */}
           <div className="space-y-2">
-            <Label>Add Members</Label>
+            <Label>{t("group.addMembers")}</Label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search contacts..."
+                placeholder={t("group.searchContacts")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -178,7 +180,7 @@ export function CreateGroupDialog({
               {isLoading ? (
                 <div className="text-center py-6">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2" />
-                  <p className="text-xs text-muted-foreground">Loading contacts...</p>
+                  <p className="text-xs text-muted-foreground">{t("group.loadingContacts")}</p>
                 </div>
               ) : filteredContacts.length > 0 ? (
                 filteredContacts.map((contact) => {
@@ -207,7 +209,7 @@ export function CreateGroupDialog({
                 })
               ) : (
                 <div className="text-center py-6">
-                  <p className="text-xs text-muted-foreground">No contacts found</p>
+                  <p className="text-xs text-muted-foreground">{t("group.noContactsFound")}</p>
                 </div>
               )}
             </div>
@@ -216,13 +218,13 @@ export function CreateGroupDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             onClick={handleCreate}
             disabled={createGroup.isPending || !groupName.trim() || selectedIds.size < 1}
           >
-            {createGroup.isPending ? "Creating..." : `Create Group (${selectedIds.size + 1})`}
+            {createGroup.isPending ? t("group.creating") : t("group.createWithNMembers", { n: selectedIds.size + 1 })}
           </Button>
         </DialogFooter>
       </DialogContent>

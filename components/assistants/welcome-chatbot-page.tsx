@@ -9,6 +9,7 @@ import { TypewriterEffect } from "@/components/ui/typewriter-effect"
 import { ChatInput } from "@/components/assistants/chat-input"
 import { createChatWithMessage } from "@/app/actions/chat.action"
 import { toast } from "sonner"
+import { useLocale } from "@/lib/i18n"
 import { useQueryClient } from "@tanstack/react-query"
 
 interface WelcomeChatbotPageProps {
@@ -23,23 +24,35 @@ export function WelcomeChatbotPage({
   const { data: session } = useSession()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const { t } = useLocale()
   const [input, setInput] = useState("")
   const [isCreating, setIsCreating] = useState(false)
 
   // Memoize welcome messages to prevent re-rendering on input changes
   const randomMessage = useMemo(() => {
-    const WELCOME_MESSAGES = [
-      `How is it going, ${session?.user?.name || "User"}?`,
-      `Time to increase your knowledge, ${session?.user?.name || "User"}`,
-      `Ready to explore something new, ${session?.user?.name || "User"}?`,
-      `What brings you here today, ${session?.user?.name || "User"}?`,
-      `Let's make today productive, ${session?.user?.name || "User"}!`,
-      `Great to see you back, ${session?.user?.name || "User"}!`,
-      `What can I help you with, ${session?.user?.name || "User"}?`,
-      `Let's dive into something interesting, ${session?.user?.name || "User"}!`,
+    const greetingKeys = [
+      "chat.welcome.greeting1",
+      "chat.welcome.greeting2",
+      "chat.welcome.greeting3",
+      "chat.welcome.greeting4",
+      "chat.welcome.greeting5",
+      "chat.welcome.greeting6",
+      "chat.welcome.greeting7",
+      "chat.welcome.greeting8",
     ]
-    return WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)]
-  }, [session?.user?.name])
+    const key = greetingKeys[Math.floor(Math.random() * greetingKeys.length)]
+    return t(key, { name: session?.user?.name || "User" })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.name]) // Remove 't' from deps - it changes on every render
+
+  // Memoize the words array to prevent TypewriterEffect from restarting on input changes
+  const typewriterWords = useMemo(() =>
+    randomMessage.split(" ").map((word) => ({
+      text: word,
+      className: "text-2xl md:text-3xl font-light",
+    })),
+    [randomMessage]
+  )
 
   const handleSend = async (
     message: string,
@@ -114,7 +127,7 @@ export function WelcomeChatbotPage({
 
     } catch (error) {
       console.error("[WelcomePage] Error creating chat:", error)
-      toast.error("Failed to start conversation")
+      toast.error(t("chat.errors.failedToStart"))
       setIsCreating(false)
     }
   }
@@ -138,10 +151,7 @@ export function WelcomeChatbotPage({
         {/* Typewriter Text */}
         <div className="w-full min-h-[80px] md:min-h-[100px] flex items-center justify-center px-4">
           <TypewriterEffect
-            words={randomMessage.split(" ").map((word) => ({
-              text: word,
-              className: "text-2xl md:text-3xl font-light",
-            }))}
+            words={typewriterWords}
             cursorClassName="hidden"
           />
         </div>
@@ -156,8 +166,8 @@ export function WelcomeChatbotPage({
             disabled={isCreating}
             placeholder={
               chatType === "ask-b"
-                ? "Ask me anything..."
-                : "Ask this assistant..."
+                ? t("chat.placeholder.askB")
+                : t("chat.placeholder.assistant")
             }
             mode={chatType}
             assistantId={assistantId}

@@ -50,6 +50,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useLocale } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 export function NavListAssistant() {
@@ -57,6 +58,7 @@ export function NavListAssistant() {
   const router = useRouter()
   const pathname = usePathname()
   const assistantStore = useAssistantStore()
+  const { t } = useLocale()
 
   // All hooks must be called before any conditional returns
   const assistantId = assistantStore.currentAssistantId || ""
@@ -133,7 +135,7 @@ export function NavListAssistant() {
     return (
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
         <SidebarGroupLabel>
-          Chats
+          {t("chat.history")}
         </SidebarGroupLabel>
         <SidebarMenu>
           {/* Show 5 skeleton items while loading */}
@@ -154,7 +156,7 @@ export function NavListAssistant() {
     <>
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
         <SidebarGroupLabel>
-          Chats
+          {t("chat.history")}
         </SidebarGroupLabel>
         <SidebarMenu>
 
@@ -163,7 +165,7 @@ export function NavListAssistant() {
             <SidebarMenuItem>
               <SidebarMenuButton disabled className="text-muted-foreground">
                 <MessageSquare className="h-4 w-4" />
-                <span className="text-xs">No chats yet</span>
+                <span className="text-xs">{t("chat.noChats")}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : (
@@ -178,10 +180,10 @@ export function NavListAssistant() {
                 >
                   <div onClick={() => handleSelectChat(chat.id)}>
                     <div className="flex-1 min-w-0">
-                      {chat.topic === "New Chat" || (chat.topic && chat.topic.length > 60) ? (
-                        <div className="truncate">Untitled</div>
+                      {chat.topic === t("chat.newChat") || (chat.topic && chat.topic.length > 60) ? (
+                        <div className="truncate">{t("chat.newChat")}</div>
                       ) : (
-                        <div className="truncate">{chat.topic}</div>
+                        <div className="truncate">{chat.topic || t("common.untitled")}</div>
                       )}
                     </div>
                   </div>
@@ -203,7 +205,7 @@ export function NavListAssistant() {
                       onClick={(e) => handleRename(chat.id, chat.topic, e)}
                     >
                       <Pencil className="h-4 w-4" />
-                      <span>Rename</span>
+                      <span>{t("common.edit")}</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -211,7 +213,7 @@ export function NavListAssistant() {
                       onClick={(e) => handleDelete(chat.id, e)}
                     >
                       <Trash2 className="h-4 w-4" />
-                      <span>Delete</span>
+                      <span>{t("common.delete")}</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -225,15 +227,15 @@ export function NavListAssistant() {
       <Dialog open={!!renamingChatId} onOpenChange={(open) => !open && setRenamingChatId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rename Chat</DialogTitle>
+            <DialogTitle>{t("chat.rename")}</DialogTitle>
             <DialogDescription>
-              Enter a new name for this conversation
+              {t("chat.renameDescription")}
             </DialogDescription>
           </DialogHeader>
           <Input
             value={newChatName}
             onChange={(e) => setNewChatName(e.target.value)}
-            placeholder="Chat name"
+            placeholder={t("chat.namePlaceholder")}
             autoFocus
             onKeyDown={(e) => {
               if (e.key === "Enter") handleRenameConfirm()
@@ -242,13 +244,13 @@ export function NavListAssistant() {
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenamingChatId(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               onClick={handleRenameConfirm}
               disabled={!newChatName.trim() || isRenaming}
             >
-              {isRenaming ? "Saving..." : "Save"}
+              {isRenaming ? t("common.saving") : t("common.save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -258,19 +260,19 @@ export function NavListAssistant() {
       <AlertDialog open={!!deletingChatId} onOpenChange={(open) => !open && setDeletingChatId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Chat</AlertDialogTitle>
+            <AlertDialogTitle>{t("chat.delete")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this chat? This action cannot be undone.
+              {t("chat.deleteDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isDeleting}
             >
-              {isDeleting ? "Deleting..." : "Delete"}
+              {isDeleting ? t("common.deleting") : t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

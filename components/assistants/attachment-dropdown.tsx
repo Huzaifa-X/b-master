@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { motion } from "motion/react"
 import { toast } from "sonner"
+import { useLocale } from "@/lib/i18n"
 
 interface AttachmentDropdownProps {
     onFileSelect?: (files: File[]) => void
@@ -52,6 +53,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
     chatWithAPIEnabled = false,
     dropboxEnabled = false,
 }) => {
+    const { t } = useLocale()
     const [isOpen, setIsOpen] = useState(false)
     const [selectedMode, setSelectedMode] = useState<"webSearch" | "research" | "chatWithAPI" | "dropbox" | "artifact" | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -225,7 +227,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
             // Show error for invalid files
             if (invalidFiles.length > 0) {
                 toast.error(
-                    `Unsupported file type: ${invalidFiles.join(', ')}. Supported: Images (JPG, PNG, GIF, WebP), Documents (PDF, TXT, CSV, MD), Code files.`
+                    t("chat.errors.unsupportedFileType", { files: invalidFiles.join(', ') })
                 )
             }
 
@@ -255,7 +257,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                             variant="ghost"
                             size="icon"
                             className="size-[34px] rounded-full hover:bg-white hover:text-black focus:bg-muted focus:text-black"
-                            aria-label="Add attachment"
+                            aria-label={t("chat.input.addAttachment")}
                             disabled={disabled}
                         >
                             <motion.div
@@ -275,14 +277,14 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                             className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
                         >
                             <FileIcon className="mr-2 size-4" />
-                            <span>Attach File</span>
+                            <span>{t("chat.input.attachFile")}</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             onClick={handleWebSearch}
                             className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
                         >
                             <Globe className="mr-2 size-4" />
-                            <span>Web Search</span>
+                            <span>{t("chat.input.webSearch")}</span>
                         </DropdownMenuItem>
                         {mode === "assistant" && (
                             <>
@@ -291,14 +293,14 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                                     className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
                                 >
                                     <Search className="mr-2 size-4" />
-                                    <span>Research</span>
+                                    <span>{t("chat.input.research")}</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                     onClick={handleChatWithArtifact}
                                     className="cursor-pointer hover:bg-muted hover:text-black focus:bg-muted focus:text-black"
                                 >
                                     <Sparkles className="mr-2 size-4" />
-                                    <span>Chat with Artifact</span>
+                                    <span>{t("chat.input.chatWithArtifact")}</span>
                                 </DropdownMenuItem>
 
 
@@ -313,18 +315,18 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                         {selectedMode === "webSearch" ? (
                             <>
                                 <Globe className="size-3.5" />
-                                <span className="font-medium">Web Search</span>
+                                <span className="font-medium">{t("chat.input.webSearch")}</span>
                             </>
                         ) : selectedMode === "research" ? (
                             <>
                                 <Search className="size-3.5" />
-                                <span className="font-medium">Research</span>
+                                <span className="font-medium">{t("chat.input.research")}</span>
                             </>
                         ) : null}
                         <button
                             onClick={handleRemoveMode}
                             className="ml-1 rounded-full hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                            aria-label="Remove mode"
+                            aria-label={t("chat.input.removeMode")}
                             disabled={disabled}
                         >
                             <X className="size-3.5" />
@@ -345,7 +347,7 @@ export const AttachmentDropdown: FC<AttachmentDropdownProps> = ({
                         <button
                             onClick={() => onRemoveArtifact?.(artifact.id)}
                             className="ml-0.5 rounded-full hover:bg-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                            aria-label={`Remove artifact ${artifact.name}`}
+                            aria-label={t("chat.input.removeArtifact", { name: artifact.name })}
                             disabled={disabled}
                         >
                             <X className="size-3.5 text-purple-600" />

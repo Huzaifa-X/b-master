@@ -51,7 +51,7 @@ export function NavUser({
   }
 
   // Get plan name or default to "Free"
-  const planName = subscription?.plan?.title || "Free"
+  const planName = subscription?.plan?.title || t("common.free")
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -153,7 +153,7 @@ export function NavUser({
                   router.push("/login")
                   router.refresh()
                 } catch (error) {
-                  toast.error("Failed to sign out", { id: "logout" })
+                  toast.error(t("auth.signOutError"), { id: "logout" })
                 }
               }}
             >

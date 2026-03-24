@@ -3,6 +3,7 @@
 import { File, Link2, ExternalLink } from "lucide-react"
 import { format } from "date-fns"
 import { HtmlCodePreview } from "@/components/assistants/html-code-preview"
+import { useLocale } from "@/lib/i18n"
 
 /** Build a server-proxy URL so the browser never hits S3 directly */
 function toProxyUrl(url: string | null | undefined): string | null {
@@ -106,6 +107,7 @@ export function MessageBubble({
   isOwn,
   senderName
 }: MessageBubbleProps) {
+  const { t } = useLocale()
   const isImage = isImageAttachment(messageType, attachmentName)
   const isUrl = isUrlMessage(messageType)
 
@@ -134,7 +136,7 @@ export function MessageBubble({
             >
               <img
                 src={resolvedAttachmentUrl}
-                alt={attachmentName ?? "Image"}
+                alt={attachmentName ?? t("common.image")}
                 className="max-w-full h-auto max-h-[320px] object-contain rounded-lg"
                 loading="lazy"
               />
@@ -196,7 +198,7 @@ export function MessageBubble({
                 isOwn ? "text-primary-foreground/90" : "text-primary"
               }`}
             >
-              {attachmentName ?? "Download File"}
+              {attachmentName ?? t("common.downloadFile")}
             </span>
           </a>
         )}

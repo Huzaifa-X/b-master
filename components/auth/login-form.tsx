@@ -80,24 +80,24 @@ export function LoginForm({
       if (result?.error) {
         // Check for specific error messages
         if (result.error.includes("Email not verified")) {
-          toast.error("Email not verified", {
-            description: "Please check your email and verify your account first",
+          toast.error(t("auth.errors.emailNotVerified"), {
+            description: t("auth.errors.emailNotVerifiedDescription"),
             action: {
-              label: "Resend",
+              label: t("auth.errors.resend"),
               onClick: () => handleResendVerification(validatedData.email)
             },
           })
         } else if (result.error.includes("No user found")) {
-          toast.error("Account not found", {
-            description: "No account exists with this email",
+          toast.error(t("auth.errors.accountNotFound"), {
+            description: t("auth.errors.accountNotFoundDescription"),
           })
         } else if (result.error.includes("Invalid password")) {
-          toast.error("Invalid password", {
-            description: "The password you entered is incorrect",
+          toast.error(t("auth.errors.invalidPassword"), {
+            description: t("auth.errors.invalidPasswordDescription"),
           })
-          setErrors({ password: "Incorrect password" })
+          setErrors({ password: t("auth.errors.incorrectPassword") })
         } else {
-          toast.error("Login failed", {
+          toast.error(t("auth.errors.loginFailed"), {
             description: result.error,
           })
         }
@@ -125,8 +125,8 @@ export function LoginForm({
       } else {
         // Handle other errors
         console.error("Login error:", error)
-        toast.error("Something went wrong", {
-          description: "Please try again later",
+        toast.error(t("auth.errors.somethingWentWrong"), {
+          description: t("auth.errors.tryAgainLater"),
         })
       }
       setIsLoading(false)

@@ -1,6 +1,4 @@
-import { TemplateDefinition } from './index';
-
-export const websiteTemplate: TemplateDefinition = {
+export const websiteTemplate = {
   id: "website",
   name: "Website",
   description: "Modern landing page with hero, features, testimonials, and CTA sections",
@@ -67,22 +65,24 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )`,
 
-    "src/App.jsx": `import { useState } from 'react'
-import {
-  Menu, X, ArrowRight, Zap, Shield, BarChart3,
-  Star, ChevronRight, Sparkles
-} from 'lucide-react'
-import './App.css'
+    "src/index.css": `* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+`,
 
-// Navigation
-function Navbar() {
+    // --- COMPONENTS ---
+    "src/components/layout/Navbar.jsx": `import { useState } from 'react'
+import { Menu, X, Sparkles } from 'lucide-react'
+
+export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
     <nav className="navbar">
       <div className="nav-container">
         <div className="nav-content">
-          {/* Logo */}
           <div className="brand">
             <div className="brand-icon">
               <Sparkles className="icon-sm" />
@@ -90,7 +90,6 @@ function Navbar() {
             <span className="brand-name">Brand</span>
           </div>
 
-          {/* Desktop Nav */}
           <div className="nav-links">
             <a href="#features" className="nav-link">Features</a>
             <a href="#testimonials" className="nav-link">Testimonials</a>
@@ -98,14 +97,12 @@ function Navbar() {
             <button className="nav-btn">Get Started</button>
           </div>
 
-          {/* Mobile Menu Button */}
           <button onClick={() => setIsOpen(!isOpen)} className="mobile-menu-btn">
             {isOpen ? <X className="icon-md" /> : <Menu className="icon-md" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {isOpen && (
         <div className="mobile-menu">
           <a href="#features" className="mobile-link">Features</a>
@@ -116,20 +113,44 @@ function Navbar() {
       )}
     </nav>
   )
-}
+}`,
 
-// Hero Section
-function Hero() {
+    "src/components/layout/Footer.jsx": `import { Sparkles } from 'lucide-react'
+
+export default function Footer() {
+  return (
+    <footer className="footer">
+      <div className="footer-container">
+        <div className="footer-content">
+          <div className="brand">
+            <div className="brand-icon">
+              <Sparkles className="icon-sm" />
+            </div>
+            <span className="brand-name">Brand</span>
+          </div>
+          <div className="footer-links">
+            <a href="#" className="footer-link">Privacy</a>
+            <a href="#" className="footer-link">Terms</a>
+            <a href="#" className="footer-link">Contact</a>
+          </div>
+          <p className="footer-copy">© 2024 Brand. All rights reserved.</p>
+        </div>
+      </div>
+    </footer>
+  )
+}`,
+
+    "src/components/sections/Hero.jsx": `import { ArrowRight, Star } from 'lucide-react'
+
+export default function Hero({ onGetStarted }) {
   return (
     <section className="hero">
       <div className="hero-container">
-        {/* Badge */}
         <div className="hero-badge">
           <span className="badge-dot" />
           <span className="badge-text">New: Version 2.0 is here</span>
         </div>
 
-        {/* Headline */}
         <h1 className="hero-title">
           Build something
           <span className="gradient-text"> amazing</span>
@@ -141,16 +162,14 @@ function Hero() {
           boost productivity, and scale with confidence.
         </p>
 
-        {/* CTAs */}
         <div className="hero-ctas">
-          <button className="btn-primary">
+          <button onClick={onGetStarted} className="btn-primary">
             Start Free Trial
             <ArrowRight className="icon-sm" />
           </button>
-          <button className="btn-secondary">Watch Demo</button>
+          <button className="btn-secondary" onClick={() => alert('Demo video would play here!')}>Watch Demo</button>
         </div>
 
-        {/* Social Proof */}
         <div className="social-proof">
           <div className="avatars">
             {[1,2,3,4,5].map(i => (
@@ -167,10 +186,11 @@ function Hero() {
       </div>
     </section>
   )
-}
+}`,
 
-// Features Section
-function Features() {
+    "src/components/sections/Features.jsx": `import { Zap, Shield, BarChart3 } from 'lucide-react'
+
+export default function Features() {
   const features = [
     {
       icon: Zap,
@@ -213,10 +233,11 @@ function Features() {
       </div>
     </section>
   )
-}
+}`,
 
-// Testimonials Section
-function Testimonials() {
+    "src/components/sections/Testimonials.jsx": `import { Star } from 'lucide-react'
+
+export default function Testimonials() {
   const testimonials = [
     {
       quote: "This platform transformed how we work. We've seen a 40% increase in productivity.",
@@ -268,74 +289,71 @@ function Testimonials() {
       </div>
     </section>
   )
-}
+}`,
 
-// CTA Section
-function CTA() {
+    "src/components/sections/CTA.jsx": `import { ArrowRight } from 'lucide-react'
+
+export default function CTA({ onGetStarted }) {
   return (
-    <section className="cta-section">
+    <section className="cta">
       <div className="cta-container">
         <div className="cta-card">
-          <div className="cta-bg">
-            <div className="cta-blob cta-blob-1" />
-            <div className="cta-blob cta-blob-2" />
-          </div>
-          <div className="cta-content">
-            <h2 className="cta-title">Ready to get started?</h2>
-            <p className="cta-subtitle">
-              Join thousands of satisfied customers and take your business to the next level.
-            </p>
-            <div className="cta-buttons">
-              <button className="cta-btn-primary">
-                Start Free Trial
-                <ChevronRight className="icon-sm" />
-              </button>
-              <button className="cta-btn-secondary">Talk to Sales</button>
-            </div>
+          <div className="cta-line" />
+          <h2 className="cta-title">Ready to scale your business?</h2>
+          <p className="cta-subtitle">
+            Join 10,000+ businesses growing with our platform. 
+            No credit card required. Cancel anytime.
+          </p>
+          <div className="cta-actions">
+            <button onClick={onGetStarted} className="cta-btn-primary">
+              Get Started for Free
+              <ArrowRight className="icon-sm" />
+            </button>
+            <button className="cta-btn-secondary" onClick={() => alert('Talk to Sales started!')}>Talk to Sales</button>
           </div>
         </div>
       </div>
     </section>
   )
-}
+}`,
 
-// Footer
-function Footer() {
-  return (
-    <footer className="footer">
-      <div className="footer-container">
-        <div className="footer-content">
-          <div className="brand">
-            <div className="brand-icon">
-              <Sparkles className="icon-sm" />
-            </div>
-            <span className="brand-name">Brand</span>
-          </div>
-          <div className="footer-links">
-            <a href="#" className="footer-link">Privacy</a>
-            <a href="#" className="footer-link">Terms</a>
-            <a href="#" className="footer-link">Contact</a>
-          </div>
-          <p className="footer-copy">© 2024 Brand. All rights reserved.</p>
-        </div>
-      </div>
-    </footer>
-  )
-}
+    "src/App.jsx": `import React, { useState } from 'react'
+import Navbar from './components/layout/Navbar'
+import Hero from './components/sections/Hero'
+import Features from './components/sections/Features'
+import Testimonials from './components/sections/Testimonials'
+import CTA from './components/sections/CTA'
+import Footer from './components/layout/Footer'
+import LeadForm from './components/LeadForm'
+import './App.css'
 
-// Main App
 export default function App() {
+  const [showLead, setShowLead] = useState(false)
+
+  const openModal = () => {
+    setShowLead(true)
+    document.body.style.overflow = 'hidden'
+  }
+
+  const closeModal = () => {
+    setShowLead(false)
+    document.body.style.overflow = 'auto'
+  }
+
   return (
     <div className="app">
-      <Navbar />
-      <Hero />
+      <Navbar onGetStarted={openModal} />
+      <Hero onGetStarted={openModal} />
       <Features />
       <Testimonials />
-      <CTA />
+      <CTA onGetStarted={openModal} />
       <Footer />
+
+      {showLead && <LeadForm onClose={closeModal} />}
     </div>
   )
-}`,
+}
+`,
 
     "src/App.css": `
 :root {
@@ -385,6 +403,79 @@ body {
   min-height: 100vh;
   background: var(--bg);
 }
+
+/* Lead Modal */
+.lead-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.lead-modal {
+  background: white;
+  width: 100%;
+  max-width: 480px;
+  border-radius: 24px;
+  padding: 2.5rem;
+  position: relative;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+  animation: modalSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalSlide {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.close-btn {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  padding: 8px;
+  border: none;
+  background: var(--bg-light);
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background: var(--border);
+  color: var(--text);
+  transform: rotate(90deg);
+}
+
+.lead-header { margin-bottom: 2rem; }
+.lead-header h2 { font-size: 1.75rem; font-weight: 700; color: var(--text); margin-bottom: 0.5rem; }
+.lead-header p { color: var(--text-muted); font-size: 0.9375rem; }
+
+.lead-form { display: flex; flex-direction: column; gap: 1.25rem; }
+.form-group { display: flex; flex-direction: column; gap: 0.5rem; }
+.form-group label { font-size: 0.8125rem; font-weight: 600; color: var(--text); text-transform: uppercase; letter-spacing: 0.05em; }
+.form-group input { 
+  padding: 0.75rem 1rem; 
+  border: 1px solid var(--border); 
+  border-radius: 12px; 
+  font-family: inherit; 
+  font-size: 0.9375rem;
+  transition: all 0.2s;
+}
+.form-group input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-bg); }
+
+.lead-success {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.lead-success h3 { font-size: 1.5rem; margin: 1rem 0 0.5rem; }
+.lead-success p { color: var(--text-muted); }
 
 /* Navbar */
 .navbar {
@@ -809,7 +900,6 @@ body {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: var(--shadow-sm);
 }
 
 .testimonial-stars {
@@ -819,8 +909,9 @@ body {
 }
 
 .testimonial-quote {
-  color: var(--text);
+  font-size: 1.125rem;
   line-height: 1.6;
+  color: var(--text);
   margin-bottom: 24px;
 }
 
@@ -831,10 +922,10 @@ body {
 }
 
 .author-avatar {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary-light) 0%, var(--purple) 100%);
+  background: linear-gradient(135deg, #CBD5E1 0%, #94A3B8 100%);
 }
 
 .author-name {
@@ -847,82 +938,81 @@ body {
   color: var(--text-muted);
 }
 
-/* CTA */
+/* CTA Section */
 .cta-section {
   padding: 80px 1rem;
 }
 
 .cta-container {
-  max-width: 896px;
+  max-width: 1024px;
   margin: 0 auto;
 }
 
 .cta-card {
   position: relative;
-  padding: 32px;
   border-radius: 24px;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
+  background: var(--text);
+  padding: 64px 24px;
+  text-align: center;
   overflow: hidden;
 }
 
 @media (min-width: 640px) {
-  .cta-card { padding: 48px; }
+  .cta-card { padding: 80px 48px; }
 }
 
 .cta-bg {
   position: absolute;
   inset: 0;
-  opacity: 0.1;
+  opacity: 0.2;
 }
 
 .cta-blob {
   position: absolute;
-  background: white;
+  width: 384px;
+  height: 384px;
   border-radius: 50%;
-  filter: blur(48px);
+  filter: blur(64px);
 }
 
 .cta-blob-1 {
-  top: 0;
-  left: 0;
-  width: 160px;
-  height: 160px;
+  top: -192px;
+  left: -192px;
+  background: var(--primary);
 }
 
 .cta-blob-2 {
-  bottom: 0;
-  right: 0;
-  width: 240px;
-  height: 240px;
+  bottom: -192px;
+  right: -192px;
+  background: var(--purple);
 }
 
 .cta-content {
   position: relative;
-  text-align: center;
+  max-width: 640px;
+  margin: 0 auto;
 }
 
 .cta-title {
-  font-size: 1.875rem;
+  font-size: 2.25rem;
   font-weight: 700;
   color: white;
   margin-bottom: 16px;
 }
 
 @media (min-width: 640px) {
-  .cta-title { font-size: 2.25rem; }
+  .cta-title { font-size: 3rem; }
 }
 
 .cta-subtitle {
   font-size: 1.125rem;
-  color: rgba(255, 255, 255, 0.8);
-  max-width: 576px;
-  margin: 0 auto 32px;
+  color: #94A3B8;
+  margin-bottom: 32px;
 }
 
 .cta-buttons {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 1rem;
 }
 
@@ -938,13 +1028,14 @@ body {
   width: 100%;
   padding: 12px 24px;
   background: white;
-  color: var(--primary);
+  color: var(--text);
   border: none;
   border-radius: 12px;
   font-family: inherit;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: transform 0.2s;
 }
 
 @media (min-width: 640px) {
@@ -952,7 +1043,7 @@ body {
 }
 
 .cta-btn-primary:hover {
-  background: var(--primary-bg);
+  transform: translateY(-2px);
 }
 
 .cta-btn-secondary {
@@ -960,9 +1051,10 @@ body {
   padding: 12px 24px;
   background: transparent;
   color: white;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 12px;
   font-family: inherit;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s;
@@ -978,8 +1070,9 @@ body {
 
 /* Footer */
 .footer {
-  padding: 48px 1rem;
+  background: var(--bg);
   border-top: 1px solid var(--border);
+  padding: 48px 1rem;
 }
 
 .footer-container {
@@ -991,10 +1084,10 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 24px;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 640px) {
   .footer-content {
     flex-direction: row;
     justify-content: space-between;
@@ -1003,13 +1096,14 @@ body {
 
 .footer-links {
   display: flex;
+  align-items: center;
   gap: 24px;
 }
 
 .footer-link {
-  font-size: 0.875rem;
   color: var(--text-muted);
   text-decoration: none;
+  font-size: 0.875rem;
   transition: color 0.2s;
 }
 
@@ -1018,29 +1112,9 @@ body {
 }
 
 .footer-copy {
-  font-size: 0.875rem;
   color: var(--text-muted);
+  font-size: 0.875rem;
 }
-`,
-
-    "src/index.css": `* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  font-family: 'DM Sans', system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-#root {
-  min-height: 100vh;
-}`
+`
   }
 };

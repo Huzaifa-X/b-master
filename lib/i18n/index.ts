@@ -29,13 +29,21 @@ function resolve(obj: unknown, parts: string[]): string | undefined {
 export function useLocale() {
   const { locale, setLocale } = useContext(LocaleContext)
 
-  function t(key: string): string {
+  function t(key: string, params?: Record<string, string | number>): string {
     const parts = key.split(".")
-    return (
+    let value = (
       resolve(messages[locale], parts) ??
       resolve(messages["en"], parts) ??
       key
     )
+
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        value = value.replaceAll(`{${k}}`, String(v))
+      })
+    }
+
+    return value
   }
 
   return { t, locale, setLocale }

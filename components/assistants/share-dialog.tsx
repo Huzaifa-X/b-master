@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
+import { useLocale } from "@/lib/i18n"
 
 interface ShareDialogProps {
   shareableId: string
@@ -22,6 +23,7 @@ interface ShareDialogProps {
 }
 
 export function ShareDialog({ shareableId, chatTopic, trigger }: ShareDialogProps) {
+  const { t } = useLocale()
   const [copied, setCopied] = useState(false)
   const [open, setOpen] = useState(false)
 
@@ -31,10 +33,10 @@ export function ShareDialog({ shareableId, chatTopic, trigger }: ShareDialogProp
     try {
       await navigator.clipboard.writeText(shareUrl)
       setCopied(true)
-      toast.success("Share link copied to clipboard!")
+      toast.success(t("chat.share.linkCopied"))
       setTimeout(() => setCopied(false), 2000)
     } catch (error) {
-      toast.error("Failed to copy link")
+      toast.error(t("chat.share.copyFailed"))
     }
   }
 
@@ -42,8 +44,8 @@ export function ShareDialog({ shareableId, chatTopic, trigger }: ShareDialogProp
     if (navigator.share) {
       try {
         await navigator.share({
-          title: chatTopic || "Shared Chat",
-          text: "Check out this conversation",
+          title: chatTopic || t("chat.share.checkOut"),
+          text: t("chat.share.checkOut"),
           url: shareUrl,
         })
       } catch (error) {
@@ -63,14 +65,14 @@ export function ShareDialog({ shareableId, chatTopic, trigger }: ShareDialogProp
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share Conversation</DialogTitle>
+          <DialogTitle>{t("chat.share.title")}</DialogTitle>
           <DialogDescription>
-            Anyone with this link can view this conversation (read-only).
+            {t("chat.share.description")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="share-url">Share Link</Label>
+            <Label htmlFor="share-url">{t("chat.share.shareLink")}</Label>
             <div className="flex space-x-2">
               <Input
                 id="share-url"

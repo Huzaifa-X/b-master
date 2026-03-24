@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
 import { useAssistantContacts } from "@/hooks/useContacts"
 import { useSession } from "next-auth/react"
+import { useLocale } from "@/lib/i18n"
 
 interface SelectContactDialogProps {
   open: boolean
@@ -23,6 +24,7 @@ interface SelectContactDialogProps {
 }
 
 export function SelectContactDialog({ open, onOpenChange, onSelectContact, assistantId }: SelectContactDialogProps) {
+  const { t } = useLocale()
   const [searchQuery, setSearchQuery] = useState("")
   const { data: session } = useSession()
   const { contacts, isLoading } = useAssistantContacts(assistantId, { enabled: open })
@@ -57,9 +59,9 @@ export function SelectContactDialog({ open, onOpenChange, onSelectContact, assis
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>New Conversation</DialogTitle>
+          <DialogTitle>{t("contacts.newConversation")}</DialogTitle>
           <DialogDescription>
-            Select a contact to start a conversation
+            {t("contacts.selectContactToStart")}
           </DialogDescription>
         </DialogHeader>
 
@@ -67,7 +69,7 @@ export function SelectContactDialog({ open, onOpenChange, onSelectContact, assis
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search contacts..."
+            placeholder={t("contacts.searchContacts")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -79,7 +81,7 @@ export function SelectContactDialog({ open, onOpenChange, onSelectContact, assis
           {isLoading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">Loading contacts...</p>
+              <p className="text-sm text-muted-foreground">{t("contacts.loadingContacts")}</p>
             </div>
           ) : filteredContacts.length > 0 ? (
             filteredContacts.map((contact) => (
@@ -103,7 +105,7 @@ export function SelectContactDialog({ open, onOpenChange, onSelectContact, assis
           ) : (
             <div className="text-center py-8">
               <User className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">No contacts found</p>
+              <p className="text-sm text-muted-foreground">{t("contacts.noContactsFound")}</p>
             </div>
           )}
         </div>

@@ -1,8 +1,9 @@
 export const analyticsDashboardTemplate = {
   id: "analytics-dashboard",
   name: "Analytics Dashboard",
-  description: "Data visualization with React Router pages",
-  category: "analytics",
+  description: "Enterprise-grade data visualization with React Router and Recharts",
+  category: "Analytics",
+  icon: "BarChart3",
   files: {
     "package.json": JSON.stringify(
       {
@@ -20,6 +21,9 @@ export const analyticsDashboardTemplate = {
           "react-dom": "^18.2.0",
           "react-router-dom": "^6.22.3",
           "lucide-react": "^0.344.0",
+          "recharts": "^2.12.2",
+          "clsx": "^2.1.0",
+          "tailwind-merge": "^2.2.1"
         },
         devDependencies: {
           "@vitejs/plugin-react": "^4.2.1",
@@ -38,33 +42,14 @@ export const analyticsDashboardTemplate = {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <title>DataSphere Analytics</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
-            },
-          }
-        }
-      }
-    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>DataFlow Analytics</title>
   </head>
-  <body>
+  <body class="bg-gray-50">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>`,
-
-    "vite.config.js": `import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-})`,
 
     "src/main.jsx": `import React from 'react'
 import ReactDOM from 'react-dom/client'
@@ -77,472 +62,425 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )`,
 
-    // --- MAIN APP ROUTER ---
-    "src/App.jsx": `import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import TopNav from './components/TopNav';
-import Overview from './pages/Overview';
-import Audiences from './pages/Audiences';
-import Acquisition from './pages/Acquisition';
-import Behavior from './pages/Behavior';
-import './App.css';
+    // --- DATA ---
+    "src/data/mockData.js": `export const activityData = [
+  { name: 'Mon', visits: 4000, active: 2400 },
+  { name: 'Tue', visits: 3000, active: 1398 },
+  { name: 'Wed', visits: 2000, active: 9800 },
+  { name: 'Thu', visits: 2780, active: 3908 },
+  { name: 'Fri', visits: 1890, active: 4800 },
+  { name: 'Sat', visits: 2390, active: 3800 },
+  { name: 'Sun', visits: 3490, active: 4300 },
+];
 
-function App() {
-  return (
-    <Router>
-      <div className="dashboard-layout">
-        <TopNav />
-        <main className="main-content">
-          <Routes>
-            <Route path="/" element={<Navigate to="/overview" replace />} />
-            <Route path="/overview" element={<Overview />} />
-            <Route path="/audiences" element={<Audiences />} />
-            <Route path="/acquisition" element={<Acquisition />} />
-            <Route path="/behavior" element={<Behavior />} />
-            <Route path="*" element={<Navigate to="/overview" replace />} />
-          </Routes>
-        </main>
-      </div>
-    </Router>
-  )
-}
+export const deviceData = [
+  { name: 'Desktop', value: 400 },
+  { name: 'Mobile', value: 300 },
+  { name: 'Tablet', value: 100 },
+];
 
-export default App`,
+export const sourceData = [
+  { name: 'Direct', value: 45 },
+  { name: 'Social', value: 25 },
+  { name: 'Search', value: 30 },
+];
+
+export const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];`,
 
     // --- COMPONENTS ---
-    "src/components/TopNav.jsx": `import { NavLink } from 'react-router-dom';
-import { BarChart3, Calendar } from 'lucide-react';
+    "src/components/layout/Sidebar.jsx": `import { NavLink } from 'react-router-dom';
+import { 
+  BarChart3, Users, MousePointer, 
+  Activity, Settings, HelpCircle,
+  LayoutDashboard
+} from 'lucide-react';
 
-export default function TopNav() {
+const navItems = [
+  { path: '/overview', label: 'Overview', icon: LayoutDashboard },
+  { path: '/audiences', label: 'Audiences', icon: Users },
+  { path: '/acquisition', label: 'Acquisition', icon: MousePointer },
+  { path: '/behavior', label: 'Behavior', icon: Activity },
+];
+
+export default function Sidebar() {
   return (
-    <nav className="top-nav">
-      <div className="nav-col-left">
-        <div className="logo">
-          <div className="logo-icon"><BarChart3 size={20} color="white" /></div>
-          <h2>DataSphere</h2>
+    <aside className="sidebar">
+      <div className="sidebar-brand">
+        <div className="brand-logo">
+          <BarChart3 className="text-blue-600" size={24} strokeWidth={3} />
+        </div>
+        <span className="brand-text">DataFlow</span>
+      </div>
+
+      <nav className="sidebar-nav">
+        <p className="nav-section-label">Main Menu</p>
+        {navItems.map((item) => (
+          <NavLink 
+            key={item.path} 
+            to={item.path}
+            className={({ isActive }) => \`nav-item \${isActive ? 'active' : ''}\`}
+          >
+            <item.icon size={20} className="nav-icon" />
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
+      </nav>
+
+      <div className="sidebar-footer">
+        <button className="nav-item" onClick={() => alert('Settings coming soon!')}>
+          <Settings size={20} className="nav-icon" />
+          <span>Settings</span>
+        </button>
+        <button className="nav-item" onClick={() => alert('Support ticket system would open!')}>
+          <HelpCircle size={20} className="nav-icon" />
+          <span>Support</span>
+        </button>
+      </div>
+    </aside>
+  );
+}`,
+
+    "src/components/ui/MetricCard.jsx": `import { TrendingUp, TrendingDown } from 'lucide-react';
+
+export default function MetricCard({ title, value, change, trend, icon: Icon, color }) {
+  const isPositive = trend === 'up';
+  return (
+    <div className="card metric-card">
+      <div className="metric-header">
+        <div className={\`metric-icon-bg \${color}\`}>
+          <Icon size={20} />
+        </div>
+        <div className={\`trend-badge \${isPositive ? 'positive' : 'negative'}\`}>
+          {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+          {change}
         </div>
       </div>
-      
-      <div className="nav-col-center">
-        <div className="nav-links">
-          <NavLink to="/overview" className={({ isActive }) => \`nav-link \${isActive ? 'active' : ''}\`}>
-            Overview
-          </NavLink>
-          <NavLink to="/audiences" className={({ isActive }) => \`nav-link \${isActive ? 'active' : ''}\`}>
-            Audiences
-          </NavLink>
-          <NavLink to="/acquisition" className={({ isActive }) => \`nav-link \${isActive ? 'active' : ''}\`}>
-            Acquisition
-          </NavLink>
-          <NavLink to="/behavior" className={({ isActive }) => \`nav-link \${isActive ? 'active' : ''}\`}>
-            Behavior
-          </NavLink>
-        </div>
+      <div className="metric-content">
+        <h3 className="metric-title">{title}</h3>
+        <p className="metric-value">{value}</p>
       </div>
-      
-      <div className="nav-col-right">
-        <button className="icon-btn"><Calendar size={18} /></button>
-        <div className="user-profile">
-          <img src="https://i.pravatar.cc/150?u=a042581f4e29026704d" alt="Profile" />
-        </div>
+    </div>
+  );
+}`,
+
+    "src/components/charts/ActivityChart.jsx": `import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
+  Tooltip, ResponsiveContainer, Legend 
+} from 'recharts';
+
+export default function ActivityChart({ data }) {
+  return (
+    <div className="card chart-card">
+      <div className="card-header">
+        <h3 className="card-title">User Activity</h3>
+        <p className="card-subtitle">Last 7 days performance</p>
       </div>
-    </nav>
+      <div className="chart-container" style={{ height: 350 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+            <XAxis 
+              dataKey="name" 
+              axisLine={false} 
+              tickLine={false}
+              tick={{ fill: '#64748B', fontSize: 12 }}
+            />
+            <YAxis 
+              axisLine={false} 
+              tickLine={false}
+              tick={{ fill: '#64748B', fontSize: 12 }}
+            />
+            <Tooltip 
+              cursor={{ fill: 'rgba(0,0,0,0.02)' }}
+              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+            />
+            <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
+            <Bar dataKey="visits" name="New Visitors" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={24} />
+            <Bar dataKey="active" name="Active Users" fill="#10B981" radius={[4, 4, 0, 0]} barSize={24} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}`,
+
+    "src/components/charts/DonutChart.jsx": `import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { COLORS } from '../../data/mockData';
+
+export default function DonutChart({ data, title }) {
+  return (
+    <div className="card chart-card h-full">
+      <div className="card-header">
+        <h3 className="card-title">{title}</h3>
+      </div>
+      <div className="chart-container" style={{ height: 300 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              innerRadius={60}
+              outerRadius={90}
+              paddingAngle={5}
+              dataKey="value"
+            >
+              {data.map((entry, index) => (
+                <Cell key={\`cell-\${index}\`} fill={COLORS[index % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip 
+              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+            />
+            <Legend iconType="circle" layout="vertical" align="right" verticalAlign="middle" />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
   );
 }`,
 
     // --- PAGES ---
-    "src/pages/Overview.jsx": `import { useState } from 'react';
-import { 
-  Users, Activity, MousePointerClick, TrendingUp, TrendingDown,
-  Filter, Download, MoreHorizontal
+    "src/pages/Overview.jsx": `import { 
+  Users, Activity, MousePointer, 
+  TrendingUp, Download, Calendar
 } from 'lucide-react';
-
-const metrics = [
-  { id: 1, title: 'Total Users', value: '45,231', change: '+20.1%', isPositive: true, icon: Users, color: 'blue' },
-  { id: 2, title: 'Active Sessions', value: '12,455', change: '+15.4%', isPositive: true, icon: Activity, color: 'emerald' },
-  { id: 3, title: 'Bounce Rate', value: '32.1%', change: '-4.3%', isPositive: false, icon: MousePointerClick, color: 'amber' },
-  { id: 4, title: 'Conversion', value: '4.83%', change: '+2.4%', isPositive: true, icon: TrendingUp, color: 'purple' }
-];
-
-const trafficSources = [
-  { source: "Organic Search", visitors: 24500, percentage: 48, color: "var(--blue-500)" },
-  { source: "Direct", visitors: 12250, percentage: 24, color: "var(--emerald-500)" },
-  { source: "Social Media", visitors: 9180, percentage: 18, color: "var(--purple-500)" },
-  { source: "Referral", visitors: 5100, percentage: 10, color: "var(--amber-500)" }
-];
+import MetricCard from '../components/ui/MetricCard';
+import ActivityChart from '../components/charts/ActivityChart';
+import DonutChart from '../components/charts/DonutChart';
+import { activityData, deviceData, sourceData } from '../data/mockData';
 
 export default function Overview() {
-  const [timeRange, setTimeRange] = useState('Last 30 Days');
-
   return (
-    <div className="animate-fade-in">
+    <div className="page-container">
       <header className="page-header">
-        <div>
-          <h1>Dashboard Overview</h1>
-          <p className="text-muted">Track your user analytics and performance metrics.</p>
+        <div className="header-left">
+          <h1 className="page-title">Executive Summary</h1>
+          <p className="page-subtitle">Real-time performance metrics</p>
         </div>
-        
         <div className="header-actions">
-          <div className="dropdown">
-            <span className="dropdown-label">Time Range:</span>
-            <select value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
-              <option>Today</option>
-              <option>Last 7 Days</option>
-              <option>Last 30 Days</option>
-              <option>Last 90 Days</option>
-            </select>
-          </div>
-          
-          <button className="btn btn-outline"><Filter size={16} /> Filters</button>
-          <button className="btn btn-primary"><Download size={16} /> Export</button>
+          <button className="btn btn-secondary" onClick={() => alert('Date picker would open!')}>
+             <Calendar size={16} /> 
+             <span>Mar 1 - Mar 30</span>
+          </button>
+          <button className="btn btn-primary" onClick={() => alert('Exporting report as PDF...')}>
+             <Download size={16} />
+             <span>Export</span>
+          </button>
         </div>
       </header>
 
-      {/* Top Metric Cards */}
-      <div className="metrics-grid">
-        {metrics.map((metric) => (
-          <div key={metric.id} className="metric-card">
-            <div className="metric-header">
-              <span className="metric-title">{metric.title}</span>
-              <div className={\`icon-wrapper \${metric.color}\`}>
-                <metric.icon size={20} />
-              </div>
-            </div>
-            <div className="metric-body">
-              <h2>{metric.value}</h2>
-              <div className={\`metric-trend \${metric.isPositive ? 'positive' : 'negative'}\`}>
-                {metric.isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                <span>{metric.change}</span>
-              </div>
-            </div>
-          </div>
-        ))}
+      <div className="stats-grid">
+        <MetricCard 
+          title="Total Users" 
+          value="45.2k" 
+          change="+12.5%" 
+          trend="up" 
+          icon={Users} 
+          color="bg-blue-100 text-blue-600" 
+        />
+        <MetricCard 
+          title="Avg. Session" 
+          value="4m 32s" 
+          change="+3.1%" 
+          trend="up" 
+          icon={Activity} 
+          color="bg-emerald-100 text-emerald-600" 
+        />
+        <MetricCard 
+          title="Bounce Rate" 
+          value="24.8%" 
+          change="-2.4%" 
+          trend="down" 
+          icon={MousePointer} 
+          color="bg-purple-100 text-purple-600" 
+        />
+        <MetricCard 
+          title="Real-time" 
+          value="1,284" 
+          change="+84" 
+          trend="up" 
+          icon={TrendingUp} 
+          color="bg-amber-100 text-amber-600" 
+        />
       </div>
 
-      {/* Charts Section */}
       <div className="charts-grid">
-        {/* Main Traffic Chart */}
-        <div className="chart-card large">
-          <div className="card-header">
-            <h3>Traffic Overview</h3>
-            <button className="icon-btn"><MoreHorizontal size={18} /></button>
-          </div>
-          
-          <div className="chart-area line-chart">
-            <div className="y-axis">
-              <span>50k</span><span>40k</span><span>30k</span><span>20k</span><span>10k</span><span>0</span>
-            </div>
-            <div className="chart-content">
-              <svg viewBox="0 0 500 200" className="svg-line-chart" preserveAspectRatio="none">
-                <path d="M 0 150 C 50 120, 80 160, 150 100 C 200 60, 250 130, 300 80 C 350 40, 400 90, 450 30 L 500 60 L 500 200 L 0 200 Z" fill="rgba(59, 130, 246, 0.1)" stroke="none" />
-                <path d="M 0 150 C 50 120, 80 160, 150 100 C 200 60, 250 130, 300 80 C 350 40, 400 90, 450 30 L 500 60" fill="none" stroke="var(--blue-500)" strokeWidth="3" />
-                <circle cx="150" cy="100" r="4" fill="white" stroke="var(--blue-500)" strokeWidth="2"/>
-                <circle cx="300" cy="80" r="4" fill="white" stroke="var(--blue-500)" strokeWidth="2"/>
-                <circle cx="450" cy="30" r="4" fill="white" stroke="var(--blue-500)" strokeWidth="2"/>
-              </svg>
-            </div>
-            <div className="x-axis">
-              <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
-            </div>
-          </div>
+        <div className="col-span-2">
+          <ActivityChart data={activityData} />
         </div>
-
-        {/* Traffic Sources */}
-        <div className="chart-card">
-          <div className="card-header">
-            <h3>Traffic Sources</h3>
-            <button className="icon-btn"><MoreHorizontal size={18} /></button>
+        <div className="col-span-1">
+          <DonutChart data={deviceData} title="Device Distribution" />
+        </div>
+        <div className="col-span-1">
+          <DonutChart data={sourceData} title="Traffic Channels" />
+        </div>
+        <div className="col-span-2 card">
+          <div className="card-header border-b border-gray-100 px-6 py-4">
+             <h3 className="card-title">Top Performing Pages</h3>
           </div>
-          <div className="sources-list">
-            {trafficSources.map((source, index) => (
-              <div key={index} className="source-item">
-                <div className="source-info">
-                  <span className="source-name">{source.source}</span>
-                  <span className="source-value">{source.visitors.toLocaleString()}</span>
-                </div>
-                <div className="progress-bg">
-                  <div className="progress-fill" style={{ width: \`\${source.percentage}%\`, backgroundColor: source.color }}></div>
-                </div>
-              </div>
+          <table className="w-full text-left">
+            <thead>
+              <tr className="text-gray-400 text-xs font-bold uppercase border-b border-gray-100">
+                <th className="px-6 py-4">Page Path</th>
+                <th className="px-6 py-4">Visitors</th>
+                <th className="px-6 py-4">Conversion</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {[
+                { path: '/', val: '12,431', rate: '4.8%' },
+                { path: '/pricing', val: '8,245', rate: '2.1%' },
+                { path: '/blog/ai-trends', val: '5,120', rate: '1.4%' }
+              ].map((row) => (
+                <tr key={row.path} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 font-medium text-gray-700">{row.path}</td>
+                  <td className="px-6 py-4 text-gray-600">{row.val}</td>
+                  <td className="px-6 py-4 font-semibold text-emerald-600">{row.rate}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}`,
+
+    // --- MAIN APP ---
+    "src/App.jsx": `import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Sidebar from './components/layout/Sidebar';
+import Overview from './pages/Overview';
+import './App.css';
+
+export default function App() {
+  return (
+    <Router>
+      <div className="app-layout">
+        <Sidebar />
+        <main className="main-content">
+          <Routes>
+            <Route path="/" element={<Navigate to="/overview" replace />} />
+            <Route path="/overview" element={<Overview />} />
+            {['audiences', 'acquisition', 'behavior'].map(p => (
+              <Route 
+                key={p} 
+                path={\`/\${p}\`} 
+                element={
+                  <div className="flex items-center justify-center min-h-[400px]">
+                    <p className="text-gray-400 font-medium">Coming soon: Detailed \${p} analysis</p>
+                  </div>
+                } 
+              />
             ))}
-          </div>
-        </div>
-        
-        {/* User Device */}
-        <div className="chart-card">
-          <div className="card-header">
-            <h3>Device Usage</h3>
-            <button className="icon-btn"><MoreHorizontal size={18} /></button>
-          </div>
-          <div className="donut-chart-container">
-             <svg viewBox="0 0 36 36" className="donut">
-               <circle className="donut-ring" cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="#E2E8F0" strokeWidth="6"></circle>
-               <circle className="donut-segment desktop" cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="var(--blue-500)" strokeWidth="6" strokeDasharray="65 35" strokeDashoffset="25"></circle>
-               <circle className="donut-segment mobile" cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="var(--emerald-500)" strokeWidth="6" strokeDasharray="25 75" strokeDashoffset="-40"></circle>
-               <circle className="donut-segment tablet" cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="var(--purple-500)" strokeWidth="6" strokeDasharray="10 90" strokeDashoffset="-65"></circle>
-             </svg>
-             <div className="donut-legend">
-               <div className="legend-item"><span className="dot" style={{background: 'var(--blue-500)'}}></span> Desktop (65%)</div>
-               <div className="legend-item"><span className="dot" style={{background: 'var(--emerald-500)'}}></span> Mobile (25%)</div>
-               <div className="legend-item"><span className="dot" style={{background: 'var(--purple-500)'}}></span> Tablet (10%)</div>
-             </div>
-          </div>
-        </div>
+          </Routes>
+        </main>
       </div>
-    </div>
+    </Router>
   );
 }`,
 
-    "src/pages/Audiences.jsx": `import { Users } from 'lucide-react';
-
-export default function Audiences() {
-  return (
-    <div className="animate-fade-in dashboard-empty-card">
-      <div className="page-header">
-        <div>
-          <h1>Audience Demographics</h1>
-          <p className="text-muted">Analyze your users by age, location, and interests.</p>
-        </div>
-      </div>
-      <div className="empty-state">
-        <Users size={48} className="text-muted mb-4 opacity-50" />
-        <h3 className="empty-title">Audience Data Pending</h3>
-        <p className="text-muted">Once your property collects enough demographic data, insights will appear here.</p>
-      </div>
-    </div>
-  );
-}`,
-
-    "src/pages/Acquisition.jsx": `import { MousePointerClick } from 'lucide-react';
-
-export default function Acquisition() {
-  return (
-    <div className="animate-fade-in dashboard-empty-card">
-      <div className="page-header">
-        <div>
-          <h1>User Acquisition</h1>
-          <p className="text-muted">See where your users are coming from and which campaigns perform best.</p>
-        </div>
-      </div>
-      <div className="empty-state">
-        <MousePointerClick size={48} className="text-muted mb-4 opacity-50" />
-        <h3 className="empty-title">Set up UTM Tracking</h3>
-        <p className="text-muted">Create trackable links to see deep insights into your marketing channels.</p>
-      </div>
-    </div>
-  );
-}`,
-
-    "src/pages/Behavior.jsx": `import { Activity } from 'lucide-react';
-
-export default function Behavior() {
-  return (
-    <div className="animate-fade-in dashboard-empty-card">
-      <div className="page-header">
-        <div>
-          <h1>Site Behavior & Flow</h1>
-          <p className="text-muted">Understand how users navigate through your application.</p>
-        </div>
-      </div>
-      <div className="empty-state">
-        <Activity size={48} className="text-muted mb-4 opacity-50" />
-        <h3 className="empty-title">Behavior Flow Analysis</h3>
-        <p className="text-muted">Map out user journeys to optimize your funnel and reduce drop-off.</p>
-      </div>
-    </div>
-  );
-}`,
-
-    // --- STYLES ---
     "src/App.css": `
 :root {
-  --blue-500: #3B82F6;
-  --blue-600: #2563EB;
-  --emerald-500: #10B981;
-  --amber-500: #F59E0B;
-  --purple-500: #8B5CF6;
-  --rose-500: #F43F5E;
-  
-  --bg-color: #F8FAFC;
-  --surface: #FFFFFF;
-  --text-main: #0F172A;
+  --sidebar-w: 260px;
+  --bg: #F8FAFC;
+  --text: #0F172A;
   --text-muted: #64748B;
   --border: #E2E8F0;
-  
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+  --primary: #3B82F6;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: var(--bg-color); color: var(--text-main); -webkit-font-smoothing: antialiased; }
+body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
 
-/* Animations */
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.animate-fade-in { animation: fadeIn 0.3s ease forwards; }
+.app-layout { display: flex; min-height: 100vh; }
 
-.dashboard-empty-card {
-  min-height: calc(100vh - 64px - 4rem);
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  background: white;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  position: fixed;
+  height: 100vh;
 }
 
-/* Layout */
-.dashboard-layout { min-height: 100vh; display: flex; flex-direction: column; }
+.sidebar-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 2.5rem; }
+.brand-logo { width: 40px; height: 40px; background: #F0F7FF; border-radius: 12px; display: flex; align-items: center; justify-content: center; border: 1px solid #E0EFFF; }
+.brand-text { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.5px; }
 
-/* Top Nav */
-.top-nav {
-  height: 64px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+.nav-section-label { font-size: 0.75rem; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+.sidebar-nav { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+
+.nav-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 2rem;
-  position: sticky;
-  top: 0;
-  z-index: 50;
-}
-.logo { display: flex; align-items: center; gap: 0.75rem; }
-.logo h2 { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.025em; }
-.logo-icon { background: var(--blue-600); border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
-
-.nav-links { display: flex; gap: 1.5rem; }
-.nav-link {
+  gap: 12px;
+  padding: 10px 14px;
   text-decoration: none;
   color: var(--text-muted);
   font-weight: 600;
-  font-size: 0.875rem;
-  padding: 0.5rem 0;
-  border-bottom: 2px solid transparent;
+  font-size: 0.9375rem;
+  border-radius: 10px;
   transition: all 0.2s;
-}
-.nav-link:hover { color: var(--text-main); }
-.nav-link.active { color: var(--blue-600); border-bottom-color: var(--blue-600); }
-
-.nav-col-right { display: flex; align-items: center; gap: 1.5rem; }
-.user-profile img { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--border); }
-.icon-btn {
+  border: none;
   background: transparent;
-  border: 1px solid var(--border);
-  width: 36px; height: 36px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--text-muted); cursor: pointer; transition: all 0.2s;
+  cursor: pointer;
+  width: 100%;
 }
-.icon-btn:hover { background: var(--bg-color); color: var(--text-main); }
+
+.nav-item:hover { color: var(--text); background: #F1F5F9; }
+.nav-item.active { color: var(--primary); background: #EFF6FF; }
+.nav-icon { opacity: 0.7; }
+.nav-item.active .nav-icon { opacity: 1; }
+
+.sidebar-footer { border-top: 1px solid var(--border); padding-top: 1rem; margin-bottom: 0.5rem; }
 
 /* Main Content */
-.main-content { padding: 2rem; max-width: 1400px; margin: 0 auto; width: 100%; }
+.main-content { margin-left: var(--sidebar-w); flex: 1; min-height: 100vh; }
+.page-container { padding: 2.5rem; max-width: 1200px; margin: 0 auto; }
 
-/* Page Header */
-.page-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem; }
-.page-header h1 { font-size: 1.875rem; font-weight: 800; letter-spacing: -0.025em; margin-bottom: 0.25rem; }
-.text-muted { color: var(--text-muted); font-size: 0.875rem; }
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2.5rem; }
+.page-title { font-size: 1.875rem; font-weight: 800; letter-spacing: -0.025em; }
+.page-subtitle { color: var(--text-muted); font-size: 0.9375rem; }
 
-.header-actions { display: flex; align-items: center; gap: 1rem; }
-.dropdown { display: flex; align-items: center; gap: 0.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 1rem; }
-.dropdown-label { font-size: 0.875rem; color: var(--text-muted); }
-.dropdown select { border: none; background: transparent; font-weight: 600; font-size: 0.875rem; color: var(--text-main); outline: none; cursor: pointer; font-family: inherit; }
+.header-actions { display: flex; gap: 12px; }
+.btn { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-weight: 700; font-size: 0.875rem; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+.btn-primary { background: var(--primary); color: white; border: none; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2); }
+.btn-primary:hover { background: #2563EB; transform: translateY(-1px); }
+.btn-secondary { background: white; color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: #F8FAFC; border-color: #CBD5E1; }
 
-.btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.875rem; cursor: pointer; transition: all 0.2s; font-family: inherit; }
-.btn-outline { background: var(--surface); border: 1px solid var(--border); color: var(--text-main); }
-.btn-outline:hover { background: var(--bg-color); }
-.btn-primary { background: var(--blue-600); border: 1px solid var(--blue-600); color: white; }
-.btn-primary:hover { background: #1D4ED8; }
+/* Stats Grid */
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
+.card { background: white; border-radius: 16px; border: 1px solid var(--border); overflow: hidden; }
 
-/* Metrics Grid */
-.metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 1.5rem; }
-.metric-card { background: var(--surface); border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border); box-shadow: var(--shadow-sm); transition: transform 0.2s, box-shadow 0.2s; }
-.metric-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-.metric-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-.metric-title { color: var(--text-muted); font-weight: 600; font-size: 0.875rem; }
-.icon-wrapper { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-.icon-wrapper.blue { background: #EFF6FF; color: var(--blue-500); }
-.icon-wrapper.emerald { background: #ECFDF5; color: var(--emerald-500); }
-.icon-wrapper.amber { background: #FFFBEB; color: var(--amber-500); }
-.icon-wrapper.purple { background: #F5F3FF; color: var(--purple-500); }
-.metric-body h2 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: -0.025em; }
-.metric-trend { display: flex; align-items: center; gap: 0.25rem; font-size: 0.875rem; font-weight: 600; }
-.metric-trend.positive { color: var(--emerald-500); }
-.metric-trend.negative { color: var(--rose-500); }
+.metric-card { padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+.metric-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+.metric-icon-bg { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+.trend-badge { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; }
+.trend-badge.positive { color: #10B981; background: #ECFDF5; }
+.trend-badge.negative { color: #EF4444; background: #FEF2F2; }
 
-/* Charts Grid */
+.metric-title { color: var(--text-muted); font-size: 0.875rem; font-weight: 600; margin-bottom: 4px; }
+.metric-value { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.025em; }
+
+/* Charts */
 .charts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
-.chart-card { background: var(--surface); border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
-.chart-card.large { grid-column: span 3; }
-.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-.card-header h3 { font-size: 1.125rem; font-weight: 700; letter-spacing: -0.025em; }
-.card-header .icon-btn { border: none; }
+.col-span-2 { grid-column: span 2; }
+.chart-card { padding: 1.5rem; }
+.card-header { margin-bottom: 1.5rem; }
+.card-title { font-size: 1.125rem; font-weight: 700; }
+.card-subtitle { font-size: 0.875rem; color: var(--text-muted); }
 
-/* Line Chart Mockup */
-.line-chart { display: flex; flex-direction: column; height: 280px; }
-.chart-content { flex: 1; position: relative; margin: 0 1rem; }
-.svg-line-chart { width: 100%; height: 100%; overflow: visible; }
-.y-axis { display: flex; flex-direction: column-reverse; justify-content: space-between; position: absolute; left: -30px; height: 100%; font-size: 0.75rem; color: var(--text-muted); }
-.x-axis { display: flex; justify-content: space-between; margin-top: 1rem; margin-left: 20px; padding: 0 10px; font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
-
-/* Sources List */
-.sources-list { display: flex; flex-direction: column; gap: 1.5rem; }
-.source-item { display: flex; flex-direction: column; gap: 0.5rem; }
-.source-info { display: flex; justify-content: space-between; align-items: center; font-size: 0.875rem; font-weight: 600; }
-.source-value { color: var(--text-muted); }
-.progress-bg { height: 8px; background: #F1F5F9; border-radius: 4px; overflow: hidden; }
-.progress-fill { height: 100%; border-radius: 4px; }
-
-/* Donut Chart */
-.donut-chart-container { display: flex; flex-direction: column; align-items: center; gap: 2rem; padding-top: 1rem; }
-.donut { width: 180px; height: 180px; }
-.donut-legend { width: 100%; display: flex; flex-direction: column; gap: 0.75rem; }
-.legend-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 500; color: var(--text-muted); }
-.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-
-/* Empty State / Placeholders */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 400px;
-  background: var(--surface);
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-}
-.empty-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-}
-.opacity-50 { opacity: 0.5; }
-
-/* Responsive */
 @media (max-width: 1024px) {
-  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
-  .chart-card.large { grid-column: span 1; }
+  .sidebar { display: none; }
+  .main-content { margin-left: 0; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .charts-grid { grid-template-columns: 1fr; }
+  .col-span-2, .col-span-1 { grid-column: span 1; }
 }
-@media (max-width: 768px) {
-  .nav-col-center { display: none; }
-  .metrics-grid { grid-template-columns: 1fr; }
-  .page-header { flex-direction: column; align-items: flex-start; gap: 1.5rem; }
-}
-`,
-
-    "src/index.css": `:root {
-  font-family: 'Plus Jakarta Sans', system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light;
-  background-color: #F8FAFC;
-  text-rendering: optimizeLegibility;
-}
-
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-#root {
-  width: 100%;
-}`
+`
   }
 };
+

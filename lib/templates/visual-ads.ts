@@ -1,6 +1,4 @@
-import { TemplateDefinition } from './index';
-
-export const visualAdsTemplate: TemplateDefinition = {
+export const visualAdsTemplate = {
   id: "visual-ads",
   name: "Visual Ads",
   description: "AI-powered marketing visual creator for stunning ads and banners",
@@ -67,24 +65,24 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )`,
 
-    "src/App.jsx": `import { useState } from 'react'
-import {
-  Image, Sparkles, Download, RefreshCw, Palette, Type, Layout,
-  Square, RectangleHorizontal, RectangleVertical, Monitor,
-  Layers, Wand2, Check, ChevronRight, Zap, Eye, Share2
-} from 'lucide-react'
-import './App.css'
+    "src/index.css": `* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+`,
 
-// Ad Formats
-const formats = [
+    // --- DATA ---
+    "src/data/constants.js": `import { Square, RectangleVertical, RectangleHorizontal, Monitor } from 'lucide-react'
+
+export const formats = [
   { id: 'square', name: 'Square', icon: Square, size: '1080x1080', platform: 'Instagram Post' },
   { id: 'story', name: 'Story', icon: RectangleVertical, size: '1080x1920', platform: 'Instagram/TikTok' },
   { id: 'landscape', name: 'Landscape', icon: RectangleHorizontal, size: '1200x628', platform: 'Facebook/LinkedIn' },
   { id: 'banner', name: 'Banner', icon: Monitor, size: '728x90', platform: 'Web Display' },
 ]
 
-// Color Themes
-const colorThemes = [
+export const colorThemes = [
   { id: 'sunset', name: 'Sunset', colors: ['#FF6B6B', '#FFA07A', '#FFD93D'] },
   { id: 'ocean', name: 'Ocean', colors: ['#4FACFE', '#00F2FE', '#43E97B'] },
   { id: 'royal', name: 'Royal', colors: ['#667EEA', '#764BA2', '#F093FB'] },
@@ -93,16 +91,17 @@ const colorThemes = [
   { id: 'candy', name: 'Candy', colors: ['#FF0080', '#FF8C00', '#40E0D0'] },
 ]
 
-// Sample Templates
-const templates = [
+export const templates = [
   { id: 1, name: 'Product Showcase', category: 'E-commerce', preview: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
   { id: 2, name: 'Flash Sale', category: 'Promotion', preview: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
   { id: 3, name: 'App Launch', category: 'Tech', preview: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
   { id: 4, name: 'Event Promo', category: 'Events', preview: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' },
-]
+]`,
 
-// Ad Preview Component
-function AdPreview({ format, theme, headline, subtext }) {
+    // --- COMPONENTS ---
+    "src/components/AdPreview.jsx": `import { formats, colorThemes } from '../data/constants'
+
+export default function AdPreview({ format, theme, headline, subtext }) {
   const selectedFormat = formats.find(f => f.id === format)
   const selectedTheme = colorThemes.find(t => t.id === theme)
 
@@ -135,10 +134,11 @@ function AdPreview({ format, theme, headline, subtext }) {
       <div className="ad-size-badge">{selectedFormat?.size}</div>
     </div>
   )
-}
+}`,
 
-// Template Card
-function TemplateCard({ template, onClick }) {
+    "src/components/TemplateCard.jsx": `import { Eye } from 'lucide-react'
+
+export default function TemplateCard({ template, onClick }) {
   return (
     <button onClick={onClick} className="template-card">
       <div className="template-bg" style={{ background: template.preview }} />
@@ -154,25 +154,58 @@ function TemplateCard({ template, onClick }) {
       </div>
     </button>
   )
-}
+}`,
 
-// Main App
+    // --- MAIN APP ---
+    "src/App.jsx": `import { useState } from 'react'
+import {
+  Image, Sparkles, Download, RefreshCw, Palette, Type, Layout,
+  Layers, Wand2, Check, ChevronRight, Zap, Share2
+} from 'lucide-react'
+import { formats, colorThemes, templates } from './data/constants'
+import AdPreview from './components/AdPreview'
+import TemplateCard from './components/TemplateCard'
+import './App.css'
+
 export default function App() {
   const [selectedFormat, setSelectedFormat] = useState('square')
   const [selectedTheme, setSelectedTheme] = useState('sunset')
   const [headline, setHeadline] = useState('Summer Sale')
   const [subtext, setSubtext] = useState('Up to 50% off on all products')
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [notification, setNotification] = useState(null)
 
   const handleGenerate = () => {
     setIsGenerating(true)
-    setTimeout(() => setIsGenerating(false), 2000)
+    setTimeout(() => {
+      setIsGenerating(false)
+      showNotification('Ad Variants Refreshed!')
+    }, 2000)
+  }
+
+  const handleExport = () => {
+    setIsExporting(true)
+    setTimeout(() => {
+      setIsExporting(false)
+      showNotification('Ad Exported Successfully!')
+    }, 2500)
+  }
+
+  const showNotification = (msg) => {
+    setNotification(msg)
+    setTimeout(() => setNotification(null), 3000)
   }
 
   return (
     <div className="app">
-      {/* Header */}
       <header className="header">
+        {notification && (
+          <div className="notification">
+            <Zap className="icon-sm" />
+            {notification}
+          </div>
+        )}
         <div className="header-container">
           <div className="header-content">
             <div className="brand">
@@ -185,11 +218,11 @@ export default function App() {
               </div>
             </div>
             <div className="header-actions">
-              <button className="projects-btn">
+              <button className="projects-btn" onClick={() => alert('Opening your project library...')}>
                 <Layers className="icon-sm" />
                 My Projects
               </button>
-              <button className="upgrade-btn">
+              <button className="upgrade-btn" onClick={() => alert('Subscription plans modal would open!')}>
                 <Sparkles className="icon-sm" />
                 Upgrade
               </button>
@@ -200,9 +233,7 @@ export default function App() {
 
       <main className="main-content">
         <div className="editor-grid">
-          {/* Editor Panel */}
           <div className="editor-panel">
-            {/* Format Selection */}
             <div className="card">
               <h2 className="section-title">
                 <Layout className="icon-md text-pink" />
@@ -223,7 +254,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Color Theme */}
             <div className="card">
               <h2 className="section-title">
                 <Palette className="icon-md text-pink" />
@@ -253,7 +283,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Text Content */}
             <div className="card">
               <h2 className="section-title">
                 <Type className="icon-md text-pink" />
@@ -283,7 +312,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* AI Generate */}
             <div className="ai-card">
               <div className="ai-content">
                 <div className="ai-icon">
@@ -314,14 +342,12 @@ export default function App() {
             </div>
           </div>
 
-          {/* Preview Panel */}
           <div className="preview-panel">
-            {/* Live Preview */}
             <div className="card">
               <div className="preview-header">
                 <h2 className="section-title-inline">Live Preview</h2>
                 <div className="preview-actions">
-                  <button className="icon-btn">
+                  <button className="icon-btn" onClick={() => alert('Share link generated and copied to clipboard!')}>
                     <Share2 className="icon-md" />
                   </button>
                   <button className="export-btn">
@@ -340,11 +366,10 @@ export default function App() {
               </div>
             </div>
 
-            {/* Templates */}
             <div className="card">
               <div className="templates-header">
                 <h2 className="section-title-inline">Quick Templates</h2>
-                <button className="view-all-link">
+                <button className="view-all-link" onClick={() => alert('Full template catalog coming soon!')}>
                   View All <ChevronRight className="icon-sm" />
                 </button>
               </div>
@@ -353,17 +378,24 @@ export default function App() {
                   <TemplateCard
                     key={template.id}
                     template={template}
-                    onClick={() => {}}
+                    onClick={() => {
+                      setHeadline(template.name);
+                      setSubtext(\`Perfect for your next \${template.category} campaign\`);
+                      showNotification(\`Applied \${template.name} template\`);
+                    }}
                   />
                 ))}
               </div>
             </div>
 
-            {/* Export Options */}
             <div className="card">
               <h2 className="section-title-inline">Export Options</h2>
               <div className="export-grid">
-                <button className="export-option">
+                <button 
+                  onClick={handleExport}
+                  disabled={isExporting}
+                  className="export-option"
+                >
                   <div className="export-option-header">
                     <div className="export-icon png">
                       <Image className="icon-sm" />
@@ -372,7 +404,11 @@ export default function App() {
                   </div>
                   <p className="export-desc">High quality, transparent background</p>
                 </button>
-                <button className="export-option">
+                <button 
+                  onClick={handleExport}
+                  disabled={isExporting}
+                  className="export-option"
+                >
                   <div className="export-option-header">
                     <div className="export-icon jpg">
                       <Zap className="icon-sm" />
@@ -422,7 +458,35 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Icons */
+.app {
+  min-height: 100vh;
+  background: var(--bg);
+  position: relative;
+}
+
+/* Notification */
+.notification {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: var(--text);
+  color: white;
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  animation: slideUp 0.3s ease-out;
+  z-index: 100;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
 .icon-xs { width: 12px; height: 12px; }
 .icon-sm { width: 16px; height: 16px; }
 .icon-md { width: 20px; height: 20px; }
@@ -808,19 +872,20 @@ body {
   background: white;
   color: var(--pink);
   border: none;
-  border-radius: 12px;
+  border-radius: 8px;
   font-family: inherit;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: transform 0.2s;
 }
 
 .ai-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-2px);
 }
 
 .ai-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.8;
   cursor: not-allowed;
 }
 
@@ -833,7 +898,7 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* Preview Header */
+/* Preview Area */
 .preview-header {
   display: flex;
   align-items: center;
@@ -843,22 +908,23 @@ body {
 
 .preview-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
 .icon-btn {
   padding: 8px;
   background: transparent;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: var(--text-light);
+  color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .icon-btn:hover {
-  color: var(--text-muted);
-  background: var(--bg);
+  color: var(--text);
+  border-color: var(--text-light);
 }
 
 .export-btn {
@@ -871,6 +937,7 @@ body {
   border: none;
   border-radius: 8px;
   font-family: inherit;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
@@ -880,11 +947,11 @@ body {
   background: #1E293B;
 }
 
-/* Preview Area */
 .preview-area {
-  background: #F1F5F9;
+  background: var(--bg);
+  border: 1px dashed var(--border);
   border-radius: 12px;
-  padding: 1.5rem;
+  padding: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -896,133 +963,132 @@ body {
   position: relative;
   width: 100%;
   max-width: 400px;
+  background: white;
   border-radius: 16px;
   overflow: hidden;
   box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2rem;
+  color: white;
+  text-align: center;
+  transition: all 0.3s ease;
 }
 
-.ad-preview.aspect-square {
-  aspect-ratio: 1;
-}
-
-.ad-preview.aspect-story {
-  aspect-ratio: 9/16;
-  max-width: 240px;
-}
-
-.ad-preview.aspect-video {
-  aspect-ratio: 16/9;
-}
-
-.ad-preview.aspect-banner {
-  aspect-ratio: 8/1;
-  max-width: 100%;
-}
+.aspect-square { aspect-ratio: 1/1; }
+.aspect-story { aspect-ratio: 9/16; max-width: 320px; }
+.aspect-video { aspect-ratio: 16/9; max-width: 100%; }
+.aspect-banner { aspect-ratio: 8/1; max-width: 100%; padding: 1rem; flex-direction: row; justify-content: space-between; text-align: left; }
 
 .ad-bg {
   position: absolute;
   inset: 0;
+  z-index: 0;
 }
 
 .ad-decorations {
   position: absolute;
   inset: 0;
-  opacity: 0.3;
+  z-index: 1;
+  overflow: hidden;
+  opacity: 0.5;
 }
 
 .ad-blob {
   position: absolute;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  filter: blur(32px);
+  background: white;
+  filter: blur(40px);
 }
 
 .ad-blob-1 {
-  top: 40px;
-  right: 40px;
-  width: 128px;
-  height: 128px;
+  top: -20%;
+  left: -20%;
+  width: 60%;
+  height: 60%;
 }
 
 .ad-blob-2 {
-  bottom: 40px;
-  left: 40px;
-  width: 160px;
-  height: 160px;
-  opacity: 0.5;
+  bottom: -20%;
+  right: -20%;
+  width: 60%;
+  height: 60%;
 }
 
 .ad-content {
   position: relative;
-  height: 100%;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  text-align: center;
-  padding: 2rem;
+  gap: 1rem;
+}
+
+.aspect-banner .ad-content {
+  flex-direction: row;
+  width: 100%;
+  gap: 2rem;
 }
 
 .ad-headline {
-  color: white;
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 12px;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
-@media (min-width: 640px) {
-  .ad-headline { font-size: 1.875rem; }
-}
+.aspect-banner .ad-headline { font-size: 1.5rem; margin: 0; }
 
 .ad-subtext {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 0.875rem;
-  margin-bottom: 1.5rem;
-  max-width: 280px;
+  font-size: 1rem;
+  opacity: 0.9;
+  max-width: 80%;
+  margin: 0 auto;
 }
 
-@media (min-width: 640px) {
-  .ad-subtext { font-size: 1rem; }
+.aspect-banner .ad-subtext {
+  max-width: none;
+  margin: 0;
+  flex: 1;
 }
 
 .ad-cta {
-  padding: 10px 24px;
+  padding: 12px 32px;
   background: white;
-  color: var(--text);
+  color: black;
   border: none;
   border-radius: 100px;
   font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 700;
+  margin-top: 1rem;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
-  transition: transform 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.ad-cta:hover {
-  transform: scale(1.05);
+.aspect-banner .ad-cta {
+  margin-top: 0;
+  white-space: nowrap;
 }
 
 .ad-size-badge {
   position: absolute;
-  bottom: 16px;
-  right: 16px;
-  padding: 4px 12px;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(8px);
-  border-radius: 100px;
-  color: white;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  padding: 4px 8px;
+  border-radius: 6px;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-family: monospace;
+  z-index: 3;
 }
 
-/* Templates */
+/* Templates Area */
 .templates-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .view-all-link {
@@ -1039,68 +1105,75 @@ body {
 }
 
 .view-all-link:hover {
-  text-decoration: underline;
+  color: var(--pink-dark);
 }
 
 .templates-grid-preview {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
-@media (min-width: 640px) {
-  .templates-grid-preview { grid-template-columns: repeat(4, 1fr); }
+  gap: 1rem;
 }
 
 .template-card {
   position: relative;
-  aspect-ratio: 1;
+  aspect-ratio: 4/3;
   border-radius: 12px;
-  overflow: hidden;
-  cursor: pointer;
   border: none;
   padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
 }
 
 .template-bg {
   position: absolute;
   inset: 0;
-  transition: transform 0.3s;
-}
-
-.template-card:hover .template-bg {
-  transform: scale(1.1);
 }
 
 .template-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.6) 100%);
+  background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%);
 }
 
 .template-info {
   position: absolute;
-  bottom: 12px;
-  left: 12px;
-  text-align: left;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px;
+  z-index: 2;
 }
 
 .template-category {
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.7);
+  display: inline-block;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(4px);
+  border-radius: 4px;
+  color: white;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 4px;
 }
 
 .template-name {
-  font-weight: 600;
   color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .template-hover {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   opacity: 0;
   transition: opacity 0.2s;
+  z-index: 3;
 }
 
 .template-card:hover .template-hover {
@@ -1108,39 +1181,43 @@ body {
 }
 
 .template-eye {
-  width: 32px;
-  height: 32px;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(8px);
+  width: 40px;
+  height: 40px;
+  background: white;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--text);
+  transform: scale(0.8);
+  transition: transform 0.2s;
 }
 
-/* Export Options */
+.template-card:hover .template-eye {
+  transform: scale(1);
+}
+
+/* Export Area */
 .export-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin-top: 1rem;
+  gap: 1rem;
 }
 
 .export-option {
   padding: 1rem;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: transparent;
-  cursor: pointer;
   text-align: left;
+  cursor: pointer;
   transition: all 0.2s;
-  font-family: inherit;
 }
 
 .export-option:hover {
-  border-color: rgba(236, 72, 153, 0.3);
-  background: rgba(236, 72, 153, 0.05);
+  border-color: var(--pink);
+  background: white;
+  box-shadow: var(--shadow-sm);
 }
 
 .export-option-header {
@@ -1157,16 +1234,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s;
 }
 
 .export-icon.png {
-  background: rgba(236, 72, 153, 0.1);
-  color: var(--pink);
-}
-
-.export-option:hover .export-icon.png {
-  background: rgba(236, 72, 153, 0.2);
+  background: rgba(168, 85, 247, 0.1);
+  color: var(--purple);
 }
 
 .export-icon.jpg {
@@ -1174,12 +1246,9 @@ body {
   color: var(--orange);
 }
 
-.export-option:hover .export-icon.jpg {
-  background: rgba(249, 115, 22, 0.2);
-}
-
 .export-format {
-  font-weight: 500;
+  font-size: 0.875rem;
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -1187,22 +1256,6 @@ body {
   font-size: 0.75rem;
   color: var(--text-muted);
 }
-`,
-
-    "src/index.css": `* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Manrope', system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-#root {
-  min-height: 100vh;
-}`
+`
   }
 };

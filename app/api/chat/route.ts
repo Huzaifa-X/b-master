@@ -29,6 +29,29 @@ export const dynamic = "force-dynamic"
 export const maxDuration = 300
 
 /**
+ * Fetch a file from URL and convert to base64 data URL
+ * This is needed because S3 URLs are not publicly accessible to AI models
+ */
+async function fetchAsBase64(url: string, mimeType: string): Promise<string | null> {
+    try {
+        console.log(`[Chat] Fetching file for base64 conversion: ${url.substring(0, 100)}...`)
+        const response = await fetch(url)
+        if (!response.ok) {
+            console.error(`[Chat] Failed to fetch file: ${response.statusText}`)
+            return null
+        }
+        const arrayBuffer = await response.arrayBuffer()
+        const base64 = Buffer.from(arrayBuffer).toString('base64')
+        const dataUrl = `data:${mimeType};base64,${base64}`
+        console.log(`[Chat] ✅ Converted to base64 (${Math.round(base64.length / 1024)}KB)`)
+        return dataUrl
+    } catch (error) {
+        console.error(`[Chat] Error fetching file for base64:`, error)
+        return null
+    }
+}
+
+/**
  * Save base64 image to S3 and return public URL
  */
 async function saveImageToS3(
@@ -192,7 +215,7 @@ export async function POST(req: NextRequest) {
 
         // Convert client messages to UIMessage format for AI SDK
         // For the LAST user message, include attachments as image/file parts
-        const conversationMessages: UIMessage[] = (clientMessages || []).map((msg: any, msgIndex: number) => {
+        const conversationMessages: UIMessage[] = await Promise.all((clientMessages || []).map(async (msg: any, msgIndex: number) => {
             let textContent = ""
             if (typeof msg.content === 'string') {
                 textContent = msg.content
@@ -228,29 +251,42 @@ export async function POST(req: NextRequest) {
 
                     if (!url) continue
 
-                    // Handle images
+                    // Handle images - convert to base64 so AI model can access them
                     if (mimeType?.startsWith('image/')) {
-                        console.log(`[Chat] Adding image attachment: ${name}`)
-                        parts.push({
-                            type: "image" as const,
-                            image: url,
-                        })
+                        console.log(`[Chat] Converting image attachment to base64: ${name}`)
+                        const base64Data = await fetchAsBase64(url, mimeType)
+                        if (base64Data) {
+                            parts.push({
+                                type: "image" as const,
+                                image: base64Data,
+                            })
+                            console.log(`[Chat] ✅ Added image attachment: ${name}`)
+                        } else {
+                            console.warn(`[Chat] ⚠️ Failed to convert image, falling back to URL: ${name}`)
+                            parts.push({
+                                type: "image" as const,
+                                image: url,
+                            })
+                        }
                     }
-                    // Handle PDFs
+                    // Handle PDFs - convert to base64 so AI model can access them
                     else if (mimeType === 'application/pdf') {
-                        console.log(`[Chat] Adding PDF attachment: ${name}`)
-                        parts.push({
-                            type: "file" as const,
-                            data: url,
-                            mediaType: "application/pdf" as const,
-                            filename: name,
-                        })
+                        console.log(`[Chat] Converting PDF attachment to base64: ${name}`)
+                        const base64Data = await fetchAsBase64(url, mimeType)
+                        if (base64Data) {
+                            parts.push({
+                                type: "file" as const,
+                                data: base64Data,
+                                mimeType: "application/pdf" as const,
+                            })
+                            console.log(`[Chat] ✅ Added PDF attachment: ${name}`)
+                        } else {
+                            console.warn(`[Chat] ⚠️ Failed to convert PDF, relying on Upstage extraction: ${name}`)
+                        }
                     }
                     // Handle other document types that might be viewable
                     else if (mimeType?.includes('document') || mimeType?.includes('text')) {
-                        console.log(`[Chat] Adding document attachment: ${name} (${mimeType})`)
-                        // For other documents, we rely on Upstage extraction in system prompt
-                        // but we can still try to pass them if the model supports it
+                        console.log(`[Chat] Document attachment: ${name} (${mimeType}) - relying on Upstage extraction`)
                     }
                 }
             }
@@ -260,7 +296,7 @@ export async function POST(req: NextRequest) {
                 role: msg.role as "user" | "assistant",
                 parts
             }
-        })
+        }))
 
         // Build system prompt
         let systemPrompt = await getSystemPrompt()

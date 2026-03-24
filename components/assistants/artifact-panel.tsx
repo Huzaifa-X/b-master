@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { VersionHistoryDialog } from "@/components/artifacts/version-history-dialog";
 import { ShareArtifactDialog } from "@/components/artifacts/share-artifact-dialog";
 import { useParams } from "next/navigation";
+import { useLocale } from "@/lib/i18n";
 
 interface ArtifactPanelProps {
   onClose?: () => void;
@@ -50,6 +51,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 }) => {
 
   const { artifactContent, isPreviewMode, togglePreview, setPrefilledPrompt, setSurgicalEditOuterHtml, isEditMode, toggleEditMode, updateArtifactContent, closePanel, isFullscreen, toggleFullscreen, wasAutoOpened } = useArtifactStore();
+  const { t } = useLocale();
   const { theme } = useTheme();
   const params = useParams()
   const assistantId = params?.id as string
@@ -66,15 +68,12 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
   const [isGeneratingDOCX, setIsGeneratingDOCX] = useState(false);
   const [isGeneratingPPTX, setIsGeneratingPPTX] = useState(false);
 
-  // Text selection state for Ask-B popover
-  const [selectedText, setSelectedText] = useState<string>("");
-  const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
-  const [showSelectionPopover, setShowSelectionPopover] = useState(false);
   const codeContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Visual edit mode (click-to-edit like Lovable)
   const [isVisualEditMode, setIsVisualEditMode] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Inline edit input state (appears when clicking element in visual edit mode)
   const [inlineEditState, setInlineEditState] = useState<{
@@ -82,13 +81,17 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     position: { x: number; y: number };
     description: string;
     outerHtml: string;
+    originalText: string;
     value: string;
+    mode: "element" | "selection";
   }>({
     visible: false,
     position: { x: 0, y: 0 },
     description: "",
     outerHtml: "",
+    originalText: "",
     value: "",
+    mode: "element",
   });
   const inlineEditInputRef = useRef<HTMLInputElement>(null);
 
@@ -103,7 +106,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
       navigator.clipboard.writeText(displayContent);
 
-      toast.success("Code copied to clipboard");
+      toast.success(t("artifactPanel.copiedToClipboard"));
 
     }
 
@@ -134,7 +137,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success("Artifact downloaded as HTML");
+    toast.success(t("artifactPanel.downloadedAsHtml"));
   };
 
   const handleDownloadAsPDF = async () => {
@@ -161,7 +164,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to generate PDF");
+        throw new Error(error.error || t("artifactPanel.failedToGeneratePdf"));
       }
 
       const data = await response.json();
@@ -176,10 +179,10 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
       a.click();
       document.body.removeChild(a);
 
-      toast.success("PDF generated and downloaded successfully");
+      toast.success(t("artifactPanel.pdfGenerated"));
     } catch (error) {
       console.error("Error generating PDF:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to generate PDF");
+      toast.error(error instanceof Error ? error.message : t("artifactPanel.failedToGeneratePdf"));
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -208,7 +211,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to generate DOCX");
+        throw new Error(error.error || t("artifactPanel.failedToGenerateDocx"));
       }
 
       const data = await response.json();
@@ -222,10 +225,10 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
       a.click();
       document.body.removeChild(a);
 
-      toast.success("DOCX generated and downloaded successfully");
+      toast.success(t("artifactPanel.docxGenerated"));
     } catch (error) {
       console.error("Error generating DOCX:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to generate DOCX");
+      toast.error(error instanceof Error ? error.message : t("artifactPanel.failedToGenerateDocx"));
     } finally {
       setIsGeneratingDOCX(false);
     }
@@ -254,7 +257,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to generate PPTX");
+        throw new Error(error.error || t("artifactPanel.failedToGeneratePptx"));
       }
 
       const data = await response.json();
@@ -268,10 +271,10 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
       a.click();
       document.body.removeChild(a);
 
-      toast.success("PPTX generated and downloaded successfully");
+      toast.success(t("artifactPanel.pptxGenerated"));
     } catch (error) {
       console.error("Error generating PPTX:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to generate PPTX");
+      toast.error(error instanceof Error ? error.message : t("artifactPanel.failedToGeneratePptx"));
     } finally {
       setIsGeneratingPPTX(false);
     }
@@ -297,7 +300,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    toast.success("Artifact downloaded successfully");
+    toast.success(t("artifactPanel.downloadedSuccessfully"));
   };
 
   const handleClose = useCallback(() => {
@@ -340,16 +343,27 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
       const range = selection?.getRangeAt(0);
       if (range) {
         const rect = range.getBoundingClientRect();
-        setSelectedText(text);
-        setSelectionPosition({
-          x: rect.left + rect.width / 2,
-          y: rect.top - 10
+
+        // Directly show the edit popover
+        setInlineEditState({
+          visible: true,
+          position: {
+            x: rect.left + rect.width / 2,
+            y: rect.top - 10
+          },
+          description: "Selection",
+          outerHtml: "",
+          originalText: text,
+          value: text,
+          mode: "selection"
         });
-        setShowSelectionPopover(true);
+
+        // Focus the input
+        setTimeout(() => {
+          inlineEditInputRef.current?.focus();
+          inlineEditInputRef.current?.select();
+        }, 50);
       }
-    } else {
-      setShowSelectionPopover(false);
-      setSelectedText("");
     }
   }, []);
 
@@ -368,7 +382,68 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     return () => window.removeEventListener("keydown", onKey);
   }, [isVisualEditMode, inlineEditState.visible]);
 
-  // Handle inline edit submission
+  // Handle manual update (direct string replacement without AI)
+  const handleManualUpdate = useCallback(async (mode: "element" | "selection") => {
+    if (!artifactId || !displayContent) return;
+
+    // Determine what we're replacing
+    const oldContent = mode === "element" ? inlineEditState.outerHtml : inlineEditState.originalText;
+    const newContent = mode === "element" ? inlineEditState.value : inlineEditState.value; // For selection, value is the new text
+
+    // If element mode, we need to be careful: the user typed just the text? Or meant to change the outerHTML?
+    // In "element" mode, let's assume we replace the text INSIDE if it's simple text, or we do a smart replacement.
+    // User said: "only the text gets replaced what use has typed no intervention of Chatbot!!"
+
+    let processedNewContent = newContent;
+
+    if (mode === "element" && inlineEditState.outerHtml) {
+      // Try to replace just the text within the outerHTML
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(inlineEditState.outerHtml, 'text/html');
+      const el = doc.body.firstElementChild as HTMLElement;
+      if (el) {
+        el.textContent = newContent; // This replaces children too, but consistent with "replace text"
+        processedNewContent = el.outerHTML;
+      }
+    }
+
+    try {
+      setIsUpdating(true);
+      const response = await fetch("/api/artifacts/manual-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          artifactId,
+          oldContent: mode === "element" ? inlineEditState.outerHtml : inlineEditState.originalText,
+          newContent: processedNewContent,
+          fullContent: displayContent,
+          mode: mode
+        }),
+      });
+
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error);
+
+      // Update local state IMMEDIATELY
+      updateArtifactContent(result.newFullHtml);
+
+      // Close popover
+      setInlineEditState(prev => ({ ...prev, visible: false }));
+
+      toast.success(t("artifactPanel.updatedSuccessfully", { version: result.versionNumber }));
+
+      // Notify parent to fetch new versions if dialog is open
+      window.dispatchEvent(new CustomEvent('artifact-version-created'));
+
+    } catch (err) {
+      console.error("Manual update failed:", err);
+      toast.error(err instanceof Error ? err.message : t("artifactPanel.manualUpdateFailed"));
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [artifactId, displayContent, inlineEditState, updateArtifactContent]);
+
+  // Handle inline edit submission (Ask Chatbot)
   const handleInlineEditSubmit = useCallback(() => {
     if (!inlineEditState.value.trim()) return;
 
@@ -376,13 +451,15 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     setSurgicalEditOuterHtml(inlineEditState.outerHtml || null);
 
     // Create the full prompt
-    const prompt = `Edit the ${inlineEditState.description}: ${inlineEditState.value}`;
+    const prompt = inlineEditState.mode === "selection"
+      ? `Regarding this selected text: "${inlineEditState.originalText}"\n\nPlease make this change: ${inlineEditState.value}`
+      : `Edit the ${inlineEditState.description}: ${inlineEditState.value}`;
 
     // Close inline edit and visual edit mode
     setInlineEditState(prev => ({ ...prev, visible: false, value: "" }));
     setIsVisualEditMode(false);
 
-    // Dispatch event with the message to send directly (avoids timing issues with prefilledPrompt)
+    // Dispatch event with the message to send directly
     window.dispatchEvent(new CustomEvent('trigger-chat-send', {
       detail: { message: prompt }
     }));
@@ -410,33 +487,6 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     };
   }, [inlineEditState.visible]);
 
-  // Handle Ask-B button click
-  const handleAskB = useCallback(() => {
-    if (selectedText) {
-      // Set the prefilled prompt with the selected text
-      const prompt = `Regarding this selected content:\n\n"${selectedText}"\n\nPlease make the following changes: `;
-      setPrefilledPrompt(prompt);
-      setShowSelectionPopover(false);
-      setSelectedText("");
-    }
-  }, [selectedText, setPrefilledPrompt]);
-
-  // Close popover when clicking outside
-  useEffect(() => {
-    const handleClickOutside = () => {
-      // Small delay to allow button click to register
-      setTimeout(() => {
-        const selection = window.getSelection();
-        if (!selection?.toString().trim()) {
-          setShowSelectionPopover(false);
-          setSelectedText("");
-        }
-      }, 100);
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   // Listen for messages from iframe for text selection + visual element clicks
   useEffect(() => {
@@ -444,20 +494,29 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
       if (event.data?.type === "textSelection") {
         const { text, x, y } = event.data;
         if (text && text.trim()) {
-          setSelectedText(text.trim());
-          // Adjust position relative to iframe
           const iframe = iframeRef.current;
           if (iframe) {
             const iframeRect = iframe.getBoundingClientRect();
-            setSelectionPosition({
-              x: iframeRect.left + x,
-              y: iframeRect.top + y - 10
+
+            setInlineEditState({
+              visible: true,
+              position: {
+                x: iframeRect.left + x,
+                y: iframeRect.top + y - 10
+              },
+              description: "Selection",
+              outerHtml: "",
+              originalText: text.trim(),
+              value: text.trim(),
+              mode: "selection"
             });
-            setShowSelectionPopover(true);
+
+            // Focus the input
+            setTimeout(() => {
+              inlineEditInputRef.current?.focus();
+              inlineEditInputRef.current?.select();
+            }, 50);
           }
-        } else {
-          setShowSelectionPopover(false);
-          setSelectedText("");
         }
       } else if (event.data?.type === "elementClick") {
         // Visual edit mode: user clicked an element inside the iframe
@@ -477,7 +536,9 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
               position: { x: inputX, y: inputY },
               description: description,
               outerHtml: outerHtml || "",
+              originalText: "",
               value: "",
+              mode: "element"
             });
 
             // Focus the input after a short delay
@@ -531,11 +592,11 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
       processedContent = displayContent.replace(/\{\{ARTIFACT_ID\}\}/g, artifactId);
     }
 
-    // Inject text selection script for Ask-B feature + visual edit mode
+    // Inject text selection script for {t("artifactPanel.askB")} feature + visual edit mode
     const selectionScript = `
       <script>
         (function() {
-          // ── Text Selection (Ask-B) ─────────────────────────────────────────
+          // ── Text Selection ({t("artifactPanel.askB")}) ─────────────────────────────────────────
           let lastSelection = '';
           document.addEventListener('mouseup', function(e) {
             if (window.__visualEditMode) return; // ignore selections during edit mode
@@ -713,12 +774,12 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
           )}
           <div className="min-w-0 flex-1">
             <h3 className="font-semibold text-sm truncate">
-              {artifactContent?.title || "Artifact Preview"}
+              {artifactContent?.title || t("artifactPanel.artifactPreview")}
             </h3>
             <p className="text-xs text-muted-foreground hidden sm:block">
               {artifactContent?.type === "code"
-                ? artifactContent.language || "code"
-                : "markdown"}
+                ? artifactContent.language || t("system.code") || "code"
+                : t("system.markdown") || "markdown"}
             </p>
           </div>
         </div>
@@ -735,7 +796,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
               title="Return to chat"
             >
               <ArrowLeft className="h-4 w-4" />
-              <span className="hidden sm:inline text-xs">Back</span>
+              <span className="hidden sm:inline text-xs">{t("common.back")}</span>
             </Button>
           )}
 
@@ -745,7 +806,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
               variant={isPreviewMode && !isEditMode ? "default" : "ghost"}
               size="icon"
               className="h-7 w-7 md:h-8 md:w-8"
-              title={isPreviewMode ? "Show code" : "Preview"}
+              title={isPreviewMode ? t("artifactPanel.showCode") : t("artifactPanel.preview")}
               onClick={() => {
                 if (isVisualEditMode) setIsVisualEditMode(false);
                 togglePreview();
@@ -764,7 +825,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
                 ? "bg-green-500 hover:bg-green-600 text-white"
                 : ""
                 }`}
-              title={isEditMode ? "Exit edit mode" : "Edit code"}
+              title={isEditMode ? t("artifactPanel.exitEditMode") : t("artifactPanel.editCode")}
               onClick={toggleEditMode}
             >
               <Edit3 className="h-3 w-3 md:h-4 md:w-4" />
@@ -780,7 +841,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
                 ? "bg-indigo-500 hover:bg-indigo-600 text-white"
                 : "text-muted-foreground"
                 }`}
-              title={isVisualEditMode ? "Exit visual edit mode" : "Click any element to edit it"}
+              title={isVisualEditMode ? t("artifactPanel.exitVisualEditMode") : t("artifactPanel.clickAnyElementToEdit")}
               onClick={() => setIsVisualEditMode((v) => !v)}
             >
               <MousePointer2 className="h-3 w-3 md:h-4 md:w-4" />
@@ -793,7 +854,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
             size="icon"
             className={`h-7 w-7 md:h-8 md:w-8 hidden md:flex ${isFullscreen ? "bg-blue-500 hover:bg-blue-600 text-white" : ""
               }`}
-            title={isFullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
+            title={isFullscreen ? t("artifactPanel.exitFullscreen") : t("artifactPanel.expandToFullscreen")}
             onClick={toggleFullscreen}
           >
             {isFullscreen ? (
@@ -811,7 +872,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 md:h-8 md:w-8 hidden md:flex"
-                  title="Download"
+                  title={t("artifactPanel.downloadItem")}
                   disabled={isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX}
                 >
                   {(isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX) ? (
@@ -826,25 +887,25 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
                   <>
                     <DropdownMenuItem onClick={handleDownloadAsHTML} disabled={isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX}>
                       <FileText className="h-4 w-4 mr-2" />
-                      Download as HTML
+                      {t("artifactPanel.downloadAsHtmlItem")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleDownloadAsPDF} disabled={isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX}>
                       <FileDown className="h-4 w-4 mr-2" />
-                      Download as PDF
+                      {t("artifactPanel.downloadAsPdfItem")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleDownloadAsDOCX} disabled={isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX}>
                       <FileType className="h-4 w-4 mr-2" />
-                      Download as DOCX
+                      {t("artifactPanel.downloadAsDocxItem")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleDownloadAsPPTX} disabled={isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX}>
                       <Presentation className="h-4 w-4 mr-2" />
-                      Download as PPTX
+                      {t("artifactPanel.downloadAsPptxItem")}
                     </DropdownMenuItem>
                   </>
                 ) : (
                   <DropdownMenuItem onClick={handleDownload} disabled={isGeneratingPDF || isGeneratingDOCX || isGeneratingPPTX}>
                     <Download className="h-4 w-4 mr-2" />
-                    Download as {artifactContent?.language || "txt"}
+                    {t("artifactPanel.downloadAsExt", { ext: artifactContent?.language || "txt" })}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
@@ -856,7 +917,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
             variant="ghost"
             size="icon"
             className="h-7 w-7 md:h-8 md:w-8"
-            title="Copy code"
+            title={t("artifactPanel.copyCode")}
             onClick={handleCopy}
           >
             <Copy className="h-3 w-3 md:h-4 md:w-4" />
@@ -868,7 +929,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
               variant="ghost"
               size="icon"
               className="h-7 w-7 md:h-8 md:w-8"
-              title="Share artifact"
+              title={t("artifactPanel.shareArtifact")}
               onClick={() => setIsShareDialogOpen(true)}
               disabled={isStreaming}
             >
@@ -891,7 +952,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
             size="icon"
             className="h-7 w-7 md:h-8 md:w-8"
             onClick={handleClose}
-            title="Close panel"
+            title={t("artifactPanel.closePanel")}
           >
             <X className="h-3 w-3 md:h-4 md:w-4" />
           </Button>
@@ -909,9 +970,9 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
             <div className="text-center space-y-6 px-4">
               <div className="rounded-lg border bg-card p-8 shadow-sm max-w-md mx-auto">
                 <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mx-auto mb-6"></div>
-                <h3 className="text-xl font-semibold mb-3">Generating Artifact</h3>
+                <h3 className="text-xl font-semibold mb-3">{t("artifactPanel.generatingArtifact")}</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  AI is creating your artifact. This may take a minute...
+                  {t("artifactPanel.generatingDescription")}
                 </p>
                 {/* Progress Bar */}
                 <div className="w-full bg-muted rounded-full h-2.5 mb-2">
@@ -920,7 +981,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
                     style={{ width: `${generationProgress}%` }}
                   ></div>
                 </div>
-                <p className="text-xs text-muted-foreground">{generationProgress}% complete</p>
+                <p className="text-xs text-muted-foreground">{generationProgress}% {t("artifactPanel.complete")}</p>
               </div>
             </div>
           </div>
@@ -960,7 +1021,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
                   {isVisualEditMode && (
                     <div className="absolute top-0 left-0 right-0 z-10 bg-indigo-500/90 text-white text-xs text-center py-1.5 px-3 flex items-center justify-center gap-2 pointer-events-none">
                       <MousePointer2 className="h-3 w-3" />
-                      <span>Click any element to edit it — press <kbd className="bg-white/20 rounded px-1">Esc</kbd> or the pointer button to exit</span>
+                      <span>{t("artifactPanel.visualEditModeHint")}</span>
                     </div>
                   )}
                   <iframe
@@ -981,7 +1042,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
 
-                    <p className="text-sm text-muted-foreground">Loading preview...</p>
+                    <p className="text-sm text-muted-foreground">{t("artifactPanel.loadingPreview")}</p>
 
                   </div>
 
@@ -1038,11 +1099,11 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
                 <Code2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
 
-                <h2 className="text-xl font-semibold mb-2">No Artifact Selected</h2>
+                <h2 className="text-xl font-semibold mb-2">{t("artifactPanel.noArtifactSelected")}</h2>
 
                 <p className="text-sm text-muted-foreground max-w-sm">
 
-                  When you generate code or interactive content, it will appear here in a live preview.
+                  {t("artifactPanel.noArtifactDescription")}
 
                 </p>
 
@@ -1067,28 +1128,8 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
         />
       )}
 
-      {/* Text Selection Popover for Ask-B */}
-      {showSelectionPopover && selectionPosition && selectedText && (
-        <div
-          className="fixed z-50 animate-in fade-in-0 zoom-in-95 duration-150"
-          style={{
-            left: selectionPosition.x,
-            top: selectionPosition.y,
-            transform: "translate(-50%, -100%)",
-          }}
-        >
-          <Button
-            size="sm"
-            onClick={handleAskB}
-            className="gap-2 shadow-lg"
-          >
-            <MessageSquare className="h-4 w-4" />
-            Ask-B
-          </Button>
-        </div>
-      )}
+      {/* Selection Popover is now handled via inlineEditState */}
 
-      {/* Inline Edit Input (appears when clicking element in visual edit mode) */}
       {inlineEditState.visible && (
         <div
           data-inline-edit-input
@@ -1099,10 +1140,16 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
             transform: "translateX(-50%)",
           }}
         >
-          <div className="flex flex-col gap-2 bg-background border rounded-lg shadow-xl p-2.5 min-w-[280px] max-w-[400px]">
-            <p className="text-[10px] text-muted-foreground px-1 truncate">
-              Edit: {inlineEditState.description}
-            </p>
+          <div className="flex flex-col gap-2 bg-background border rounded-lg shadow-xl p-2.5 min-w-[320px] max-w-[450px]">
+            <div className="flex items-center justify-between px-1">
+              <p className="text-[10px] font-medium text-muted-foreground truncate uppercase tracking-wider">
+                {inlineEditState.mode === "selection" ? t("artifactPanel.directEdit") : t("artifactPanel.editDescription", { description: inlineEditState.description })}
+              </p>
+              {inlineEditState.mode === "selection" && (
+                <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{t("artifactPanel.selection")}</span>
+              )}
+            </div>
+
             <Input
               ref={inlineEditInputRef}
               value={inlineEditState.value}
@@ -1110,20 +1157,54 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  handleInlineEditSubmit();
+                  if (e.metaKey || e.ctrlKey) {
+                    if (inlineEditState.mode === "element") handleInlineEditSubmit();
+                    else handleManualUpdate(inlineEditState.mode);
+                  } else {
+                    if (inlineEditState.mode === "selection") handleManualUpdate("selection");
+                    else handleInlineEditSubmit(); // Default to AI for elements as requested
+                  }
                 }
               }}
-              placeholder="What changes do you want?"
-              className="h-9 text-sm"
+              placeholder={inlineEditState.mode === "selection" ? t("artifactPanel.newTextContent") : t("artifactPanel.describeChange")}
+              className="h-9 text-sm focus-visible:ring-indigo-500"
             />
-            <Button
-              className="w-fit bg-indigo-500 hover:bg-indigo-600 gap-2 ml-auto"
-              onClick={handleInlineEditSubmit}
-              disabled={!inlineEditState.value.trim()}
-            >
-              <Send className="h-4 w-4" />
-              Send
-            </Button>
+
+            <div className="flex items-center gap-2 mt-1">
+              {inlineEditState.mode === "element" && (
+                <Button
+                  size="sm"
+                  className="w-fit ml-auto bg-indigo-500 hover:bg-indigo-600 text-white gap-2 text-xs shadow-sm"
+                  onClick={handleInlineEditSubmit}
+                  disabled={isUpdating || !inlineEditState.value.trim()}
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  {t("artifactPanel.askB")}
+                </Button>
+              )}
+
+              {inlineEditState.mode === "selection" && (
+                <Button
+                  size="sm"
+                  className="ml-auto w-fit bg-emerald-500 hover:bg-emerald-600 text-white gap-2 text-xs shadow-sm cursor-pointer"
+                  onClick={() => handleManualUpdate("selection")}
+                  disabled={!inlineEditState.value.trim() || isUpdating}
+                >
+                  {isUpdating ? (
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5" />
+                  )}
+                  {isUpdating ? t("artifactPanel.updating") : t("artifactPanel.updateSelectedText")}
+                </Button>
+              )}
+            </div>
+
+            <p className="text-[9px] text-muted-foreground/60 text-center px-1">
+              {inlineEditState.mode === "selection"
+                ? t("artifactPanel.pressEnterToSave")
+                : t("artifactPanel.pressEnterToSend")}
+            </p>
           </div>
         </div>
       )}

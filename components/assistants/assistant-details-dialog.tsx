@@ -26,6 +26,7 @@ import { useAssistantPermissions } from "@/hooks/usePermissions"
 import { useHardDeleteAssistant } from "@/hooks/useAssistantMutations"
 import { leaveAssistant, duplicateAssistant } from "@/app/actions/assistant.action"
 import { toast } from "sonner"
+import { useLocale } from "@/lib/i18n"
 
 interface Assistant {
   id: string
@@ -49,6 +50,7 @@ export function AssistantDetailsDialog({
   open,
   onOpenChange,
 }: AssistantDetailsDialogProps) {
+  const { t } = useLocale()
   const router = useRouter()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showLeaveDialog, setShowLeaveDialog] = useState(false)
@@ -97,7 +99,7 @@ export function AssistantDetailsDialog({
     const link = `${window.location.origin}/assistants/${assistant.id}`
     await navigator.clipboard.writeText(link)
     setLinkCopied(true)
-    toast.success("Link copied to clipboard!")
+    toast.success(t("assistants.details.copied"))
     setTimeout(() => setLinkCopied(false), 2000)
   }
 
@@ -107,14 +109,14 @@ export function AssistantDetailsDialog({
     try {
       const result = await duplicateAssistant(assistant.id)
       if (result.success && result.newAssistantId) {
-        toast.success(`"Copy of ${assistant.name}" created!`)
+        toast.success(t("assistants.details.duplicateSuccess", { name: assistant.name }))
         onOpenChange(false)
         router.push(`/assistants/${result.newAssistantId}/edit`)
       } else {
-        toast.error(result.error || "Failed to duplicate assistant")
+        toast.error(result.error || t("errors.generic"))
       }
     } catch {
-      toast.error("Failed to duplicate assistant")
+      toast.error(t("errors.generic"))
     } finally {
       setIsDuplicating(false)
     }
@@ -126,15 +128,15 @@ export function AssistantDetailsDialog({
     try {
       const result = await leaveAssistant(assistant.id)
       if (result.success) {
-        toast.success(`You have left "${assistant.name}"`)
+        toast.success(t("assistants.details.leaveSuccess", { name: assistant.name }))
         setShowLeaveDialog(false)
         onOpenChange(false)
         router.push("/assistants")
       } else {
-        toast.error(result.error || "Failed to leave assistant")
+        toast.error(result.error || t("errors.generic"))
       }
     } catch {
-      toast.error("Failed to leave assistant")
+      toast.error(t("errors.generic"))
     } finally {
       setIsLeaving(false)
     }
@@ -144,9 +146,9 @@ export function AssistantDetailsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] max-w-[500px] mx-4 sm:mx-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl sm:text-2xl font-bold">Assistant Details</DialogTitle>
+          <DialogTitle className="text-xl sm:text-2xl font-bold">{t("assistants.details.title")}</DialogTitle>
           <DialogDescription className="text-sm sm:text-base">
-            {canEdit ? "View or edit your assistant information" : "View assistant information"}
+            {canEdit ? t("assistants.details.editInfo") : t("assistants.details.viewInfo")}
           </DialogDescription>
         </DialogHeader>
 
@@ -173,7 +175,7 @@ export function AssistantDetailsDialog({
           {/* Name */}
           <div>
             <label className="text-xs sm:text-sm font-semibold text-neutral-600 dark:text-neutral-400">
-              Name
+              {t("assistants.details.name")}
             </label>
             <p className="text-base sm:text-lg font-bold text-neutral-800 dark:text-white mt-1 break-words">
               {assistant.name}
@@ -184,7 +186,7 @@ export function AssistantDetailsDialog({
           {assistant.category && (
             <div>
               <label className="text-xs sm:text-sm font-semibold text-neutral-600 dark:text-neutral-400">
-                Category
+                {t("assistants.details.category")}
               </label>
               <p className="text-sm sm:text-base text-neutral-800 dark:text-white mt-1 break-words">
                 {assistant.category}
@@ -195,7 +197,7 @@ export function AssistantDetailsDialog({
           {/* Description */}
           <div>
             <label className="text-xs sm:text-sm font-semibold text-neutral-600 dark:text-neutral-400">
-              Description
+              {t("assistants.details.description")}
             </label>
             <p className="text-sm sm:text-base text-neutral-800 dark:text-white mt-1 leading-relaxed break-words">
               {assistant.description}
@@ -209,7 +211,7 @@ export function AssistantDetailsDialog({
               className="w-full sm:flex-1 bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white text-sm sm:text-base"
             >
               <EyeIcon className="h-4 w-4 mr-2" />
-              View Assistant
+              {t("assistants.details.viewAssistant")}
             </Button>
 
             {/* Copy shareable link — available to all users */}
@@ -221,12 +223,12 @@ export function AssistantDetailsDialog({
               {linkCopied ? (
                 <>
                   <Check className="h-4 w-4 mr-2 text-green-500" />
-                  Copied!
+                  {t("assistants.details.copied")}
                 </>
               ) : (
                 <>
                   <Link2 className="h-4 w-4 mr-2" />
-                  Copy Link
+                  {t("assistants.details.copyLink")}
                 </>
               )}
             </Button>
@@ -238,7 +240,7 @@ export function AssistantDetailsDialog({
                   className="w-full sm:flex-1 bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white text-sm sm:text-base"
                 >
                   <PencilIcon className="h-4 w-4 mr-2" />
-                  Edit Assistant
+                  {t("assistants.details.editAssistant")}
                 </Button>
                 <Button
                   onClick={handleDuplicate}
@@ -249,12 +251,12 @@ export function AssistantDetailsDialog({
                   {isDuplicating ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Duplicating...
+                      {t("assistants.details.duplicating")}
                     </>
                   ) : (
                     <>
                       <Copy className="h-4 w-4 mr-2" />
-                      Duplicate
+                      {t("assistants.details.duplicate")}
                     </>
                   )}
                 </Button>
@@ -267,12 +269,12 @@ export function AssistantDetailsDialog({
                   {isDeleting ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Deleting...
+                      {t("assistants.details.deleting")}
                     </>
                   ) : (
                     <>
                       <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
+                      {t("assistants.details.delete")}
                     </>
                   )}
                 </Button>
@@ -290,12 +292,12 @@ export function AssistantDetailsDialog({
                 {isLeaving ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Leaving...
+                    {t("assistants.details.leaving")}
                   </>
                 ) : (
                   <>
                     <LogOut className="h-4 w-4 mr-2" />
-                    Leave Assistant
+                    {t("assistants.details.leave")}
                   </>
                 )}
               </Button>
@@ -308,22 +310,22 @@ export function AssistantDetailsDialog({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent className="w-[95vw] max-w-[500px] mx-4 sm:mx-auto">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg sm:text-xl">Delete Assistant</AlertDialogTitle>
+            <AlertDialogTitle className="text-lg sm:text-xl">{t("assistants.details.deleteConfirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription className="text-sm sm:text-base">
-              Are you sure you want to delete "{assistant.name}"? This action cannot be undone and will permanently delete:
+              {t("assistants.details.deleteConfirmText", { name: assistant.name })}
               <ul className="list-disc list-inside mt-2 space-y-1 text-xs sm:text-sm">
-                <li>All chat messages and conversations</li>
-                <li>All artifacts and versions</li>
-                <li>All contacts and permissions</li>
-                <li>All knowledge base files</li>
-                <li>All news feed posts</li>
-                <li>All purchase records</li>
+                <li>{t("assistants.details.deleteList.chats")}</li>
+                <li>{t("assistants.details.deleteList.artifacts")}</li>
+                <li>{t("assistants.details.deleteList.contacts")}</li>
+                <li>{t("assistants.details.deleteList.knowledge")}</li>
+                <li>{t("assistants.details.deleteList.feed")}</li>
+                <li>{t("assistants.details.deleteList.purchases")}</li>
               </ul>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
             <AlertDialogCancel disabled={isDeleting} className="w-full sm:w-auto order-2 sm:order-1">
-              Cancel
+              {t("common.cancel")}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
@@ -333,10 +335,10 @@ export function AssistantDetailsDialog({
               {isDeleting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting...
+                  {t("assistants.details.deleting")}
                 </>
               ) : (
-                "Delete Forever"
+                t("assistants.details.deleteForever")
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -347,14 +349,14 @@ export function AssistantDetailsDialog({
       <AlertDialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
         <AlertDialogContent className="w-[95vw] max-w-[500px] mx-4 sm:mx-auto">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg sm:text-xl">Leave Assistant</AlertDialogTitle>
+            <AlertDialogTitle className="text-lg sm:text-xl">{t("assistants.details.leaveConfirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription className="text-sm sm:text-base">
-              Are you sure you want to leave &quot;{assistant.name}&quot;? You will lose access to this assistant and all its features. The owner can re-add you later if needed.
+              {t("assistants.details.leaveConfirmText", { name: assistant.name })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
             <AlertDialogCancel disabled={isLeaving} className="w-full sm:w-auto order-2 sm:order-1">
-              Cancel
+              {t("common.cancel")}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleLeaveConfirm}
@@ -364,10 +366,10 @@ export function AssistantDetailsDialog({
               {isLeaving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Leaving...
+                  {t("assistants.details.leaving")}
                 </>
               ) : (
-                "Leave Assistant"
+                t("assistants.details.leave")
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

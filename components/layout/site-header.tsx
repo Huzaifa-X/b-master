@@ -12,8 +12,10 @@ import { usePinnedAssistants } from "@/hooks/usePinnedAssistants"
 import { useMemo } from "react"
 import { useSpecificChat } from "@/hooks/useSpecificChat"
 import { Skeleton } from "../ui/skeleton"
+import { useLocale } from "@/lib/i18n"
 
 export function SiteHeader() {
+  const { t } = useLocale()
   const assistantStore = useAssistantStore()
   const pathname = usePathname()
   const router = useRouter()
@@ -102,10 +104,10 @@ export function SiteHeader() {
     const registrationUrl = `${window.location.origin}/signup`
     try {
       await navigator.clipboard.writeText(registrationUrl)
-      toast.success("Registration link copied to clipboard!")
+      toast.success(t("header.copied"))
     } catch (error) {
       console.error("Failed to copy registration link:", error)
-      toast.error("Failed to copy link")
+      toast.error(t("common.error"))
     }
   }
 
@@ -133,7 +135,7 @@ export function SiteHeader() {
                   onClick={handleTogglePin}
                   disabled={isToggling || !(assistantIdFromPath || assistantStore.currentAssistantId)}
                   className="shrink-0 h-8 w-8 p-0 hover:bg-transparent hover:text-primary"
-                  title={isPinned ? "Unpin from sidebar" : "Pin to sidebar"}
+                  title={isPinned ? t("header.unpin") : t("header.pin")}
                 >
                   {isToggling ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -171,11 +173,11 @@ export function SiteHeader() {
               variant="ghost"
               size="icon"
               className="h-8 w-8 hover:bg-muted hover:text-primary"
-              title="Share registration page"
+              title={t("header.shareRegistration")}
               onClick={() => {
                 const registrationUrl = `${window.location.origin}/signup`
                 navigator.clipboard.writeText(registrationUrl)
-                toast.success("Registration page link copied to clipboard!")
+                toast.success(t("header.copied"))
               }}
             >
               <Share2 className="h-4 w-4 text-primary" />
@@ -193,7 +195,7 @@ export function SiteHeader() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8"
-                    title="Share conversation"
+                    title={t("header.shareConversation")}
                   >
                     <Share2 className="h-4 w-4" />
                   </Button>
@@ -203,7 +205,7 @@ export function SiteHeader() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
-                title="Close chat"
+                title={t("header.closeChat")}
                 onClick={handleCloseChat}
               >
                 <X className="h-4 w-4" />

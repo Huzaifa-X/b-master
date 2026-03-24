@@ -11,6 +11,7 @@ import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
 import { toast } from "sonner"
 import { ContactDialog, type ContactFormData } from "./contact-dialog"
 import { useDeleteContact, useContactStatistics } from "@/hooks/useContacts"
+import { useLocale } from "@/lib/i18n"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -71,6 +72,7 @@ export function ExpandableContactCards({
     viewOnly = false,
     canEdit = true,
 }: ExpandableContactCardsProps) {
+    const { t } = useLocale()
     const [active, setActive] = useState<Contact | null>(null)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [editingContact, setEditingContact] = useState<ContactFormData | null>(null)
@@ -218,7 +220,7 @@ export function ExpandableContactCards({
                                         )}
                                         {!viewOnly && active.assistantName && (
                                             <p className="text-xs text-muted-foreground mt-2">
-                                                {viewOnly ? active.assistantName : `Assistant: ${active.assistantName}`}
+                                                {viewOnly ? active.assistantName : t("contacts.assistant", { name: active.assistantName })}
                                             </p>
                                         )}
                                     </div>
@@ -227,8 +229,8 @@ export function ExpandableContactCards({
                                     {canEdit && !viewOnly && (
                                         <Tabs defaultValue="details" className="w-full mb-4">
                                             <TabsList className="grid w-full grid-cols-2">
-                                                <TabsTrigger value="details">Details</TabsTrigger>
-                                                <TabsTrigger value="activity">Activity</TabsTrigger>
+                                                <TabsTrigger value="details">{t("contacts.details")}</TabsTrigger>
+                                                <TabsTrigger value="activity">{t("contacts.activity")}</TabsTrigger>
                                             </TabsList>
 
                                             <TabsContent value="details" className="mt-4 space-y-4">
@@ -237,7 +239,7 @@ export function ExpandableContactCards({
                                                     <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
                                                         <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
                                                         <div className="flex-1">
-                                                            <p className="text-xs text-muted-foreground mb-1">Description</p>
+                                                            <p className="text-xs text-muted-foreground mb-1">{t("contacts.description")}</p>
                                                             <p className="text-sm">{active.description}</p>
                                                         </div>
                                                     </div>
@@ -248,7 +250,7 @@ export function ExpandableContactCards({
                                                     <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
                                                         <User className="h-5 w-5 text-muted-foreground mt-0.5" />
                                                         <div>
-                                                            <p className="text-xs text-muted-foreground">Gender</p>
+                                                            <p className="text-xs text-muted-foreground">{t("contacts.gender")}</p>
                                                             <p className="text-sm font-medium">{active.gender}</p>
                                                         </div>
                                                     </div>
@@ -257,7 +259,7 @@ export function ExpandableContactCards({
                                                 <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
                                                     <Briefcase className="h-5 w-5 text-muted-foreground mt-0.5" />
                                                     <div>
-                                                        <p className="text-xs text-muted-foreground">Role</p>
+                                                        <p className="text-xs text-muted-foreground">{t("contacts.role")}</p>
                                                         <p className="text-sm font-medium capitalize">{active.role}</p>
                                                     </div>
                                                 </div>
@@ -265,7 +267,7 @@ export function ExpandableContactCards({
                                                 <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
                                                     <Mail className="h-5 w-5 text-muted-foreground mt-0.5" />
                                                     <div>
-                                                        <p className="text-xs text-muted-foreground">Email Address</p>
+                                                        <p className="text-xs text-muted-foreground">{t("contacts.emailAddress")}</p>
                                                         <p className="text-sm font-medium">{active.email}</p>
                                                     </div>
                                                 </div>
@@ -274,7 +276,7 @@ export function ExpandableContactCards({
                                                     <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
                                                         <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
                                                         <div>
-                                                            <p className="text-xs text-muted-foreground">Address</p>
+                                                            <p className="text-xs text-muted-foreground">{t("contacts.address")}</p>
                                                             <p className="text-sm font-medium">{active.address}</p>
                                                         </div>
                                                     </div>
@@ -284,7 +286,7 @@ export function ExpandableContactCards({
                                                     <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
                                                         <Phone className="h-5 w-5 text-muted-foreground mt-0.5" />
                                                         <div>
-                                                            <p className="text-xs text-muted-foreground">Telephone</p>
+                                                            <p className="text-xs text-muted-foreground">{t("contacts.telephone")}</p>
                                                             <p className="text-sm font-medium">{active.telephone}</p>
                                                         </div>
                                                     </div>
@@ -294,7 +296,7 @@ export function ExpandableContactCards({
                                                     <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
                                                         <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
                                                         <div>
-                                                            <p className="text-xs text-muted-foreground">Additional Information</p>
+                                                            <p className="text-xs text-muted-foreground">{t("contacts.additionalInfo")}</p>
                                                             <p className="text-sm">{active.information}</p>
                                                         </div>
                                                     </div>
@@ -313,7 +315,7 @@ export function ExpandableContactCards({
                                                             <div className="flex items-center justify-between">
                                                                 <div className="flex items-center gap-2">
                                                                     <FileCode className="h-5 w-5 text-primary" />
-                                                                    <h4 className="font-semibold">Artifacts ({statistics.artifactCount})</h4>
+                                                                    <h4 className="font-semibold">{t("contacts.artifactsCount", { count: statistics.artifactCount })}</h4>
                                                                 </div>
                                                             </div>
                                                             
@@ -346,7 +348,7 @@ export function ExpandableContactCards({
                                                             ) : (
                                                                 <div className="text-center py-6 text-muted-foreground">
                                                                     <FileCode className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                                                    <p className="text-sm">No artifacts created yet</p>
+                                                                    <p className="text-sm">{t("contacts.noArtifacts")}</p>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -359,7 +361,7 @@ export function ExpandableContactCards({
                                                             <div className="flex items-center justify-between">
                                                                 <div className="flex items-center gap-2">
                                                                     <Newspaper className="h-5 w-5 text-green-600 dark:text-green-400" />
-                                                                    <h4 className="font-semibold">News Feed Posts ({statistics.newsfeedCount})</h4>
+                                                                    <h4 className="font-semibold">{t("contacts.newsFeedPostsCount", { count: statistics.newsfeedCount })}</h4>
                                                                 </div>
                                                             </div>
                                                             
@@ -407,14 +409,14 @@ export function ExpandableContactCards({
                                                             ) : (
                                                                 <div className="text-center py-6 text-muted-foreground">
                                                                     <Newspaper className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                                                    <p className="text-sm">No posts created yet</p>
+                                                                    <p className="text-sm">{t("contacts.noPosts")}</p>
                                                                 </div>
                                                             )}
                                                         </div>
                                                     </div>
                                                 ) : (
                                                     <div className="text-center py-8 text-muted-foreground">
-                                                        <p className="text-sm">Unable to load activity data</p>
+                                                        <p className="text-sm">{t("contacts.unableToLoadActivity")}</p>
                                                     </div>
                                                 )}
                                             </TabsContent>
@@ -510,7 +512,7 @@ export function ExpandableContactCards({
                                                 className="w-full sm:w-auto"
                                             >
                                                 <Edit className="h-4 w-4 mr-2" />
-                                                Edit
+                                                {t("common.edit")}
                                             </Button>
                                             <Button
                                                 variant="destructive"
@@ -519,7 +521,7 @@ export function ExpandableContactCards({
                                                 className="w-full sm:w-auto"
                                             >
                                                 <Trash2 className="h-4 w-4 mr-2" />
-                                                Delete
+                                                {t("common.delete")}
                                             </Button>
                                         </>
                                     )}
@@ -530,7 +532,7 @@ export function ExpandableContactCards({
                                         className="w-full sm:w-auto bg-transparent hover:bg-transparent hover:text-primary"
                                     >
                                         <X className="h-4 w-4 mr-2" />
-                                        Close
+                                        {t("common.close")}
                                     </Button>
                                 </div>
                             </div>
@@ -587,7 +589,7 @@ export function ExpandableContactCards({
                                         </motion.p>
                                     </div>
                                     <Button variant="outline" size="sm" className="bg-transparent hover:bg-transparent hover:text-primary">
-                                        View
+                                        {t("contacts.view")}
                                     </Button>
                                 </div>
                             </motion.div>
@@ -597,13 +599,13 @@ export function ExpandableContactCards({
                     {/* Empty State */}
                     {filteredContacts.length === 0 && contacts.length === 0 && (
                         <div className="text-center py-16">
-                            <Search className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                            <h3 className="text-lg font-semibold mb-2">No contacts found</h3>
-                            <p className="text-sm text-muted-foreground">
-                                {searchQuery
-                                    ? "Try searching with different keywords"
-                                    : "No contacts available"}
-                            </p>
+                             <Search className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                             <h3 className="text-lg font-semibold mb-2">{t("contacts.noContactsFound")}</h3>
+                             <p className="text-sm text-muted-foreground">
+                                 {searchQuery
+                                     ? t("contacts.tryDifferentKeywords")
+                                     : t("contacts.noContactsAvailable")}
+                             </p>
                         </div>
                     )}
 
@@ -636,19 +638,19 @@ export function ExpandableContactCards({
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Contact</AlertDialogTitle>
+                        <AlertDialogTitle>{t("contacts.deleteTitle")}</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to delete {contactToDelete?.name} from your contacts? This action cannot be undone.
+                            {t("contacts.deleteDescription", { name: contactToDelete?.name || "" })}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel disabled={isDeleting}>{t("common.cancel")}</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDeleteConfirm}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             disabled={isDeleting}
                         >
-                            {isDeleting ? "Deleting..." : "Delete"}
+                            {isDeleting ? t("common.deleting") : t("common.delete")}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

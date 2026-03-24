@@ -100,6 +100,6 @@ export function usePresignedImage(
     }
   }, [imageUrl, enabled])
 
-  return presignedUrl || imageUrl || null
+  return presignedUrl
 }
 
