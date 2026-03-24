@@ -1,3 +1,5 @@
+"use client"
+
 import { AssistantWizard } from "@/app/(dashboard)/assistants/add/_components/assistant-wizard"
 import { useLocale } from "@/lib/i18n"
 
