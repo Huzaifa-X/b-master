@@ -9,8 +9,11 @@ import { useRouter } from "next/navigation"
 import { getActivePromotionForUser } from "@/app/actions/promotion.action"
 import { Badge } from "@/components/ui/badge"
 
+import { useLocale } from "@/lib/i18n"
+
 export function Header() {
     const { state, toggleSidebar } = useSidebar()
+    const { t } = useLocale()
     const [isHovered, setIsHovered] = useState(false)
     const [promo, setPromo] = useState<any>(null)
     const isCollapsed = state === "collapsed"
@@ -63,7 +66,9 @@ export function Header() {
                 <div className="mt-2 px-2 pb-2">
                     <Badge variant="secondary" className="w-full flex justify-center py-1.5 cursor-pointer bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-200" onClick={() => router.push("/pricing")}>
                         <Gift className="w-3.5 h-3.5 mr-1" />
-                        {promo.discountPercent ? `${promo.discountPercent}% OFF` : `$${promo.discountAmount} OFF`} GIFT
+                        {t("promo.discountOff", {
+                            amount: promo.discountPercent ? `${promo.discountPercent}%` : `$${promo.discountAmount}`
+                        })} {t("promo.gift")}
                     </Badge>
                 </div>
             )}

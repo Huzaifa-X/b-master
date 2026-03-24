@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation"
 import { useAssistantMutations } from "@/hooks/useAssistantMutations"
 import { useSubscriptionLimits } from "@/hooks/useSubscriptionLimits"
 import Link from "next/link"
+import { useLocale } from "@/lib/i18n"
 
 interface AssistantWizardProps {
   assistantId?: string
@@ -25,6 +26,7 @@ interface AssistantWizardProps {
 }
 
 export function AssistantWizard({ assistantId, initialData, mode = "create" }: AssistantWizardProps) {
+  const { t } = useLocale()
   const router = useRouter()
   const currentStep = useWizardStore((state) => state.currentStep)
   const setCurrentStep = useWizardStore((state) => state.setCurrentStep)
@@ -93,15 +95,15 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
     switch (step) {
       case 1:
         if (!formData.name.trim()) {
-          toast.error("Please enter a name")
+          toast.error(t("wizard.validation.enterName"))
           return false
         }
         if (!formData.price.trim()) {
-          toast.error("Please enter a price")
+          toast.error(t("wizard.validation.enterPrice"))
           return false
         }
         if (!formData.description.trim()) {
-          toast.error("Please enter a description")
+          toast.error(t("wizard.validation.enterDescription"))
           return false
         }
         return true
@@ -192,7 +194,7 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
     }
 
     if (result.success) {
-      toast.success(mode === "edit" ? "Assistant updated successfully!" : "Assistant created successfully!")
+      toast.success(mode === "edit" ? t("wizard.success.update") : t("wizard.success.create"))
       addCompletedStep(6)
 
       // Show additional info for URLs being processed
@@ -210,7 +212,7 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
         router.push('/assistants')
       }
     } else {
-      toast.error(result.error || `Failed to ${mode === "edit" ? "update" : "create"} assistant`)
+      toast.error(result.error || t(mode === "edit" ? "wizard.error.update" : "wizard.error.create"))
     }
   }
 
@@ -231,31 +233,31 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
         </div>
 
         <div className="space-y-2">
-          <h2 className="text-xl font-semibold">Assistant Limit Reached</h2>
+          <h2 className="text-xl font-semibold">{t("wizard.limitReached.title")}</h2>
           <p className="text-muted-foreground">
-            Your <span className="font-medium text-foreground">{subscriptionLimits.planTitle || "current"}</span> plan allows up to{" "}
-            <span className="font-medium text-foreground">{subscriptionLimits.assistantLimit}</span> assistant
-            {subscriptionLimits.assistantLimit !== 1 ? "s" : ""}.{" "}
-            You currently have{" "}
-            <span className="font-medium text-foreground">{subscriptionLimits.currentAssistants}</span>.
+            {t("wizard.limitReached.description", {
+              plan: subscriptionLimits.planTitle || "current",
+              limit: subscriptionLimits.assistantLimit,
+              current: subscriptionLimits.currentAssistants
+            })}
           </p>
           <p className="text-sm text-muted-foreground">
-            Upgrade your plan to create more assistants.
+            {t("wizard.limitReached.upgrade")}
           </p>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
           <Button asChild className="flex-1">
-            <Link href="/pricing">Upgrade Plan</Link>
+            <Link href="/pricing">{t("wizard.limitReached.upgradeButton")}</Link>
           </Button>
           <Button variant="outline" asChild className="flex-1">
-            <Link href="/assistants">Back to Assistants</Link>
+            <Link href="/assistants">{t("wizard.limitReached.backButton")}</Link>
           </Button>
         </div>
 
         <div className="flex items-center gap-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span>Unlimited assistants are available on higher plans.</span>
+          <span>{t("wizard.limitReached.unlimitedInfo")}</span>
         </div>
       </Card>
     )
@@ -294,7 +296,7 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
           className="flex items-center gap-2 bg-background hover:bg-muted hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" />
-          Back
+          {t("wizard.back")}
         </Button>
 
         {currentStep < 6 ? (
@@ -302,7 +304,7 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
             onClick={handleNext}
             className="flex items-center gap-2"
           >
-            Next
+            {t("wizard.next")}
             <ChevronRight className="h-4 w-4" />
           </Button>
         ) : (
@@ -311,8 +313,8 @@ export function AssistantWizard({ assistantId, initialData, mode = "create" }: A
             disabled={isSaving}
             className="flex items-center gap-2"
           >
-            {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {mode === "edit" ? "Update Assistant" : "Create Assistant"}
+            {(isSaving || isCreating || isUpdating) && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isSaving ? t("wizard.saving") : (mode === "edit" ? t("wizard.update") : t("wizard.create"))}
           </Button>
         )}
       </div>

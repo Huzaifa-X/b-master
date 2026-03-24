@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Tabs } from "@/components/ui/vercel-tabs"
 import ProfileTab from "./_components/profile-tab"
 import BillingTab from "./_components/billing-tab"
@@ -13,19 +13,21 @@ import { PresignedAvatarImage } from "@/components/ui/presigned-avatar-image"
 import { useChangePasswordMutation } from "@/hooks/useAuth"
 import { toast } from "sonner"
 import { useSession } from "next-auth/react"
-
-const TABS = [
-    { id: "profile", label: "Profile" },
-    { id: "billing", label: "Billing" },
-    { id: "wallet", label: "Wallet" },
-    { id: "security", label: "Security" },
-]
+import { useLocale } from "@/lib/i18n"
 
 export default function ProfilePage() {
+    const { t } = useLocale()
     const [activeTab, setActiveTab] = useState("profile")
     const { user, loading, error, updateProfile, isUpdating } = useUser()
     const { data: session } = useSession()
     const changePasswordMutation = useChangePasswordMutation()
+
+    const TABS = useMemo(() => [
+        { id: "profile", label: t("profile.tabs.profile") },
+        { id: "billing", label: t("profile.tabs.billing") },
+        { id: "wallet", label: t("profile.tabs.wallet") },
+        { id: "security", label: t("profile.tabs.security") },
+    ], [t])
 
     const handleProfileSave = async (data: {
         name: string
@@ -45,22 +47,22 @@ export default function ProfilePage() {
     ) => {
         // Validation
         if (!currentPassword || !newPassword || !confirmPassword) {
-            toast.error("Please fill in all password fields")
+            toast.error(t("profile.errors.fillAll"))
             return false
         }
 
         if (newPassword.length < 8) {
-            toast.error("New password must be at least 8 characters long")
+            toast.error(t("profile.errors.minLength", { n: 8 }))
             return false
         }
 
         if (newPassword !== confirmPassword) {
-            toast.error("New passwords do not match")
+            toast.error(t("profile.errors.mismatch"))
             return false
         }
 
         if (!session?.user?.id) {
-            toast.error("You must be logged in to change password")
+            toast.error(t("profile.errors.notLoggedIn"))
             return false
         }
 
@@ -94,7 +96,7 @@ export default function ProfilePage() {
         if (error || !user) {
             return (
                 <div className="text-center py-12">
-                    <p className="text-destructive">{error || "Failed to load user data"}</p>
+                    <p className="text-destructive">{error || t("profile.errors.loadFailed")}</p>
                 </div>
             )
         }
@@ -149,10 +151,10 @@ export default function ProfilePage() {
                                 </Avatar>
                                 <div className="space-y-2">
                                     <h1 className="text-2xl font-medium tracking-tight">
-                                        {user?.name || "User"}
+                                        {user?.name || t("contacts.roles.user")}
                                     </h1>
                                     <p className="text-muted-foreground text-sm">
-                                        Manage your account settings and preferences
+                                        {t("profile.subtitle")}
                                     </p>
                                 </div>
                             </>

@@ -325,9 +325,37 @@ export default function TimeSlots({
         />
       </div>
 
-      <button type="button" className="add-guests-btn">
-        Add Guests
-      </button>
+      <div className="form-group">
+        <label>Guests</label>
+        <div className="guests-input-group">
+          {formData.guests?.map((guest, idx) => (
+            <div key={idx} className="guest-item">
+              <input
+                type="text"
+                value={guest}
+                onChange={(e) => {
+                  const newGuests = [...(formData.guests || [])];
+                  newGuests[idx] = e.target.value;
+                  setFormData({ ...formData, guests: newGuests });
+                }}
+                placeholder={\`Guest \${idx + 1} name\`}
+              />
+            </div>
+          ))}
+          <button 
+            type="button" 
+            onClick={() => {
+              setFormData({ 
+                ...formData, 
+                guests: [...(formData.guests || []), ''] 
+              });
+            }} 
+            className="add-guests-btn-link"
+          >
+            + Add Guest
+          </button>
+        </div>
+      </div>
 
       <div className="form-group mt-4">
         <label>Please share anything that will help prepare for our meeting.</label>

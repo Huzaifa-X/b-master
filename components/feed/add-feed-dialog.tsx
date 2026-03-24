@@ -508,7 +508,7 @@ export function AddFeedDialog({
                                         ref={fileInputRef}
                                         id="media"
                                         type="file"
-                                        accept="image/*,application/pdf,video/mp4,video/quicktime,video/webm"
+                                        accept="image/*,application/pdf,video/mp4,video/webm"
                                         onChange={handleMediaChange}
                                         className="hidden"
                                         disabled={isLoading}
@@ -528,7 +528,7 @@ export function AddFeedDialog({
                             )}
 
                             <p className="text-xs text-muted-foreground">
-                                Images up to 100MB · PDFs up to 100MB · Videos (MP4/MOV/WebM) up to 500MB
+                                Images up to 100MB · PDFs up to 100MB · Videos (MP4/WebM) up to 500MB
                             </p>
                         </div>
                     </div>

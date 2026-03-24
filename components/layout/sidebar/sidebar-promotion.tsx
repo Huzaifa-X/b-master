@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Gift, Percent } from "lucide-react"
 import { getActivePromotionForUser } from "@/app/actions/promotion.action"
 import { useSidebar } from "@/components/ui/sidebar"
+import { useLocale } from "@/lib/i18n"
 import {
   Tooltip,
   TooltipContent,
@@ -22,6 +23,7 @@ export function SidebarPromotion() {
   const [promotion, setPromotion] = useState<Promotion | null>(null)
   const [loading, setLoading] = useState(true)
   const { state } = useSidebar()
+  const { t } = useLocale()
   const isCollapsed = state === "collapsed"
 
   useEffect(() => {
@@ -42,15 +44,17 @@ export function SidebarPromotion() {
     return null
   }
 
-  const discountText = promotion.discountPercent
-    ? `${promotion.discountPercent}% OFF`
+  const discountValueText = promotion.discountPercent
+    ? `${promotion.discountPercent}%`
     : promotion.discountAmount
-      ? `CHF ${promotion.discountAmount} OFF`
+      ? `CHF ${promotion.discountAmount}`
       : null
 
-  if (!discountText) {
+  if (!discountValueText) {
     return null
   }
+
+  const discountFullText = t("promo.discountOff", { amount: discountValueText })
 
   // Collapsed state - show icon with tooltip
   if (isCollapsed) {
@@ -63,8 +67,8 @@ export function SidebarPromotion() {
             </div>
           </TooltipTrigger>
           <TooltipContent side="right" className="flex flex-col gap-1">
-            <span className="font-semibold">{discountText}</span>
-            <span className="text-xs text-muted-foreground">Code: {promotion.code}</span>
+            <span className="font-semibold">{discountFullText}</span>
+            <span className="text-xs text-muted-foreground">{t("promo.code", { code: promotion.code })}</span>
           </TooltipContent>
         </Tooltip>
       </div>
@@ -81,15 +85,15 @@ export function SidebarPromotion() {
         <div className="relative z-10 flex items-center gap-2">
           <Gift className="h-5 w-5 flex-shrink-0" />
           <div className="flex flex-col min-w-0">
-            <span className="text-xs font-medium opacity-90">You have a coupon!</span>
-            <span className="text-sm font-bold truncate">{discountText}</span>
+            <span className="text-xs font-medium opacity-90">{t("promo.hasCoupon")}</span>
+            <span className="text-sm font-bold truncate">{discountFullText}</span>
           </div>
         </div>
         <div className="relative z-10 mt-2 flex items-center gap-1.5 text-xs opacity-90">
           <span className="bg-white/20 px-1.5 py-0.5 rounded font-mono truncate">
             {promotion.code}
           </span>
-          <span className="flex-shrink-0">Auto-applied at checkout</span>
+          <span className="flex-shrink-0">{t("promo.autoApplied")}</span>
         </div>
       </div>
     </div>

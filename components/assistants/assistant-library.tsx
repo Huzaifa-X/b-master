@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, useState, useCallback } from "react"
+import { useLocale } from "@/lib/i18n"
 import {
   Upload,
   Trash2,
@@ -74,26 +75,27 @@ function getFileIcon(file: LibraryFile) {
 }
 
 function VectorStatusBadge({ status }: { status: string | null | undefined }) {
+  const { t } = useLocale()
   if (!status) return null
   if (status === "completed")
     return (
       <span className="inline-flex items-center gap-1 text-xs text-green-600">
         <CheckCircle2 className="h-3 w-3" />
-        Indexed
+        {t("library.indexed")}
       </span>
     )
   if (status === "in_progress" || status === "cancelling")
     return (
       <span className="inline-flex items-center gap-1 text-xs text-amber-500">
         <Clock className="h-3 w-3" />
-        Indexing…
+        {t("library.indexing")}
       </span>
     )
   if (status === "failed" || status === "cancelled")
     return (
       <span className="inline-flex items-center gap-1 text-xs text-destructive">
         <XCircle className="h-3 w-3" />
-        Failed
+        {t("library.failed")}
       </span>
     )
   return (
@@ -116,6 +118,7 @@ interface FileRowProps {
 }
 
 function FileRow({ file, assistantId, onDeleteRequest, readonly = false }: FileRowProps) {
+  const { t } = useLocale()
   const [previewOpen, setPreviewOpen] = useState(false)
 
   // Proxy URL routes through our Next.js server – browser never connects to S3 directly
@@ -156,7 +159,7 @@ function FileRow({ file, assistantId, onDeleteRequest, readonly = false }: FileR
             </Badge>
             {file.type === "url" && file.isCrawled !== undefined && (
               <span className="text-xs text-muted-foreground">
-                {file.isCrawled ? "Crawled" : "Pending crawl"}
+                {file.isCrawled ? t("library.crawled") : t("library.pendingCrawl")}
               </span>
             )}
             <VectorStatusBadge status={file.vectorStatus} />
@@ -170,7 +173,7 @@ function FileRow({ file, assistantId, onDeleteRequest, readonly = false }: FileR
               size="icon"
               className="h-7 w-7"
               onClick={handlePreview}
-              title="Preview"
+              title={t("common.preview")}
             >
               <Eye className="h-3.5 w-3.5" />
             </Button>
@@ -182,7 +185,7 @@ function FileRow({ file, assistantId, onDeleteRequest, readonly = false }: FileR
               size="icon"
               className="h-7 w-7 text-destructive hover:text-destructive"
               onClick={() => onDeleteRequest(file)}
-              title="Delete"
+              title={t("common.delete")}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -221,11 +224,11 @@ function FileRow({ file, assistantId, onDeleteRequest, readonly = false }: FileR
               <div className="flex flex-col items-center gap-4 py-8">
                 <FileIcon className="h-16 w-16 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground text-center">
-                  Preview not available for this file type.
+                  {t("library.previewNotAvailable")}
                 </p>
                 <Button asChild variant="outline">
                   <a href={proxyUrl} download={file.name}>
-                    Download file
+                    {t("common.downloadFile")}
                   </a>
                 </Button>
               </div>
@@ -248,6 +251,7 @@ interface AddUrlDialogProps {
 }
 
 function AddUrlDialog({ open, onOpenChange, assistantId }: AddUrlDialogProps) {
+  const { t } = useLocale()
   const [url, setUrl] = useState("")
   const { addUrl, isAdding } = useAddLibraryUrl(assistantId, {
     onSuccess: () => {
@@ -266,11 +270,11 @@ function AddUrlDialog({ open, onOpenChange, assistantId }: AddUrlDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Add URL</DialogTitle>
+          <DialogTitle>{t("library.addUrl")}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="lib-url">URL</Label>
+            <Label htmlFor="lib-url">{t("common.url")}</Label>
             <Input
               id="lib-url"
               placeholder="https://example.com/page"
@@ -293,10 +297,10 @@ function AddUrlDialog({ open, onOpenChange, assistantId }: AddUrlDialogProps) {
               {isAdding ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                  Adding…
+                  {t("common.adding")}
                 </>
               ) : (
-                "Add URL"
+                t("library.addUrl")
               )}
             </Button>
           </DialogFooter>
@@ -317,6 +321,7 @@ interface AddNoteDialogProps {
 }
 
 function AddNoteDialog({ open, onOpenChange, assistantId }: AddNoteDialogProps) {
+  const { t } = useLocale()
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const { addNote, isAdding } = useAddLibraryNote(assistantId, {
@@ -337,14 +342,14 @@ function AddNoteDialog({ open, onOpenChange, assistantId }: AddNoteDialogProps) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add Note</DialogTitle>
+          <DialogTitle>{t("library.addNote")}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="lib-note-title">Title <span className="text-muted-foreground">(optional)</span></Label>
+            <Label htmlFor="lib-note-title">{t("library.noteTitle")}</Label>
             <Input
               id="lib-note-title"
-              placeholder="Note title…"
+              placeholder={t("library.noteTitlePlaceholder")}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               autoFocus
@@ -352,10 +357,10 @@ function AddNoteDialog({ open, onOpenChange, assistantId }: AddNoteDialogProps) 
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="lib-note-content">Content</Label>
+            <Label htmlFor="lib-note-content">{t("common.note")}</Label>
             <Textarea
               id="lib-note-content"
-              placeholder="Enter the note content to add to the assistant's knowledge base…"
+              placeholder={t("library.noteContentPlaceholder")}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={6}
@@ -375,10 +380,10 @@ function AddNoteDialog({ open, onOpenChange, assistantId }: AddNoteDialogProps) 
               {isAdding ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                  Adding…
+                  {t("common.adding")}
                 </>
               ) : (
-                "Add Note"
+                t("library.addNote")
               )}
             </Button>
           </DialogFooter>
@@ -421,6 +426,7 @@ export function AssistantLibrary({
   assistantId,
   readonly = false,
 }: AssistantLibraryProps) {
+  const { t } = useLocale()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<LibraryFile | null>(null)
@@ -477,7 +483,7 @@ export function AssistantLibrary({
       <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
         <div className="flex items-center gap-2">
           <BookOpen className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold">Library</span>
+          <span className="text-sm font-semibold">{t("library.title")}</span>
           {!isLoading && (
             <Badge variant="secondary" className="text-xs tabular-nums">
               {files.length}
@@ -499,22 +505,22 @@ export function AssistantLibrary({
                 ) : (
                   <Plus className="h-3.5 w-3.5" />
                 )}
-                Add
+                {t("common.add")}
                 <ChevronDown className="h-3 w-3 opacity-60" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
               <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
                 <Upload className="h-3.5 w-3.5 mr-2" />
-                File
+                {t("common.file")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setAddUrlOpen(true)}>
                 <Link className="h-3.5 w-3.5 mr-2" />
-                URL
+                {t("common.url")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setAddNoteOpen(true)}>
                 <StickyNote className="h-3.5 w-3.5 mr-2" />
-                Note
+                {t("common.note")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -572,10 +578,10 @@ export function AssistantLibrary({
                   <Upload className="h-8 w-8 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">
-                      No items yet
+                      {t("library.noItems")}
                     </p>
                     <p className="text-xs text-muted-foreground/70 mt-0.5">
-                      Add files, URLs, or notes using the Add button
+                      {t("library.addItemsDescription")}
                     </p>
                   </div>
                   <Button
@@ -585,14 +591,14 @@ export function AssistantLibrary({
                     disabled={isUploading}
                   >
                     <Upload className="h-3.5 w-3.5 mr-1.5" />
-                    Choose files
+                    {t("common.chooseFiles")}
                   </Button>
                 </>
               ) : (
                 <>
                   <BookOpen className="h-8 w-8 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
-                    No files in library
+                    {t("library.noFilesInLibrary")}
                   </p>
                 </>
               )}
@@ -607,7 +613,7 @@ export function AssistantLibrary({
                 <div className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary py-4 mb-1">
                   <Upload className="h-4 w-4 text-primary" />
                   <span className="text-sm text-primary font-medium">
-                    Drop to upload
+                    {t("library.dropToUpload")}
                   </span>
                 </div>
               )}
@@ -615,7 +621,7 @@ export function AssistantLibrary({
               {fileItems.length > 0 && (
                 <section>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-1 mb-1 mt-1">
-                    Files ({fileItems.length})
+                    {t("library.filesCount", { n: fileItems.length })}
                   </p>
                   <div className="flex flex-col gap-1">
                     {fileItems.map((f) => (
@@ -634,7 +640,7 @@ export function AssistantLibrary({
               {urlItems.length > 0 && (
                 <section className={fileItems.length > 0 ? "mt-3" : ""}>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-1 mb-1 mt-1">
-                    URLs ({urlItems.length})
+                    {t("library.urlsCount", { n: urlItems.length })}
                   </p>
                   <div className="flex flex-col gap-1">
                     {urlItems.map((f) => (
@@ -657,7 +663,7 @@ export function AssistantLibrary({
                   }
                 >
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-1 mb-1 mt-1">
-                    Notes ({textItems.length})
+                    {t("library.notesCount", { n: textItems.length })}
                   </p>
                   <div className="flex flex-col gap-1">
                     {textItems.map((f) => (
@@ -696,14 +702,13 @@ export function AssistantLibrary({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove from library?</AlertDialogTitle>
+            <AlertDialogTitle>{t("library.deleteConfirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              &ldquo;{deleteTarget?.name}&rdquo; will be removed from the vector
-              store and the library. This cannot be undone.
+              {t("library.deleteConfirmDescription", { name: deleteTarget?.name ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={handleDeleteConfirm}
@@ -712,10 +717,10 @@ export function AssistantLibrary({
               {isDeleting ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                  Removing…
+                  {t("common.removing")}
                 </>
               ) : (
-                "Remove"
+                t("common.remove")
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

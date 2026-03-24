@@ -6,6 +6,7 @@
  * Preview tab shows the HTML inside a sandboxed iframe — safe, no Prisma changes.
  */
 import { useState } from "react"
+import { useLocale } from "@/lib/i18n"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
 import { Copy, Eye, Code2 } from "lucide-react"
@@ -18,13 +19,14 @@ interface HtmlCodePreviewProps {
 }
 
 export function HtmlCodePreview({ code, language = "html" }: HtmlCodePreviewProps) {
+  const { t } = useLocale()
   const [tab, setTab] = useState<"code" | "preview">("code")
 
   const isHtml = language.toLowerCase() === "html"
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code)
-    toast.success("Code copied to clipboard")
+    toast.success(t("common.codeCopied"))
   }
 
   return (
@@ -47,7 +49,7 @@ export function HtmlCodePreview({ code, language = "html" }: HtmlCodePreviewProp
                 }`}
               >
                 <Code2 className="h-3 w-3" />
-                Code
+                {t("common.code")}
               </button>
               <button
                 onClick={() => setTab("preview")}
@@ -58,7 +60,7 @@ export function HtmlCodePreview({ code, language = "html" }: HtmlCodePreviewProp
                 }`}
               >
                 <Eye className="h-3 w-3" />
-                Preview
+                {t("common.preview")}
               </button>
             </div>
           )}
@@ -70,7 +72,7 @@ export function HtmlCodePreview({ code, language = "html" }: HtmlCodePreviewProp
           variant="ghost"
           className="h-6 w-6 text-muted-foreground hover:text-foreground"
           onClick={handleCopy}
-          title="Copy code"
+          title={t("common.copyCode")}
         >
           <Copy className="h-3.5 w-3.5" />
         </Button>
@@ -99,7 +101,7 @@ export function HtmlCodePreview({ code, language = "html" }: HtmlCodePreviewProp
         /* Sandboxed iframe preview — safe, no external scripts can escape */
         <div className="w-full bg-white">
           <iframe
-            title="HTML Preview"
+            title={t("common.preview")}
             sandbox="allow-scripts allow-same-origin"
             srcDoc={code}
             className="w-full min-h-[280px] border-0"

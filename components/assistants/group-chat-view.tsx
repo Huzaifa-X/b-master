@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react"
 import { useParams } from "next/navigation"
+import { useLocale } from "@/lib/i18n"
 import {
   ArrowLeft,
   Users,
@@ -56,6 +57,7 @@ interface GroupChatViewProps {
 }
 
 export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
+  const { t } = useLocale()
   const params = useParams()
   const assistantId = params.id as string
   const { data: session } = useSession()
@@ -157,7 +159,7 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
 
     if (attachment?.type === "file" && attachment.file) {
       if (attachment.file.size > 10 * 1024 * 1024) {
-        toast.error("File size must be less than 10MB")
+        toast.error(t("chat.view.fileSizeError"))
         return
       }
       try {
@@ -174,7 +176,7 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
           attachmentSize: uploadResult.fileSize
         })
       } catch {
-        toast.error("Failed to upload file")
+        toast.error(t("chat.view.uploadFailed"))
       }
     } else if (attachment?.type === "url" && attachment.url) {
       sendMessage({
@@ -194,8 +196,8 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
       { groupChatId: groupId, userId },
       {
         onSuccess: (res) => {
-          if (res.success) toast.success(`${name} added to group`)
-          else toast.error(res.error || "Failed to add member")
+          if (res.success) toast.success(t("group.memberAdded", { name }))
+          else toast.error(res.error || t("errors.generic"))
         }
       }
     )
@@ -208,9 +210,9 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
       {
         onSuccess: (res) => {
           if (res.success) {
-            toast.success("Member removed")
+            toast.success(t("group.memberRemoved"))
             setMemberToRemove(null)
-          } else toast.error(res.error || "Failed to remove member")
+          } else toast.error(res.error || t("errors.generic"))
         }
       }
     )
@@ -223,9 +225,9 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
       {
         onSuccess: (res) => {
           if (res.success) {
-            toast.success("You left the group")
+            toast.success(t("group.leftGroup"))
             onBack?.()
-          } else toast.error(res.error || "Failed to leave group")
+          } else toast.error(res.error || t("errors.generic"))
         }
       }
     )
@@ -235,7 +237,7 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
     if (!groupId) return
     deactivateGroup(groupId, {
       onSuccess: () => {
-        toast.success("Group deleted")
+        toast.success(t("group.groupDeleted"))
         onBack?.()
       }
     })
@@ -253,9 +255,9 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
           <Users className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-          <h3 className="text-lg font-semibold mb-2">No group selected</h3>
+          <h3 className="text-lg font-semibold mb-2">{t("group.noGroupSelected")}</h3>
           <p className="text-sm text-muted-foreground">
-            Select a group from the sidebar or create a new one
+            {t("group.selectGroupDescription")}
           </p>
         </div>
       </div>
@@ -288,17 +290,17 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-sm truncate">
-              {currentGroup?.name ?? "Loading..."}
+              {currentGroup?.name ?? t("common.loading")}
             </p>
             <p className="text-xs text-muted-foreground">
-              {activeMembers.length} member{activeMembers.length !== 1 ? "s" : ""}
+              {t("group.memberCount", { n: activeMembers.length, s: activeMembers.length !== 1 ? "s" : "" })}
             </p>
           </div>
         </div>
 
         {/* Actions menu */}
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+          <DropdownMenuTrigger asChild title={t("common.more")}>
             <Button size="icon" variant="ghost">
               <MoreVertical className="h-4 w-4" />
             </Button>
@@ -306,7 +308,7 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
           <DropdownMenuContent align="end">
             {/* Member list tooltip — simple info */}
             <div className="px-2 py-1.5">
-              <p className="text-xs font-medium text-muted-foreground mb-1">Members</p>
+              <p className="text-xs font-medium text-muted-foreground mb-1">{t("group.members")}</p>
               <div className="space-y-1 max-h-36 overflow-y-auto">
                 {activeMembers.map((m) => (
                   <div key={m.userId} className="flex items-center gap-2 text-xs">
@@ -318,13 +320,13 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
                     </Avatar>
                     <span className="truncate max-w-[120px]">{m.user?.name ?? m.user?.email}</span>
                     {m.role === "admin" && (
-                      <span className="text-primary text-[9px] font-semibold">admin</span>
+                      <span className="text-primary text-[9px] font-semibold">{t("group.admin")}</span>
                     )}
                     {isAdmin && m.userId !== session?.user?.id && (
                       <button
                         className="ml-auto text-destructive hover:opacity-80"
                         onClick={() =>
-                          setMemberToRemove({ id: m.userId, name: m.user?.name ?? "Member" })
+                          setMemberToRemove({ id: m.userId, name: m.user?.name ?? t("group.members") })
                         }
                       >
                         <UserMinus className="h-3 w-3" />
@@ -340,7 +342,7 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setShowAddMemberDialog(true)}>
                   <UserPlus className="h-4 w-4 mr-2" />
-                  Add Member
+                  {t("group.addMember")}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -348,7 +350,7 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
                   onClick={() => setShowDeleteDialog(true)}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Group
+                  {t("group.deleteGroup")}
                 </DropdownMenuItem>
               </>
             )}
@@ -360,7 +362,7 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
                   className="text-destructive"
                   onClick={() => setShowLeaveDialog(true)}
                 >
-                  Leave Group
+                  {t("group.leaveGroup")}
                 </DropdownMenuItem>
               </>
             )}
@@ -383,7 +385,7 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
             {hasNextPage && (
               <div className="text-center py-2">
                 <Button variant="ghost" size="sm" onClick={() => fetchNextPage()}>
-                  Load Previous Messages
+                  {t("chat.view.loadPrevious")}
                 </Button>
               </div>
             )}
@@ -434,7 +436,7 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
       {/* Input */}
       <div className="shrink-0 border-t">
         <AIInput
-          placeholder={isSending || isUploading ? "Sending..." : "Type a message..."}
+          placeholder={isSending || isUploading ? t("common.sending") : t("chat.view.typeMessage")}
           onSubmit={handleSend}
           minHeight={52}
           maxHeight={200}
@@ -452,18 +454,18 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
       <AlertDialog open={!!memberToRemove} onOpenChange={() => setMemberToRemove(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove {memberToRemove?.name}?</AlertDialogTitle>
+            <AlertDialogTitle>{t("group.removeMemberTitle", { name: memberToRemove?.name ?? "" })}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove them from the group chat.
+              {t("group.removeMemberDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90"
               onClick={() => memberToRemove && handleRemoveMember(memberToRemove.id)}
             >
-              Remove
+              {t("group.removeMember")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -472,18 +474,18 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
       <AlertDialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Leave Group?</AlertDialogTitle>
+            <AlertDialogTitle>{t("group.leaveGroupTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              You will no longer receive messages from this group.
+              {t("group.leaveGroupDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90"
               onClick={handleLeaveGroup}
             >
-              Leave
+              {t("group.leaveGroup")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -492,19 +494,19 @@ export function GroupChatView({ groupId, onBack }: GroupChatViewProps) {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Group?</AlertDialogTitle>
+            <AlertDialogTitle>{t("group.deleteGroupTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the group and all its messages. This cannot be undone.
+              {t("group.deleteGroupDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90"
               onClick={handleDeleteGroup}
               disabled={isDeleting}
             >
-              {isDeleting ? "Deleting..." : "Delete"}
+              {isDeleting ? t("common.deleting") : t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -258,6 +258,7 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
     activeArtifact,
     webcontainerInstance,
     exportFilesAsJson,
+    saveWorkspace,
     resetWorkspace,
     hasStoredChanges,
   } = useBCoderContext()
@@ -612,6 +613,19 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
               </Button>
             )}
 
+            {/* Save Button */}
+            {/* <Button
+              variant="outline"
+              size="sm"
+              onClick={() => saveWorkspace()}
+              className="h-8 px-3 gap-1.5 text-xs font-medium border-border/60 hover:bg-muted"
+              title="Save Changes Locally"
+              disabled={isBooting || isInstalling || !isServerReady}
+            >
+              <HardDrive className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Save</span>
+            </Button> */}
+
             {/* Divider */}
             <div className="h-5 w-px bg-border/60" />
 
@@ -882,7 +896,7 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
                 await resetWorkspace()
                 await contextBuildFileTree()
               }}
-              className="bg-amber-600 hover:bg-amber-700 text-white"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
               Reset Workspace
             </AlertDialogAction>

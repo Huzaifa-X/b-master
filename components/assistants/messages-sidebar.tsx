@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useParams } from "next/navigation"
+import { useLocale } from "@/lib/i18n"
 import { Plus, MessageSquare, MoreVertical, Trash2, Search, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,6 +40,7 @@ export function MessagesSidebar({
     selectedGroupId,
     onSelectGroup
 }: MessagesSidebarProps) {
+    const { t } = useLocale()
     const params = useParams()
     const assistantId = params.id as string
     const { data: session } = useSession()
@@ -73,13 +75,13 @@ export function MessagesSidebar({
             {
                 onSuccess: (data) => {
                     if (data.success && data.chat) {
-                        toast.success(`Started conversation with ${contactName}`)
+                        toast.success(t("chat.sidebar.startedWith", { name: contactName }))
                         onSelectConversation(data.chat.id)
                         setSelectContactOpen(false)
                     }
                 },
                 onError: (error: Error) => {
-                    toast.error(error.message || "Failed to start conversation")
+                    toast.error(error.message || t("chat.errors.failedToStart"))
                 }
             }
         )
@@ -95,7 +97,7 @@ export function MessagesSidebar({
             {
                 onSuccess: (data) => {
                     if (data.success) {
-                        toast.success("Conversation deleted")
+                        toast.success(t("chat.sidebar.conversationDeleted"))
                         if (selectedConversationId === conversationId) {
                             onSelectConversation("")
                         }
@@ -134,12 +136,12 @@ export function MessagesSidebar({
                 {/* Header */}
                 <div className="p-3 border-b space-y-3">
                     <div className="flex items-center justify-between">
-                        <h2 className="font-semibold">Messages</h2>
+                        <h2 className="font-semibold">{t("chat.sidebar.title")}</h2>
                         <Button
                             size="icon"
                             variant="ghost"
                             onClick={handleNewConversation}
-                            title={activeTab === "dms" ? "New Conversation" : "New Group"}
+                            title={activeTab === "dms" ? t("chat.sidebar.newConversation") : t("chat.sidebar.newGroup")}
                             className="hover:bg-transparent hover:text-primary"
                         >
                             <Plus className="h-4 w-4" />
@@ -158,7 +160,7 @@ export function MessagesSidebar({
                             )}
                         >
                             <MessageSquare className="h-3.5 w-3.5" />
-                            Direct
+                            {t("chat.sidebar.tabs.direct")}
                         </button>
                         <button
                             onClick={() => setActiveTab("groups")}
@@ -170,7 +172,7 @@ export function MessagesSidebar({
                             )}
                         >
                             <Users className="h-3.5 w-3.5" />
-                            Groups
+                            {t("chat.sidebar.tabs.groups")}
                         </button>
                     </div>
 
@@ -179,7 +181,7 @@ export function MessagesSidebar({
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
                             type="text"
-                            placeholder={activeTab === "dms" ? "Search conversations..." : "Search groups..."}
+                            placeholder={activeTab === "dms" ? t("chat.sidebar.searchDms") : t("chat.sidebar.searchGroups")}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="pl-9 h-9"
@@ -198,7 +200,7 @@ export function MessagesSidebar({
                             ) : filteredConversations.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-32 text-center p-4">
                                     <MessageSquare className="h-8 w-8 text-muted-foreground mb-2" />
-                                    <p className="text-sm text-muted-foreground">No conversations found</p>
+                                    <p className="text-sm text-muted-foreground">{t("chat.sidebar.noConversations")}</p>
                                 </div>
                             ) : (
                                 filteredConversations.map((chat) => {
@@ -223,11 +225,11 @@ export function MessagesSidebar({
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center justify-between gap-2 mb-1">
                                                         <span className="font-medium truncate">
-                                                            {otherUser.name || "Unknown User"}
+                                                            {otherUser.name || t("common.unknownUser")}
                                                         </span>
                                                     </div>
                                                     <p className="text-xs text-muted-foreground truncate">
-                                                        {chat.lastMessage?.message || "No messages yet"}
+                                                        {chat.lastMessage?.message || t("chat.noChats")}
                                                     </p>
                                                     <div className="flex items-center justify-between gap-2">
                                                         <p className="text-xs text-muted-foreground mt-1">
@@ -259,7 +261,7 @@ export function MessagesSidebar({
                                                         className="text-destructive focus:text-destructive focus:bg-destructive/10"
                                                     >
                                                         <Trash2 className="h-4 w-4 mr-2" />
-                                                        Delete
+                                                        {t("common.delete")}
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
@@ -270,7 +272,7 @@ export function MessagesSidebar({
                             {hasNextPage && (
                                 <div className="p-4 text-center">
                                     <Button variant="ghost" size="sm" onClick={() => fetchNextPage()}>
-                                        Load More
+                                        {t("chat.sidebar.loadMore")}
                                     </Button>
                                 </div>
                             )}
@@ -284,7 +286,7 @@ export function MessagesSidebar({
                             ) : filteredGroups.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-32 text-center p-4">
                                     <Users className="h-8 w-8 text-muted-foreground mb-2" />
-                                    <p className="text-sm text-muted-foreground">No groups yet</p>
+                                    <p className="text-sm text-muted-foreground">{t("chat.sidebar.noGroups")}</p>
                                     <Button
                                         variant="outline"
                                         size="sm"
@@ -292,7 +294,7 @@ export function MessagesSidebar({
                                         onClick={() => setCreateGroupOpen(true)}
                                     >
                                         <Plus className="h-3.5 w-3.5 mr-1.5" />
-                                        Create Group
+                                        {t("chat.sidebar.createFirstGroup")}
                                     </Button>
                                 </div>
                             ) : (
@@ -315,7 +317,7 @@ export function MessagesSidebar({
                                                     <span className="font-medium truncate">{group.name}</span>
                                                 </div>
                                                 <p className="text-xs text-muted-foreground truncate">
-                                                    {activeMembers.length} member{activeMembers.length !== 1 ? "s" : ""}
+                                                    {t("group.memberCount", { n: activeMembers.length, s: activeMembers.length !== 1 ? "s" : "" })}
                                                     {group.description ? ` · ${group.description}` : ""}
                                                 </p>
                                                 {group.lastMessageAt && (

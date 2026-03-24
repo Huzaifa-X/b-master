@@ -12,6 +12,7 @@ import { useChatMessages, useSendMessage, useMarkAsRead, useMessageSubscription,
 import { useSession } from "next-auth/react"
 import { useUploadFileToS3 } from "@/hooks/useUpload"
 import { toast } from "sonner"
+import { useLocale } from "@/lib/i18n"
 
 interface ChatViewProps {
   conversationId: string | null
@@ -20,6 +21,7 @@ interface ChatViewProps {
 
 export function ChatView({ conversationId, onBack }: ChatViewProps) {
   const params = useParams()
+  const { t } = useLocale()
   const assistantId = params.id as string
   const { data: session } = useSession()
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -214,7 +216,7 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
 
     if (attachment?.type === "file" && attachment.file) {
       if (attachment.file.size > 10 * 1024 * 1024) {
-        toast.error("File size must be less than 10MB")
+        toast.error(t("chat.view.fileSizeError"))
         return
       }
       try {
@@ -226,7 +228,7 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
         sendMessage({
           assistantId,
           chatId: conversationId,
-          message: message.trim() || (isImage ? "" : `[File: ${attachment.file.name}]`),
+          message: message.trim() || (isImage ? "" : t("chat.view.fileLabel", { name: attachment.file.name })),
           messageType: isImage ? "image" : "file",
           attachmentUrl: uploadResult.url,
           attachmentName: uploadResult.fileName,
@@ -234,7 +236,7 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
         })
       } catch (error) {
         console.error("File upload error:", error)
-        toast.error("Failed to upload file")
+        toast.error(t("chat.view.uploadFailed"))
       }
     } else if (attachment?.type === "url" && attachment.url) {
       sendMessage({
@@ -266,9 +268,9 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
           <MessageSquare className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-          <h3 className="text-lg font-semibold mb-2">No conversation selected</h3>
+          <h3 className="text-lg font-semibold mb-2">{t("chat.view.noConversationSelected")}</h3>
           <p className="text-sm text-muted-foreground">
-            Select a conversation from the sidebar or start a new one
+            {t("chat.view.selectConversation")}
           </p>
         </div>
       </div>
@@ -280,7 +282,7 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
-          <p className="text-sm text-muted-foreground">Loading conversation...</p>
+          <p className="text-sm text-muted-foreground">{t("chat.view.loadingConversation")}</p>
         </div>
       </div>
     )
@@ -310,9 +312,9 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
             </AvatarFallback>
           </Avatar>
           <div>
-            <p className="font-semibold text-sm">{otherUser.name || "Unknown User"}</p>
+            <p className="font-semibold text-sm">{otherUser.name || t("common.unknownUser")}</p>
             <p className="text-xs text-muted-foreground">
-              {isConnected ? "Online" : "Offline"}
+              {isConnected ? t("common.online") : t("common.offline")}
             </p>
           </div>
         </div>
@@ -336,7 +338,7 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
                   size="sm"
                   onClick={() => fetchNextPage()}
                 >
-                  Load Previous Messages
+                  {t("chat.view.loadPrevious")}
                 </Button>
               </div>
             )}
@@ -372,7 +374,7 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
       {/* Message Input */}
       <div className="shrink-0 border-t">
         <AIInput
-          placeholder={isSending || isUploading ? "Sending..." : "Type a message..."}
+          placeholder={isSending || isUploading ? t("chat.view.sending") : t("chat.view.typeMessage")}
           onSubmit={handleSend}
           minHeight={52}
           maxHeight={200}

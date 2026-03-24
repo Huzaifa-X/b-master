@@ -5,8 +5,10 @@ import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
 import { ExpandableContactCards } from "@/components/assistants/expandable-contact-cards"
 import { useAllContacts, useInvalidateContacts } from "@/hooks/useContacts"
+import { useLocale } from "@/lib/i18n"
 
 export default function ContactsPage() {
+  const { t } = useLocale()
   // Fetch all contacts across all assistants
   const { contacts, isLoading: isLoadingContacts, refetch: refetchContacts } = useAllContacts()
   const { invalidateAllContacts } = useInvalidateContacts()
@@ -19,9 +21,9 @@ export default function ContactsPage() {
         <div className="mb-6 md:mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 md:mb-6">
             <div>
-              <h1 className="text-xl sm:text-2xl font-medium mb-1 sm:mb-2">All Contacts</h1>
+              <h1 className="text-xl sm:text-2xl font-medium mb-1 sm:mb-2">{t("contacts.allContacts")}</h1>
               <p className="text-sm text-muted-foreground">
-                View all contacts across all your assistants
+                {t("contacts.subtitle")}
               </p>
             </div>
           </div>
@@ -32,7 +34,7 @@ export default function ContactsPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search contacts..."
+              placeholder={t("contacts.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"

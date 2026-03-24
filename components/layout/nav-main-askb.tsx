@@ -11,8 +11,11 @@ import {
 import { Plus } from "lucide-react"
 import { useRouter } from "next/navigation"
 
+import { useLocale } from "@/lib/i18n"
+
 export function NavMainAskB({ currentPath }: { currentPath: string }) {
     const router = useRouter();
+    const { t } = useLocale();
     
     const handleBack = () => {
         router.push("/home");
@@ -23,19 +26,19 @@ export function NavMainAskB({ currentPath }: { currentPath: string }) {
             <SidebarMenu>
                 {/* Back Button */}
                 <SidebarMenuItem>
-                    <SidebarMenuButton asChild tooltip="Back">
+                    <SidebarMenuButton asChild tooltip={t("common.back")}>
                         <div className="group/nav-item cursor-pointer" onClick={handleBack}>
                             <ArrowLeft className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
-                            <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">Back</span>
+                            <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">{t("common.back")}</span>
                         </div>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
 
                 <SidebarMenuItem key={"New Chat"}>
-                    <SidebarMenuButton asChild tooltip={"New Chat"} isActive={currentPath === "/ask-b/new-chat"}>
+                    <SidebarMenuButton asChild tooltip={t("chat.newChat")} isActive={currentPath === "/ask-b/new-chat"}>
                         <Link href={"/ask-b"} className="group/nav-item">
                             <Plus className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
-                            <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">New Chat</span>
+                            <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">{t("chat.newChat")}</span>
                         </Link>
                     </SidebarMenuButton>
                 </SidebarMenuItem>   

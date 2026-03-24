@@ -6,7 +6,7 @@
  */
 
 const STORAGE_PREFIX = 'bcoder-workspace-'
-const STORAGE_VERSION = 1
+const STORAGE_VERSION = 2
 
 interface StoredWorkspace {
   version: number

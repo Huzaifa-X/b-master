@@ -16,17 +16,29 @@ const STEPS = [
   { id: 6, title: "Sharing", description: "Permissions" },
 ]
 
+import { useLocale } from "@/lib/i18n"
+
 export function NavWizardProgress() {
   const router = useRouter()
   const { state } = useSidebar()
+  const { t } = useLocale()
   const currentStep = useWizardStore((state) => state.currentStep)
   const completedSteps = useWizardStore((state) => state.completedSteps)
   const resetWizard = useWizardStore((state) => state.reset)
 
+  const STEPS = [
+    { id: 1, title: t("wizard.steps.step1.title"), description: t("wizard.steps.step1.desc") },
+    { id: 2, title: t("wizard.steps.step2.title"), description: t("wizard.steps.step2.desc") },
+    { id: 3, title: t("wizard.steps.step3.title"), description: t("wizard.steps.step3.desc") },
+    { id: 4, title: t("wizard.steps.step4.title"), description: t("wizard.steps.step4.desc") },
+    { id: 5, title: t("wizard.steps.step5.title"), description: t("wizard.steps.step5.desc") },
+    { id: 6, title: t("wizard.steps.step6.title"), description: t("wizard.steps.step6.desc") },
+  ]
+
   const handleBack = () => {
     // Reset wizard state and navigate back
     resetWizard()
-    router.push("/home") // Change this to wherever you want to go back to
+    router.push("/home")
   }
 
   const isCollapsed = state === "collapsed"
@@ -34,10 +46,10 @@ export function NavWizardProgress() {
   return (
     <SidebarGroup>
       {/* Back Button */}
-      <SidebarMenuButton asChild tooltip="Back">
+      <SidebarMenuButton asChild tooltip={t("common.back")}>
         <div className="group/nav-item cursor-pointer" onClick={handleBack}>
           <ArrowLeft className="text-primary transition-all duration-300 ease-in-out group-hover/nav-item:scale-110 group-hover/nav-item:rotate-3" />
-          <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">Back</span>
+          <span className="transition-all duration-300 ease-in-out group-hover/nav-item:translate-x-1">{t("common.back")}</span>
         </div>
       </SidebarMenuButton>
 
@@ -45,7 +57,7 @@ export function NavWizardProgress() {
       {!isCollapsed && (
         <div className="px-4 py-3 mt-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-            <span>Overall Progress</span>
+            <span>{t("wizard.progress")}</span>
             <span className="font-medium">
               {Math.round((completedSteps.length / STEPS.length) * 100)}%
             </span>

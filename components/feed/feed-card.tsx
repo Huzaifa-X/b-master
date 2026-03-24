@@ -12,7 +12,9 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import { usePresignedImage } from "@/hooks/usePresignedImage"
 import { useComments } from "@/hooks/use-newFeed"
+import { useLocale } from "@/lib/i18n"
 
 interface NewsFeedPost {
   id: string
@@ -51,28 +53,41 @@ type MediaKind = "image" | "video" | "pdf"
 
 function getMediaType(url: string | null): MediaKind {
   if (!url) return "image"
-  const lower = url.toLowerCase().split("?")[0]
-  if (/\.(mp4|mov|webm|ogg|avi)/.test(lower) || lower.includes("/video/")) return "video"
-  if (/\.pdf/.test(lower) || lower.includes("/pdf")) return "pdf"
+  const path = url.toLowerCase().split("?")[0]
+  const videoRegex = /\.(mp4|mov|webm|ogg|ogv|avi|mkv|3gp|m4v|flv|wmv|ts|m3u8)$|(\/video\/)|(video-artifact)/
+  const pdfRegex = /\.(pdf)$|(\/pdf)/
+
+  if (videoRegex.test(path)) return "video"
+  if (pdfRegex.test(path)) return "pdf"
   return "image"
 }
 
 function MediaRenderer({ src, className }: { src: string; className?: string }) {
   const kind = getMediaType(src)
+  // Only fetch presigned URL for PDFs here - videos and images handle it internally
+  const presignedUrl = usePresignedImage(src, kind === "pdf")
+
   if (kind === "video") {
+    // For videos: remove object-cover (we use object-contain in PresignedVideo)
+    // Keep max-height constraints for proper sizing
+    const videoClassName = className
+      ?.replace("object-cover", "")
+      .replace(/\s+/g, " ")
+      .trim()
     return (
       <PresignedVideo
         src={src}
-        className={className ?? "rounded-lg w-full bg-black"}
+        className={videoClassName}
       />
     )
   }
+
   if (kind === "pdf") {
     const rawName = src.split("/").pop()?.split("?")[0] ?? "document.pdf"
     const fileName = decodeURIComponent(rawName)
     return (
       <a
-        href={src}
+        href={presignedUrl || "#"}
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-3 p-3 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors"
@@ -82,29 +97,30 @@ function MediaRenderer({ src, className }: { src: string; className?: string }) 
       </a>
     )
   }
+
   return (
     <PresignedImage
       src={src}
       alt="Post media"
-      className={className ?? "rounded-lg w-full object-cover"}
+      className={cn("rounded-lg w-full object-cover", className)}
     />
   )
 }
 
-function formatTimestamp(date: Date): string {
+function formatTimestamp(date: Date, t: any): string {
   const now = new Date()
   const diffInMs = now.getTime() - date.getTime()
   const diffInMinutes = Math.floor(diffInMs / (1000 * 60))
   const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60))
   const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24))
 
-  if (diffInMinutes < 1) return "Just now"
-  if (diffInMinutes < 60) return `${diffInMinutes}m ago`
-  if (diffInHours < 24) return `${diffInHours}h ago`
-  if (diffInDays === 1) return "Yesterday"
-  if (diffInDays < 7) return `${diffInDays}d ago`
+  if (diffInMinutes < 1) return t("feed.justNow")
+  if (diffInMinutes < 60) return t("feed.minutesAgo", { n: diffInMinutes })
+  if (diffInHours < 24) return t("feed.hoursAgo", { n: diffInHours })
+  if (diffInDays === 1) return t("feed.yesterday")
+  if (diffInDays < 7) return t("feed.daysAgo", { n: diffInDays })
   
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
 }
 
 export function FeedCard({
@@ -116,6 +132,7 @@ export function FeedCard({
   onAddComment,
   onDelete,
 }: FeedCardProps) {
+  const { t } = useLocale()
   const [commentText, setCommentText] = useState("")
   const [isLikeAnimating, setIsLikeAnimating] = useState(false)
   const ref = useRef<HTMLDivElement>(null as any)
@@ -201,9 +218,9 @@ export function FeedCard({
             </Avatar>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-semibold text-sm">{post.user.name || "Unknown User"}</p>
+                <p className="font-semibold text-sm">{post.user.name || t("feed.unknownUser")}</p>
                 <span className="text-xs text-muted-foreground">•</span>
-                <p className="text-xs text-muted-foreground">{formatTimestamp(new Date(post.createdAt))}</p>
+                <p className="text-xs text-muted-foreground">{formatTimestamp(new Date(post.createdAt), t)}</p>
                 <span className="text-xs text-muted-foreground">•</span>
                 <div
                   className={cn(
@@ -216,17 +233,17 @@ export function FeedCard({
                   {post.isPublic ? (
                     <>
                       <Globe className="h-3 w-3" />
-                      <span>Public</span>
+                      <span>{t("feed.public")}</span>
                     </>
                   ) : (
                     <>
                       <Lock className="h-3 w-3" />
-                      <span>Private</span>
+                      <span>{t("feed.private")}</span>
                     </>
                   )}
                 </div>
               </div>
-              <h3 className="font-bold text-lg mt-1">{title || "Post"}</h3>
+              <h3 className="font-bold text-lg mt-1">{title || t("feed.title")}</h3>
             </div>
           </div>
 
@@ -237,7 +254,7 @@ export function FeedCard({
             </p>
             {content.length > 150 && (
               <button className="text-primary text-sm font-medium mt-1 hover:underline">
-                Read more
+                {t("feed.readMore")}
               </button>
             )}
           </div>
@@ -284,7 +301,7 @@ export function FeedCard({
             }}
             className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
           >
-            <span>View Details</span>
+            <span>{t("feed.viewDetails")}</span>
             <ChevronDown className="h-4 w-4" />
           </button>
         </div>
@@ -314,10 +331,10 @@ export function FeedCard({
                     </Avatar>
                     <div className="flex-1 min-w-0 pr-20">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-sm text-neutral-800 dark:text-neutral-200">{post.user.name || "Unknown User"}</p>
-                        <span className="text-xs text-neutral-600 dark:text-neutral-400">•</span>
-                        <p className="text-xs text-neutral-600 dark:text-neutral-400">{formatTimestamp(new Date(post.createdAt))}</p>
-                        <span className="text-xs text-neutral-600 dark:text-neutral-400">•</span>
+                        <p className="font-semibold text-sm text-neutral-800 dark:text-neutral-200">{post.user.name || t("feed.unknownUser")}</p>
+                        <p className="text-xs text-neutral-600 dark:text-neutral-400">•</p>
+                        <p className="text-xs text-neutral-600 dark:text-neutral-400">{formatTimestamp(new Date(post.createdAt), t)}</p>
+                        <p className="text-xs text-neutral-600 dark:text-neutral-400">•</p>
                         <div
                           className={cn(
                             "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
@@ -329,17 +346,17 @@ export function FeedCard({
                           {post.isPublic ? (
                             <>
                               <Globe className="h-3 w-3" />
-                              <span>Public</span>
+                              <span>{t("feed.public")}</span>
                             </>
                           ) : (
                             <>
                               <Lock className="h-3 w-3" />
-                              <span>Private</span>
+                              <span>{t("feed.private")}</span>
                             </>
                           )}
                         </div>
                       </div>
-                      <h3 className="font-bold text-lg mt-1 text-neutral-800 dark:text-neutral-200">{title || "Post"}</h3>
+                      <h3 className="font-bold text-lg mt-1 text-neutral-800 dark:text-neutral-200">{title || t("feed.title")}</h3>
                     </div>
                   </div>
 
@@ -352,7 +369,7 @@ export function FeedCard({
                         variant="ghost"
                         onClick={() => onDelete(post.id)}
                         className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        title="Delete Post"
+                        title={t("feed.deletePost")}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -362,7 +379,7 @@ export function FeedCard({
                       variant="ghost"
                       onClick={onToggleExpand}
                       className="bg-transparent hover:bg-transparent hover:text-primary"
-                      title="Close"
+                      title={t("feed.close")}
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -399,11 +416,11 @@ export function FeedCard({
                       )}
                     >
                       <Heart className={cn("h-4 w-4", isLiked && "fill-current")} />
-                      <span>{likesCount} likes</span>
+                      <span>{t("feed.likes", { n: likesCount })}</span>
                     </button>
                     <button className="flex items-center gap-1.5 text-sm font-medium text-neutral-600 dark:text-neutral-400">
                       <MessageCircle className="h-4 w-4" />
-                      <span>{commentsCount} comments</span>
+                      <span>{t("feed.comments", { n: commentsCount })}</span>
                     </button>
                   </div>
 
@@ -411,11 +428,11 @@ export function FeedCard({
                   {likesCount > 0 && (
                     <div className="p-4 sm:p-6">
                       <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
-                        {isLiked && likesCount === 1 && "You liked this"}
-                        {isLiked && likesCount === 2 && "You and 1 other liked this"}
-                        {isLiked && likesCount > 2 && `You and ${likesCount - 1} others liked this`}
-                        {!isLiked && likesCount === 1 && "1 person liked this"}
-                        {!isLiked && likesCount > 1 && `${likesCount} people liked this`}
+                        {isLiked && likesCount === 1 && t("feed.youLiked")}
+                        {isLiked && likesCount === 2 && t("feed.youAndOneOtherLiked")}
+                        {isLiked && likesCount > 2 && t("feed.youAndOthersLiked", { n: likesCount - 1 })}
+                        {!isLiked && likesCount === 1 && t("feed.onePersonLiked")}
+                        {!isLiked && likesCount > 1 && t("feed.peopleLiked", { n: likesCount })}
                       </p>
                     </div>
                   )}
@@ -431,11 +448,11 @@ export function FeedCard({
                     {commentsLoading ? (
                       <div className="text-center py-4">
                         <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
-                        <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading comments...</p>
+                        <p className="text-sm text-neutral-600 dark:text-neutral-400">{t("feed.loadingComments")}</p>
                       </div>
                     ) : !commentsData || commentsData.length === 0 ? (
                       <p className="text-sm text-neutral-600 dark:text-neutral-400 text-center py-4">
-                        No comments yet. Be the first to comment!
+                        {t("feed.noComments")}
                       </p>
                     ) : (
                       <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
@@ -454,7 +471,7 @@ export function FeedCard({
                               </div>
                               <div className="flex items-center gap-3 mt-1 px-3">
                                 <span className="text-xs text-neutral-600 dark:text-neutral-400">
-                                  {formatTimestamp(new Date(comment.createdAt))}
+                                  {formatTimestamp(new Date(comment.createdAt), t)}
                                 </span>
                               </div>
                             </div>
@@ -471,7 +488,7 @@ export function FeedCard({
                       </Avatar>
                       <div className="flex-1 flex gap-2">
                         <Textarea
-                          placeholder="Write a comment..."
+                          placeholder={t("feed.writeComment")}
                           value={commentText}
                           onChange={(e) => setCommentText(e.target.value)}
                           className="min-h-[45px] resize-none"

@@ -3,7 +3,7 @@ import { TemplateDefinition } from './index';
 export const ecommerceTemplate: TemplateDefinition = {
   id: "e-commerce",
   name: "E-Commerce",
-  description: "Modern online store with product grid, cart, and checkout",
+  description: "Modern online store with product grid, cart, and interactive checkout",
   category: "Commerce",
   icon: "ShoppingBag",
   files: {
@@ -22,6 +22,8 @@ export const ecommerceTemplate: TemplateDefinition = {
           react: "^18.2.0",
           "react-dom": "^18.2.0",
           "lucide-react": "^0.344.0",
+          "clsx": "^2.1.0",
+          "tailwind-merge": "^2.2.1"
         },
         devDependencies: {
           "@vitejs/plugin-react": "^4.2.1",
@@ -40,21 +42,14 @@ export const ecommerceTemplate: TemplateDefinition = {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <title>ShopNow - Modern E-Commerce</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>ShopFlow - Premium E-Commerce</title>
   </head>
-  <body>
+  <body class="antialiased text-gray-900 bg-white">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>`,
-
-    "vite.config.js": `import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-})`,
 
     "src/main.jsx": `import React from 'react'
 import ReactDOM from 'react-dom/client'
@@ -67,1144 +62,467 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )`,
 
-    "src/App.jsx": `import { useState, createContext, useContext } from 'react'
-import {
-  ShoppingBag, Search, User, Heart, X, Plus, Minus,
-  Star, ChevronRight, Truck, Shield, RefreshCw, Menu
-} from 'lucide-react'
-import './App.css'
+    // --- DATA ---
+    "src/data/products.js": `export const products = [
+  { id: 1, name: "Premium Wireless Headphones", price: 299.00, rating: 4.8, reviews: 245, image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80", category: "Electronics" },
+  { id: 2, name: "Minimalist Watch", price: 199.00, rating: 4.9, reviews: 189, image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&q=80", category: "Accessories" },
+  { id: 3, name: "Designer Sunglasses", price: 159.00, rating: 4.7, reviews: 312, image: "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=800&q=80", category: "Accessories" },
+  { id: 4, name: "Leather Backpack", price: 249.00, rating: 4.6, reviews: 156, image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&q=80", category: "Bags" },
+  { id: 5, name: "Smart Fitness Tracker", price: 179.00, rating: 4.5, reviews: 423, image: "https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=800&q=80", category: "Electronics" },
+  { id: 6, name: "Ceramic Coffee Set", price: 49.00, rating: 4.8, reviews: 89, image: "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=800&q=80", category: "Home" },
+];`,
 
-// Cart Context
-const CartContext = createContext()
+    // --- CONTEXT ---
+    "src/context/AppContext.jsx": `import { useState, createContext, useContext, useEffect } from 'react';
 
-function CartProvider({ children }) {
-  const [cart, setCart] = useState([])
-  const [isCartOpen, setIsCartOpen] = useState(false)
+const AppContext = createContext();
+
+export function AppProvider({ children }) {
+  const [cart, setCart] = useState([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [wishlist, setWishlist] = useState([]);
 
   const addToCart = (product) => {
     setCart(prev => {
-      const existing = prev.find(item => item.id === product.id)
+      const existing = prev.find(item => item.id === product.id);
       if (existing) {
         return prev.map(item =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        )
+          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+        );
       }
-      return [...prev, { ...product, quantity: 1 }]
-    })
-    setIsCartOpen(true)
-  }
+      return [...prev, { ...product, quantity: 1 }];
+    });
+    setIsCartOpen(true);
+  };
+
+  const toggleWishlist = (productId) => {
+    setWishlist(prev => 
+      prev.includes(productId) 
+        ? prev.filter(id => id !== productId) 
+        : [...prev, productId]
+    );
+  };
 
   const removeFromCart = (productId) => {
-    setCart(prev => prev.filter(item => item.id !== productId))
-  }
+    setCart(prev => prev.filter(item => item.id !== productId));
+  };
 
   const updateQuantity = (productId, delta) => {
     setCart(prev => prev.map(item => {
       if (item.id === productId) {
-        const newQty = item.quantity + delta
-        return newQty > 0 ? { ...item, quantity: newQty } : item
+        const newQty = item.quantity + delta;
+        return newQty > 0 ? { ...item, quantity: newQty } : item;
       }
-      return item
-    }).filter(item => item.quantity > 0))
-  }
+      return item;
+    }).filter(item => item.quantity > 0));
+  };
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
+  const clearCart = () => setCart([]);
+
+  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <CartContext.Provider value={{
-      cart, cartTotal, cartCount, isCartOpen,
-      addToCart, removeFromCart, updateQuantity, setIsCartOpen
+    <AppContext.Provider value={{
+      cart, cartTotal, cartCount, isCartOpen, isCheckoutOpen, wishlist,
+      addToCart, removeFromCart, updateQuantity, setIsCartOpen, setIsCheckoutOpen, toggleWishlist, clearCart
     }}>
       {children}
-    </CartContext.Provider>
-  )
+    </AppContext.Provider>
+  );
 }
 
-const useCart = () => useContext(CartContext)
+export const useApp = () => useContext(AppContext);`,
 
-// Sample Products
-const products = [
-  { id: 1, name: "Premium Wireless Headphones", price: 299, rating: 4.8, reviews: 245, image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop", category: "Electronics" },
-  { id: 2, name: "Minimalist Watch", price: 199, rating: 4.9, reviews: 189, image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=400&fit=crop", category: "Accessories" },
-  { id: 3, name: "Designer Sunglasses", price: 159, rating: 4.7, reviews: 312, image: "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400&h=400&fit=crop", category: "Accessories" },
-  { id: 4, name: "Leather Backpack", price: 249, rating: 4.6, reviews: 156, image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=400&fit=crop", category: "Bags" },
-  { id: 5, name: "Smart Fitness Tracker", price: 179, rating: 4.5, reviews: 423, image: "https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=400&h=400&fit=crop", category: "Electronics" },
-  { id: 6, name: "Ceramic Coffee Mug", price: 29, rating: 4.8, reviews: 89, image: "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=400&h=400&fit=crop", category: "Home" },
-]
+    // --- COMPONENTS ---
+    "src/components/layout/Navbar.jsx": `import { ShoppingBag, Search, User, Heart, Menu } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 
-// Header Component
-function Header() {
-  const { cartCount, setIsCartOpen } = useCart()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+export default function Navbar() {
+  const { cartCount, setIsCartOpen, wishlist } = useApp();
 
   return (
-    <header className="header">
-      <div className="header-container">
-        <div className="header-content">
-          {/* Logo */}
-          <div className="brand">
-            <div className="brand-icon">
-              <ShoppingBag className="icon-md" />
+    <nav className="navbar">
+      <div className="container mx-auto px-6 h-20 flex items-center justify-between">
+        <div className="flex items-center gap-12">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-rose-500 rounded-xl flex items-center justify-center text-white">
+              <ShoppingBag size={20} />
             </div>
-            <span className="brand-name">ShopNow</span>
+            <span className="text-xl font-bold tracking-tight">ShopFlow</span>
           </div>
-
-          {/* Desktop Nav */}
-          <nav className="nav-links">
-            <a href="#" className="nav-link active">All Products</a>
-            <a href="#" className="nav-link">Electronics</a>
-            <a href="#" className="nav-link">Accessories</a>
-            <a href="#" className="nav-link">Sale</a>
-          </nav>
-
-          {/* Actions */}
-          <div className="header-actions">
-            <button className="icon-btn desktop-only">
-              <Search className="icon-md" />
-            </button>
-            <button className="icon-btn desktop-only">
-              <Heart className="icon-md" />
-            </button>
-            <button className="icon-btn desktop-only">
-              <User className="icon-md" />
-            </button>
-            <button onClick={() => setIsCartOpen(true)} className="cart-btn">
-              <ShoppingBag className="icon-md" />
-              {cartCount > 0 && (
-                <span className="cart-badge">{cartCount}</span>
-              )}
-            </button>
-            <button onClick={() => setMobileMenuOpen(true)} className="mobile-menu-btn">
-              <Menu className="icon-md" />
-            </button>
+          <div className="hidden md:flex items-center gap-8">
+            {['Shop', 'Categories', 'Deals', 'About'].map(t => (
+              <a key={t} href="#" className="text-gray-500 hover:text-black font-medium transition-colors">{t}</a>
+            ))}
           </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-all">
+            <Search size={22} />
+          </button>
+          <button className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-all">
+            <Heart size={22} />
+            {wishlist.length > 0 && (
+              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white" />
+            )}
+          </button>
+          <button 
+            onClick={() => setIsCartOpen(true)}
+            className="group relative p-2 px-4 bg-gray-900 text-white rounded-full hover:bg-black transition-all flex items-center gap-2"
+          >
+            <ShoppingBag size={18} />
+            <span className="font-semibold text-sm">{cartCount}</span>
+          </button>
         </div>
       </div>
+    </nav>
+  );
+}`,
 
-      {/* Mobile Menu */}
-      {mobileMenuOpen && (
-        <div className="mobile-overlay" onClick={() => setMobileMenuOpen(false)}>
-          <div className="mobile-menu" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setMobileMenuOpen(false)} className="mobile-close">
-              <X className="icon-md" />
-            </button>
-            <nav className="mobile-nav">
-              <a href="#" className="mobile-link">All Products</a>
-              <a href="#" className="mobile-link">Electronics</a>
-              <a href="#" className="mobile-link">Accessories</a>
-              <a href="#" className="mobile-link">Sale</a>
-            </nav>
-          </div>
-        </div>
-      )}
-    </header>
-  )
-}
+    "src/components/shop/ProductCard.jsx": `import { Heart, Star, ShoppingCart } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 
-// Product Card
-function ProductCard({ product }) {
-  const { addToCart } = useCart()
-  const [isHovered, setIsHovered] = useState(false)
+export default function ProductCard({ product }) {
+  const { addToCart, wishlist, toggleWishlist } = useApp();
+  const isWishlisted = wishlist.includes(product.id);
 
   return (
-    <div
-      className="product-card"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {/* Image */}
-      <div className="product-image-wrapper">
-        <img
-          src={product.image}
+    <div className="group bg-white rounded-3xl overflow-hidden border border-gray-100 hover:shadow-2xl hover:shadow-gray-200/50 transition-all duration-500">
+      <div className="relative aspect-square overflow-hidden bg-gray-50">
+        <img 
+          src={product.image} 
           alt={product.name}
-          className="product-image"
+          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
         />
-        <button className="wishlist-btn">
-          <Heart className="icon-sm" />
+        <button 
+          onClick={() => toggleWishlist(product.id)}
+          className={\`absolute top-4 right-4 p-3 rounded-2xl backdrop-blur-md transition-all \${
+            isWishlisted ? 'bg-rose-500 text-white' : 'bg-white/80 text-gray-900 hover:bg-white'
+          }\`}
+        >
+          <Heart size={20} fill={isWishlisted ? 'currentColor' : 'none'} />
         </button>
-        {/* Quick Add Button */}
-        <div className={\`quick-add \${isHovered ? 'visible' : ''}\`}>
-          <button onClick={() => addToCart(product)} className="add-to-cart-btn">
+        <div className="absolute inset-x-4 bottom-4 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
+          <button 
+            onClick={() => addToCart(product)}
+            className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-black"
+          >
+            <ShoppingCart size={18} />
             Add to Cart
           </button>
         </div>
       </div>
-
-      {/* Info */}
-      <div className="product-info">
-        <span className="product-category">{product.category}</span>
-        <h3 className="product-name">{product.name}</h3>
-        <div className="product-meta">
-          <span className="product-price">\${product.price}</span>
-          <div className="product-rating">
-            <Star className="star-icon" />
-            <span>{product.rating}</span>
-            <span className="reviews-count">({product.reviews})</span>
+      <div className="p-6">
+        <div className="flex justify-between items-start mb-2">
+          <div>
+            <p className="text-xs font-bold text-rose-500 uppercase tracking-widest mb-1">{product.category}</p>
+            <h3 className="text-lg font-bold truncate pr-4">{product.name}</h3>
           </div>
+          <span className="text-xl font-extrabold">\${product.price}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="flex text-amber-400">
+            {[...Array(5)].map((_, i) => (
+              <Star key={i} size={14} fill={i < Math.floor(product.rating) ? 'currentColor' : 'none'} />
+            ))}
+          </div>
+          <span className="text-sm font-bold">{product.rating}</span>
+          <span className="text-sm text-gray-400 font-medium">({product.reviews} reviews)</span>
         </div>
       </div>
     </div>
-  )
-}
+  );
+}`,
 
-// Cart Sidebar
-function CartSidebar() {
-  const { cart, cartTotal, isCartOpen, setIsCartOpen, removeFromCart, updateQuantity } = useCart()
+    "src/components/cart/CartDrawer.jsx": `import { X, ShoppingBag, ArrowRight, Minus, Plus, Trash2 } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 
-  if (!isCartOpen) return null
+export default function CartDrawer() {
+  const { cart, cartTotal, isCartOpen, setIsCartOpen, removeFromCart, updateQuantity, setIsCheckoutOpen } = useApp();
+
+  if (!isCartOpen) return null;
 
   return (
-    <div className="cart-overlay">
-      {/* Backdrop */}
-      <div className="cart-backdrop" onClick={() => setIsCartOpen(false)} />
-
-      {/* Sidebar */}
-      <div className="cart-sidebar">
-        {/* Header */}
-        <div className="cart-header">
-          <h2 className="cart-title">Your Cart ({cart.length})</h2>
-          <button onClick={() => setIsCartOpen(false)} className="icon-btn">
-            <X className="icon-md" />
+    <div className="fixed inset-0 z-[100] flex justify-end">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsCartOpen(false)} />
+      <div className="relative w-full max-w-md bg-white h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
+        <div className="p-6 h-20 flex items-center justify-between border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <ShoppingBag className="text-rose-500" />
+            <h2 className="text-xl font-extrabold">Your Bag</h2>
+            <span className="bg-gray-100 px-2 py-1 rounded-lg text-xs font-bold">{cart.length}</span>
+          </div>
+          <button onClick={() => setIsCartOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+            <X size={20} />
           </button>
         </div>
 
-        {/* Cart Items */}
-        <div className="cart-items">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {cart.length === 0 ? (
-            <div className="cart-empty">
-              <ShoppingBag className="icon-xl" />
-              <p>Your cart is empty</p>
+            <div className="h-full flex flex-col items-center justify-center opacity-40">
+              <ShoppingBag size={64} className="mb-4" />
+              <p className="text-lg font-bold">Bag is empty</p>
             </div>
           ) : (
             cart.map(item => (
-              <div key={item.id} className="cart-item">
-                <img src={item.image} alt={item.name} className="cart-item-image" />
-                <div className="cart-item-details">
-                  <h4 className="cart-item-name">{item.name}</h4>
-                  <p className="cart-item-price">\${item.price}</p>
-                  <div className="quantity-controls">
-                    <button onClick={() => updateQuantity(item.id, -1)} className="qty-btn">
-                      <Minus className="icon-xs" />
-                    </button>
-                    <span className="qty-value">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.id, 1)} className="qty-btn">
-                      <Plus className="icon-xs" />
-                    </button>
+              <div key={item.id} className="flex gap-4">
+                <div className="w-24 h-24 rounded-2xl bg-gray-50 overflow-hidden flex-shrink-0">
+                  <img src={item.image} className="w-full h-full object-cover" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-bold underline-offset-4 hover:underline cursor-pointer">{item.name}</h4>
+                  <p className="text-sm text-gray-500 mb-3">{item.category}</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center bg-gray-100 rounded-xl p-1 px-2 gap-3">
+                      <button onClick={() => updateQuantity(item.id, -1)} className="hover:text-rose-500"><Minus size={14}/></button>
+                      <span className="font-bold text-sm">{item.quantity}</span>
+                      <button onClick={() => updateQuantity(item.id, 1)} className="hover:text-rose-500"><Plus size={14}/></button>
+                    </div>
+                    <span className="font-extrabold">\${(item.price * item.quantity).toFixed(2)}</span>
                   </div>
                 </div>
-                <button onClick={() => removeFromCart(item.id)} className="remove-btn">
-                  <X className="icon-sm" />
+                <button onClick={() => removeFromCart(item.id)} className="text-gray-300 hover:text-rose-500">
+                  <Trash2 size={18} />
                 </button>
               </div>
             ))
           )}
         </div>
 
-        {/* Footer */}
         {cart.length > 0 && (
-          <div className="cart-footer">
-            <div className="cart-total">
-              <span>Subtotal</span>
-              <span className="total-amount">\${cartTotal.toFixed(2)}</span>
+          <div className="p-6 border-t border-gray-100 space-y-4">
+            <div className="flex justify-between text-lg">
+              <span className="text-gray-500 font-medium">Subtotal</span>
+              <span className="font-extrabold">\${cartTotal.toFixed(2)}</span>
             </div>
-            <button className="checkout-btn">
-              Checkout
-              <ChevronRight className="icon-sm" />
+            <button 
+              onClick={() => {
+                setIsCartOpen(false);
+                setIsCheckoutOpen(true);
+              }}
+              className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-black transition-all active:scale-95"
+            >
+              Go to Checkout
+              <ArrowRight size={18} />
             </button>
-            <p className="shipping-note">Free shipping on orders over \$100</p>
           </div>
         )}
       </div>
     </div>
-  )
-}
+  );
+}`,
 
-// Hero Banner
-function HeroBanner() {
-  return (
-    <section className="hero">
-      <div className="hero-bg">
-        <div className="hero-blob hero-blob-1" />
-        <div className="hero-blob hero-blob-2" />
-      </div>
-      <div className="hero-container">
-        <div className="hero-content">
-          <span className="hero-badge">Summer Sale - Up to 50% Off</span>
-          <h1 className="hero-title">Discover Your Perfect Style</h1>
-          <p className="hero-subtitle">
-            Shop the latest trends in electronics, accessories, and more. Premium quality at unbeatable prices.
-          </p>
-          <button className="hero-btn">Shop Now</button>
-        </div>
-      </div>
-    </section>
-  )
-}
+    "src/components/shop/CheckoutModal.jsx": `import { useState } from 'react';
+import { X, ShieldCheck, CreditCard, Truck, CheckCircle2 } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 
-// Features Bar
-function FeaturesBar() {
-  const features = [
-    { icon: Truck, text: "Free Shipping" },
-    { icon: Shield, text: "Secure Payment" },
-    { icon: RefreshCw, text: "Easy Returns" },
-  ]
+export default function CheckoutModal() {
+  const { isCheckoutOpen, setIsCheckoutOpen, cart, cartTotal, clearCart } = useApp();
+  const [step, setStep] = useState('summary'); // summary | payment | success
+
+  if (!isCheckoutOpen) return null;
+
+  const handlePayment = () => {
+    setStep('success');
+    setTimeout(() => {
+      setIsCheckoutOpen(false);
+      clearCart();
+      setStep('summary');
+    }, 3000);
+  };
 
   return (
-    <div className="features-bar">
-      <div className="features-container">
-        <div className="features-grid">
-          {features.map((feature, index) => (
-            <div key={index} className="feature-item">
-              <feature.icon className="feature-icon" />
-              <span className="feature-text">{feature.text}</span>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setIsCheckoutOpen(false)} />
+      <div className="relative w-full max-w-lg bg-white rounded-[32px] overflow-hidden shadow-3xl animate-in zoom-in-95 duration-300">
+        
+        {step !== 'success' && (
+          <div className="p-8 pb-4 flex items-center justify-between">
+            <h2 className="text-2xl font-black">Checkout</h2>
+            <button onClick={() => setIsCheckoutOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+        )}
+
+        <div className="p-8 pt-4">
+          {step === 'summary' && (
+            <div className="space-y-6">
+              <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
+                {cart.map(item => (
+                  <div key={item.id} className="flex justify-between text-sm">
+                    <span className="text-gray-600">{item.quantity}x {item.name}</span>
+                    <span className="font-bold">\${(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+                <div className="border-t border-gray-200 mt-2 pt-2 flex justify-between">
+                  <span className="font-bold">Total</span>
+                  <span className="font-black text-rose-500 text-lg">\${cartTotal.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-2xl border border-gray-100 flex items-center gap-3">
+                  <Truck className="text-blue-500" size={20} />
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Shipping</p>
+                    <p className="text-xs font-bold">Express (2-3 Days)</p>
+                  </div>
+                </div>
+                <div className="p-4 rounded-2xl border border-gray-100 flex items-center gap-3">
+                  <ShieldCheck className="text-emerald-500" size={20} />
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Security</p>
+                    <p className="text-xs font-bold">256-bit Encrypted</p>
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setStep('payment')}
+                className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-black transition-all"
+              >
+                Proceed to Payment
+              </button>
             </div>
-          ))}
+          )}
+
+          {step === 'payment' && (
+            <div className="space-y-6">
+              <div className="p-6 border-2 border-gray-900 rounded-2xl flex items-center gap-4">
+                <CreditCard size={24} />
+                <div className="flex-1">
+                  <p className="font-bold italic">**** **** **** 4242</p>
+                  <p className="text-xs text-gray-400">Expires 12/26</p>
+                </div>
+                <CheckCircle2 className="text-gray-900" size={20} fill="currentColor" />
+              </div>
+
+              <div className="text-center">
+                <p className="text-gray-400 text-sm mb-6 px-4">
+                  By clicking "Pay Now", you agree to our terms of service and acknowledge the non-refundable nature of digital goods.
+                </p>
+                <button 
+                  onClick={handlePayment}
+                  className="w-full py-4 bg-rose-500 text-white rounded-2xl font-bold text-lg hover:bg-rose-600 transition-all shadow-xl shadow-rose-200"
+                >
+                  Pay \${cartTotal.toFixed(2)} Now
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 'success' && (
+            <div className="py-12 flex flex-col items-center text-center animate-in fade-in zoom-in duration-500">
+              <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-6 scale-125">
+                <CheckCircle2 size={48} />
+              </div>
+              <h2 className="text-3xl font-black mb-2">Order Confirmed!</h2>
+              <p className="text-gray-500 max-w-[240px]">
+                Your premium products are on their way. Redirecting you shortly...
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
-  )
-}
-
-// Product Grid
-function ProductGrid() {
-  return (
-    <section className="products-section">
-      <div className="products-container">
-        <div className="products-header">
-          <h2 className="products-title">Trending Products</h2>
-          <a href="#" className="view-all-link">
-            View All <ChevronRight className="icon-sm" />
-          </a>
-        </div>
-        <div className="products-grid">
-          {products.map(product => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// Main App
-export default function App() {
-  return (
-    <CartProvider>
-      <div className="app">
-        <Header />
-        <HeroBanner />
-        <FeaturesBar />
-        <ProductGrid />
-        <CartSidebar />
-      </div>
-    </CartProvider>
-  )
+  );
 }`,
 
-    "src/App.css": `
-:root {
-  --primary: #F43F5E;
-  --primary-dark: #E11D48;
-  --primary-light: #FB7185;
-  --primary-bg: rgba(244, 63, 94, 0.1);
+    // --- MAIN APP ---
+    "src/App.jsx": `import { AppProvider } from './context/AppContext';
+import Navbar from './components/layout/Navbar';
+import ProductCard from './components/shop/ProductCard';
+import CartDrawer from './components/cart/CartDrawer';
+import CheckoutModal from './components/shop/CheckoutModal';
+import { products } from './data/products';
+import './App.css';
 
-  --amber: #F59E0B;
-  --purple: #A855F7;
+export default function App() {
+  return (
+    <AppProvider>
+      <div className="min-h-screen">
+        <Navbar />
+        
+        <header className="pt-12 pb-20 px-6">
+          <div className="container mx-auto">
+            <div className="max-w-2xl">
+              <span className="px-4 py-2 bg-rose-50 rounded-full text-rose-500 font-bold text-sm mb-6 inline-block">Curated Collections</span>
+              <h1 className="text-5xl md:text-7xl font-black leading-[1.1] mb-8">Elevate Your Everyday Essentials.</h1>
+              <p className="text-xl text-gray-500 font-medium">Discover premium craftsmanship and minimalist design in every piece of our latest drop.</p>
+            </div>
+          </div>
+        </header>
 
-  --bg: #FFFFFF;
-  --bg-light: #F8FAFC;
-  --surface: #FFFFFF;
-  --text: #0F172A;
-  --text-muted: #64748B;
-  --text-light: #94A3B8;
-  --border: #F1F5F9;
+        <main className="container mx-auto px-6 pb-24">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {products.map(p => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        </main>
 
+        <CartDrawer />
+        <CheckoutModal />
+      </div>
+    </AppProvider>
+  );
+}`,
+
+    "src/App.css": `:root {
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --primary: #f43f5e;
+  --primary-dark: #e11d48;
+  --bg: #ffffff;
+  --bg-light: #f8fafc;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --text-light: #94a3b8;
+  --amber: #fbbf24;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-3xl: 0 32px 64px -12px rgba(0, 0, 0, 0.2);
 }
 
-* {
-  box-sizing: border-box;
+body {
+  font-family: var(--font-sans);
   margin: 0;
   padding: 0;
 }
 
-body {
-  font-family: 'Poppins', system-ui, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  -webkit-font-smoothing: antialiased;
-}
-
-/* Icons */
-.icon-xs { width: 12px; height: 12px; }
-.icon-sm { width: 16px; height: 16px; }
-.icon-md { width: 20px; height: 20px; }
-.icon-lg { width: 24px; height: 24px; }
-.icon-xl { width: 48px; height: 48px; color: #CBD5E1; }
-
-.app {
-  min-height: 100vh;
-  background: var(--bg);
-}
-
-/* Header */
-.header {
+.navbar {
   position: sticky;
   top: 0;
-  z-index: 50;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--border);
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
 }
 
-.header-container {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0 1rem;
+.shadow-3xl {
+  box-shadow: var(--shadow-3xl);
 }
 
-@media (min-width: 640px) {
-  .header-container { padding: 0 1.5rem; }
-}
-
-@media (min-width: 1024px) {
-  .header-container { padding: 0 2rem; }
-}
-
-.header-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 64px;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.brand-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--primary) 0%, #EC4899 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.brand-name {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.nav-links {
-  display: none;
-  align-items: center;
-  gap: 2rem;
-}
-
-@media (min-width: 768px) {
-  .nav-links { display: flex; }
-}
-
-.nav-link {
-  color: var(--text-muted);
-  font-weight: 500;
-  text-decoration: none;
-  transition: color 0.2s;
-}
-
-.nav-link:hover,
-.nav-link.active {
-  color: var(--text);
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.icon-btn {
-  padding: 8px;
-  background: transparent;
-  border: none;
-  border-radius: 8px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.icon-btn:hover {
-  color: var(--text);
-  background: var(--bg-light);
-}
-
-.desktop-only {
-  display: none;
-}
-
-@media (min-width: 640px) {
-  .desktop-only { display: flex; }
-}
-
-.cart-btn {
-  position: relative;
-  padding: 8px;
-  background: transparent;
-  border: none;
-  border-radius: 8px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.cart-btn:hover {
-  color: var(--text);
-  background: var(--bg-light);
-}
-
-.cart-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 20px;
-  height: 20px;
-  background: var(--primary);
-  color: white;
-  font-size: 0.75rem;
-  font-weight: 700;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.mobile-menu-btn {
-  display: flex;
-  padding: 8px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-
-@media (min-width: 768px) {
-  .mobile-menu-btn { display: none; }
-}
-
-/* Mobile Menu */
-.mobile-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  background: rgba(0, 0, 0, 0.5);
-}
-
-.mobile-menu {
-  position: absolute;
-  right: 0;
-  top: 0;
-  height: 100%;
-  width: 256px;
-  background: var(--bg);
-  padding: 1.5rem;
-}
-
-.mobile-close {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  padding: 8px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-
-.mobile-nav {
-  margin-top: 3rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.mobile-link {
-  padding: 8px 0;
-  font-weight: 500;
-  color: var(--text-muted);
-  text-decoration: none;
-}
-
-/* Hero */
-.hero {
-  position: relative;
-  background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%);
-  color: white;
-  padding: 64px 0;
-  overflow: hidden;
-}
-
-@media (min-width: 640px) {
-  .hero { padding: 96px 0; }
-}
-
-.hero-bg {
-  position: absolute;
-  inset: 0;
-  opacity: 0.2;
-}
-
-.hero-blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(64px);
-}
-
-.hero-blob-1 {
-  top: 0;
-  right: 0;
-  width: 384px;
-  height: 384px;
-  background: var(--primary);
-}
-
-.hero-blob-2 {
-  bottom: 0;
-  left: 0;
-  width: 384px;
-  height: 384px;
-  background: var(--purple);
-}
-
-.hero-container {
-  position: relative;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0 1rem;
-}
-
-@media (min-width: 640px) {
-  .hero-container { padding: 0 1.5rem; }
-}
-
-@media (min-width: 1024px) {
-  .hero-container { padding: 0 2rem; }
-}
-
-.hero-content {
-  max-width: 672px;
-}
-
-.hero-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  background: rgba(244, 63, 94, 0.2);
-  color: #FDA4AF;
-  border-radius: 100px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  margin-bottom: 1rem;
-}
-
-.hero-title {
-  font-size: 2rem;
-  font-weight: 700;
-  margin-bottom: 1.5rem;
-  line-height: 1.2;
-}
-
-@media (min-width: 640px) {
-  .hero-title { font-size: 3rem; }
-}
-
-.hero-subtitle {
-  font-size: 1.125rem;
-  color: #94A3B8;
-  margin-bottom: 2rem;
-  line-height: 1.6;
-}
-
-.hero-btn {
-  padding: 1rem 2rem;
-  background: white;
-  color: var(--text);
-  border: none;
-  border-radius: 12px;
-  font-family: inherit;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.hero-btn:hover {
-  background: var(--bg-light);
-}
-
-/* Features Bar */
-.features-bar {
-  background: var(--bg-light);
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-}
-
-.features-container {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0 1rem;
-}
-
-@media (min-width: 640px) {
-  .features-container { padding: 0 1.5rem; }
-}
-
-@media (min-width: 1024px) {
-  .features-container { padding: 0 2rem; }
-}
-
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  padding: 1.5rem 0;
-}
-
-.feature-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  text-align: center;
-}
-
-@media (min-width: 640px) {
-  .feature-item {
-    flex-direction: row;
-    text-align: left;
-  }
-}
-
-.feature-icon {
-  width: 20px;
-  height: 20px;
-  color: var(--primary);
-}
-
-.feature-text {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text);
-}
-
-/* Products Section */
-.products-section {
-  padding: 64px 0;
-}
-
-.products-container {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0 1rem;
-}
-
-@media (min-width: 640px) {
-  .products-container { padding: 0 1.5rem; }
-}
-
-@media (min-width: 1024px) {
-  .products-container { padding: 0 2rem; }
-}
-
-.products-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 2rem;
-}
-
-.products-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-@media (min-width: 640px) {
-  .products-title { font-size: 1.875rem; }
-}
-
-.view-all-link {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--primary);
-  font-weight: 500;
-  text-decoration: none;
-}
-
-.view-all-link:hover {
-  text-decoration: underline;
-}
-
-.products-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1.5rem;
-}
-
-@media (min-width: 640px) {
-  .products-grid { grid-template-columns: repeat(2, 1fr); }
-}
-
-@media (min-width: 1024px) {
-  .products-grid { grid-template-columns: repeat(3, 1fr); }
-}
-
-/* Product Card */
-.product-card {
-  position: relative;
-  background: var(--bg);
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  overflow: hidden;
-  transition: all 0.3s;
-}
-
-.product-card:hover {
-  box-shadow: var(--shadow-xl);
-}
-
-.product-image-wrapper {
-  position: relative;
-  aspect-ratio: 1;
-  background: var(--bg-light);
-  overflow: hidden;
-}
-
-.product-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.5s;
-}
-
-.product-card:hover .product-image {
-  transform: scale(1.05);
-}
-
-.wishlist-btn {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(4px);
-  border: none;
-  border-radius: 50%;
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  transition: background 0.2s;
-  color: var(--text-muted);
-}
-
-.wishlist-btn:hover {
-  background: white;
-}
-
-.quick-add {
-  position: absolute;
-  left: 1rem;
-  right: 1rem;
-  bottom: 1rem;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: all 0.3s;
-}
-
-.quick-add.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.add-to-cart-btn {
-  width: 100%;
-  padding: 12px;
-  background: var(--text);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-family: inherit;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.add-to-cart-btn:hover {
-  background: #1E293B;
-}
-
-.product-info {
-  padding: 1rem;
-}
-
-.product-category {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--primary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.product-name {
-  margin-top: 4px;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text);
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.product-meta {
-  margin-top: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.product-price {
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.product-rating {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.875rem;
-  color: var(--text-muted);
-}
-
-.star-icon {
-  width: 16px;
-  height: 16px;
-  fill: var(--amber);
-  color: var(--amber);
-}
-
-.reviews-count {
-  color: var(--text-light);
-}
-
-/* Cart Sidebar */
-.cart-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-}
-
-.cart-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-}
-
-.cart-sidebar {
-  position: absolute;
-  right: 0;
-  top: 0;
-  height: 100%;
-  width: 100%;
-  max-width: 448px;
-  background: var(--bg);
-  box-shadow: var(--shadow-xl);
-  display: flex;
-  flex-direction: column;
-}
-
-.cart-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.cart-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-}
-
-.cart-items {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.cart-empty {
-  text-align: center;
-  padding: 3rem 0;
-  color: var(--text-muted);
-}
-
-.cart-empty svg {
-  margin: 0 auto 1rem;
-}
-
-.cart-item {
-  display: flex;
-  gap: 1rem;
-  padding: 1rem;
-  background: var(--bg-light);
-  border-radius: 12px;
-}
-
-.cart-item-image {
-  width: 80px;
-  height: 80px;
-  border-radius: 8px;
-  object-fit: cover;
-}
-
-.cart-item-details {
-  flex: 1;
-}
-
-.cart-item-name {
-  font-weight: 500;
-  color: var(--text);
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.cart-item-price {
-  color: var(--primary);
-  font-weight: 600;
-  margin-top: 4px;
-}
-
-.quantity-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.qty-btn {
-  padding: 4px;
-  background: white;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.qty-btn:hover {
-  background: var(--bg-light);
-}
-
-.qty-value {
-  width: 32px;
-  text-align: center;
-  font-weight: 500;
-}
-
-.remove-btn {
-  padding: 4px;
-  background: transparent;
-  border: none;
-  color: var(--text-light);
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.remove-btn:hover {
-  color: var(--primary);
-}
-
-.cart-footer {
-  padding: 1.5rem;
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.cart-total {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 1.125rem;
-}
-
-.cart-total span:first-child {
-  color: var(--text-muted);
-}
-
-.total-amount {
-  font-weight: 700;
-  color: var(--text);
-}
-
-.checkout-btn {
-  width: 100%;
-  padding: 1rem;
-  background: var(--primary);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-family: inherit;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: background 0.2s;
-}
-
-.checkout-btn:hover {
-  background: var(--primary-dark);
-}
-
-.shipping-note {
-  text-align: center;
-  font-size: 0.875rem;
-  color: var(--text-muted);
+.transition-transform {
+  transition-property: transform;
 }
 `,
 
-    "src/index.css": `* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+    "src/index.css": `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Plus Jakarta Sans', sans-serif;
 }
 
 body {
-  font-family: 'Poppins', system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  padding: 0;
 }
-
-#root {
-  min-height: 100vh;
-}`
+`
   }
 };

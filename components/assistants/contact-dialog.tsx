@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
+import { useLocale } from "@/lib/i18n"
 
 export interface ContactFormData {
   id?: string
@@ -43,6 +44,7 @@ interface ContactDialogProps {
 }
 
 export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave }: ContactDialogProps) {
+  const { t } = useLocale()
   const [formData, setFormData] = useState<ContactFormData>({
     name: "",
     email: "",
@@ -82,11 +84,11 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
     // Validation for adding new contact
     if (!contact) {
     if (!formData.email.trim()) {
-      toast.error("Please enter an email")
+      toast.error(t("auth.invalidEmail"))
       return
     }
       if (!formData.role) {
-        toast.error("Please select a role")
+        toast.error(t("contacts.roles.user")) // Generic role error
       return
       }
       // Description is optional but we'll allow empty
@@ -95,7 +97,7 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
     // Validation for editing (role and description are editable)
     if (contact) {
       if (!formData.role) {
-        toast.error("Please select a role")
+        toast.error(t("contacts.roles.user")) // Generic role error
         return
       }
     }
@@ -120,12 +122,12 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {contact ? "Edit Contact" : "Add New Contact"}
+            {contact ? t("contacts.editContact") : t("contacts.addContact")}
           </DialogTitle>
           <DialogDescription>
             {contact 
-              ? "You can only edit the role and description for this contact" 
-              : "Enter the email of a registered user to add them as a contact. Only email, role, and description are required."}
+              ? t("contacts.editDescriptionPrompt") 
+              : t("contacts.addDescriptionPrompt")}
           </DialogDescription>
         </DialogHeader>
 
@@ -148,16 +150,16 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
                   disabled={isSubmitting}
               />
                 <p className="text-xs text-muted-foreground">
-                  Enter the email of a registered user in b-master
+                  {t("contacts.emailInputHint")}
                 </p>
           </div>
 
               {/* Description - Optional */}
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">{t("contacts.description")}</Label>
             <Textarea
               id="description"
-              placeholder="Add a brief description about this contact..."
+              placeholder={t("contacts.descriptionPlaceholder")}
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
@@ -168,7 +170,7 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
 
               {/* Telephone - Optional */}
           <div className="space-y-2">
-            <Label htmlFor="telephone">Telephone</Label>
+            <Label htmlFor="telephone">{t("contacts.telephone")}</Label>
             <Input
               id="telephone"
               type="tel"
@@ -181,10 +183,10 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
 
               {/* Information - Optional */}
           <div className="space-y-2">
-            <Label htmlFor="information">Additional Information</Label>
+            <Label htmlFor="information">{t("contacts.additionalInfo")}</Label>
             <Textarea
               id="information"
-              placeholder="Any additional information about this contact..."
+              placeholder={t("contacts.additionalInfoPlaceholder")}
               value={formData.information || ""}
               onChange={(e) => setFormData({ ...formData, information: e.target.value })}
               rows={3}
@@ -196,7 +198,7 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
               {/* Role - Required */}
             <div className="space-y-2">
                 <Label htmlFor="role">
-                  Role <span className="text-destructive">*</span>
+                  {t("contacts.role")} <span className="text-destructive">*</span>
               </Label>
               <Select
                   value={formData.role}
@@ -206,12 +208,12 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
                   disabled={isSubmitting}
               >
                 <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select role" />
+                    <SelectValue placeholder={t("contacts.role")} />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="user" className="focus:bg-muted focus:text-foreground">User</SelectItem>
-                    <SelectItem value="client" className="focus:bg-muted focus:text-foreground">Client</SelectItem>
-                    <SelectItem value="investor" className="focus:bg-muted focus:text-foreground">Investor</SelectItem>
+                    <SelectItem value="user" className="focus:bg-muted focus:text-foreground">{t("contacts.roles.user")}</SelectItem>
+                    <SelectItem value="client" className="focus:bg-muted focus:text-foreground">{t("contacts.roles.client")}</SelectItem>
+                    <SelectItem value="investor" className="focus:bg-muted focus:text-foreground">{t("contacts.roles.investor")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -221,7 +223,7 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
               {/* When editing: Show all fields but only Role and Description are editable */}
               {/* Name - Read-only */}
               <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">{t("contacts.contactName")}</Label>
                 <Input
                   id="name"
                   value={formData.name}
@@ -232,7 +234,7 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
 
               {/* Email - Read-only */}
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t("contacts.contactEmail")}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -244,10 +246,10 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
 
               {/* Description - Editable */}
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">{t("contacts.description")}</Label>
                 <Textarea
                   id="description"
-                  placeholder="Add a brief description about this contact..."
+                  placeholder={t("contacts.descriptionPlaceholder")}
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={3}
@@ -258,7 +260,7 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
 
               {/* Telephone - Editable */}
               <div className="space-y-2">
-                <Label htmlFor="telephone">Telephone</Label>
+                <Label htmlFor="telephone">{t("contacts.telephone")}</Label>
                 <Input
                   id="telephone"
                   type="tel"
@@ -271,10 +273,10 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
 
               {/* Information - Editable */}
               <div className="space-y-2">
-                <Label htmlFor="information">Additional Information</Label>
+                <Label htmlFor="information">{t("contacts.additionalInfo")}</Label>
                 <Textarea
                   id="information"
-                  placeholder="Any additional information about this contact..."
+                  placeholder={t("contacts.additionalInfoPlaceholder")}
                   value={formData.information || ""}
                   onChange={(e) => setFormData({ ...formData, information: e.target.value })}
                   rows={3}
@@ -285,7 +287,7 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
 
               {/* Gender - Read-only */}
               <div className="space-y-2">
-                <Label htmlFor="gender">Gender</Label>
+                <Label htmlFor="gender">{t("contacts.gender")}</Label>
                 <Input
                   id="gender"
                   value={formData.gender}
@@ -297,7 +299,7 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
               {/* Role - Editable */}
             <div className="space-y-2">
                 <Label htmlFor="role">
-                  Role <span className="text-destructive">*</span>
+                  {t("contacts.role")} <span className="text-destructive">*</span>
                 </Label>
               <Select
                 value={formData.role}
@@ -307,19 +309,19 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
                   disabled={isSubmitting}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select role" />
+                  <SelectValue placeholder={t("contacts.role")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user" className="focus:bg-muted focus:text-foreground">User</SelectItem>
-                  <SelectItem value="client" className="focus:bg-muted focus:text-foreground">Client</SelectItem>
-                  <SelectItem value="investor" className="focus:bg-muted focus:text-foreground">Investor</SelectItem>
+                  <SelectItem value="user" className="focus:bg-muted focus:text-foreground">{t("contacts.roles.user")}</SelectItem>
+                  <SelectItem value="client" className="focus:bg-muted focus:text-foreground">{t("contacts.roles.client")}</SelectItem>
+                  <SelectItem value="investor" className="focus:bg-muted focus:text-foreground">{t("contacts.roles.investor")}</SelectItem>
                 </SelectContent>
               </Select>
           </div>
 
               {/* Address - Read-only */}
           <div className="space-y-2">
-            <Label htmlFor="address">Address</Label>
+            <Label htmlFor="address">{t("contacts.address")}</Label>
             <Textarea
               id="address"
               value={formData.address}
@@ -339,14 +341,14 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
               onClick={() => onOpenChange(false)}
               className="bg-muted text-foreground hover:bg-muted/80 hover:text-primary"
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting
-                ? "Processing..."
+                ? t("contacts.processing")
                 : contact
-                ? "Update Contact"
-                : "Add Contact"}
+                ? t("contacts.editContact")
+                : t("contacts.addContact")}
             </Button>
           </div>
         </form>

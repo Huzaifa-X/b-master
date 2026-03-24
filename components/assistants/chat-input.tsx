@@ -30,6 +30,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useSearchUsersForMention } from "@/hooks/useUser"
 import { useUploadFileToS3 } from "@/hooks/useUpload"
 import { toast } from "sonner"
+import { useLocale } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import ReactMarkdown from "react-markdown"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
@@ -99,6 +100,7 @@ export function ChatInput({
   assistantId,
   isAtBottom = false
 }: ChatInputProps) {
+  const { t } = useLocale()
   // Internal state for controlled input
   const [internalValue, setInternalValue] = useState("")
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
@@ -420,13 +422,13 @@ export function ChatInput({
       }
 
       if (failedCount > 0) {
-        toast.error(`${failedCount} file(s) failed to upload. Please try again.`)
+        toast.error(t("chat.errors.uploadFailed", { n: failedCount }))
         setIsUploading(false)
         return
       }
 
       if (successfulUploads.length === 0) {
-        toast.error('Failed to upload files. Please try again.')
+        toast.error(t("chat.errors.generalUploadFailed"))
         setIsUploading(false)
         return
       }
@@ -794,7 +796,7 @@ export function ChatInput({
                   ref={textareaRef}
                   onKeyDown={handleKeyDown}
                   onPaste={handlePaste}
-                  placeholder={placeholder}
+                  placeholder={placeholder === "Send a message..." ? t("chat.input.placeholder") : placeholder}
                   disabled={disabled || isLoading}
                   rows={1}
                   className="text-foreground placeholder:text-muted-foreground min-h-[44px] w-full resize-none border-none bg-transparent shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
@@ -810,11 +812,11 @@ export function ChatInput({
                   {isLoadingMentions ? (
                     <div className="flex items-center justify-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Loading users...</span>
+                      <span>{t("chat.input.loadingUsers")}</span>
                     </div>
                   ) : getFilteredMentionUsers().length === 0 ? (
                     <div className="px-2 py-1.5 text-sm text-muted-foreground text-center">
-                      No users found
+                      {t("chat.input.noUsersFound")}
                     </div>
                   ) : (
                     getFilteredMentionUsers().map((user) => (
@@ -849,7 +851,7 @@ export function ChatInput({
               {isDragging && (
                 <div className="absolute inset-0 rounded-3xl bg-primary/10 dark:bg-primary/20 border-2 border-dashed border-primary flex items-center justify-center pointer-events-none z-10">
                   <div className="text-center">
-                    <p className="text-sm font-medium text-primary">Drop files here to upload</p>
+                    <p className="text-sm font-medium text-primary">{t("chat.input.dropFiles")}</p>
                   </div>
                 </div>
               )}
@@ -928,13 +930,13 @@ export function ChatInput({
                         }`}
                         onClick={handleCanvasModeToggle}
                         disabled={disabled || isLoading}
-                        aria-label={canvasModeEnabled ? "Disable Canvas mode" : "Enable Canvas mode"}
+                        aria-label={canvasModeEnabled ? t("chat.input.disableCanvas") : t("chat.input.enableCanvas")}
                       >
                         <Palette className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top">
-                      {canvasModeEnabled ? "Canvas mode ON — will generate HTML" : "Canvas mode — generate visual HTML"}
+                      {canvasModeEnabled ? t("chat.input.canvasOn") : t("chat.input.canvasOff")}
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -942,7 +944,7 @@ export function ChatInput({
                   {canvasModeEnabled && (
                     <span className="text-xs font-medium text-violet-500 flex items-center gap-1">
                       <Palette className="h-3 w-3" />
-                      Canvas
+                      {t("chat.input.canvas")}
                     </span>
                   )}
                   <Tooltip>
@@ -961,7 +963,7 @@ export function ChatInput({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top">
-                      Send message (Enter)
+                      {t("chat.input.send")}
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -989,7 +991,7 @@ export function ChatInput({
                 onChange={(e) => handleValueChange(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                placeholder={placeholder}
+                placeholder={placeholder === "Send a message..." ? t("chat.input.placeholder") : placeholder}
                 disabled={disabled || isLoading}
                 rows={1}
                 className="text-foreground placeholder:text-muted-foreground min-h-[44px] w-full resize-none border-none bg-transparent shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
@@ -999,7 +1001,7 @@ export function ChatInput({
               {isDragging && (
                 <div className="absolute inset-0 rounded-3xl bg-primary/10 dark:bg-primary/20 border-2 border-dashed border-primary flex items-center justify-center pointer-events-none z-10">
                   <div className="text-center">
-                    <p className="text-sm font-medium text-primary">Drop files here to upload</p>
+                    <p className="text-sm font-medium text-primary">{t("chat.input.dropFiles")}</p>
                   </div>
                 </div>
               )}
@@ -1076,13 +1078,13 @@ export function ChatInput({
                         }`}
                         onClick={handleCanvasModeToggle}
                         disabled={disabled || isLoading}
-                        aria-label={canvasModeEnabled ? "Disable Canvas mode" : "Enable Canvas mode"}
+                        aria-label={canvasModeEnabled ? t("chat.input.disableCanvas") : t("chat.input.enableCanvas")}
                       >
                         <Palette className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top">
-                      {canvasModeEnabled ? "Canvas mode ON — will generate HTML" : "Canvas mode — generate visual HTML"}
+                      {canvasModeEnabled ? t("chat.input.canvasOn") : t("chat.input.canvasOff")}
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -1090,7 +1092,7 @@ export function ChatInput({
                   {canvasModeEnabled && (
                     <span className="text-xs font-medium text-violet-500 flex items-center gap-1">
                       <Palette className="h-3 w-3" />
-                      Canvas
+                      {t("chat.input.canvas")}
                     </span>
                   )}
                   <Tooltip>
@@ -1109,7 +1111,7 @@ export function ChatInput({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top">
-                      Send message (Enter)
+                      {t("chat.input.send")}
                     </TooltipContent>
                   </Tooltip>
                 </div>
