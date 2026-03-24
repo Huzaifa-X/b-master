@@ -480,11 +480,13 @@ export async function POST(req: NextRequest) {
         // CANVAS MODE SYSTEM PROMPT (manual or auto-detected)
         // ============================================
         if (effectiveCanvasMode) {
-            systemPrompt += `\n\n## 🎨 CANVAS MODE IS ACTIVE - MANDATORY HTML OUTPUT
+            if (isCanvasIntent) {
+                // ── VISUAL CREATION: force full HTML output ──────────────────
+                systemPrompt += `\n\n## 🎨 CANVAS MODE IS ACTIVE - HTML VISUAL OUTPUT
 
 **⚠️ THIS IS A HARD REQUIREMENT - YOU MUST FOLLOW THESE RULES:**
 
-${isCanvasIntent && !canvas ? '**Note: Canvas mode was auto-enabled based on your creation request.**\n\n' : ''}The user wants a VISUAL HTML output, NOT a text explanation.
+${!canvas ? '**Note: Canvas mode was auto-enabled based on your creation request.**\n\n' : ''}The user wants a VISUAL HTML output, NOT a text explanation.
 
 **ABSOLUTE RULES (NO EXCEPTIONS):**
 1. You MUST ALWAYS output a complete, self-contained HTML page - NO MATTER WHAT the user asks
@@ -519,9 +521,28 @@ ${isCanvasIntent && !canvas ? '**Note: Canvas mode was auto-enabled based on you
 </html>
 \`\`\`
 
-**REMEMBER: Canvas mode = HTML output. ALWAYS. No exceptions. Even for documents, contracts, letters, etc. - create them as styled HTML pages.**
+**REMEMBER: Canvas mode = HTML output for visual creation. No exceptions. Even for documents, contracts, letters, etc. - create them as styled HTML pages.**
 
 ${swissQRInvoiceInstructions}`
+            } else {
+                // ── TEXT / QUESTION CANVAS: output rich markdown in a canvas block ──
+                systemPrompt += `\n\n## 🖊️ CANVAS MODE IS ACTIVE - MARKDOWN CANVAS OUTPUT
+
+The user has enabled the Canvas panel. Your response will be displayed there as rendered markdown.
+
+**RULES:**
+1. Write your ENTIRE response inside a single \`\`\`canvas ... \`\`\` fenced block
+2. Use rich markdown formatting: # headings, **bold**, *italic*, bullet lists, numbered lists, tables, code blocks etc.
+3. Do NOT output anything outside the \`\`\`canvas\`\`\` block
+4. Provide the full, well-structured answer — the canvas panel has plenty of space
+
+**OUTPUT FORMAT (follow exactly):**
+\`\`\`canvas
+# Title of Your Response
+
+Your full, well-formatted response here…
+\`\`\``
+            }
         }
 
         // Add artifact context

@@ -98,6 +98,9 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
     // Track if canvas HTML has been auto-opened in the preview panel
     const [canvasAutoOpened, setCanvasAutoOpened] = useState(false)
     const canvasOpenedRef = useRef(false) // Prevent multiple dispatches
+    // Track if canvas Markdown block has been auto-opened
+    const [markdownCanvasAutoOpened, setMarkdownCanvasAutoOpened] = useState(false)
+    const markdownCanvasOpenedRef = useRef(false)
     // Share artifact state (for Canvas Output Card)
     const [shareArtifactDialogOpen, setShareArtifactDialogOpen] = useState(false)
     const [savedCanvasArtifactId, setSavedCanvasArtifactId] = useState<string | null>(null)
@@ -443,6 +446,20 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
         return null
     }, [contentWithoutSources])
 
+    // 🖊️ Detect Canvas Markdown output (```canvas ... ``` blocks)
+    const canvasMarkdownData = useMemo(() => {
+        if (!contentWithoutSources) return null
+        const canvasBlockRegex = /```canvas\s*\n([\s\S]*?)```/gi
+        const matches = [...contentWithoutSources.matchAll(canvasBlockRegex)]
+        for (const match of matches) {
+            const mdContent = match[1]?.trim() || ''
+            if (mdContent.length > 0) {
+                return { fullMatch: match[0], mdContent, isCanvasOutput: true }
+            }
+        }
+        return null
+    }, [contentWithoutSources])
+
     // Get detected intent for auto-open decision
     const detectedIntent = useArtifactStore((state) => state.detectedIntent)
 
@@ -476,14 +493,39 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
         }
     }, [canvasHtmlData, isLoading, detectedIntent])
 
-    // Content without the canvas HTML block (to show card instead)
-    const contentForDisplay = useMemo(() => {
-        if (!canvasHtmlData?.isCanvasOutput || !contentWithoutSources) {
-            return contentWithoutSources
+    // Auto-open canvas panel when markdown canvas block is detected
+    useEffect(() => {
+        if (
+            canvasMarkdownData?.isCanvasOutput &&
+            !markdownCanvasOpenedRef.current &&
+            !isLoading
+        ) {
+            markdownCanvasOpenedRef.current = true
+            setMarkdownCanvasAutoOpened(true)
+            window.dispatchEvent(
+                new CustomEvent("open-code-preview", {
+                    detail: {
+                        content: canvasMarkdownData.mdContent,
+                        language: "markdown",
+                        type: "markdown",
+                        title: "Canvas Output",
+                    },
+                })
+            )
         }
-        // Remove the canvas HTML block from content - will show card instead
-        return contentWithoutSources.replace(canvasHtmlData.fullMatch, '').trim()
-    }, [contentWithoutSources, canvasHtmlData])
+    }, [canvasMarkdownData, isLoading])
+
+    // Content without canvas blocks (to show cards instead)
+    const contentForDisplay = useMemo(() => {
+        let display = contentWithoutSources || ''
+        if (canvasHtmlData?.isCanvasOutput) {
+            display = display.replace(canvasHtmlData.fullMatch, '').trim()
+        }
+        if (canvasMarkdownData?.isCanvasOutput) {
+            display = display.replace(canvasMarkdownData.fullMatch, '').trim()
+        }
+        return display
+    }, [contentWithoutSources, canvasHtmlData, canvasMarkdownData])
 
     // Helper to get favicon URL
     const getFaviconUrl = (url: string) => {
@@ -599,7 +641,53 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
                     </div>
                 )}
 
-                {((contentForDisplay && contentForDisplay.trim().length > 0) || (canvasHtmlData?.isCanvasOutput && !canvasAutoOpened)) && (
+                {/* 🖊️ Markdown Canvas Output Card */}
+                {canvasMarkdownData?.isCanvasOutput && markdownCanvasAutoOpened && (
+                    <div className="flex gap-4 px-2 mb-4">
+                        <div className="flex-shrink-0 pt-1">
+                            <div className="flex size-8 items-center justify-center rounded-full">
+                                <Image src="/bmaster-icon.png" alt="Assistant" width={24} height={24} style={{ width: "auto", height: "24px" }} unoptimized />
+                            </div>
+                        </div>
+                        <div className="flex-1">
+                            <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 p-4 shadow-sm">
+                                <div className="flex items-start gap-3">
+                                    <div className="flex-shrink-0 p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+                                        <Code2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="font-semibold text-sm text-blue-900 dark:text-blue-100 mb-1">Canvas Output</h4>
+                                        <p className="text-xs text-blue-600 dark:text-blue-300 mb-3">Your response is displayed in the canvas panel on the right.</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="default"
+                                                className="h-8 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+                                                onClick={() => window.dispatchEvent(new CustomEvent("open-code-preview", {
+                                                    detail: { content: canvasMarkdownData.mdContent, language: "markdown", type: "markdown", title: "Canvas Output" }
+                                                }))}
+                                            >
+                                                <Eye className="h-3.5 w-3.5" />
+                                                View in Canvas
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 gap-1.5"
+                                                onClick={() => { navigator.clipboard.writeText(canvasMarkdownData.mdContent); toast.success("Copied to clipboard") }}
+                                            >
+                                                <Copy className="h-3.5 w-3.5" />
+                                                Copy
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {((contentForDisplay && contentForDisplay.trim().length > 0) || (canvasHtmlData?.isCanvasOutput && !canvasAutoOpened) || (canvasMarkdownData?.isCanvasOutput && !markdownCanvasAutoOpened)) && (
                     <div className="flex gap-4 px-2">
                         {/* Avatar */}
                         <div className="flex-shrink-0 pt-1">

@@ -282,12 +282,12 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
   // Listen for code preview events
   useEffect(() => {
     const handler = (e: CustomEvent) => {
-      const { content, language, type, autoCollapse } = e.detail
+      const { content, language, type, autoCollapse, title } = e.detail
       setArtifact({
         type: type || "code",
         language: language || "text",
         content: content,
-        title: `Generated Content`
+        title: title || `Generated Content`
       })
 
       // Auto-collapse chat for creation intents (desktop only)

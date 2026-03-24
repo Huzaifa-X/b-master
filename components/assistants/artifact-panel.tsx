@@ -1060,28 +1060,41 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
                 onMouseUp={handleTextSelection}
               >
 
-                {artifactContent?.type === "code" || isStreaming ? (
+                {(() => {
+                  // Languages that should render as monospace raw code
+                  const MONO_LANGS = new Set([
+                    'javascript','js','typescript','ts','jsx','tsx',
+                    'python','py','css','json','sql','bash','sh',
+                    'yaml','yml','toml','java','c','cpp','go','rust',
+                    'ruby','php','swift','kotlin','scala','csharp','cs',
+                    'xml','dockerfile','html','htm',
+                  ])
+                  const lang = artifactContent?.language?.toLowerCase() || ''
+                  const isMonoCode = MONO_LANGS.has(lang) || isHtmlCode
 
-                  <pre className="m-0 p-6 text-sm font-mono whitespace-pre-wrap break-all overflow-wrap-anywhere bg-muted rounded-lg relative">
+                  if (isMonoCode) {
+                    return (
+                      <pre className="m-0 p-6 text-sm font-mono whitespace-pre-wrap break-all overflow-wrap-anywhere bg-muted rounded-lg relative">
+                        <code className="block">
+                          {displayContent}
+                          {isStreaming && displayContent && (
+                            <span className="inline-block w-2 h-4 bg-primary ml-1 animate-pulse"></span>
+                          )}
+                        </code>
+                      </pre>
+                    )
+                  }
 
-                    <code className="block">
-                      {displayContent}
+                  // Markdown / plain text — render with ReactMarkdown
+                  return (
+                    <div className="p-6 prose prose-sm dark:prose-invert max-w-none break-words overflow-wrap-anywhere">
+                      <ReactMarkdown>{displayContent}</ReactMarkdown>
                       {isStreaming && displayContent && (
                         <span className="inline-block w-2 h-4 bg-primary ml-1 animate-pulse"></span>
                       )}
-                    </code>
-
-                  </pre>
-
-                ) : (
-
-                  <div className="p-6 prose prose-sm dark:prose-invert max-w-none break-words overflow-wrap-anywhere">
-
-                    <ReactMarkdown>{displayContent}</ReactMarkdown>
-
-                  </div>
-
-                )}
+                    </div>
+                  )
+                })()}
 
               </div>
 
