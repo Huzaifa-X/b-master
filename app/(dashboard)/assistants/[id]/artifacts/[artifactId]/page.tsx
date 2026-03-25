@@ -25,6 +25,8 @@ interface PageProps {
   }>
 }
 
+import { useLocale } from "@/lib/i18n"
+
 export default function ArtifactPage({ params }: PageProps) {
   const { id: assistantId, artifactId } = use(params)
   const router = useRouter()
@@ -38,6 +40,8 @@ export default function ArtifactPage({ params }: PageProps) {
   const [generationProgress, setGenerationProgress] = useState<number>(0)
   const eventSourceRef = useRef<EventSource | null>(null)
   const streamingInitiatedRef = useRef(false)
+  const artifactContentSetRef = useRef<string | null>(null) // Track which content we've already set
+  const { t } = useLocale()
 
   // Use React Query hook to fetch artifact
   const { artifact, isLoading, isError, error, refetch } = useArtifactById(artifactId, {
@@ -128,14 +132,14 @@ export default function ArtifactPage({ params }: PageProps) {
                   type: "code",
                   language: "html",
                   content: data.result,
-                  title: artifact?.name || "Generated",
+                  title: artifact?.name || t("artifacts.generated"),
                 })
               }
 
               // Refetch artifact data to get the final version from database
               await refetch()
 
-              toast.success("Artifact generated successfully!")
+              toast.success(t("artifacts.toasts.generatedSuccess"))
 
               // Close the EventSource
               eventSource.close()
@@ -145,7 +149,7 @@ export default function ArtifactPage({ params }: PageProps) {
             case 'error':
               console.error("[Artifact] Job error:", data.error)
               setIsStreaming(false)
-              toast.error(data.error || "Failed to generate artifact")
+              toast.error(data.error || t("artifacts.errors.generateFailed"))
 
               // Close the EventSource
               eventSource.close()
@@ -160,7 +164,7 @@ export default function ArtifactPage({ params }: PageProps) {
       eventSource.onerror = (error) => {
         console.error("[Artifact] EventSource error:", error)
         setIsStreaming(false)
-        toast.error("Connection to generation service lost. Please refresh and try again.")
+        toast.error(t("artifacts.errors.connectionLost"))
 
         eventSource.close()
         eventSourceRef.current = null
@@ -172,16 +176,16 @@ export default function ArtifactPage({ params }: PageProps) {
 
       // Handle different types of errors with specific messages
       if (error.message?.includes('HTTP error')) {
-        toast.error("Server error occurred. Please try again later.")
+        toast.error(t("artifacts.errors.serverError"))
       } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-        toast.error("Network error. Please check your connection and try again.")
+        toast.error(t("artifacts.errors.networkError"))
       } else if (error.message?.includes('Invalid job response')) {
-        toast.error("Invalid server response. Please try again.")
+        toast.error(t("artifacts.errors.invalidResponse"))
       } else {
-        toast.error("Failed to generate artifact. Please try again.")
+        toast.error(t("artifacts.errors.generateFailed"))
       }
     }
-  }, [artifactId, setArtifact, refetch, artifact?.name, isStreaming])
+  }, [artifactId, setArtifact, refetch, artifact?.name, isStreaming, t])
 
   // Set assistant mode in header (automatically handles fetching and cleanup)
   useSetAssistantMode(assistantId)
@@ -190,16 +194,19 @@ export default function ArtifactPage({ params }: PageProps) {
   const handleVersionSelect = (versionCode: string, versionId: string) => {
     setSelectedVersionCode(versionCode)
     setSelectedVersionId(versionId)
-    
+
+    // Update the ref to prevent the main effect from overwriting
+    artifactContentSetRef.current = versionCode
+
     // Update the artifact store with the selected version
     setArtifact({
       type: "code",
       language: "html",
       content: versionCode,
-      title: artifact?.name || "Artifact",
+      title: artifact?.name || t("artifacts.artifactTitleShort"),
     })
-    
-    toast.success("Version loaded successfully")
+
+    toast.success(t("artifacts.toasts.versionLoaded"))
   }
 
   // Set artifact content in store when artifact is loaded
@@ -243,9 +250,16 @@ export default function ArtifactPage({ params }: PageProps) {
       return
     }
 
-    // Show completed artifact content
+    // Show completed artifact content - only if we haven't already set this exact content
     if (artifact.htmlContent && artifact.htmlContent.trim() !== '' && !isStreaming) {
+      // Prevent infinite loop by checking if we've already set this content
+      if (artifactContentSetRef.current === artifact.htmlContent) {
+        console.log("[Artifact] Skipping - content already set")
+        return
+      }
+
       console.log("[Artifact] Displaying existing artifact content (", artifact.htmlContent.length, "characters)")
+      artifactContentSetRef.current = artifact.htmlContent
       setArtifact({
         type: "code",
         language: "html",
@@ -274,6 +288,7 @@ export default function ArtifactPage({ params }: PageProps) {
       setStreamingContent("")
       setSelectedVersionCode(null)
       setSelectedVersionId(null)
+      artifactContentSetRef.current = null
     }
   }, [artifact, setArtifact, setPreviewMode, clearArtifact, closePanel, startStreaming, isStreaming, selectedVersionCode])
 
@@ -289,7 +304,7 @@ export default function ArtifactPage({ params }: PageProps) {
       <div className="h-full w-full flex items-center justify-center bg-background overflow-hidden">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-sm text-muted-foreground">Loading artifact...</p>
+          <p className="text-sm text-muted-foreground">{t("artifacts.loadingArtifact")}</p>
         </div>
       </div>
     )
@@ -300,17 +315,17 @@ export default function ArtifactPage({ params }: PageProps) {
       <div className="h-full w-full flex items-center justify-center bg-background overflow-hidden">
         <div className="text-center space-y-4 px-4">
           <div className="rounded-lg border bg-card p-8 shadow-sm max-w-md mx-auto">
-            <h2 className="text-xl font-semibold mb-2">Error Loading Artifact</h2>
+            <h2 className="text-xl font-semibold mb-2">{t("artifacts.errors.loadArtifactTitle")}</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              {error?.message || "Failed to load the artifact. Please try again."}
+              {error?.message || t("artifacts.errors.loadArtifactDescription")}
             </p>
             <div className="flex gap-2 justify-center">
               <Button variant="outline" onClick={() => refetch()}>
-                Try Again
+                {t("common.tryAgain")}
               </Button>
               <Button onClick={handleBack}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Artifacts
+                {t("artifacts.backToArtifacts")}
               </Button>
             </div>
           </div>
@@ -324,13 +339,13 @@ export default function ArtifactPage({ params }: PageProps) {
       <div className="h-full w-full flex items-center justify-center bg-background overflow-hidden">
         <div className="text-center space-y-4 px-4">
           <div className="rounded-lg border bg-card p-8 shadow-sm max-w-md mx-auto">
-            <h2 className="text-xl font-semibold mb-2">Artifact Not Found</h2>
+            <h2 className="text-xl font-semibold mb-2">{t("artifacts.errors.artifactNotFound")}</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              The artifact you're looking for doesn't exist or you don't have permission to view it.
+              {t("artifacts.errors.artifactNotFoundDescription")}
             </p>
             <Button onClick={handleBack}>
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Artifacts
+              {t("artifacts.backToArtifacts")}
             </Button>
           </div>
         </div>
@@ -411,7 +426,7 @@ export default function ArtifactPage({ params }: PageProps) {
               side="bottom" 
               className="h-[90vh] p-0 [&>button]:hidden"
             >
-              <SheetTitle className="sr-only">Artifact Preview</SheetTitle>
+              <SheetTitle className="sr-only">{t("artifacts.preview")}</SheetTitle>
               <ArtifactPanel
                 onClose={() => setIsPanelOpen(false)}
                 streamingContent={isStreaming ? streamingContent : undefined}

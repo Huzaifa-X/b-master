@@ -8,11 +8,13 @@ import { Button } from "@/components/ui/button"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { uploadImageToS3, deleteFileFromS3 } from "@/app/actions/upload.action"
+import { useLocale } from "@/lib/i18n"
 
 export function VisualIdentityStep({
   formData,
   updateFormData
 }: VisualIdentityStepProps) {
+  const { t } = useLocale()
   const [isUploading, setIsUploading] = useState(false)
 
   const handleImageChange = async (value: File | string | null) => {
@@ -53,14 +55,14 @@ export function VisualIdentityStep({
               imagePreview: base64Data, // Keep preview for UI
               imageURL: uploadResult.url // Store S3 URL for backend
             })
-            toast.success("Image uploaded successfully")
+            toast.success(t("wizard.visualIdentity.uploadSuccess"))
           } else {
             // Upload failed - clear preview and show error
             updateFormData({
               imagePreview: null,
               imageURL: null
             })
-            toast.error(uploadResult.error || "Failed to upload image")
+            toast.error(uploadResult.error || t("wizard.visualIdentity.uploadError"))
           }
 
           setIsUploading(false)
@@ -72,7 +74,7 @@ export function VisualIdentityStep({
           imagePreview: null,
           imageURL: null
         })
-        toast.error(error.message || "Failed to upload image")
+        toast.error(error.message || t("wizard.visualIdentity.uploadError"))
         setIsUploading(false)
       }
     } else if (value === null) {
@@ -87,14 +89,14 @@ export function VisualIdentityStep({
       try {
         const deleteResult = await deleteFileFromS3(formData.imageURL)
         if (deleteResult.success) {
-          toast.success("Image removed from storage")
+          toast.success(t("wizard.visualIdentity.removeSuccess"))
         } else {
           console.warn("Failed to delete image from S3:", deleteResult.error)
-          toast.warning("Image removed locally, but may still exist in storage")
+          toast.warning(t("wizard.visualIdentity.removeWarning"))
         }
       } catch (error) {
         console.error("Error deleting image:", error)
-        toast.warning("Image removed locally, but may still exist in storage")
+        toast.warning(t("wizard.visualIdentity.removeWarning"))
       }
     }
 
@@ -108,9 +110,9 @@ export function VisualIdentityStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold mb-2">Visual Identity</h2>
+        <h2 className="text-2xl font-bold mb-2">{t("wizard.visualIdentity.title")}</h2>
         <p className="text-muted-foreground">
-          Upload an image to represent your AI assistant
+          {t("wizard.visualIdentity.description")}
         </p>
       </div>
 
@@ -128,7 +130,7 @@ export function VisualIdentityStep({
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 rounded-lg">
               <div className="flex flex-col items-center gap-2">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Uploading...</p>
+                <p className="text-sm text-muted-foreground">{t("wizard.visualIdentity.uploading")}</p>
               </div>
             </div>
           )}
@@ -136,8 +138,8 @@ export function VisualIdentityStep({
 
         <p className="text-sm text-muted-foreground text-center">
           {isUploading
-            ? "Uploading image to cloud storage..."
-            : "This image will be used as the avatar for your assistant"
+            ? t("wizard.visualIdentity.uploadingToCloud")
+            : t("wizard.visualIdentity.avatarHint")
           }
         </p>
       </div>

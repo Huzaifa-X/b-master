@@ -18,6 +18,7 @@ import {
     removeNewsFeedPostPermission
 } from '@/app/actions/newsFeed.action'
 import { toast } from 'sonner'
+import { useLocale } from '@/lib/i18n'
 
 // ================================================================
 // TYPES
@@ -107,35 +108,37 @@ export function useNewsFeedPost(postId: string) {
 // ================================================================
 
 export function useCreatePost() {
+    const { t } = useLocale()
     const queryClient = useQueryClient()
 
     return useMutation({
         mutationFn: createNewsFeedPost,
         onSuccess: (data) => {
             if (data.success && 'post' in data && data.post) {
-                toast.success('Post created successfully')
+                toast.success(t('feed.postCreated'))
                 // Invalidate all queries for this assistant
                 queryClient.invalidateQueries({
                     queryKey: ['newsfeed-posts', data.post.assistantId]
                 })
             } else {
-                toast.error(data.error || 'Failed to create post')
+                toast.error(data.error || t('feed.errorCreatePost'))
             }
         },
         onError: (error: Error) => {
-            toast.error(error.message || 'Failed to create post')
+            toast.error(error.message || t('feed.errorCreatePost'))
         }
     })
 }
 
 export function useUpdatePost() {
+    const { t } = useLocale()
     const queryClient = useQueryClient()
 
     return useMutation({
         mutationFn: updateNewsFeedPost,
         onSuccess: (data) => {
             if (data.success && 'post' in data && data.post) {
-                toast.success('Post updated successfully')
+                toast.success(t('feed.postUpdated'))
                 queryClient.invalidateQueries({
                     queryKey: ['newsfeed-posts', data.post.assistantId]
                 })
@@ -143,23 +146,24 @@ export function useUpdatePost() {
                     queryKey: ['newsfeed-post', data.post.id]
                 })
             } else {
-                toast.error(data.error || 'Failed to update post')
+                toast.error(data.error || t('feed.errorUpdatePost'))
             }
         },
         onError: (error: Error) => {
-            toast.error(error.message || 'Failed to update post')
+            toast.error(error.message || t('feed.errorUpdatePost'))
         }
     })
 }
 
 export function useDeletePost() {
+    const { t } = useLocale()
     const queryClient = useQueryClient()
 
     return useMutation({
         mutationFn: deleteNewsFeedPost,
         onSuccess: (data, postId) => {
             if (data.success) {
-                toast.success('Post deleted successfully')
+                toast.success(t('feed.postDeleted'))
                 // Invalidate all newsfeed queries to refresh the list
                 queryClient.invalidateQueries({
                     queryKey: ['newsfeed-posts']
@@ -168,11 +172,11 @@ export function useDeletePost() {
                     queryKey: ['newsfeed-post', postId]
                 })
             } else {
-                toast.error(data.error || 'Failed to delete post')
+                toast.error(data.error || t('feed.errorDeletePost'))
             }
         },
         onError: (error: Error) => {
-            toast.error(error.message || 'Failed to delete post')
+            toast.error(error.message || t('feed.errorDeletePost'))
         }
     })
 }
@@ -198,6 +202,7 @@ export function usePostLikes(postId: string) {
 }
 
 export function useLikePost() {
+    const { t } = useLocale()
     const queryClient = useQueryClient()
 
     return useMutation({
@@ -241,7 +246,7 @@ export function useLikePost() {
             if (data.success) {
                 queryClient.invalidateQueries({ queryKey: ['post-likes'] })
             } else {
-                toast.error(data.error || 'Failed to like post')
+                toast.error(data.error || t('feed.errorLikePost'))
             }
         },
         onError: (error: Error, postId, context) => {
@@ -251,7 +256,7 @@ export function useLikePost() {
                     queryClient.setQueryData(queryKey, data)
                 })
             }
-            toast.error(error.message || 'Failed to like post')
+            toast.error(error.message || t('feed.errorLikePost'))
         },
         onSettled: () => {
             // Always refetch after error or success
@@ -261,6 +266,7 @@ export function useLikePost() {
 }
 
 export function useUnlikePost() {
+    const { t } = useLocale()
     const queryClient = useQueryClient()
 
     return useMutation({
@@ -304,7 +310,7 @@ export function useUnlikePost() {
             if (data.success) {
                 queryClient.invalidateQueries({ queryKey: ['post-likes'] })
             } else {
-                toast.error(data.error || 'Failed to unlike post')
+                toast.error(data.error || t('feed.errorUnlikePost'))
             }
         },
         onError: (error: Error, postId, context) => {
@@ -314,7 +320,7 @@ export function useUnlikePost() {
                     queryClient.setQueryData(queryKey, data)
                 })
             }
-            toast.error(error.message || 'Failed to unlike post')
+            toast.error(error.message || t('feed.errorUnlikePost'))
         },
         onSettled: () => {
             // Always refetch after error or success
@@ -344,13 +350,14 @@ export function useComments(postId: string, parentCommentId?: string) {
 }
 
 export function useCreateComment() {
+    const { t } = useLocale()
     const queryClient = useQueryClient()
 
     return useMutation({
         mutationFn: createComment,
         onSuccess: (data, variables) => {
             if (data.success) {
-                toast.success('Comment added successfully')
+                toast.success(t('feed.commentAdded'))
                 // Invalidate comments for this post
                 queryClient.invalidateQueries({
                     queryKey: ['comments', variables.postId]
@@ -360,44 +367,46 @@ export function useCreateComment() {
                     queryKey: ['newsfeed-posts']
                 })
             } else {
-                toast.error(data.error || 'Failed to add comment')
+                toast.error(data.error || t('feed.errorAddComment'))
             }
         },
         onError: (error: Error) => {
-            toast.error(error.message || 'Failed to add comment')
+            toast.error(error.message || t('feed.errorAddComment'))
         }
     })
 }
 
 export function useUpdateComment() {
+    const { t } = useLocale()
     const queryClient = useQueryClient()
 
     return useMutation({
         mutationFn: updateComment,
         onSuccess: (data) => {
             if (data.success) {
-                toast.success('Comment updated successfully')
+                toast.success(t('feed.commentUpdated'))
                 queryClient.invalidateQueries({
                     queryKey: ['comments']
                 })
             } else {
-                toast.error(data.error || 'Failed to update comment')
+                toast.error(data.error || t('feed.errorUpdateComment'))
             }
         },
         onError: (error: Error) => {
-            toast.error(error.message || 'Failed to update comment')
+            toast.error(error.message || t('feed.errorUpdateComment'))
         }
     })
 }
 
 export function useDeleteComment() {
+    const { t } = useLocale()
     const queryClient = useQueryClient()
 
     return useMutation({
         mutationFn: deleteComment,
         onSuccess: (data) => {
             if (data.success) {
-                toast.success('Comment deleted successfully')
+                toast.success(t('feed.commentDeleted'))
                 queryClient.invalidateQueries({
                     queryKey: ['comments']
                 })
@@ -405,11 +414,11 @@ export function useDeleteComment() {
                     queryKey: ['newsfeed-posts']
                 })
             } else {
-                toast.error(data.error || 'Failed to delete comment')
+                toast.error(data.error || t('feed.errorDeleteComment'))
             }
         },
         onError: (error: Error) => {
-            toast.error(error.message || 'Failed to delete comment')
+            toast.error(error.message || t('feed.errorDeleteComment'))
         }
     })
 }
@@ -435,13 +444,14 @@ export function usePostPermissions(postId: string) {
 }
 
 export function useUpdatePostPermissions() {
+    const { t } = useLocale()
     const queryClient = useQueryClient()
 
     return useMutation({
         mutationFn: updateNewsFeedPostPermissions,
         onSuccess: (data, variables) => {
             if (data.success) {
-                toast.success('Post permissions updated successfully')
+                toast.success(t('feed.permissionsUpdated'))
                 queryClient.invalidateQueries({
                     queryKey: ['post-permissions', variables.postId]
                 })
@@ -449,23 +459,24 @@ export function useUpdatePostPermissions() {
                     queryKey: ['newsfeed-posts']
                 })
             } else {
-                toast.error(data.error || 'Failed to update permissions')
+                toast.error(data.error || t('feed.errorUpdatePermissions'))
             }
         },
         onError: (error: Error) => {
-            toast.error(error.message || 'Failed to update permissions')
+            toast.error(error.message || t('feed.errorUpdatePermissions'))
         }
     })
 }
 
 export function useAddPostPermission() {
+    const { t } = useLocale()
     const queryClient = useQueryClient()
 
     return useMutation({
         mutationFn: addNewsFeedPostPermission,
         onSuccess: (data, variables) => {
             if (data.success) {
-                toast.success('Permission added successfully')
+                toast.success(t('feed.permissionAdded'))
                 queryClient.invalidateQueries({
                     queryKey: ['post-permissions', variables.postId]
                 })
@@ -473,23 +484,24 @@ export function useAddPostPermission() {
                     queryKey: ['newsfeed-posts']
                 })
             } else {
-                toast.error(data.error || 'Failed to add permission')
+                toast.error(data.error || t('feed.errorAddPermission'))
             }
         },
         onError: (error: Error) => {
-            toast.error(error.message || 'Failed to add permission')
+            toast.error(error.message || t('feed.errorAddPermission'))
         }
     })
 }
 
 export function useRemovePostPermission() {
+    const { t } = useLocale()
     const queryClient = useQueryClient()
 
     return useMutation({
         mutationFn: removeNewsFeedPostPermission,
         onSuccess: (data, variables) => {
             if (data.success) {
-                toast.success('Permission removed successfully')
+                toast.success(t('feed.permissionRemoved'))
                 queryClient.invalidateQueries({
                     queryKey: ['post-permissions', variables.postId]
                 })
@@ -497,11 +509,11 @@ export function useRemovePostPermission() {
                     queryKey: ['newsfeed-posts']
                 })
             } else {
-                toast.error(data.error || 'Failed to remove permission')
+                toast.error(data.error || t('feed.errorRemovePermission'))
             }
         },
         onError: (error: Error) => {
-            toast.error(error.message || 'Failed to remove permission')
+            toast.error(error.message || t('feed.errorRemovePermission'))
         }
     })
 }

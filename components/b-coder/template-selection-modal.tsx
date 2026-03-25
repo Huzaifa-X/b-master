@@ -31,6 +31,7 @@ import {
     Building2,
     Clipboard,
 } from "lucide-react"
+import { useLocale } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 interface TemplateOption {
@@ -41,143 +42,6 @@ interface TemplateOption {
     isEnabled: boolean
     category: string
 }
-
-const templates: TemplateOption[] = [
-    // Starter Templates
-    {
-        id: "from-scratch",
-        name: "From Scratch",
-        description: "Minimal blank starter - build anything you want",
-        icon: <Layers className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Starter",
-    },
-    {
-        id: "default-todo",
-        name: "Default Todo",
-        description: "A beautiful todo application to get started",
-        icon: <CheckCircle2 className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Starter",
-    },
-    // Website & Landing
-    {
-        id: "website",
-        name: "Website",
-        description: "Modern landing page with hero, features & CTA",
-        icon: <Globe className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Marketing",
-    },
-    // E-Commerce
-    {
-        id: "e-commerce",
-        name: "E-Commerce",
-        description: "Online store with cart and checkout flow",
-        icon: <ShoppingBag className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Commerce",
-    },
-    // Booking
-    {
-        id: "booking-system",
-        name: "Appointment Scheduler",
-        description: "Personal meeting scheduler (Calendly-style)",
-        icon: <Calendar className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Business",
-    },
-    {
-        id: "calendar-booking",
-        name: "Calendar Booking",
-        description: "Multi-step appointment booking with calendar & time slots",
-        icon: <Calendar className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Business",
-    },
-    {
-        id: "event-registration",
-        name: "Event Registration",
-        description: "Event sign-up form with ticket selection & e-ticket",
-        icon: <Tag className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Business",
-    },
-    {
-        id: "meeting-scheduler",
-        name: "Meeting Scheduler",
-        description: "Team meeting planner with time slots, agenda & timezone",
-        icon: <UserCircle2 className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Business",
-    },
-    {
-        id: "office-booking",
-        name: "Office Space Booking",
-        description: "Reserve desks, rooms and office resources",
-        icon: <Building2 className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Business",
-    },
-    {
-        id: "reservation-system",
-        name: "Reservation System",
-        description: "General-purpose reservations for any venue or service",
-        icon: <Clipboard className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Business",
-    },
-    // Finance & Analytics
-    {
-        id: "accounting-dashboard",
-        name: "Accounting",
-        description: "Financial tracking and reporting dashboard",
-        icon: <Calculator className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Finance",
-    },
-    {
-        id: "analytics-dashboard",
-        name: "Analytics",
-        description: "Data visualization and analytics platform",
-        icon: <BarChart3 className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Finance",
-    },
-    {
-        id: "trading",
-        name: "Trading",
-        description: "Trading dashboard with charts & portfolio tracking",
-        icon: <TrendingUp className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Finance",
-    },
-    // Marketing & Content
-    {
-        id: "seo-content",
-        name: "SEO Content",
-        description: "SEO analysis and content optimization tool",
-        icon: <Search className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Marketing",
-    },
-    {
-        id: "copywriting",
-        name: "Copywriting",
-        description: "AI-powered social media copy generator",
-        icon: <PenTool className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Marketing",
-    },
-    {
-        id: "visual-ads",
-        name: "Visual Ads",
-        description: "Marketing visual and ad banner creator",
-        icon: <Image className="h-8 w-8" />,
-        isEnabled: true,
-        category: "Marketing",
-    },
-]
 
 interface TemplateSelectionModalProps {
     open: boolean
@@ -190,7 +54,145 @@ export function TemplateSelectionModal({
     onOpenChange,
     onSelectTemplate,
 }: TemplateSelectionModalProps) {
+    const { t } = useLocale()
     const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
+
+    const templates: TemplateOption[] = [
+        // Starter Templates
+        {
+            id: "from-scratch",
+            name: t("bCoder.templates.fromScratchName"),
+            description: t("bCoder.templates.fromScratchDesc"),
+            icon: <Layers className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.starter"),
+        },
+        {
+            id: "default-todo",
+            name: t("bCoder.templates.todoName"),
+            description: t("bCoder.templates.todoDesc"),
+            icon: <CheckCircle2 className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.starter"),
+        },
+        // Website & Landing
+        {
+            id: "website",
+            name: t("bCoder.templates.websiteName"),
+            description: t("bCoder.templates.websiteDesc"),
+            icon: <Globe className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.marketing"),
+        },
+        // E-Commerce
+        {
+            id: "e-commerce",
+            name: t("bCoder.templates.ecommerceName"),
+            description: t("bCoder.templates.ecommerceDesc"),
+            icon: <ShoppingBag className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.commerce"),
+        },
+        // Booking
+        {
+            id: "booking-system",
+            name: t("bCoder.templates.bookingName"),
+            description: t("bCoder.templates.bookingDesc"),
+            icon: <Calendar className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.business"),
+        },
+        {
+            id: "calendar-booking",
+            name: t("bCoder.templates.calendarName"),
+            description: t("bCoder.templates.calendarDesc"),
+            icon: <Calendar className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.business"),
+        },
+        {
+            id: "event-registration",
+            name: t("bCoder.templates.eventName"),
+            description: t("bCoder.templates.eventDesc"),
+            icon: <Tag className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.business"),
+        },
+        {
+            id: "meeting-scheduler",
+            name: t("bCoder.templates.meetingName"),
+            description: t("bCoder.templates.meetingDesc"),
+            icon: <UserCircle2 className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.business"),
+        },
+        {
+            id: "office-booking",
+            name: t("bCoder.templates.officeName"),
+            description: t("bCoder.templates.officeDesc"),
+            icon: <Building2 className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.business"),
+        },
+        {
+            id: "reservation-system",
+            name: t("bCoder.templates.reservationName"),
+            description: t("bCoder.templates.reservationDesc"),
+            icon: <Clipboard className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.business"),
+        },
+        // Finance & Analytics
+        {
+            id: "accounting-dashboard",
+            name: t("bCoder.templates.accountingName"),
+            description: t("bCoder.templates.accountingDesc"),
+            icon: <Calculator className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.finance"),
+        },
+        {
+            id: "analytics-dashboard",
+            name: t("bCoder.templates.analyticsName"),
+            description: t("bCoder.templates.analyticsDesc"),
+            icon: <BarChart3 className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.finance"),
+        },
+        {
+            id: "trading",
+            name: t("bCoder.templates.tradingName"),
+            description: t("bCoder.templates.tradingDesc"),
+            icon: <TrendingUp className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.finance"),
+        },
+        // Marketing & Content
+        {
+            id: "seo-content",
+            name: t("bCoder.templates.seoName"),
+            description: t("bCoder.templates.seoDesc"),
+            icon: <Search className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.marketing"),
+        },
+        {
+            id: "copywriting",
+            name: t("bCoder.templates.copywritingName"),
+            description: t("bCoder.templates.copywritingDesc"),
+            icon: <PenTool className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.marketing"),
+        },
+        {
+            id: "visual-ads",
+            name: t("bCoder.templates.visualAdsName"),
+            description: t("bCoder.templates.visualAdsDesc"),
+            icon: <Image className="h-8 w-8" />,
+            isEnabled: true,
+            category: t("bCoder.templates.categories.marketing"),
+        },
+    ]
 
     const handleSelect = (template: TemplateOption) => {
         if (!template.isEnabled) return
@@ -217,10 +219,10 @@ export function TemplateSelectionModal({
                                     <Code2 className="h-4 w-4 sm:h-6 sm:w-6 text-white" />
                                 </div>
                             </div>
-                            Choose Your Template
+                            {t("bCoder.templates.selectTitle")}
                         </DialogTitle>
                         <DialogDescription className="text-xs sm:text-sm">
-                            Select a template to start building your application
+                            {t("bCoder.templates.selectDescription")}
                         </DialogDescription>
                     </DialogHeader>
                 </div>
@@ -248,7 +250,7 @@ export function TemplateSelectionModal({
                                     <div className="absolute top-2 right-2 sm:top-3 sm:right-3">
                                         <Badge variant="secondary" className="gap-1 text-xs">
                                             <Lock className="h-3 w-3" />
-                                            <span className="hidden xs:inline">Coming Soon</span>
+                                            <span className="hidden xs:inline">{t("bCoder.templates.comingSoon")}</span>
                                             <span className="xs:hidden">Soon</span>
                                         </Badge>
                                     </div>
@@ -300,7 +302,7 @@ export function TemplateSelectionModal({
                     <div className="flex flex-col-reverse sm:flex-row justify-end items-center gap-2 sm:gap-3 w-full">
                         <DialogClose asChild>
                             <Button variant="outline" className="w-full sm:w-auto">
-                                Cancel
+                                {t("common.cancel")}
                             </Button>
                         </DialogClose>
                         <Button
@@ -308,7 +310,7 @@ export function TemplateSelectionModal({
                             disabled={!selectedTemplate}
                             className="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 text-white shadow-md shadow-emerald-500/20"
                         >
-                            Continue
+                            {t("bCoder.templates.continue")}
                         </Button>
                     </div>
                 </DialogFooter>
@@ -316,3 +318,4 @@ export function TemplateSelectionModal({
         </Dialog>
     )
 }
+

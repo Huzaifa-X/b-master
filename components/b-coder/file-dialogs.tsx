@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle, FileText, FolderPlus, Edit3, Trash2 } from "lucide-react"
+import { useLocale } from "@/lib/i18n"
+
 
 // Create File Dialog
 interface CreateFileDialogProps {
@@ -24,18 +26,20 @@ interface CreateFileDialogProps {
 }
 
 export function CreateFileDialog({ open, onOpenChange, onConfirm, currentPath = "" }: CreateFileDialogProps) {
+    const { t } = useLocale()
     const [fileName, setFileName] = useState("")
     const [error, setError] = useState("")
+
 
     const handleConfirm = () => {
         // Validation
         if (!fileName.trim()) {
-            setError("File name is required")
+            setError(t("bCoder.dialogs.fileNameRequired"))
             return
         }
 
         if (!/^[a-zA-Z0-9._-]+$/.test(fileName)) {
-            setError("File name can only contain letters, numbers, dots, hyphens, and underscores")
+            setError(t("bCoder.dialogs.invalidName", { type: t("bCoder.newFile") }))
             return
         }
 
@@ -59,16 +63,18 @@ export function CreateFileDialog({ open, onOpenChange, onConfirm, currentPath = 
                         <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
                             <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                         </div>
-                        <DialogTitle>Create New File</DialogTitle>
+                        <DialogTitle>{t("bCoder.dialogs.createFile")}</DialogTitle>
                     </div>
                     <DialogDescription>
-                        {currentPath ? `Creating file in ${currentPath}` : "Creating file in root directory"}
+                        {currentPath 
+                          ? t("bCoder.dialogs.creatingIn", { type: t("bCoder.newFile"), path: currentPath }) 
+                          : t("bCoder.dialogs.creatingInRoot", { type: t("bCoder.newFile") })}
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="fileName">File Name</Label>
+                        <Label htmlFor="fileName">{t("bCoder.dialogs.fileName")}</Label>
                         <Input
                             id="fileName"
                             placeholder="example.tsx"
@@ -95,10 +101,11 @@ export function CreateFileDialog({ open, onOpenChange, onConfirm, currentPath = 
 
                 <DialogFooter>
                     <Button variant="outline" onClick={handleCancel}>
-                        Cancel
+                        {t("common.cancel")}
                     </Button>
-                    <Button onClick={handleConfirm}>Create File</Button>
+                    <Button onClick={handleConfirm}>{t("bCoder.dialogs.createFile")}</Button>
                 </DialogFooter>
+
             </DialogContent>
         </Dialog>
     )
@@ -113,18 +120,19 @@ interface CreateFolderDialogProps {
 }
 
 export function CreateFolderDialog({ open, onOpenChange, onConfirm, currentPath = "" }: CreateFolderDialogProps) {
+    const { t } = useLocale()
     const [folderName, setFolderName] = useState("")
     const [error, setError] = useState("")
 
     const handleConfirm = () => {
         // Validation
         if (!folderName.trim()) {
-            setError("Folder name is required")
+            setError(t("bCoder.dialogs.folderNameRequired"))
             return
         }
 
         if (!/^[a-zA-Z0-9._-]+$/.test(folderName)) {
-            setError("Folder name can only contain letters, numbers, dots, hyphens, and underscores")
+            setError(t("bCoder.dialogs.invalidName", { type: t("bCoder.newFolder") }))
             return
         }
 
@@ -148,16 +156,18 @@ export function CreateFolderDialog({ open, onOpenChange, onConfirm, currentPath 
                         <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                             <FolderPlus className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         </div>
-                        <DialogTitle>Create New Folder</DialogTitle>
+                        <DialogTitle>{t("bCoder.dialogs.createFolder")}</DialogTitle>
                     </div>
                     <DialogDescription>
-                        {currentPath ? `Creating folder in ${currentPath}` : "Creating folder in root directory"}
+                        {currentPath 
+                          ? t("bCoder.dialogs.creatingIn", { type: t("bCoder.newFolder"), path: currentPath }) 
+                          : t("bCoder.dialogs.creatingInRoot", { type: t("bCoder.newFolder") })}
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="folderName">Folder Name</Label>
+                        <Label htmlFor="folderName">{t("bCoder.dialogs.folderName")}</Label>
                         <Input
                             id="folderName"
                             placeholder="components"
@@ -184,14 +194,15 @@ export function CreateFolderDialog({ open, onOpenChange, onConfirm, currentPath 
 
                 <DialogFooter>
                     <Button variant="outline" onClick={handleCancel}>
-                        Cancel
+                        {t("common.cancel")}
                     </Button>
-                    <Button onClick={handleConfirm}>Create Folder</Button>
+                    <Button onClick={handleConfirm}>{t("bCoder.dialogs.createFolder")}</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     )
 }
+
 
 // Rename Dialog
 interface RenameDialogProps {
@@ -203,23 +214,24 @@ interface RenameDialogProps {
 }
 
 export function RenameDialog({ open, onOpenChange, onConfirm, currentName, itemType }: RenameDialogProps) {
+    const { t } = useLocale()
     const [newName, setNewName] = useState(currentName)
     const [error, setError] = useState("")
 
     const handleConfirm = () => {
         // Validation
         if (!newName.trim()) {
-            setError(`${itemType === "file" ? "File" : "Folder"} name is required`)
+            setError(t("bCoder.dialogs.invalidName", { type: itemType === "file" ? t("bCoder.newFile") : t("bCoder.newFolder") }))
             return
         }
 
         if (!/^[a-zA-Z0-9._-]+$/.test(newName)) {
-            setError("Name can only contain letters, numbers, dots, hyphens, and underscores")
+            setError(t("bCoder.dialogs.invalidName", { type: itemType === "file" ? t("bCoder.newFile") : t("bCoder.newFolder") }))
             return
         }
 
         if (newName === currentName) {
-            setError("New name must be different from current name")
+            setError(t("bCoder.dialogs.nameMustBeDifferent"))
             return
         }
 
@@ -242,16 +254,16 @@ export function RenameDialog({ open, onOpenChange, onConfirm, currentName, itemT
                         <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
                             <Edit3 className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                         </div>
-                        <DialogTitle>Rename {itemType === "file" ? "File" : "Folder"}</DialogTitle>
+                        <DialogTitle>{t("bCoder.rename")} {itemType === "file" ? t("bCoder.newFile") : t("bCoder.newFolder")}</DialogTitle>
                     </div>
                     <DialogDescription>
-                        Enter a new name for "{currentName}"
+                         {t("bCoder.dialogs.enterNewName", { name: currentName })}
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="newName">New Name</Label>
+                        <Label htmlFor="newName">{t("bCoder.dialogs.newName")}</Label>
                         <Input
                             id="newName"
                             value={newName}
@@ -277,14 +289,15 @@ export function RenameDialog({ open, onOpenChange, onConfirm, currentName, itemT
 
                 <DialogFooter>
                     <Button variant="outline" onClick={handleCancel}>
-                        Cancel
+                        {t("common.cancel")}
                     </Button>
-                    <Button onClick={handleConfirm}>Rename</Button>
+                    <Button onClick={handleConfirm}>{t("bCoder.rename")}</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     )
 }
+
 
 // Delete Confirmation Dialog
 interface DeleteConfirmDialogProps {
@@ -296,6 +309,7 @@ interface DeleteConfirmDialogProps {
 }
 
 export function DeleteConfirmDialog({ open, onOpenChange, onConfirm, itemName, itemType }: DeleteConfirmDialogProps) {
+    const { t } = useLocale()
     const handleConfirm = () => {
         onConfirm()
         onOpenChange(false)
@@ -309,25 +323,28 @@ export function DeleteConfirmDialog({ open, onOpenChange, onConfirm, itemName, i
                         <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
                             <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                         </div>
-                        <DialogTitle>Delete {itemType === "file" ? "File" : "Folder"}</DialogTitle>
+                        <DialogTitle>{t("bCoder.dialogs.deleteConfirmTitle", { type: itemType === "file" ? t("bCoder.newFile") : t("bCoder.newFolder") })}</DialogTitle>
                     </div>
                     <DialogDescription>
-                        Are you sure you want to delete "{itemName}"?
-                        {itemType === "folder" && " This will delete all files and folders inside it."}
+                        {t("bCoder.dialogs.deleteConfirmDescription", {
+                            name: itemName,
+                            folderWarning: itemType === "folder" ? t("bCoder.dialogs.folderWarning") : ""
+                        })}
                         <br />
-                        <span className="text-red-600 dark:text-red-400 font-semibold">This action cannot be undone.</span>
+                        <span className="text-red-600 dark:text-red-400 font-semibold">{t("bCoder.dialogs.cannotBeUndone")}</span>
                     </DialogDescription>
                 </DialogHeader>
 
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancel
+                        {t("common.cancel")}
                     </Button>
                     <Button variant="destructive" onClick={handleConfirm}>
-                        Delete
+                        {t("bCoder.delete")}
                     </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     )
 }
+

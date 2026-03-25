@@ -304,6 +304,27 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
     }
   }, [setArtifact, isMobile])
 
+  // Listen for canvas-edit-send events from ArtifactPanel (canvas edit mode)
+  useEffect(() => {
+    const handler = async (e: CustomEvent) => {
+      const { message } = e.detail
+      if (message && !isStreaming) {
+        // Send the edit request as a chat message with canvas option
+        setIsCreating(true)
+        try {
+          await sendMessage(message.trim(), undefined, { canvas: true })
+        } finally {
+          setTimeout(() => setIsCreating(false), 100)
+        }
+      }
+    }
+
+    window.addEventListener("canvas-edit-send", handler as EventListener)
+    return () => {
+      window.removeEventListener("canvas-edit-send", handler as EventListener)
+    }
+  }, [sendMessage, isStreaming])
+
   const scrollToBottom = () => {
     if (viewportRef.current) {
       viewportRef.current.scrollTo({

@@ -18,6 +18,7 @@ import ReactMarkdown from "react-markdown"
 import { toast } from "sonner"
 import { CreateArtifactDialog } from "./create-artifact-dialog"
 import { DictateButton } from "@/components/assistants/dictate-button"
+import { useLocale } from "@/lib/i18n"
 
 interface UploadedFileData {
   name: string
@@ -53,6 +54,7 @@ interface ArtifactChatbotProps {
 }
 
 export function ArtifactChatbot({ artifactId, artifactName, assistantId, disabled = false, isGenerating = false, isPanelOpen = true, onTogglePanel, onclose }: ArtifactChatbotProps) {
+  const { t } = useLocale()
   const { data: session } = useSession()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -108,7 +110,8 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     const invalidFiles = files.filter(file => file.size > maxSize)
 
     if (invalidFiles.length > 0) {
-      toast.error(`Some files exceed 10MB limit: ${invalidFiles.map(f => f.name).join(", ")}`)
+      toast.error(t("artifacts.chatbot.fileLimitError", { files: invalidFiles.map(f => f.name).join(", ") }))
+
       return
     }
 
@@ -136,7 +139,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     const invalidFiles = fileArray.filter(file => file.size > maxSize)
 
     if (invalidFiles.length > 0) {
-      toast.error(`Some files exceed 10MB limit: ${invalidFiles.map(f => f.name).join(", ")}`)
+      toast.error(t("artifacts.chatbot.fileLimitError", { files: invalidFiles.map(f => f.name).join(", ") }))
       return
     }
 
@@ -227,6 +230,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
   }
 
   // Load messages from localStorage (persists across navigation and mobile browser backgrounding)
+  // Only runs on mount or when artifactId changes - not on artifactName change to avoid loops
   useEffect(() => {
     try {
       const stored = localStorage.getItem(storageKey)
@@ -235,18 +239,13 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
           ...msg,
           timestamp: new Date(msg.timestamp),
         }))
-        // Always refresh the welcome message with the latest wording
-        const updatedWelcome = `Hello! I'm your AI assistant for **"${artifactName}"**. You can:\n\n- **Ask questions** — I'll explain how it works, what the code does, or anything about its content\n- **Request changes** — tell me what to modify, add, or fix and I'll update the artifact\n- **Attach files or images** — I'll read and incorporate them\n\nWhat would you like to do?`
-        const refreshed = parsed.map((msg) =>
-          msg.id === "welcome" ? { ...msg, content: updatedWelcome } : msg
-        )
-        setMessages(refreshed)
+        setMessages(parsed)
       } else {
         // Initialize with welcome message
         const welcomeMessage: Message = {
           id: "welcome",
           role: "assistant",
-          content: `Hello! I'm your AI assistant for **"${artifactName}"**. You can:\n\n- **Ask questions** — I'll explain how it works, what the code does, or anything about its content\n- **Request changes** — tell me what to modify, add, or fix and I'll update the artifact\n- **Attach files or images** — I'll read and incorporate them\n\nWhat would you like to do?`,
+          content: t("artifacts.chatbot.welcomeMessage", { name: artifactName }),
           timestamp: new Date(),
         }
         setMessages([welcomeMessage])
@@ -255,7 +254,8 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     } catch (error) {
       console.error("Error loading chat history:", error)
     }
-  }, [artifactId, storageKey, artifactName])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artifactId, storageKey])
 
   // Save messages to localStorage
   useEffect(() => {
@@ -272,8 +272,12 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
   // Directly setting scrollTop on the Radix <ScrollArea> root doesn't work because
   // the root is not the scrollable viewport — this caused the "jumps to top" bug.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [messages, isStreaming])
+    // Use requestAnimationFrame to batch scroll updates and prevent rapid re-renders
+    const rafId = requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    })
+    return () => cancelAnimationFrame(rafId)
+  }, [messages.length, isStreaming])
 
   // Handle prefilled prompt from text selection (Ask-B feature)
   useEffect(() => {
@@ -321,10 +325,10 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
       setIsUploadingFiles(true)
       try {
         uploadedFiles = await uploadFilesToS3(selectedFiles)
-        toast.success(`${selectedFiles.length} file(s) uploaded successfully`)
+        toast.success(t("artifacts.chatbot.uploadSuccess", { count: selectedFiles.length }))
       } catch (error) {
         console.error("File upload error:", error)
-        toast.error("Failed to upload files. Please try again.")
+        toast.error(t("artifacts.chatbot.uploadFailed"))
         setIsUploadingFiles(false)
         return
       }
@@ -335,7 +339,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: userPrompt || "📎 Attached files",
+      content: userPrompt || t("artifacts.chatbot.attachedFiles"),
       timestamp: new Date(),
       files: uploadedFiles,
     }
@@ -357,7 +361,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
       const errorMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
-        content: "❌ **Error**: Unable to find the current artifact code. The artifact may not have any content yet. Please refresh the page and try again.",
+        content: t("artifacts.chatbot.errorNoCode"),
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, errorMessage])
@@ -384,12 +388,12 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
       const patchingMsg: Message = {
         id: `patch-${Date.now()}`,
         role: "assistant",
-        content: "⚡ Applying change...",
+        content: t("artifacts.chatbot.patchApplying"),
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, patchingMsg])
 
-      const patchToastId = toast.loading("Applying surgical patch...")
+      const patchToastId = toast.loading(t("artifacts.chatbot.applyingPatch"))
 
       try {
         const patchRes = await fetch("/api/artifacts/patch", {
@@ -427,21 +431,21 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                 ...msg,
                 content: patchData.warning
                   ? `⚠️ ${patchData.warning}`
-                  : `✅ Done! Applied your change instantly.${patchData.versionNumber ? ` (v${patchData.versionNumber})` : ""}`,
+                  : t("artifacts.chatbot.patchApplied", { version: patchData.versionNumber ? ` (v${patchData.versionNumber})` : "" }),
               }
               : msg
           )
         )
 
-        toast.success("Change applied!")
+        toast.success(t("artifacts.chatbot.changeApplied"))
         await refetch()
       } catch (err: any) {
         toast.dismiss(patchToastId)
-        toast.error(err.message || "Patch failed")
+        toast.error(err.message || t("artifacts.errors.generateFailed"))
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === patchingMsg.id
-              ? { ...msg, content: `❌ **Patch failed**: ${err.message || "Unknown error"}\n\nTry rephrasing your request.` }
+              ? { ...msg, content: t("artifacts.chatbot.patchFailed", { error: err.message || t("common.unknownError") }) }
               : msg
           )
         )
@@ -458,7 +462,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
     const streamingMessage: Message = {
       id: `streaming-${Date.now()}`,
       role: "assistant",
-      content: "💭 Thinking...",
+      content: t("artifacts.chatbot.thinking"),
       timestamp: new Date(),
     }
     setMessages((prev) => [...prev, streamingMessage])
@@ -514,7 +518,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                     setMessages((prev) =>
                       prev.map((msg) =>
                         msg.id === streamingMessage.id
-                          ? { ...msg, content: "🔄 Updating artifact..." }
+                          ? { ...msg, content: t("artifacts.chatbot.updatingArtifact") }
                           : msg
                       )
                     )
@@ -531,11 +535,11 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                 } else if (data.type === 'artifact_updating') {
                   // Server is about to write the new version to the database
                   isQAMode = false
-                  loadingToastId = toast.loading("Saving new artifact version...")
+                  loadingToastId = toast.loading(t("artifacts.chatbot.savingArtifact"))
                   setMessages((prev) =>
                     prev.map((msg) =>
                       msg.id === streamingMessage.id
-                        ? { ...msg, content: "⏳ Saving changes..." }
+                        ? { ...msg, content: t("artifacts.chatbot.savingChanges") }
                         : msg
                     )
                   )
@@ -557,9 +561,9 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                   setIsStreaming(false)
                   setMessages((prev) =>
                     prev.map((msg) =>
-                      msg.id === streamingMessage.id
-                        ? { ...msg, content: qaAccumulatedText || "I couldn't generate a response. Please try again." }
-                        : msg
+                        msg.id === streamingMessage.id
+                          ? { ...msg, content: qaAccumulatedText || t("artifacts.chatbot.noResponse") }
+                          : msg
                     )
                   )
                   // qa_done has an implicit break — we stop processing
@@ -602,8 +606,8 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                     id: Date.now().toString(),
                     role: "assistant",
                     content: data.message
-                      ? `✅ ${data.message}`
-                      : `✅ **Artifact Updated Successfully!**\n\nThe artifact "${artifactName}" has been updated with your requested changes.`,
+                      ? t("artifacts.chatbot.updateSuccess", { message: data.message })
+                      : t("artifacts.chatbot.updateSuccessDefault", { name: artifactName }),
                     timestamp: new Date(),
                   }
                   setMessages((prev) => [...prev, successMessage])
@@ -611,7 +615,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                   // Refetch artifact to get final version
                   await refetch()
 
-                  toast.success("Artifact updated successfully!")
+                  toast.success(t("artifacts.chatbot.changeApplied"))
                   break
                 } else if (data.type === 'error') {
                   setIsStreaming(false)
@@ -629,12 +633,12 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                   const errorMessage: Message = {
                     id: Date.now().toString(),
                     role: "assistant",
-                    content: `❌ **Update Failed**\n\n${data.error || "An error occurred"}\n\nPlease try again or rephrase your request.`,
+                    content: t("artifacts.chatbot.updateFailed", { error: data.error || t("common.unknownError") }),
                     timestamp: new Date(),
                   }
                   setMessages((prev) => [...prev, errorMessage])
 
-                  toast.error(data.error || "Failed to update artifact")
+                  toast.error(data.error || t("artifacts.errors.generateFailed"))
                   break
                 } else if (data.type === 'connected') {
                   console.log("[Artifact Chatbot] Streaming connected successfully")
@@ -662,12 +666,12 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
       const errorMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
-        content: `❌ **Update Failed**\n\n${error.message || "An unexpected error occurred. Please try again."}`,
+        content: t("artifacts.chatbot.updateFailed", { error: error.message || t("common.unknownError") }),
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, errorMessage])
 
-      toast.error("Failed to update artifact")
+      toast.error(t("artifacts.errors.generateFailed"))
     }
   }
 
@@ -685,7 +689,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h6>Ask questions or request changes</h6>
+            <h6>{t("artifacts.chatbot.headerTitle")}</h6>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -696,7 +700,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
               size="icon"
               onClick={onTogglePanel}
               className="hover:bg-muted hover:text-primary"
-              title={isPanelOpen ? "Close preview panel" : "Open preview panel"}
+              title={isPanelOpen ? t("artifacts.chatbot.tooltips.closePanel") : t("artifacts.chatbot.tooltips.openPanel")}
             >
               <Maximize2 className="h-4 w-4" />
             </Button>
@@ -709,7 +713,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                 onClick={() => setIsEditDialogOpen(true)}
                 disabled={disabled || isGenerating}
                 className="gap-2"
-                title="Edit artifact settings"
+                title={t("artifacts.chatbot.tooltips.editSettings")}
               >
                 <Pencil className="h-4 w-4" />
               </Button>
@@ -812,7 +816,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                                   <p className="text-xs font-medium truncate">{file.name}</p>
                                   <p className="text-[10px] text-muted-foreground">
                                     {(file.size / 1024).toFixed(1)} KB
-                                    {file.extractedContent && " • Text extracted"}
+                                    {file.extractedContent && t("artifacts.chatbot.textExtracted")}
                                   </p>
                                 </div>
                               </div>
@@ -872,7 +876,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
             <div className="flex items-center gap-3 text-primary mb-3">
               <Loader2 className="h-5 w-5 animate-spin" />
               <div className="text-sm font-medium">
-                Generating artifact...
+                {t("artifacts.chatbot.generatingArtifact")}
               </div>
             </div>
 
@@ -882,7 +886,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                 <div className="h-full bg-primary rounded-full animate-pulse" />
               </div>
               <p className="text-xs text-muted-foreground mt-2 text-center">
-                This may take a few moments for complex artifacts
+                {t("artifacts.chatbot.generationMoments")}
               </p>
             </div>
           </div>
@@ -894,7 +898,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
             <div className="flex items-center gap-3 text-primary mb-3">
               <Loader2 className="h-5 w-5 animate-spin" />
               <div className="text-sm font-medium">
-                Uploading files...
+                {t("artifacts.chatbot.uploadingFiles")}
               </div>
             </div>
           </div>
@@ -949,14 +953,14 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
         >
           <PromptInputTextarea
             ref={inputTextareaRef}
-            placeholder={isGenerating ? "Generating artifact..." : isUploadingFiles ? "Uploading files..." : "Ask about this artifact..."}
+            placeholder={isGenerating ? t("artifacts.chatbot.generatingArtifact") : isUploadingFiles ? t("artifacts.chatbot.uploadingFiles") : t("artifacts.chatbot.placeholders.askArtifact")}
             className="text-foreground placeholder:text-muted-foreground"
             disabled={disabled || isGenerating || isUploadingFiles}
           />
           <PromptInputActions className="px-2 pb-1 justify-between">
             {/* Left side: Plus icon for file upload and Dictate button */}
             <div className="flex items-center gap-1">
-              <PromptInputAction tooltip="Attach files or images">
+              <PromptInputAction tooltip={t("artifacts.chatbot.tooltips.attachFiles")}>
                 <Button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={disabled || isGenerating || isUploadingFiles || isStreaming}
@@ -990,9 +994,9 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
             </div>
 
             {/* Right side: Send button */}
-            <PromptInputAction tooltip={isGenerating ? "Generating artifact..." : "Send message (Enter)"}>
+            <PromptInputAction tooltip={isGenerating ? t("artifacts.chatbot.generatingArtifact") : t("artifacts.chatbot.tooltips.sendMessage")}>
               <Button
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={(!input.trim() && selectedFiles.length === 0) || isStreaming || disabled || isGenerating || isUploadingFiles}
                 size="icon"
                 className="h-8 w-8"

@@ -6,70 +6,73 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { InputGroup, InputGroupAddon, InputGroupText, InputGroupInput } from "@/components/ui/input-group"
 import { AssistantCategory, BasicInformationStepProps } from "@/types/assistant"
+import { useLocale } from "@/lib/i18n"
 
 export function BasicInformationStep({ formData, updateFormData }: BasicInformationStepProps) {
+  const { t } = useLocale()
+  
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold mb-2">Basic Information</h2>
+        <h2 className="text-2xl font-bold mb-2">{t("wizard.basicInfo.title")}</h2>
         <p className="text-muted-foreground">
-          Let's start with the essential details about your assistant
+          {t("wizard.basicInfo.description")}
         </p>
       </div>
 
       <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="name">
-            Assistant Name <span className="text-destructive">*</span>
+            {t("wizard.basicInfo.nameLabel")} <span className="text-destructive">*</span>
           </Label>
           <Input
             id="name"
-            placeholder="e.g., Marketing Assistant"
+            placeholder={t("wizard.basicInfo.namePlaceholder")}
             value={formData.name}
             onChange={(e) => updateFormData({ name: e.target.value })}
             className="w-full"
           />
           <p className="text-sm text-muted-foreground">
-            Give your assistant a memorable name
+            {t("wizard.basicInfo.nameHint")}
           </p>
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="category">
-            Category <span className="text-destructive">*</span>
+            {t("wizard.basicInfo.categoryLabel")} <span className="text-destructive">*</span>
           </Label>
           <Select
             value={formData.category}
             onValueChange={(value) => updateFormData({ category: value as AssistantCategory })}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a category" />
+              <SelectValue placeholder={t("wizard.basicInfo.categoryPlaceholder")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Education" className="focus:bg-muted focus:text-foreground">Education</SelectItem>
-              <SelectItem value="Travelling" className="focus:bg-muted focus:text-foreground capitalize">Travelling</SelectItem>
-              <SelectItem value="Programming" className="focus:bg-muted focus:text-foreground capitalize">Programming</SelectItem>
-              <SelectItem value="Markteting" className="focus:bg-muted focus:text-foreground capitalize">Markteting</SelectItem>
-              <SelectItem value="Analysis" className="focus:bg-muted focus:text-foreground capitalize">Analysis</SelectItem>
-              <SelectItem value="Booking" className="focus:bg-muted focus:text-foreground capitalize">Booking</SelectItem>
-              <SelectItem value="Other" className="focus:bg-muted focus:text-foreground capitalize">Other</SelectItem>
+              <SelectItem value="Education" className="focus:bg-muted focus:text-foreground">{t("wizard.basicInfo.categories.education")}</SelectItem>
+              <SelectItem value="Travelling" className="focus:bg-muted focus:text-foreground capitalize">{t("wizard.basicInfo.categories.travelling")}</SelectItem>
+              <SelectItem value="Programming" className="focus:bg-muted focus:text-foreground capitalize">{t("wizard.basicInfo.categories.programming")}</SelectItem>
+              <SelectItem value="Markteting" className="focus:bg-muted focus:text-foreground capitalize">{t("wizard.basicInfo.categories.marketing")}</SelectItem>
+              <SelectItem value="Analysis" className="focus:bg-muted focus:text-foreground capitalize">{t("wizard.basicInfo.categories.analysis")}</SelectItem>
+              <SelectItem value="Booking" className="focus:bg-muted focus:text-foreground capitalize">{t("wizard.basicInfo.categories.booking")}</SelectItem>
+              <SelectItem value="Other" className="focus:bg-muted focus:text-foreground capitalize">{t("wizard.basicInfo.categories.other")}</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-sm text-muted-foreground">
-            Select the category that best describes your assistant
+            {t("wizard.basicInfo.categoryHint")}
           </p>
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="price">
-            Price <span className="text-destructive">*</span>
+            {t("wizard.basicInfo.priceLabel")} <span className="text-destructive">*</span>
           </Label>
           <InputGroup>
             <InputGroupAddon>
               <InputGroupText>CHF</InputGroupText>
             </InputGroupAddon>
             <InputGroupInput
-              placeholder="0.00"
+              placeholder={t("wizard.basicInfo.pricePlaceholder")}
               value={formData.price}
               onChange={(e) => updateFormData({ price: e.target.value })}
               type="number"
@@ -78,25 +81,25 @@ export function BasicInformationStep({ formData, updateFormData }: BasicInformat
             />
           </InputGroup>
           <p className="text-sm text-muted-foreground">
-            Set the pricing for your assistant.
+            {t("wizard.basicInfo.priceHint")}
           </p>
         </div>
 
 
         <div className="space-y-2">
           <Label htmlFor="description">
-            Description <span className="text-destructive">*</span>
+            {t("wizard.basicInfo.descLabel")} <span className="text-destructive">*</span>
           </Label>
           <Textarea
             id="description"
-            placeholder="Describe what your assistant does and its key features..."
+            placeholder={t("wizard.basicInfo.descPlaceholder")}
             value={formData.description}
             onChange={(e) => updateFormData({ description: e.target.value })}
             rows={6}
             className="resize-none"
           />
           <p className="text-sm text-muted-foreground">
-            Provide a detailed description of your assistant's capabilities
+            {t("wizard.basicInfo.descHint")}
           </p>
         </div>
       </div>

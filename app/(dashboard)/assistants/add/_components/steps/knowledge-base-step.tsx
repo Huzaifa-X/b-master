@@ -10,8 +10,10 @@ import { Plus, X, Upload, File, Download, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { uploadFileToS3, deleteFileFromS3 } from "@/app/actions/upload.action"
+import { useLocale } from "@/lib/i18n"
 
 export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseStepProps) {
+  const { t } = useLocale()
   const [newNote, setNewNote] = useState("")
   const [newUrl, setNewUrl] = useState("")
   const [isUploading, setIsUploading] = useState(false)
@@ -38,7 +40,7 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
         updateFormData({ urls: [...formData.urls, newUrl.trim()] })
         setNewUrl("")
       } catch {
-        toast.error("Please enter a valid URL")
+        toast.error(t("wizard.knowledgeBase.invalidUrl"))
       }
     }
   }
@@ -86,7 +88,7 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
       if (file.size > maxFileSize) {
         invalidFiles.push({
           name: file.name,
-          reason: `File size exceeds 50MB limit (${(file.size / 1024 / 1024).toFixed(2)}MB)`
+          reason: t("wizard.knowledgeBase.fileLimitError", { name: file.name, size: (file.size / 1024 / 1024).toFixed(2) })
         })
         continue
       }
@@ -102,7 +104,7 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
       if (!isValidType) {
         invalidFiles.push({
           name: file.name,
-          reason: 'File type not allowed. Only documents, PDFs, and text files are permitted'
+          reason: t("wizard.knowledgeBase.fileTypeError", { name: file.name })
         })
         continue
       }
@@ -110,10 +112,10 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
       validFiles.push(file)
     }
 
-    // Show errors for invalid files
+    // Show errors for invalid files (they already contain the full message)
     if (invalidFiles.length > 0) {
-      invalidFiles.forEach(({ name, reason }) => {
-        toast.error(`${name}: ${reason}`)
+      invalidFiles.forEach(({ reason }) => {
+        toast.error(reason)
       })
     }
 
@@ -150,12 +152,12 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
           })
         } else {
           failedCount++
-          toast.error(`Failed to upload ${file.name}: ${uploadResult.error}`)
+          toast.error(`${file.name}: ${uploadResult.error}`)
         }
       } catch (error: any) {
         console.error(`Error uploading ${file.name}:`, error)
         failedCount++
-        toast.error(`Failed to upload ${file.name}`)
+        toast.error(`${file.name}`)
       } finally {
         // Remove from uploading set
         setUploadingFiles(prev => {
@@ -171,11 +173,11 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
       updateFormData({
         fileURLs: [...(formData.fileURLs || []), ...successfulUploads]
       })
-      toast.success(`${successfulUploads.length} file(s) uploaded successfully`)
+      toast.success(t("wizard.knowledgeBase.fileUploaded", { count: successfulUploads.length }))
     }
 
     if (failedCount > 0) {
-      toast.error(`${failedCount} file(s) failed to upload`)
+      toast.error(t("wizard.knowledgeBase.fileFailed", { count: failedCount }))
     }
 
     setIsUploading(false)
@@ -199,14 +201,14 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
         updateFormData({
           fileURLs: (formData.fileURLs || []).filter((_, i) => i !== index)
         })
-        toast.success("File removed from storage")
+        toast.success(t("wizard.knowledgeBase.fileRemoved"))
       } else {
         console.warn("Failed to delete file from S3:", deleteResult.error)
         // Still remove from form data, but warn user
         updateFormData({
           fileURLs: (formData.fileURLs || []).filter((_, i) => i !== index)
         })
-        toast.warning("File removed locally, but may still exist in storage")
+        toast.warning(t("wizard.knowledgeBase.fileRemoveWarning"))
       }
     } catch (error) {
       console.error("Error deleting file:", error)
@@ -214,7 +216,7 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
       updateFormData({
         fileURLs: (formData.fileURLs || []).filter((_, i) => i !== index)
       })
-      toast.warning("File removed locally, but may still exist in storage")
+      toast.warning(t("wizard.knowledgeBase.fileRemoveWarning"))
     }
   }
 
@@ -228,10 +230,10 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      toast.success("Download started")
+      toast.success(t("wizard.knowledgeBase.downloadStarted"))
     } catch (error) {
       console.error("Error downloading file:", error)
-      toast.error("Failed to download file")
+      toast.error(t("wizard.knowledgeBase.downloadFailed"))
     }
   }
 
@@ -242,9 +244,9 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold mb-2">Knowledge Base</h2>
+        <h2 className="text-2xl font-bold mb-2">{t("wizard.knowledgeBase.title")}</h2>
         <p className="text-muted-foreground">
-          Add information sources for your assistant to reference
+          {t("wizard.knowledgeBase.description")}
         </p>
       </div>
 
@@ -252,14 +254,14 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
         {/* Notes Section */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label>Notes</Label>
+            <Label>{t("wizard.knowledgeBase.notesLabel")}</Label>
             <Button onClick={addNote} size="icon" className="self-start">
               <Plus className="h-4 w-4" />
             </Button>
           </div>
           <div className="flex gap-2">
             <Textarea
-              placeholder="Add notes, guidelines, or knowledge for your assistant..."
+              placeholder={t("wizard.knowledgeBase.notesPlaceholder")}
               value={newNote}
               onChange={(e) => setNewNote(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && e.ctrlKey && addNote()}
@@ -290,21 +292,21 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
             </div>
           )}
           <p className="text-sm text-muted-foreground">
-            Add notes and context for your assistant
+            {t("wizard.knowledgeBase.notesHint")}
           </p>
         </div>
 
         {/* URLs Section */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label>Reference URLs</Label>
+            <Label>{t("wizard.knowledgeBase.urlsLabel")}</Label>
             <Button onClick={addUrl} size="icon" className="self-start">
               <Plus className="h-4 w-4" />
             </Button>
           </div>
           <div className="flex gap-2">
             <Input
-              placeholder="https://example.com/documentation"
+              placeholder={t("wizard.knowledgeBase.urlsPlaceholder")}
               value={newUrl}
               onChange={(e) => setNewUrl(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && addUrl()}
@@ -338,13 +340,13 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
             </div>
           )}
           <p className="text-sm text-muted-foreground">
-            Add URLs that your assistant can reference
+            {t("wizard.knowledgeBase.urlsHint")}
           </p>
         </div>
 
         {/* Files Section */}
         <div className="space-y-2">
-          <Label>Upload Files</Label>
+          <Label>{t("wizard.knowledgeBase.filesLabel")}</Label>
 
           <input
             ref={fileInputRef}
@@ -369,20 +371,20 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
               <>
                 <Loader2 className="h-10 w-10 mx-auto mb-3 text-primary animate-spin" />
                 <p className="text-sm font-medium mb-1">
-                  Uploading files...
+                  {t("wizard.knowledgeBase.uploadingFiles")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Please wait while files are being uploaded to cloud storage
+                  {t("wizard.knowledgeBase.uploadWait")}
                 </p>
               </>
             ) : (
               <>
                 <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
                 <p className="text-sm font-medium mb-1">
-                  Click to upload files
+                  {t("wizard.knowledgeBase.clickToUpload")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Upload documents, PDFs, or text files (max 50MB each)
+                  {t("wizard.knowledgeBase.uploadTypes")}
                 </p>
               </>
             )}
@@ -391,7 +393,7 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
           {uploadingFiles.size > 0 && (
             <div className="space-y-2 mt-3">
               <p className="text-sm font-medium text-muted-foreground">
-                Uploading... ({uploadingFiles.size} file{uploadingFiles.size > 1 ? 's' : ''})
+                {t("wizard.knowledgeBase.uploadCount", { count: uploadingFiles.size })}
               </p>
               {Array.from(uploadingFiles).map((fileName) => (
                 <div
@@ -408,7 +410,7 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
           {(formData.fileURLs?.length ?? 0) > 0 && (
             <div className="space-y-2 mt-3">
               <p className="text-sm font-medium">
-                Uploaded Files ({formData.fileURLs?.length ?? 0})
+                {t("wizard.knowledgeBase.uploadedFiles", { count: formData.fileURLs?.length ?? 0 })}
               </p>
               {(formData.fileURLs || []).map((file, index) => (
                 <div
@@ -428,7 +430,7 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
                       size="icon"
                       onClick={() => handleDownloadFile(file.url, file.fileName)}
                       className="h-8 w-8 bg-transparent hover:bg-transparent text-muted-foreground hover:text-primary"
-                      title="Download file"
+                      title={t("common.download") || "Download"}
                     >
                       <Download className="h-4 w-4" />
                     </Button>
@@ -437,7 +439,7 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
                       size="icon"
                       onClick={() => removeFile(index)}
                       className="h-8 w-8 bg-transparent hover:bg-transparent text-muted-foreground hover:text-destructive"
-                      title="Remove file"
+                      title={t("common.remove") || "Remove"}
                     >
                       <X className="h-4 w-4" />
                     </Button>

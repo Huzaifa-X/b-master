@@ -15,11 +15,13 @@ import { useNotifications } from "@/context/notificationContext"
 import { formatRelativeTime } from "@/lib/utils/date"
 import { Notification } from "@/types/notification"
 import { getNotificationUrl } from "@/lib/utils/notification-url"
+import { useLocale } from "@/lib/i18n"
 
 type FilterType = 'all' | 'unread'
 
 export function NotificationsDropdown() {
   const router = useRouter()
+  const { t, locale } = useLocale()
   const [isOpen, setIsOpen] = useState(false)
   const [filter, setFilter] = useState<FilterType>('all')
   
@@ -158,7 +160,7 @@ export function NotificationsDropdown() {
         {/* Header */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b bg-background sticky top-0 z-10">
           <div className="flex items-center justify-between">
-            <h3 className="text-base sm:text-lg font-bold">Notifications</h3>
+            <h3 className="text-base sm:text-lg font-bold">{t("notifications.title")}</h3>
             <div className="flex items-center gap-2 sm:gap-4">
               <button
                 onClick={() => setFilter('all')}
@@ -169,7 +171,7 @@ export function NotificationsDropdown() {
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                All
+                {t("common.all")}
               </button>
               <button
                 onClick={() => setFilter('unread')}
@@ -180,7 +182,7 @@ export function NotificationsDropdown() {
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                Unread
+                {t("notifications.unread")}
               </button>
               {unreadCount > 0 && (
                 <button
@@ -188,7 +190,7 @@ export function NotificationsDropdown() {
                   disabled={markAllAsReadMutation.isPending}
                   className="text-xs sm:text-sm font-medium text-primary hover:underline disabled:opacity-50"
                 >
-                  {markAllAsReadMutation.isPending ? 'Marking...' : 'Mark all read'}
+                  {markAllAsReadMutation.isPending ? t("notifications.markingAllRead") : t("notifications.markAllRead")}
                 </button>
               )}
             </div>
@@ -205,7 +207,7 @@ export function NotificationsDropdown() {
             <div className="flex flex-col items-center justify-center py-8 px-4">
               <Bell className="h-8 w-8 text-muted-foreground mb-2" />
               <p className="text-sm text-muted-foreground text-center">
-                {filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
+                {filter === 'unread' ? t("notifications.noUnreadNotifications") : t("notifications.noNotifications")}
               </p>
             </div>
           ) : (
@@ -241,7 +243,7 @@ export function NotificationsDropdown() {
                         </div>
                         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                           <span className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
-                            {formatRelativeTime(notification.createdAt)}
+                            {formatRelativeTime(notification.createdAt, locale)}
                           </span>
                           {!notification.isRead && (
                             <div className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0" />

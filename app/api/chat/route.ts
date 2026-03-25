@@ -11,14 +11,13 @@ import { safeUploadToS3 } from "@/lib/aws-s3"
 import { OpenAPITool } from "@/lib/openapi-tool-converter"
 import { executeAPITool, loadAPITools } from "@/lib/api-tools-loader"
 import { decrypt } from "@/lib/encryption"
-import { createStripeConnectInvoice } from "@/lib/services/stripe-connect-invoice.service"
 import { swissQRInvoiceInstructions } from "@/lib/templates/swiss-qr-invoice"
+import { getChatTools } from "@/lib/chat-tools"
+import { buildUserContext, getGeoSystemContext } from "@/lib/services/geo-service"
 import {
     streamText,
-    tool,
     convertToModelMessages,
     type UIMessage,
-    type InferUITools,
     type ToolSet,
     stepCountIs
 } from "ai"
@@ -51,41 +50,6 @@ async function fetchAsBase64(url: string, mimeType: string): Promise<string | nu
     }
 }
 
-/**
- * Save base64 image to S3 and return public URL
- */
-async function saveImageToS3(
-    base64Image: string,
-    chatId: number,
-    imageIndex: number,
-    mimeType: string = "image/webp"
-): Promise<string | null> {
-    try {
-        const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "")
-        const imageBuffer = Buffer.from(base64Data, "base64")
-        const timestamp = Date.now()
-        const extension = mimeType.split('/')[1] || 'webp'
-        const fileName = `image-${timestamp}-${imageIndex}.${extension}`
-
-        const uploadResult = await safeUploadToS3(
-            imageBuffer,
-            fileName,
-            mimeType,
-            `chat-images/chat-${chatId}`
-        )
-
-        if (uploadResult.success && uploadResult.url) {
-            console.log(`[Chat] ✅ Saved image ${imageIndex + 1} to S3: ${uploadResult.url}`)
-            return uploadResult.url
-        } else {
-            console.warn(`[Chat] ⚠️ Failed to save image ${imageIndex + 1}`)
-            return null
-        }
-    } catch (error) {
-        console.error(`[Chat] ❌ Error saving image:`, error)
-        return null
-    }
-}
 
 /**
  * POST /api/chat - Stream chat responses using AI SDK
@@ -298,18 +262,14 @@ export async function POST(req: NextRequest) {
             }
         }))
 
+        const userIp = req.headers.get("x-forwarded-for")?.split(",")[0] || "8.8.8.8"
+        const userContext = await buildUserContext(userIp)
+
         // Build system prompt
         let systemPrompt = await getSystemPrompt()
 
-        // Inject current date & time so the AI is always aware of when it is
-        const _now = new Date()
-        const _dateBlock = [
-          `## 📅 Current Date & Time`,
-          `- **Date**: ${_now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`,
-          `- **Time (UTC)**: ${_now.toUTCString()}`,
-          `- **ISO 8601**: ${_now.toISOString()}`,
-        ].join("\n")
-        systemPrompt = _dateBlock + "\n\n" + systemPrompt
+        // Inject location and time context
+        systemPrompt = getGeoSystemContext(userContext) + "\n\n" + systemPrompt
 
         // Force image generation tool usage
         systemPrompt += `\n\n## IMAGE GENERATION CAPABILITIES\n**YOU HAVE THE CAPABILITY TO GENERATE IMAGES.**\n- If the user asks for an image, visual, or photo, you **MUST** use the \`image_generation\` tool.\n- **NEVER** say "I can't generate images" or "I can't render bitmap images". YOU CAN.\n- **NEVER** offer to generate an SVG or text description instead. JUST USE THE TOOL.\n- The tool will return a public S3 URL of the generated image.\n- **CRITICAL**: You MUST display the generated image using markdown syntax: \`![Generated Image](url)\` in your response so the user can see it.\n- Trust the tool.`
@@ -649,169 +609,23 @@ Your full, well-formatted response here…
         }
 
         // ============================================
-        // BUILD TOOLS FOR AI SDK
+        // CONFIGURE TOOLS (Using ChatTools library)
         // ============================================
 
-        const tools: ToolSet = {}
-        let model = "gpt-5"
-
-        // 1. Stripe Connect Invoice Tool (Custom Function)
-        tools.create_stripe_connect_invoice = tool({
-            description: "Create an invoice on the user's connected Stripe account and generate a PDF. The invoice will be created on the user's Stripe Connect account so they receive payments directly.",
-            inputSchema: z.object({
-                customerName: z.string().describe("Customer's full name"),
-                customerEmail: z.string().email().describe("Customer's email address"),
-                amount: z.number().describe("Invoice amount in dollars (e.g., 100.50)"),
-                description: z.string().describe("Description of service/product"),
-                currency: z.string().optional().describe("Currency code (defaults to 'chf')"),
-                daysUntilDue: z.number().optional().describe("Days until due (defaults to 7)")
-            }),
-            execute: async ({ customerName, customerEmail, amount, description, currency, daysUntilDue }) => {
-                console.log(`[Chat] 💳 Creating Stripe Connect invoice`)
-
-                try {
-                    const result = await createStripeConnectInvoice({
-                        userId: BigInt(session.user.id),
-                        customerName,
-                        customerEmail,
-                        amount,
-                        description,
-                        currency: currency || "chf",
-                        daysUntilDue: daysUntilDue || 7,
-                        artifactHtml: artifact?.htmlContent
-                    })
-
-                    if (!result.success) {
-                        return `⚠️ **Stripe Account Required**\n\n${result.error}\n\nTo create invoices, please connect your Stripe account in profile settings.`
-                    }
-
-                    return `✅ **Invoice Created Successfully**\n\n**Customer:** ${customerName} (${customerEmail})\n**Amount:** ${result.amountDue} ${result.currency?.toUpperCase()}\n**Description:** ${description}\n\n**Payment Link:** ${result.stripeInvoiceUrl}\n**PDF Invoice:** ${result.pdfUrl}\n\nShare the payment link with ${customerName} to receive payment.`
-                } catch (error: any) {
-                    console.error(`[Chat] ❌ Invoice error:`, error)
-                    return `⚠️ **Failed to Create Invoice**\n\nError: ${error.message}\n\nPlease try again or contact support.`
-                }
-            }
+        const tools: ToolSet = getChatTools({
+            userId: BigInt(session.user.id),
+            chatIdInt: chatIdInt || 0,
+            assistantId,
+            artifact,
+            apiTools
         })
 
-        console.log(hasImageIntent, hasImageAttachments, shouldUseIterativeEditing)
-
-        tools.image_generation = tool({
-            description: "Generate an image using DALL-E-3 based on a text prompt. Use this tool whenever the user asks for an image, visual, or drawing. adn editing the image.",
-            inputSchema: z.object({
-                prompt: z.string().describe("The descriptive prompt for the image generation"),
-            }),
-            execute: async ({ prompt }) => {
-                console.log(`[Chat] 🎨 Custom tool generating image: ${prompt}`)
-                try {
-                    const response = await openaiClient.images.generate({
-                        model: "gpt-image-1.5",
-                        prompt,
-                        n: 1,
-                        size: "1024x1024",
-                        response_format: "b64_json"
-                    });
-
-                    const base64Image = response.data?.[0]?.b64_json;
-                    if (!base64Image) throw new Error("No image data returned from OpenAI");
-
-                    const imageUrl = await saveImageToS3(
-                        base64Image,
-                        chatIdInt || 0,
-                        0,
-                        'image/png'
-                    )
-
-                    if (!imageUrl) throw new Error("Failed to save image to S3");
-
-                    console.log(`[Chat] ✅ Custom tool generated and saved image: ${imageUrl}`)
-                    return { url: imageUrl };
-                } catch (error: any) {
-                    console.error(`[Chat] ❌ Custom tool image generation failed:`, error)
-                    return { error: error.message };
-                }
-            }
-        })
-
-        // 2. Artifact Update Tool (Custom Function)
-        if (artifact) {
-            tools.update_artifact = tool({
-                description: `Update the current artifact "${artifact.name}" with new HTML code.`,
-                inputSchema: z.object({
-                    updatedCode: z.string().describe("Complete updated HTML code"),
-                    changeDescription: z.string().describe("What changed and why"),
-                    changeSummary: z.string().describe("One-line summary")
-                }),
-                execute: async ({ updatedCode, changeDescription, changeSummary }) => {
-                    console.log(`[Chat] 🎨 Updating artifact: ${artifact.name}`)
-
-                    try {
-                        const { createArtifactVersion } = await import("@/app/actions/update-artifact.action")
-
-                        const versionResult = await createArtifactVersion({
-                            artifactId: parseInt(artifact.id),
-                            userId: BigInt(session.user.id),
-                            code: updatedCode,
-                            description: changeDescription,
-                            changeType: 'ai',
-                            setAsActive: true
-                        })
-
-                        if (!versionResult.success) {
-                            throw new Error(versionResult.error || "Failed to create artifact version")
-                        }
-
-                        console.log(`[Chat] ✅ Artifact updated. Version: ${versionResult.version?.versionNumber}`)
-
-                        return `✅ **Artifact Updated Successfully**\n\n**Version:** ${versionResult.version?.versionNumber}\n**Change:** ${changeSummary}\n\nThe artifact "${artifact.name}" has been updated.`
-                    } catch (error: any) {
-                        console.error(`[Chat] ❌ Artifact update error:`, error)
-                        return `⚠️ **Failed to Update Artifact**\n\nError: ${error.message}\n\nPlease try again or check your permissions.`
-                    }
-                }
-            })
-        }
-
-        // 3. API Tools (from OpenAPI schemas)
-        if (apiTools.length > 0) {
-            for (const apiTool of apiTools) {
-                const toolName = apiTool.openaiTool.name
-                const inputSchema = z.object(
-                    Object.fromEntries(
-                        Object.entries(apiTool.openaiTool.parameters.properties || {}).map(([key, prop]: [string, any]) => [
-                            key,
-                            prop.type === "string" ? z.string().describe(prop.description || "") :
-                                prop.type === "number" ? z.number().describe(prop.description || "") :
-                                    prop.type === "boolean" ? z.boolean().describe(prop.description || "") :
-                                        z.any().describe(prop.description || "")
-                        ])
-                    )
-                )
-
-                tools[toolName] = tool({
-                    description: apiTool.openaiTool.description,
-                    inputSchema,
-                    execute: async (args: any) => {
-                        console.log(`[Chat] Executing API tool: ${toolName}`)
-
-                        try {
-                            const result = await executeAPITool(apiTools, toolName, args)
-                            console.log(`[Chat] ✅ API tool executed`)
-
-                            // Let AI SDK handle the result - it will automatically be added to conversation
-                            return JSON.stringify(result, null, 2)
-                        } catch (error: any) {
-                            console.error(`[Chat] ❌ API tool error:`, error)
-                            return `API call failed: ${error.message}`
-                        }
-                    }
-                })
-            }
-        }
-
-        // 4. OpenAI Web Search Tool
+        // Add special SDK-specific tools
         if (webSearch || research) {
-            tools.web_search = ai_sdk_openai.tools.webSearch({})
+            tools.web_search = ai_sdk_openai.tools.webSearch() as any
         }
+
+        let model = "gpt-5"
 
         // ============================================
         // CONFIGURE OPENAI PROVIDER OPTIONS
@@ -887,16 +701,22 @@ Your full, well-formatted response here…
             }
         }
 
-        // Store option
+        // Store option and conditional reasoning
+        // Only enable extended thinking for complex tasks (canvas, research, artifacts)
+        const needsReasoning = canvas || research || artifact
+
         providerOptions.openai = {
             ...providerOptions.openai,
-            reasoningSummary: 'auto',
-            reasoningEffort: 'medium',
             store: true,
             metadata: {
                 chatId: chatIdInt.toString(),
                 userId: session.user.id
-            }
+            },
+            // Only add reasoning options for complex tasks
+            ...(needsReasoning && {
+                reasoningSummary: 'auto',
+                reasoningEffort: 'medium', // Use 'low' even for complex tasks for faster responses
+            })
         }
 
         // ============================================
@@ -923,9 +743,9 @@ Your full, well-formatted response here…
             // Track content as it streams for abort recovery
             onChunk: async ({ chunk }) => {
                 if (chunk.type === 'text-delta') {
-                    partialContent += chunk.textDelta
-                } else if (chunk.type === 'reasoning') {
-                    partialReasoning += (chunk as any).textDelta || ""
+                    partialContent += chunk.text
+                } else if (chunk.type === 'reasoning-delta') {
+                    partialReasoning += (chunk as any).text || ""
                 }
             },
         })

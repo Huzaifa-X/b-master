@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Globe, Github, AlertCircle, CheckCircle2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useLocale } from "@/lib/i18n"
+
 
 interface ActionResponse<T> {
     success: boolean
@@ -35,12 +37,14 @@ export function GithubDeployDialog({
     initialRepoName,
     isUpdateMode
 }: GithubDeployDialogProps) {
+    const { t } = useLocale()
     const [repoName, setRepoName] = useState(initialRepoName || "")
     const [description, setDescription] = useState("")
     const [isDeploying, setIsDeploying] = useState(false)
     const [successData, setSuccessData] = useState<{ githubUrl?: string; vercelUrl?: string } | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [step, setStep] = useState<"idle" | "packaging" | "github" | "vercel">("idle")
+
 
     // Update repo name if props change
     useEffect(() => {
@@ -107,13 +111,14 @@ export function GithubDeployDialog({
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Globe className="h-5 w-5 text-emerald-500" />
-                        {isUpdateMode ? "Update Published Project" : "Publish Project"}
+                        {isUpdateMode ? t("bCoder.deploy.updateTitle") : t("bCoder.deploy.publishTitle")}
                     </DialogTitle>
                     <DialogDescription>
                         {isUpdateMode
-                            ? "Push new commits to your GitHub repository and trigger a live update."
-                            : "Publish your code to a new GitHub repository and make it live instantly."}
+                            ? t("bCoder.deploy.updateDescription")
+                            : t("bCoder.deploy.publishDescription")}
                     </DialogDescription>
+
                 </DialogHeader>
 
                 {successData ? (
@@ -122,15 +127,17 @@ export function GithubDeployDialog({
                             <CheckCircle2 className="h-6 w-6" />
                         </div>
                         <div className="space-y-1">
-                            <h3 className="font-semibold text-lg text-emerald-600">Published Successfully!</h3>
-                            <p className="text-sm text-muted-foreground">Your project is now live on the world wide web.</p>
+                            <h3 className="font-semibold text-lg text-emerald-600">{t("bCoder.deploy.publishSuccess")}</h3>
+                            <p className="text-sm text-muted-foreground">{t("bCoder.deploy.publishSuccessDescription")}</p>
                         </div>
+
 
                         <div className="w-full space-y-2 mt-4 text-left">
                             {successData.vercelUrl && (
                                 <div className="bg-muted/50 p-3 rounded-lg text-sm flex flex-col gap-1">
-                                    <span className="font-medium text-xs uppercase text-muted-foreground">Live Application</span>
+                                    <span className="font-medium text-xs uppercase text-muted-foreground">{t("bCoder.deploy.liveApplication")}</span>
                                     <a href={successData.vercelUrl.startsWith('http') ? successData.vercelUrl : `https://${successData.vercelUrl}`} target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline break-all flex items-center gap-1.5">
+
                                         <Globe className="h-4 w-4 shrink-0" />
                                         {successData.vercelUrl}
                                     </a>
@@ -138,8 +145,9 @@ export function GithubDeployDialog({
                             )}
                             {successData.githubUrl && (
                                 <div className="bg-muted/50 p-3 rounded-lg text-sm flex flex-col gap-1">
-                                    <span className="font-medium text-xs uppercase text-muted-foreground">Repository</span>
+                                    <span className="font-medium text-xs uppercase text-muted-foreground">{t("bCoder.deploy.repository")}</span>
                                     <a href={successData.githubUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline break-all flex items-center gap-1.5">
+
                                         <Github className="h-4 w-4 shrink-0" />
                                         {successData.githubUrl.replace('https://github.com/', '')}
                                     </a>
@@ -155,9 +163,9 @@ export function GithubDeployDialog({
                                     <AlertCircle className="h-4 w-4" />
                                     <AlertDescription className="break-words">{error}</AlertDescription>
                                 </Alert>
-                            )}
+                             )}
                             <div className="space-y-2">
-                                <Label htmlFor="repoName">Repository Name</Label>
+                                <Label htmlFor="repoName">{t("bCoder.deploy.repositoryName")}</Label>
                                 <Input
                                     id="repoName"
                                     placeholder={placeholder}
@@ -167,30 +175,33 @@ export function GithubDeployDialog({
                                 />
                                 {isUpdateMode && (
                                     <p className="text-xs text-muted-foreground">
-                                        You are updating an existing repository. The name cannot be changed.
+                                        {t("bCoder.deploy.updateNameDisabled")}
                                     </p>
                                 )}
                                 {!isUpdateMode && (
-                                    <p className="text-[10px] text-muted-foreground">Only lowercase letters, numbers, and hyphens.</p>
+                                    <p className="text-[10px] text-muted-foreground">{t("bCoder.deploy.repoNameFormat")}</p>
                                 )}
                             </div>
+
                             <div className="grid gap-2">
-                                <Label htmlFor="description">Description (Optional)</Label>
+                                <Label htmlFor="description">{t("bCoder.deploy.descriptionLabel")}</Label>
                                 <Textarea
                                     id="description"
                                     value={description}
                                     onChange={(e) => setDescription(e.target.value)}
-                                    placeholder="A beautiful app generated by B-Coder..."
+                                    placeholder={t("bCoder.deploy.descriptionPlaceholder")}
                                     className="resize-none h-20"
                                     disabled={isDeploying}
                                 />
                             </div>
+
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={handleClose} disabled={isDeploying}>
-                                Cancel
+                                {t("common.cancel")}
                             </Button>
                             <Button
+
                                 type="submit"
                                 disabled={isDeploying || (!repoName.trim() && !isUpdateMode)}
                                 className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 text-white"
@@ -198,16 +209,17 @@ export function GithubDeployDialog({
                                 {isDeploying ? (
                                     <>
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        {step === "packaging" ? "Packaging Files..." :
-                                            step === "github" ? "Pushing to GitHub..." :
-                                                "Publishing to Vercel..."}
+                                        {step === "packaging" ? t("bCoder.deploy.packagingFiles") :
+                                            step === "github" ? t("bCoder.deploy.pushingToGithub") :
+                                                t("bCoder.deploy.publishingToVercel")}
                                     </>
                                 ) : (
                                     <>
                                         <Globe className="mr-2 h-4 w-4" />
-                                        {isUpdateMode ? "Update Published Project" : "Publish Now"}
+                                        {isUpdateMode ? t("bCoder.deploy.updateTitle") : t("bCoder.deploy.publishNow")}
                                     </>
                                 )}
+
                             </Button>
                         </DialogFooter>
                     </form>

@@ -17,6 +17,8 @@ interface ArtifactGenerationResultSectionProps {
     onFeedback: (isPositive: boolean) => void
 }
 
+import { useLocale } from "@/lib/i18n"
+
 export function ArtifactGenerationResultSection({
     generatedInstructions,
     isLoading,
@@ -26,11 +28,13 @@ export function ArtifactGenerationResultSection({
     onRegenerate,
     onFeedback,
 }: ArtifactGenerationResultSectionProps) {
+    const { t } = useLocale()
+
     return (
         <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <Label htmlFor="generated-instructions" className="text-base font-semibold">
-                    Generated Instructions
+                    {t("artifacts.generatedInstructions")}
                 </Label>
                 <div className="flex items-center gap-2">
                     {generatedInstructions && (
@@ -44,12 +48,12 @@ export function ArtifactGenerationResultSection({
                                 {copied ? (
                                     <>
                                         <Check className="h-3.5 w-3.5" />
-                                        <span className="text-xs">Copied!</span>
+                                        <span className="text-xs">{t("common.copied")}</span>
                                     </>
                                 ) : (
                                     <>
                                         <Copy className="h-3.5 w-3.5" />
-                                        <span className="text-xs">Copy</span>
+                                        <span className="text-xs">{t("common.copy")}</span>
                                     </>
                                 )}
                             </Button>
@@ -60,7 +64,7 @@ export function ArtifactGenerationResultSection({
                                 className="h-8 gap-2"
                             >
                                 <RefreshCw className="h-3.5 w-3.5" />
-                                <span className="text-xs">Regenerate</span>
+                                <span className="text-xs">{t("common.regenerate")}</span>
                             </Button>
                         </>
                     )}
@@ -76,14 +80,14 @@ export function ArtifactGenerationResultSection({
                         "min-h-[250px] resize-none font-mono text-sm",
                         isLoading && "animate-pulse"
                     )}
-                    placeholder={isLoading ? "Generating instructions..." : ""}
+                    placeholder={isLoading ? t("artifacts.generatingInstructions") : ""}
                     rows={12}
                 />
                 {isLoading && (
                     <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
                         <div className="flex flex-col items-center gap-2">
                             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-                            <p className="text-sm text-muted-foreground">Generating instructions...</p>
+                            <p className="text-sm text-muted-foreground">{t("artifacts.generatingInstructions")}</p>
                         </div>
                     </div>
                 )}
@@ -92,7 +96,7 @@ export function ArtifactGenerationResultSection({
             {generatedInstructions && !isLoading && (
                 <div className="flex items-center justify-between pt-2">
                     <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">Was this helpful?</span>
+                        <span className="text-sm text-muted-foreground">{t("artifacts.wasHelpful")}</span>
                         <div className="flex gap-1">
                             <Button
                                 variant="ghost"
@@ -118,7 +122,7 @@ export function ArtifactGenerationResultSection({
                         </div>
                         {feedbackSent && (
                             <span className="text-xs text-muted-foreground ml-2">
-                                Thank you for your feedback!
+                                {t("artifacts.feedbackThanks")}
                             </span>
                         )}
                     </div>

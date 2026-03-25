@@ -7,6 +7,7 @@ import { SharingPermissionsStepProps, SharedUser, PermissionType } from "@/types
 import { cn } from "@/lib/utils"
 import { Lock, Globe, Check, X, User, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { useLocale } from "@/lib/i18n"
 import {
   Table,
   TableBody,
@@ -24,26 +25,27 @@ import {
   TagsInputList,
 } from "@/components/ui/tags-input"
 
-const PERMISSION_OPTIONS = [
-  {
-    value: "private" as const,
-    icon: Lock,
-    title: "Private",
-    description: "You and selected users can access",
-  },
-  {
-    value: "public" as const,
-    icon: Globe,
-    title: "Public",
-    description: "Available in BMaster Store for everyone",
-  },
-]
-
 export function SharingPermissionsStep({
   formData,
   updateFormData,
 }: SharingPermissionsStepProps) {
+  const { t } = useLocale()
   const [isVerifying, setIsVerifying] = useState(false)
+
+  const PERMISSION_OPTIONS = [
+    {
+      value: "private" as const,
+      icon: Lock,
+      title: t("wizard.sharing.privateTitle"),
+      description: t("wizard.sharing.privateDesc"),
+    },
+    {
+      value: "public" as const,
+      icon: Globe,
+      title: t("wizard.sharing.publicTitle"),
+      description: t("wizard.sharing.publicDesc"),
+    },
+  ]
   // Derive email tags from sharedUsers for display in TagsInput
   const emailTags = formData.sharedUsers.map((u: SharedUser) => u.email)
 
@@ -65,13 +67,13 @@ export function SharingPermissionsStep({
       // Basic email validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(email)) {
-        toast.error(`Invalid email format: ${rawEmail}`)
+        toast.error(t("wizard.sharing.invalidEmail", { email: rawEmail }))
         continue
       }
 
       // Check if already added
       if (formData.sharedUsers.some((u: SharedUser) => u.email.toLowerCase() === email)) {
-        toast.error("This user is already added")
+        toast.error(t("wizard.sharing.userAlreadyAdded"))
         continue
       }
 
@@ -80,7 +82,7 @@ export function SharingPermissionsStep({
         const result = await verifyUserByEmail(email)
 
         if (!result.success || !result.user) {
-          toast.error(result.error || `User not found: ${email}`)
+          toast.error(result.error || t("wizard.sharing.userNotFound", { email }))
           continue
         }
 
@@ -102,9 +104,9 @@ export function SharingPermissionsStep({
           sharedUsers: [...formData.sharedUsers, newUser],
         })
 
-        toast.success(`${result.user.name || result.user.email} added successfully`)
+        toast.success(t("wizard.sharing.userAdded", { name: result.user.name || result.user.email }))
       } catch {
-        toast.error(`Failed to verify user: ${email}`)
+        toast.error(t("wizard.sharing.verifyFailed", { email }))
       } finally {
         setIsVerifying(false)
       }
@@ -122,7 +124,7 @@ export function SharingPermissionsStep({
           (user: SharedUser) => user.email.toLowerCase() !== removedEmail.toLowerCase()
         ),
       })
-      toast.success("User removed")
+      toast.success(t("wizard.sharing.userRemoved"))
     }
   }
 
@@ -140,7 +142,7 @@ export function SharingPermissionsStep({
     updateFormData({
       sharedUsers: formData.sharedUsers.filter((user: SharedUser) => user.id !== userId),
     })
-    toast.success("User removed")
+    toast.success(t("wizard.sharing.userRemoved"))
   }
 
   const updateUserPermission = (
@@ -176,16 +178,16 @@ export function SharingPermissionsStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold mb-2">Sharing & Permissions</h2>
+        <h2 className="text-2xl font-bold mb-2">{t("wizard.sharing.title")}</h2>
         <p className="text-muted-foreground">
-          Control who can access and use your AI assistant
+          {t("wizard.sharing.description")}
         </p>
       </div>
 
       <div className="space-y-6">
         {/* Permission Level Selection */}
         <div className="space-y-3">
-          <Label>Access Level</Label>
+          <Label>{t("wizard.sharing.accessLevel")}</Label>
           <div className="grid gap-3">
             {PERMISSION_OPTIONS.map((option) => {
               const Icon = option.icon
@@ -230,7 +232,7 @@ export function SharingPermissionsStep({
         {/* User Management - Only show for Private */}
         {formData.permissionLevel === "private" && (
           <div className="space-y-4">
-            <Label>Add Users by Email</Label>
+            <Label>{t("wizard.sharing.addUsers")}</Label>
 
             {/* Email Tags Input */}
             <TagsInput
@@ -245,7 +247,7 @@ export function SharingPermissionsStep({
                   </TagsInputItem>
                 ))}
                 <TagsInputInput
-                  placeholder={isVerifying ? "Verifying..." : "Type email and press Enter..."}
+                  placeholder={isVerifying ? t("wizard.sharing.verifying") : t("wizard.sharing.emailPlaceholder")}
                   disabled={isVerifying}
                   className="min-w-[200px]"
                 />
@@ -258,13 +260,13 @@ export function SharingPermissionsStep({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[250px]">User</TableHead>
-                      <TableHead className="text-center">Chat</TableHead>
-                      <TableHead className="text-center">Contact</TableHead>
-                      <TableHead className="text-center">News Feed</TableHead>
-                      <TableHead className="text-center">Messenger</TableHead>
-                      <TableHead className="text-center">Artifact</TableHead>
-                      <TableHead className="text-center">Library</TableHead>
+                      <TableHead className="w-[250px]">{t("wizard.sharing.userTable.user")}</TableHead>
+                      <TableHead className="text-center">{t("wizard.sharing.userTable.chat")}</TableHead>
+                      <TableHead className="text-center">{t("wizard.sharing.userTable.contact")}</TableHead>
+                      <TableHead className="text-center">{t("wizard.sharing.userTable.newsFeed")}</TableHead>
+                      <TableHead className="text-center">{t("wizard.sharing.userTable.messenger")}</TableHead>
+                      <TableHead className="text-center">{t("wizard.sharing.userTable.artifact")}</TableHead>
+                      <TableHead className="text-center">{t("wizard.sharing.userTable.library")}</TableHead>
                       <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -362,9 +364,9 @@ export function SharingPermissionsStep({
             ) : (
               <div className="text-center py-8 border rounded-lg border-dashed">
                 <User className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-                <p className="text-sm font-medium mb-1">No users added yet</p>
+                <p className="text-sm font-medium mb-1">{t("wizard.sharing.noUsers")}</p>
                 <p className="text-xs text-muted-foreground">
-                  Add the User's email above
+                  {t("wizard.sharing.addEmailHint")}
                 </p>
               </div>
             )}
@@ -378,16 +380,16 @@ export function SharingPermissionsStep({
               <div className="flex gap-3">
                 <Globe className="h-6 w-6 text-primary shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <h4 className="font-medium mb-1">Public Assistant</h4>
+                  <h4 className="font-medium mb-1">{t("wizard.sharing.publicInfoTitle")}</h4>
                   <p className="text-sm text-muted-foreground">
-                    This assistant will be available to all users in the BMaster Store.
+                    {t("wizard.sharing.publicInfoDesc")}
                   </p>
                 </div>
               </div>
 
               <div className="space-y-3">
                 <Label className="text-sm font-medium">
-                  Select permissions for buyers/users:
+                  {t("wizard.sharing.selectPermissions")}
                 </Label>
 
                 <div className="space-y-2 bg-background rounded-lg p-4 border">
@@ -405,11 +407,11 @@ export function SharingPermissionsStep({
                         htmlFor="buyer-chat"
                         className="text-sm font-medium leading-none cursor-pointer"
                       >
-                        Chat
+                        {t("wizard.sharing.permissionLabels.chat")}
                       </label>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Private AI conversations
+                      {t("wizard.sharing.permissionLabels.chatDesc")}
                     </p>
                   </div>
 
@@ -427,11 +429,11 @@ export function SharingPermissionsStep({
                         htmlFor="buyer-contact"
                         className="text-sm font-medium leading-none cursor-pointer"
                       >
-                        Contacts
+                        {t("wizard.sharing.permissionLabels.contact")}
                       </label>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      View team directory
+                      {t("wizard.sharing.permissionLabels.contactDesc")}
                     </p>
                   </div>
 
@@ -449,11 +451,11 @@ export function SharingPermissionsStep({
                         htmlFor="buyer-newsfeed"
                         className="text-sm font-medium leading-none cursor-pointer"
                       >
-                        News Feed
+                        {t("wizard.sharing.permissionLabels.newsFeed")}
                       </label>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      View & post updates
+                      {t("wizard.sharing.permissionLabels.newsFeedDesc")}
                     </p>
                   </div>
 
@@ -471,11 +473,11 @@ export function SharingPermissionsStep({
                         htmlFor="buyer-messenger"
                         className="text-sm font-medium leading-none cursor-pointer"
                       >
-                        Messenger
+                        {t("wizard.sharing.permissionLabels.messenger")}
                       </label>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Chat with team members
+                      {t("wizard.sharing.permissionLabels.messengerDesc")}
                     </p>
                   </div>
 
@@ -493,11 +495,11 @@ export function SharingPermissionsStep({
                         htmlFor="buyer-artifact"
                         className="text-sm font-medium leading-none cursor-pointer"
                       >
-                        Artifacts
+                        {t("wizard.sharing.permissionLabels.artifact")}
                       </label>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Create & share artifacts
+                      {t("wizard.sharing.permissionLabels.artifactDesc")}
                     </p>
                   </div>
 
@@ -515,11 +517,11 @@ export function SharingPermissionsStep({
                         htmlFor="buyer-library"
                         className="text-sm font-medium leading-none cursor-pointer"
                       >
-                        Library
+                        {t("wizard.sharing.permissionLabels.library")}
                       </label>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Access knowledge library
+                      {t("wizard.sharing.permissionLabels.libraryDesc")}
                     </p>
                   </div>
                 </div>

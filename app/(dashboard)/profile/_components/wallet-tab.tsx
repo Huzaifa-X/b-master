@@ -7,11 +7,13 @@ import { useWallet } from "@/hooks/useWallet"
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { toast } from 'sonner';
+import { useLocale } from "@/lib/i18n"
 
 export default function WalletTab() {
   const { wallet, transactions, stats, loading, transactionsLoading, statsLoading } = useWallet()
   const [connectStatus, setConnectStatus] = useState<any>(null);
   const [connectLoading, setConnectLoading] = useState(false);
+  const { t, locale } = useLocale()
 
   useEffect(() => {
     refreshConnectStatus();
@@ -45,20 +47,20 @@ export default function WalletTab() {
       // Redirect to Stripe
       window.location.href = data.url;
     } catch (error: any) {
-      toast.error(error.message || 'Failed to start onboarding');
+      toast.error(error.message || t("common.error"));
       setConnectLoading(false);
     }
   };
 
   const formatCurrency = (amount: number, currency: string = "CHF") => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-US", {
       style: "currency",
       currency: currency.toUpperCase(),
     }).format(amount)
   }
 
   const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleDateString("en-US", {
+    return new Date(date).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -84,9 +86,9 @@ export default function WalletTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold">Wallet & Earnings</h2>
+        <h2 className="text-xl font-semibold">{t("profile.wallet.title")}</h2>
         <p className="text-muted-foreground text-sm">
-          Manage your earnings from assistant sales
+          {t("profile.wallet.description")}
         </p>
       </div>
 
@@ -99,9 +101,9 @@ export default function WalletTab() {
                   <Wallet className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-semibold">Stripe Connect</h3>
+                  <h3 className="font-semibold">{t("profile.wallet.connectStripe")}</h3>
                   <p className="text-xs text-muted-foreground">
-                    Required to receive payments.
+                    {t("profile.wallet.connectDescription")}
                   </p>
                 </div>
               </div>
@@ -109,7 +111,7 @@ export default function WalletTab() {
             {connectStatus?.status === 'active' ? (
               <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                 <p className="text-sm text-green-800">
-                  Your account is active and ready to receive payments!
+                  {t("profile.wallet.activeStatus")}
                 </p>
               </div>
             ) : connectStatus?.status === 'pending' ? (
@@ -123,12 +125,12 @@ export default function WalletTab() {
                   {connectLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Redirecting...
+                      {t("profile.wallet.redirecting")}
                     </>
                   ) : (
                     <>
                       <ExternalLink className="mr-2 h-4 w-4" />
-                      Complete Stripe Setup
+                      {t("profile.wallet.completeSetup")}
                     </>
                   )}
                 </Button>
@@ -144,12 +146,12 @@ export default function WalletTab() {
                   {connectLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Redirecting...
+                      {t("profile.wallet.redirecting")}
                     </>
                   ) : (
                     <>
                       <ExternalLink className="mr-2 h-4 w-4" />
-                      Connect Stripe Account
+                      {t("profile.wallet.connectAccount")}
                     </>
                   )}
                 </Button>
@@ -177,13 +179,13 @@ export default function WalletTab() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4 text-yellow-500" />
-                      <span className="text-sm text-muted-foreground">Pending</span>
+                      <span className="text-sm text-muted-foreground">{t("profile.wallet.pending")}</span>
                     </div>
                     <p className="text-2xl font-semibold">
                       {formatCurrency(wallet?.pendingBalance || 0, wallet?.currency)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Available after 7-day holding period
+                      {t("profile.wallet.holdingPeriod")}
                     </p>
                   </div>
                 )}
@@ -204,13 +206,13 @@ export default function WalletTab() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <Wallet className="w-4 h-4 text-green-500" />
-                      <span className="text-sm text-muted-foreground">Available</span>
+                      <span className="text-sm text-muted-foreground">{t("profile.wallet.available")}</span>
                     </div>
                     <p className="text-2xl font-semibold text-green-500">
                       {formatCurrency(wallet?.availableBalance || 0, wallet?.currency)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Ready for withdrawal
+                      {t("profile.wallet.readyForWithdrawal")}
                     </p>
                   </div>
                 )}
@@ -231,13 +233,13 @@ export default function WalletTab() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <TrendingUp className="w-4 h-4 text-primary" />
-                      <span className="text-sm text-muted-foreground">Total Earnings</span>
+                      <span className="text-sm text-muted-foreground">{t("profile.wallet.totalEarnings")}</span>
                     </div>
                     <p className="text-2xl font-semibold">
                       {formatCurrency(wallet?.lifetimeEarnings || 0, wallet?.currency)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Lifetime earnings
+                      {t("profile.wallet.lifetimeEarnings")}
                     </p>
                   </div>
                 )}
@@ -280,16 +282,16 @@ export default function WalletTab() {
                     <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
                       <DollarSign className="w-6 h-6 text-primary" />
                     </div>
-                    <h3 className="text-lg font-semibold">Earnings Statistics</h3>
+                    <h3 className="text-lg font-semibold">{t("profile.wallet.earningsStats")}</h3>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 pt-2">
                     <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Total Sales</p>
+                      <p className="text-sm text-muted-foreground">{t("profile.wallet.totalSales")}</p>
                       <p className="text-xl font-semibold">{stats.totalSales}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Sales Amount</p>
+                      <p className="text-sm text-muted-foreground">{t("profile.wallet.salesAmount")}</p>
                       <p className="text-xl font-semibold text-green-500">
                         {formatCurrency(stats.totalSalesAmount, stats.currency)}
                       </p>
@@ -306,7 +308,7 @@ export default function WalletTab() {
                   <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
                     <ArrowUpRight className="w-6 h-6 text-primary" />
                   </div>
-                  <h3 className="text-lg font-semibold">Transaction History</h3>
+                  <h3 className="text-lg font-semibold">{t("profile.wallet.history")}</h3>
                 </div>
 
                 {transactionsLoading ? (
@@ -324,11 +326,11 @@ export default function WalletTab() {
                 ) : transactions.length > 0 ? (
                   <div className="overflow-hidden">
                     <div className="grid grid-cols-5 gap-4 text-sm font-medium text-muted-foreground border-b border-border pb-2">
-                      <div>Date</div>
-                      <div>Type</div>
-                      <div>Status</div>
-                      <div>Amount</div>
-                      <div>Details</div>
+                      <div>{t("profile.wallet.table.date")}</div>
+                      <div>{t("profile.wallet.table.type")}</div>
+                      <div>{t("profile.wallet.table.status")}</div>
+                      <div>{t("profile.wallet.table.amount")}</div>
+                      <div>{t("profile.wallet.table.details")}</div>
                     </div>
 
                     <div className="space-y-3 mt-3 max-h-96 overflow-y-auto">
@@ -353,7 +355,7 @@ export default function WalletTab() {
                   </div>
                 ) : (
                   <div className="text-center py-8 text-sm text-muted-foreground">
-                    No transactions found. Start selling assistants to earn!
+                    {t("profile.wallet.noTransactions")}
                   </div>
                 )}
               </div>

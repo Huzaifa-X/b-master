@@ -1,6 +1,6 @@
 "use client";
 
-import { FC, useEffect, useState, useRef, useCallback } from "react";
+import { FC, useEffect, useState, useRef, useCallback, Fragment } from "react";
 import Editor from "@monaco-editor/react";
 import { useTheme } from "next-themes";
 
@@ -51,6 +51,9 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 }) => {
 
   const { artifactContent, isPreviewMode, togglePreview, setPrefilledPrompt, setSurgicalEditOuterHtml, isEditMode, toggleEditMode, updateArtifactContent, closePanel, isFullscreen, toggleFullscreen, wasAutoOpened } = useArtifactStore();
+
+  // Determine if we're in artifact mode (with version control) or chat mode (preview only)
+  const isArtifactMode = !!artifactId;
   const { t } = useLocale();
   const { theme } = useTheme();
   const params = useParams()
@@ -447,9 +450,6 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
   const handleInlineEditSubmit = useCallback(() => {
     if (!inlineEditState.value.trim()) return;
 
-    // Store the outerHTML so the chatbot can do a surgical patch
-    setSurgicalEditOuterHtml(inlineEditState.outerHtml || null);
-
     // Create the full prompt
     const prompt = inlineEditState.mode === "selection"
       ? `Regarding this selected text: "${inlineEditState.originalText}"\n\nPlease make this change: ${inlineEditState.value}`
@@ -459,11 +459,21 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     setInlineEditState(prev => ({ ...prev, visible: false, value: "" }));
     setIsVisualEditMode(false);
 
-    // Dispatch event with the message to send directly
-    window.dispatchEvent(new CustomEvent('trigger-chat-send', {
-      detail: { message: prompt }
-    }));
-  }, [inlineEditState, setSurgicalEditOuterHtml]);
+    if (isArtifactMode) {
+      // Artifact mode: Store the outerHTML so the artifact chatbot can do a surgical patch
+      setSurgicalEditOuterHtml(inlineEditState.outerHtml || null);
+
+      // Dispatch event for artifact chatbot
+      window.dispatchEvent(new CustomEvent('trigger-chat-send', {
+        detail: { message: prompt }
+      }));
+    } else {
+      // Chat mode: Send to the regular chat input using distinct event
+      window.dispatchEvent(new CustomEvent('canvas-edit-send', {
+        detail: { message: prompt }
+      }));
+    }
+  }, [inlineEditState, setSurgicalEditOuterHtml, isArtifactMode]);
 
   // Close inline edit when clicking outside
   useEffect(() => {
@@ -1021,7 +1031,18 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
                   {isVisualEditMode && (
                     <div className="absolute top-0 left-0 right-0 z-10 bg-indigo-500/90 text-white text-xs text-center py-1.5 px-3 flex items-center justify-center gap-2 pointer-events-none">
                       <MousePointer2 className="h-3 w-3" />
-                      <span>{t("artifactPanel.visualEditModeHint")}</span>
+                      <span>
+                        {t("artifactPanel.visualEditModeHint").split("{key}").map((part, index, array) => (
+                          <Fragment key={index}>
+                            {part}
+                            {index < array.length - 1 && (
+                              <kbd className="bg-white/20 rounded px-1 group-hover:bg-white/30 transition-colors mx-0.5 animate-pulse">
+                                Esc
+                              </kbd>
+                            )}
+                          </Fragment>
+                        ))}
+                      </span>
                     </div>
                   )}
                   <iframe
@@ -1170,12 +1191,17 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  if (e.metaKey || e.ctrlKey) {
-                    if (inlineEditState.mode === "element") handleInlineEditSubmit();
-                    else handleManualUpdate(inlineEditState.mode);
+                  if (isArtifactMode) {
+                    // Artifact mode: Enter = manual update for selection, Cmd+Enter = Ask B
+                    if (e.metaKey || e.ctrlKey) {
+                      handleInlineEditSubmit();
+                    } else {
+                      if (inlineEditState.mode === "selection") handleManualUpdate("selection");
+                      else handleInlineEditSubmit();
+                    }
                   } else {
-                    if (inlineEditState.mode === "selection") handleManualUpdate("selection");
-                    else handleInlineEditSubmit(); // Default to AI for elements as requested
+                    // Chat mode: Always use Ask B (no manual update available)
+                    handleInlineEditSubmit();
                   }
                 }
               }}
@@ -1197,25 +1223,41 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
               )}
 
               {inlineEditState.mode === "selection" && (
-                <Button
-                  size="sm"
-                  className="ml-auto w-fit bg-emerald-500 hover:bg-emerald-600 text-white gap-2 text-xs shadow-sm cursor-pointer"
-                  onClick={() => handleManualUpdate("selection")}
-                  disabled={!inlineEditState.value.trim() || isUpdating}
-                >
-                  {isUpdating ? (
-                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                <>
+                  {/* Direct update only available in artifact mode (with version control) */}
+                  {isArtifactMode ? (
+                    <Button
+                      size="sm"
+                      className="ml-auto w-fit bg-emerald-500 hover:bg-emerald-600 text-white gap-2 text-xs shadow-sm cursor-pointer"
+                      onClick={() => handleManualUpdate("selection")}
+                      disabled={!inlineEditState.value.trim() || isUpdating}
+                    >
+                      {isUpdating ? (
+                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      ) : (
+                        <Send className="h-3.5 w-3.5" />
+                      )}
+                      {isUpdating ? t("artifactPanel.updating") : t("artifactPanel.updateSelectedText")}
+                    </Button>
                   ) : (
-                    <Send className="h-3.5 w-3.5" />
+                    /* Chat mode: Show Ask B button instead */
+                    <Button
+                      size="sm"
+                      className="w-fit ml-auto bg-indigo-500 hover:bg-indigo-600 text-white gap-2 text-xs shadow-sm"
+                      onClick={handleInlineEditSubmit}
+                      disabled={!inlineEditState.value.trim()}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      {t("artifactPanel.askB")}
+                    </Button>
                   )}
-                  {isUpdating ? t("artifactPanel.updating") : t("artifactPanel.updateSelectedText")}
-                </Button>
+                </>
               )}
             </div>
 
             <p className="text-[9px] text-muted-foreground/60 text-center px-1">
               {inlineEditState.mode === "selection"
-                ? t("artifactPanel.pressEnterToSave")
+                ? (isArtifactMode ? t("artifactPanel.pressEnterToSave") : t("artifactPanel.pressEnterToSend"))
                 : t("artifactPanel.pressEnterToSend")}
             </p>
           </div>

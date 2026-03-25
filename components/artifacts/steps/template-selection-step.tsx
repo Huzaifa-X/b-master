@@ -1,5 +1,6 @@
 "use client"
 
+import { useLocale } from "@/lib/i18n"
 import { useState, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Check } from "lucide-react"
@@ -21,6 +22,7 @@ export function TemplateSelectionStep({
   setTemplateHtml,
 }: TemplateSelectionStepProps) {
   const [selectedCategory, setSelectedCategory] = useState<Category>("presentation")
+  const { t } = useLocale()
 
   // Get templates for selected category
   const categoryTemplates = TEMPLATES.filter((t) => t.category === selectedCategory)
@@ -136,6 +138,9 @@ export function TemplateSelectionStep({
             line-height: 24px;
             margin-right: 12px;
             font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .cta-button {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -156,17 +161,17 @@ export function TemplateSelectionStep({
 </head>
 <body>
     <div class="container">
-        <h1>🎨 Custom Artifact</h1>
-        <p class="subtitle">This is a preview of your custom artifact</p>
+        <h1>🎨 ${t("artifactPanel.artifactPreview")}</h1>
+        <p class="subtitle">${t("artifactPanel.noArtifactDescription")}</p>
 
         <ul class="feature-list">
-            <li>Create dynamic and interactive content</li>
-            <li>Full HTML, CSS, and JavaScript support</li>
-            <li>Responsive and mobile-friendly design</li>
-            <li>Real-time preview of your creation</li>
+            <li>${t("artifacts.dummyFeatures.dynamicContent")}</li>
+            <li>${t("artifacts.dummyFeatures.fullSupport")}</li>
+            <li>${t("artifacts.dummyFeatures.responsiveDesign")}</li>
+            <li>${t("artifacts.dummyFeatures.realTimePreview")}</li>
         </ul>
 
-        <button class="cta-button">Get Started</button>
+        <button class="cta-button">${t("artifacts.getStarted")}</button>
     </div>
 </body>
 </html>`
@@ -183,7 +188,7 @@ export function TemplateSelectionStep({
         <div className="space-y-6">
           {/* Category Selection */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Select Category</h3>
+            <h3 className="text-lg font-semibold mb-4">{t("artifacts.category")}</h3>
             <div className="w-full overflow-x-auto pb-4 scrollbar-hide">
               <div className="flex gap-2">
                 {CATEGORIES.map((category) => {
@@ -204,7 +209,7 @@ export function TemplateSelectionStep({
                       )}
                     >
                       <Icon className="h-4 w-4" />
-                      <span className="font-medium">{category.label}</span>
+                      <span className="font-medium">{t(`artifacts.categories.${category.id.toLowerCase().replace(/\s+/g, '_')}`, { defaultValue: category.label })}</span>
                       <Badge
                         variant={isActive ? "secondary" : "outline"}
                         className={cn("ml-1", isActive && "bg-primary-foreground/20 text-primary-foreground")}
@@ -220,7 +225,7 @@ export function TemplateSelectionStep({
 
           {/* Template Grid */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Choose Template</h3>
+            <h3 className="text-lg font-semibold mb-4">{t("artifacts.chooseTemplate")}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {categoryTemplates.map((template) => {
                 const Icon = ICON_MAP[template.icon]
@@ -279,7 +284,7 @@ export function TemplateSelectionStep({
         <div className="flex-1 lg:w-1/2 border-l pl-6 hidden lg:flex">
           <div className="h-full flex flex-col w-full">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Live Preview</h3>
+              <h3 className="text-lg font-semibold">{t("artifactPanel.preview")}</h3>
               <Badge variant="outline" className="text-xs">
                 {selectedTemplate.name}
               </Badge>
@@ -298,13 +303,13 @@ export function TemplateSelectionStep({
                 <div className="w-full h-full flex items-center justify-center">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p className="text-sm text-muted-foreground">Loading preview...</p>
+                    <p className="text-sm text-muted-foreground">{t("artifactPanel.loadingPreview")}</p>
                   </div>
                 </div>
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              ✨ Preview of how your <span className="font-medium">{selectedTemplate.name}</span> will look
+              ✨ {t("artifactPanel.preview")} of how your <span className="font-medium">{selectedTemplate.name}</span> will look
             </p>
           </div>
         </div>
@@ -315,24 +320,24 @@ export function TemplateSelectionStep({
         <div className="flex-1 lg:w-1/2 border-l pl-6 hidden lg:flex">
           <div className="h-full flex flex-col w-full">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Custom Template</h3>
+              <h3 className="text-lg font-semibold">{t("artifacts.customTemplate")}</h3>
               <Badge variant="outline" className="text-xs">
-                Start from Scratch
+                {selectedTemplate.name}
               </Badge>
             </div>
             <div className="flex-1 border-2 border-dashed border-purple-300 dark:border-purple-700 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
               <div className="text-center p-8">
                 <div className="text-6xl mb-4">🎨</div>
                 <h4 className="text-lg font-semibold text-purple-700 dark:text-purple-300 mb-2">
-                  Build from Scratch
+                  {selectedTemplate.name}
                 </h4>
                 <p className="text-sm text-purple-600 dark:text-purple-400">
-                  Create a completely custom artifact with your own design and functionality
+                  {t("artifactPanel.noArtifactDescription")}
                 </p>
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              🚀 Ready to proceed to customization
+              🚀 {t("artifacts.readyToCustomize")}
             </p>
           </div>
         </div>
@@ -340,4 +345,3 @@ export function TemplateSelectionStep({
     </div>
   )
 }
-

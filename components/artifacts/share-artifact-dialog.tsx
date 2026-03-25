@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { User, Search, Loader2, Share2 } from "lucide-react"
 import { useAssistantContacts } from "@/hooks/useContacts"
 import { useShareArtifact } from "@/hooks/useArtifact"
+import { useLocale } from "@/lib/i18n"
 
 interface Contact {
   id: string
@@ -40,6 +41,7 @@ export function ShareArtifactDialog({
 }: ShareArtifactDialogProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const { data: session } = useSession()
+  const { t } = useLocale()
   const { contacts, isLoading } = useAssistantContacts(assistantId, { enabled: open })
 
   // Share artifact mutation
@@ -84,10 +86,10 @@ export function ShareArtifactDialog({
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="h-5 w-5 text-primary" />
-            Share Artifact
+            {t("artifacts.shareArtifact")}
           </DialogTitle>
           <DialogDescription>
-            Share "{artifactName}" with users from this assistant
+            {t("artifacts.shareDialogDescription", { name: artifactName })}
           </DialogDescription>
         </DialogHeader>
 
@@ -95,7 +97,7 @@ export function ShareArtifactDialog({
         <div className="relative flex-shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search contacts..."
+            placeholder={t("artifacts.searchContacts")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -112,9 +114,9 @@ export function ShareArtifactDialog({
             ) : filteredContacts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-[300px] text-center p-6">
                 <User className="h-12 w-12 text-muted-foreground mb-2" />
-                <p className="text-sm font-medium">No contacts found</p>
+                <p className="text-sm font-medium">{t("artifacts.noContactsFound")}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {searchQuery ? "Try a different search" : "Add contacts to this assistant first"}
+                  {searchQuery ? t("artifacts.tryDifferentSearch") : t("artifacts.addContactsFirst")}
                 </p>
               </div>
             ) : (
@@ -152,7 +154,7 @@ export function ShareArtifactDialog({
                         {isSharing ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
-                          "Share"
+                          t("artifacts.share")
                         )}
                       </Button>
                     </div>

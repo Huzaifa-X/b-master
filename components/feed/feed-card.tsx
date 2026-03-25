@@ -442,7 +442,7 @@ export function FeedCard({
                   {/* Comments Section */}
                   <div className="p-4 sm:p-6 space-y-4">
                     <h4 className="font-semibold text-sm text-neutral-800 dark:text-neutral-200">
-                      Comments {commentsCount > 0 && `(${commentsCount})`}
+                      {t("feed.commentsHeader")} {commentsCount > 0 && `(${commentsCount})`}
                     </h4>
 
                     {commentsLoading ? (
@@ -466,7 +466,7 @@ export function FeedCard({
                             </Avatar>
                             <div className="flex-1 min-w-0">
                               <div className="bg-neutral-100 dark:bg-neutral-800 rounded-lg p-3">
-                                <p className="font-semibold text-sm text-neutral-800 dark:text-neutral-200">{comment.user?.name || "User"}</p>
+                                <p className="font-semibold text-sm text-neutral-800 dark:text-neutral-200">{comment.user?.name || t("feed.unknownUser")}</p>
                                 <p className="text-sm mt-1 text-neutral-700 dark:text-neutral-300">{comment.comment}</p>
                               </div>
                               <div className="flex items-center gap-3 mt-1 px-3">

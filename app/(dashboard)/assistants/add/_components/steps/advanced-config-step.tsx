@@ -17,6 +17,7 @@ import { AdvancedConfigStepProps, ApiConnectionConfig, AuthenticationType, AuthT
 import { SchemaPreview } from "@/app/(dashboard)/assistants/add/_components/schema-preview"
 import { Shield, Key, Lock, BookOpen, Plus, Trash2 } from "lucide-react"
 import { parseSchemaText, parseOpenAPISchema } from "@/lib/openapi-parser"
+import { useLocale } from "@/lib/i18n"
 
 // Example OpenAPI schemas
 const EXAMPLE_SCHEMAS = {
@@ -4451,6 +4452,7 @@ paths:
 }
 
 export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigStepProps) {
+  const { t } = useLocale()
 
   // Normalize: use apiConfigs array if present, else migrate from legacy flat fields
   const getApiConfigs = (): ApiConnectionConfig[] => {
@@ -4611,15 +4613,19 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
         {apiConfigs.length > 1 && (
           <div className={`flex items-center justify-between${index === 1 ? " border-t pt-6" : ""}`}>
             <div className="flex items-center gap-2">
-              <h3 className="text-base font-semibold">API Connection {index + 1}</h3>
+              <h3 className="text-base font-semibold">
+                {t("wizard.advanced.apiConnection", { count: index + 1 })}
+              </h3>
               {index === 1 && (
-                <span className="text-xs font-normal bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Optional</span>
+                <span className="text-xs font-normal bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                  {t("wizard.advanced.optional")}
+                </span>
               )}
             </div>
             {index === 1 && (
               <Button variant="ghost" size="sm" onClick={removeSecondApi} className="text-destructive hover:text-destructive hover:bg-destructive/10">
                 <Trash2 className="h-4 w-4 mr-1" />
-                Remove
+                {t("wizard.advanced.remove")}
               </Button>
             )}
           </div>
@@ -4627,7 +4633,7 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
 
         {/* Authentication Type Selection */}
         <div className="space-y-4">
-          <Label>Authentication</Label>
+          <Label>{t("wizard.advanced.authentication")}</Label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card
               className={`cursor-pointer transition-all hover:shadow-md ${config.authenticationType === "none" ? "ring-2 ring-primary bg-primary/5" : "hover:bg-muted/50"}`}
@@ -4636,9 +4642,9 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                   <Shield className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle className="text-base">None</CardTitle>
+                  <CardTitle className="text-base">{t("wizard.advanced.authNone")}</CardTitle>
                 </div>
-                <CardDescription className="text-sm">No authentication required</CardDescription>
+                <CardDescription className="text-sm">{t("wizard.advanced.authNoneDesc")}</CardDescription>
               </CardHeader>
             </Card>
             <Card
@@ -4648,9 +4654,9 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                   <Key className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle className="text-base">API Key</CardTitle>
+                  <CardTitle className="text-base">{t("wizard.advanced.apiKey")}</CardTitle>
                 </div>
-                <CardDescription className="text-sm">Use API keys for authentication</CardDescription>
+                <CardDescription className="text-sm">{t("wizard.advanced.apiKeyDesc")}</CardDescription>
               </CardHeader>
             </Card>
             <Card
@@ -4660,14 +4666,14 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                   <Lock className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle className="text-base">OAuth</CardTitle>
+                  <CardTitle className="text-base">{t("wizard.advanced.oauth")}</CardTitle>
                 </div>
-                <CardDescription className="text-sm">OAuth 2.0 authentication flow</CardDescription>
+                <CardDescription className="text-sm">{t("wizard.advanced.oauthDesc")}</CardDescription>
               </CardHeader>
             </Card>
           </div>
           <p className="text-sm text-muted-foreground">
-            Configure how your assistant authenticates with external APIs
+            {t("wizard.advanced.authFooter")}
           </p>
         </div>
 
@@ -4675,39 +4681,39 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
         {config.authenticationType === "api_key" && (
           <div className="space-y-4 border-t pt-4">
             <div className="space-y-2">
-              <Label>API Key</Label>
+              <Label>{t("wizard.advanced.apiKeyLabel")}</Label>
               <Input
                 type="password"
-                placeholder="Enter your API key"
+                placeholder={t("wizard.advanced.apiKeyPlaceholder")}
                 value={config.apiKey || ""}
                 onChange={(e) => updateApiConfig(index, { apiKey: e.target.value })}
               />
-              <p className="text-sm text-muted-foreground">Your API key for authentication (stored securely)</p>
+              <p className="text-sm text-muted-foreground">{t("wizard.advanced.apiKeyHint")}</p>
             </div>
             <div className="space-y-2">
-              <Label>Auth Type</Label>
+              <Label>{t("wizard.advanced.authTypeLabel")}</Label>
               <Select
                 value={config.authType || "bearer"}
                 onValueChange={(value: "basic" | "bearer" | "custom") => updateApiConfig(index, { authType: value })}
               >
-                <SelectTrigger><SelectValue placeholder="Select auth type" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("wizard.advanced.authTypePlaceholder")} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="basic" className="focus:bg-muted focus:text-foreground">Basic</SelectItem>
                   <SelectItem value="bearer" className="focus:bg-muted focus:text-foreground">Bearer</SelectItem>
                   <SelectItem value="custom" className="focus:bg-muted focus:text-foreground">Custom</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-sm text-muted-foreground">Select how the API key should be sent in requests</p>
+              <p className="text-sm text-muted-foreground">{t("wizard.advanced.authTypeHint")}</p>
             </div>
             {config.authType === "custom" && (
               <div className="space-y-2">
-                <Label>Custom Header Name</Label>
+                <Label>{t("wizard.advanced.customHeaderLabel")}</Label>
                 <Input
-                  placeholder="e.g., X-API-Key, Authorization"
+                  placeholder={t("wizard.advanced.customHeaderPlaceholder")}
                   value={config.customHeaderName || ""}
                   onChange={(e) => updateApiConfig(index, { customHeaderName: e.target.value })}
                 />
-                <p className="text-sm text-muted-foreground">Specify the custom header name to send the API key</p>
+                <p className="text-sm text-muted-foreground">{t("wizard.advanced.customHeaderHint")}</p>
               </div>
             )}
           </div>
@@ -4717,40 +4723,40 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
         {config.authenticationType === "oauth" && (
           <div className="space-y-4 border-t pt-4">
             <div className="space-y-2">
-              <Label>Client ID</Label>
-              <Input placeholder="Enter client ID" value={config.clientId || ""} onChange={(e) => updateApiConfig(index, { clientId: e.target.value })} />
+              <Label>{t("wizard.advanced.clientIdLabel")}</Label>
+              <Input placeholder={t("wizard.advanced.clientIdPlaceholder")} value={config.clientId || ""} onChange={(e) => updateApiConfig(index, { clientId: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label>Client Secret</Label>
-              <Input type="password" placeholder="Enter client secret" value={config.clientSecret || ""} onChange={(e) => updateApiConfig(index, { clientSecret: e.target.value })} />
-              <p className="text-sm text-muted-foreground">Client secret (stored securely)</p>
+              <Label>{t("wizard.advanced.clientSecretLabel")}</Label>
+              <Input type="password" placeholder={t("wizard.advanced.clientSecretPlaceholder")} value={config.clientSecret || ""} onChange={(e) => updateApiConfig(index, { clientSecret: e.target.value })} />
+              <p className="text-sm text-muted-foreground">{t("wizard.advanced.clientSecretHint")}</p>
             </div>
             <div className="space-y-2">
-              <Label>Authorization URL</Label>
-              <Input type="url" placeholder="https://example.com/oauth/authorize" value={config.authorizationUrl || ""} onChange={(e) => updateApiConfig(index, { authorizationUrl: e.target.value })} />
+              <Label>{t("wizard.advanced.authUrlLabel")}</Label>
+              <Input type="url" placeholder={t("wizard.advanced.authUrlPlaceholder")} value={config.authorizationUrl || ""} onChange={(e) => updateApiConfig(index, { authorizationUrl: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label>Token URL</Label>
-              <Input type="url" placeholder="https://example.com/oauth/token" value={config.tokenUrl || ""} onChange={(e) => updateApiConfig(index, { tokenUrl: e.target.value })} />
+              <Label>{t("wizard.advanced.tokenUrlLabel")}</Label>
+              <Input type="url" placeholder={t("wizard.advanced.tokenUrlPlaceholder")} value={config.tokenUrl || ""} onChange={(e) => updateApiConfig(index, { tokenUrl: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label>Scope</Label>
-              <Input placeholder="read write" value={config.scope || ""} onChange={(e) => updateApiConfig(index, { scope: e.target.value })} />
-              <p className="text-sm text-muted-foreground">OAuth scopes (space-separated)</p>
+              <Label>{t("wizard.advanced.scopeLabel")}</Label>
+              <Input placeholder={t("wizard.advanced.scopePlaceholder")} value={config.scope || ""} onChange={(e) => updateApiConfig(index, { scope: e.target.value })} />
+              <p className="text-sm text-muted-foreground">{t("wizard.advanced.scopeHint")}</p>
             </div>
             <div className="space-y-2">
-              <Label>Token Exchange Method</Label>
+              <Label>{t("wizard.advanced.tokenExchangeLabel")}</Label>
               <Select
                 value={config.tokenExchangeMethod || "post"}
                 onValueChange={(value: "post" | "basic_auth") => updateApiConfig(index, { tokenExchangeMethod: value })}
               >
-                <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("wizard.advanced.tokenExchangePlaceholder")} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="post" className="focus:bg-muted focus:text-foreground">POST</SelectItem>
                   <SelectItem value="basic_auth" className="focus:bg-muted focus:text-foreground">Basic Auth</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-sm text-muted-foreground">Method used for token exchange</p>
+              <p className="text-sm text-muted-foreground">{t("wizard.advanced.tokenExchangeHint")}</p>
             </div>
           </div>
         )}
@@ -4758,12 +4764,12 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
         {/* OpenAPI Schema Field */}
         <div className="space-y-2 border-t pt-4">
           <div className="flex items-center justify-between">
-            <Label htmlFor={`schema-${index}`}>OpenAPI Schema (JSON or YAML)</Label>
+            <Label htmlFor={`schema-${index}`}>{t("wizard.advanced.schemaLabel")}</Label>
             <div className="flex items-center gap-2">
-              <Label className="text-sm text-muted-foreground">Examples:</Label>
+              <Label className="text-sm text-muted-foreground">{t("wizard.advanced.examplesLabel")}</Label>
               <Select value="" onValueChange={handleExampleSelect}>
                 <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Choose example..." />
+                  <SelectValue placeholder={t("wizard.advanced.chooseExample")} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="sharepoint" className="focus:bg-muted focus:text-foreground">Microsoft SharePoint API</SelectItem>
@@ -4781,24 +4787,24 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
                 href="/api-setup"
                 target="_blank"
                 rel="noopener noreferrer"
-                title="View API Setup Guide"
+                title={t("wizard.advanced.setupGuide")}
                 className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground"
               >
                 <BookOpen className="h-3.5 w-3.5" />
-                Setup Guide
+                {t("wizard.advanced.setupGuide")}
               </a>
             </div>
           </div>
           <Textarea
             id={`schema-${index}`}
-            placeholder="Paste your OpenAPI schema here (JSON or YAML format)..."
+            placeholder={t("wizard.advanced.schemaPlaceholder")}
             value={config.schemaText || ""}
             onChange={(e) => handleSchemaTextChange(e.target.value)}
             rows={20}
             style={{ height: "300px" }}
             className="resize-none font-mono text-sm overflow-y-auto"
           />
-          <p className="text-sm text-muted-foreground">Supports both JSON and YAML formats</p>
+          <p className="text-sm text-muted-foreground">{t("wizard.advanced.schemaHint")}</p>
         </div>
 
         {/* Schema Preview */}
@@ -4828,9 +4834,9 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold mb-2">Advanced Configuration</h2>
+        <h2 className="text-2xl font-bold mb-2">{t("wizard.advanced.title")}</h2>
         <p className="text-muted-foreground">
-          Configure API settings and authentication for your assistant
+          {t("wizard.advanced.description")}
         </p>
       </div>
 
@@ -4845,7 +4851,7 @@ export function AdvancedConfigStep({ formData, updateFormData }: AdvancedConfigS
             className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground transition-colors hover:border-primary/60 hover:bg-muted/40 hover:text-foreground"
           >
             <Plus className="h-4 w-4" />
-            Add Second API Connection (Optional)
+            {t("wizard.advanced.addSecondApi")}
           </button>
         )}
       </div>

@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useArtifactVersions, useSetActiveVersion } from "@/hooks/useArtifact"
 import { cn } from "@/lib/utils"
+import { useLocale } from "@/lib/i18n"
 
 interface VersionHistoryDialogProps {
   artifactId: string
@@ -46,6 +47,7 @@ export function VersionHistoryDialog({
   onVersionSelect,
   disabled = false,
 }: VersionHistoryDialogProps) {
+  const { t } = useLocale()
   const [open, setOpen] = useState(false)
 
   // Fetch versions using the hook
@@ -83,9 +85,9 @@ export function VersionHistoryDialog({
 
   const getChangeTypeBadge = (changeType: string) => {
     const variants: Record<string, { variant: "default" | "secondary" | "outline" | "destructive", label: string }> = {
-      manual: { variant: "default", label: "Manual" },
-      ai: { variant: "secondary", label: "AI Generated" },
-      rollback: { variant: "outline", label: "Rollback" },
+      manual: { variant: "default", label: t("artifacts.changeTypes.manual") },
+      ai: { variant: "secondary", label: t("artifacts.changeTypes.ai") },
+      rollback: { variant: "outline", label: t("artifacts.changeTypes.rollback") },
     }
 
     const config = variants[changeType] || variants.manual
@@ -104,10 +106,10 @@ export function VersionHistoryDialog({
     const diffHours = Math.floor(diffMs / 3600000)
     const diffDays = Math.floor(diffMs / 86400000)
 
-    if (diffMins < 1) return "Just now"
-    if (diffMins < 60) return `${diffMins}m ago`
-    if (diffHours < 24) return `${diffHours}h ago`
-    if (diffDays < 7) return `${diffDays}d ago`
+    if (diffMins < 1) return t("artifacts.time.justNow")
+    if (diffMins < 60) return t("artifacts.time.minutesAgo", { count: diffMins })
+    if (diffHours < 24) return t("artifacts.time.hoursAgo", { count: diffHours })
+    if (diffDays < 7) return t("artifacts.time.daysAgo", { count: diffDays })
 
     return new Date(date).toLocaleDateString()
   }
@@ -119,7 +121,7 @@ export function VersionHistoryDialog({
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          title="Version history"
+          title={t("artifacts.versionHistory")}
           disabled={disabled}
         >
           <History className="h-4 w-4" />
@@ -129,10 +131,10 @@ export function VersionHistoryDialog({
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <History className="h-5 w-5" />
-            Version History
+            {t("artifacts.versionHistory")}
           </DialogTitle>
           <DialogDescription>
-            View and restore previous versions of this artifact
+            {t("artifacts.viewRestoreVersions")}
           </DialogDescription>
         </DialogHeader>
 
@@ -143,15 +145,15 @@ export function VersionHistoryDialog({
             </div>
           ) : isError ? (
             <div className="flex h-full flex-col items-center justify-center space-y-4">
-              <p className="text-sm text-destructive">Failed to load versions</p>
+              <p className="text-sm text-destructive">{t("artifacts.failedToLoadVersions")}</p>
               <Button onClick={() => refetch()} variant="outline" size="sm">
-                Try Again
+                {t("artifacts.tryAgain")}
               </Button>
             </div>
           ) : versions.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center space-y-2">
               <History className="h-12 w-12 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">No version history available</p>
+              <p className="text-sm text-muted-foreground">{t("artifacts.noVersionHistory")}</p>
             </div>
           ) : (
             <div className="max-h-[60vh] w-full overflow-y-auto">
@@ -176,13 +178,13 @@ export function VersionHistoryDialog({
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-semibold text-sm">
-                            {version.versionName || `Version ${version.versionNumber}`}
+                            {version.versionName || t("artifacts.version", { number: version.versionNumber })}
                           </h4>
                           {getChangeTypeBadge(version.changeType)}
                           {version.isActive && (
                             <Badge variant="default" className="text-xs gap-1">
                               <Check className="h-3 w-3" />
-                              Active
+                              {t("artifacts.active")}
                             </Badge>
                           )}
                         </div>

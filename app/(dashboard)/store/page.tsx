@@ -13,6 +13,7 @@ import { useInvalidateAssistants } from "@/hooks/useAssistants"
 import { useDebounce } from "@/hooks/useDebounce"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PurchaseAssistantDialog } from "@/components/assistants/purchase-assistant-dialog"
+import { useLocale } from "@/lib/i18n"
 import {
     Dialog,
     DialogContent,
@@ -22,7 +23,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 
-const TABS = [
+const FALLBACK_TABS = [
     { id: "marketplace", label: "Marketplace Assistants" },
     { id: "my", label: "My Assistants" },
 ]
@@ -52,6 +53,13 @@ export default function StorePage() {
     const [showSuccessDialog, setShowSuccessDialog] = useState(false)
     const [showCancelDialog, setShowCancelDialog] = useState(false)
     const [processingPayment, setProcessingPayment] = useState(false)
+
+    const { t } = useLocale()
+
+    const TABS = [
+        { id: "marketplace", label: t("store.tabs.marketplace") },
+        { id: "my", label: t("store.tabs.my") },
+    ]
 
     // For "My Assistants" tab - use the same hook as assistants page
     const {
@@ -146,7 +154,7 @@ export default function StorePage() {
                                     height={220}
                                 />
                                 <p className="text-muted-foreground mt-2">
-                                    Discover and explore powerful assistants and resources to enhance your productivity and creativity.
+                                    {t("store.description")}
                                 </p>
                             </div>
                         </div>
@@ -157,7 +165,7 @@ export default function StorePage() {
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
-                                placeholder="Search assistants..."
+                                placeholder={t("store.searchPlaceholder")}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="pl-10"
@@ -186,9 +194,9 @@ export default function StorePage() {
                 {isError && (
                     <div className="text-center py-16">
                         <Bot className="h-16 w-16 mx-auto mb-4 text-destructive" />
-                        <h3 className="text-lg font-semibold mb-2">Error loading assistants</h3>
+                        <h3 className="text-lg font-semibold mb-2">{t("store.error.title")}</h3>
                         <p className="text-sm text-muted-foreground mb-4">
-                            {error || "Something went wrong"}
+                            {error || t("store.error.default")}
                         </p>
                     </div>
                 )}
@@ -219,26 +227,26 @@ export default function StorePage() {
                         ) : searchQuery ? (
                             <div className="text-center py-16">
                                 <Search className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                                <h3 className="text-lg font-semibold mb-2">No results found</h3>
+                                <h3 className="text-lg font-semibold mb-2">{t("store.empty.noResults")}</h3>
                                 <p className="text-sm text-muted-foreground">
-                                    Try searching with different keywords
+                                    {t("store.empty.tryDifferent")}
                                 </p>
                             </div>
                         ) : (
                             <div className="text-center py-16">
                                 <Bot className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
                                 <h3 className="text-lg font-semibold mb-2">
-                                    {activeTab === "my" && "No assistants created yet"}
-                                    {activeTab === "marketplace" && "No marketplace assistants"}
+                                    {activeTab === "my" && t("store.empty.noMyAssistants")}
+                                    {activeTab === "marketplace" && t("store.empty.noMarketplace")}
                                 </h3>
                                 <p className="text-sm text-muted-foreground mb-4">
-                                    {activeTab === "my" && "Create your first assistant to get started"}
-                                    {activeTab === "marketplace" && "Browse the marketplace to discover assistants"}
+                                    {activeTab === "my" && t("store.empty.createFirst")}
+                                    {activeTab === "marketplace" && t("store.empty.browseMarketplace")}
                                 </p>
                                 {activeTab === "my" && (
                                     <Button onClick={handleCreateNew} className="mt-4">
                                         <Plus className="mr-2 h-4 w-4" />
-                                        Create Assistant
+                                        {t("assistants.createAssistant")}
                                     </Button>
                                 )}
                             </div>
@@ -259,9 +267,9 @@ export default function StorePage() {
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader className="text-center">
                         <Loader2 className="h-16 w-16 mx-auto mb-4 animate-spin text-[#BDA76D]" />
-                        <DialogTitle className="text-2xl">Processing Payment...</DialogTitle>
+                        <DialogTitle className="text-2xl">{t("store.payment.processing")}</DialogTitle>
                         <DialogDescription>
-                            Please wait while we confirm your purchase
+                            {t("store.payment.wait")}
                         </DialogDescription>
                     </DialogHeader>
                 </DialogContent>
@@ -272,10 +280,9 @@ export default function StorePage() {
                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader className="text-center">
                         <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-green-500" />
-                        <DialogTitle className="text-2xl">Purchase Successful!</DialogTitle>
+                        <DialogTitle className="text-2xl">{t("store.payment.success.title")}</DialogTitle>
                         <DialogDescription className="text-base pt-2">
-                            Congratulations! Your assistant purchase is complete.
-                            The assistant has been added to your collection.
+                            {t("store.payment.success.description")}
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="sm:justify-center">
@@ -287,7 +294,7 @@ export default function StorePage() {
                             }}
                             className="bg-[#BDA76D] hover:bg-[#BDA76D]/90"
                         >
-                            View My Assistants
+                            {t("store.payment.success.viewMy")}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -298,9 +305,9 @@ export default function StorePage() {
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader className="text-center">
                         <XCircle className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                        <DialogTitle className="text-2xl">Purchase Cancelled</DialogTitle>
+                        <DialogTitle className="text-2xl">{t("store.payment.cancel.title")}</DialogTitle>
                         <DialogDescription className="text-base pt-2">
-                            Your purchase was cancelled. No charges were made.
+                            {t("store.payment.cancel.description")}
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="sm:justify-center">
@@ -308,7 +315,7 @@ export default function StorePage() {
                             onClick={() => setShowCancelDialog(false)}
                             variant="outline"
                         >
-                            Continue Shopping
+                            {t("store.payment.cancel.continue")}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

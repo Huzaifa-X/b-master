@@ -11,6 +11,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+import { useLocale } from "@/lib/i18n"
+
 export interface SelectedUser {
   id: string
   name: string
@@ -36,14 +38,16 @@ export function UserSelectTable({
   onAddUser,
   onRemoveUser,
 }: UserSelectTableProps) {
+  const { t } = useLocale()
+
   return (
     <div className="space-y-4">
-      <Label>Select Users Who Can Access</Label>
+      <Label>{t("userSelectTable.title")}</Label>
 
       {/* Select Contact Dropdown */}
       <Select value="" onValueChange={onAddUser}>
         <SelectTrigger className="w-full">
-          <SelectValue placeholder="Select a user to add..." />
+          <SelectValue placeholder={t("userSelectTable.placeholder")} />
         </SelectTrigger>
         <SelectContent>
           {availableContacts.length > 0 ? (
@@ -54,7 +58,7 @@ export function UserSelectTable({
                 className="focus:bg-muted focus:text-foreground"
               >
                 <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-primary" />
+                   <User className="h-4 w-4 text-primary" />
                   <div>
                     <p className="font-medium">{contact.name}</p>
                     <p className="text-xs text-muted-foreground">{contact.email}</p>
@@ -64,7 +68,7 @@ export function UserSelectTable({
             ))
           ) : (
             <SelectItem value="none" disabled>
-              All contacts have been added
+              {t("permissionsTable.allContactsAdded")}
             </SelectItem>
           )}
         </SelectContent>
@@ -101,16 +105,16 @@ export function UserSelectTable({
       ) : (
         <div className="text-center py-8 border rounded-lg border-dashed">
           <User className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-          <p className="text-sm font-medium mb-1">No users added yet</p>
+          <p className="text-sm font-medium mb-1">{t("userSelectTable.noUsersAdded")}</p>
           <p className="text-xs text-muted-foreground">
-            Select users from the dropdown above to grant access
+            {t("userSelectTable.grantAccessHint")}
           </p>
         </div>
       )}
 
       {selectedUsers.length > 0 && (
         <p className="text-xs text-muted-foreground">
-          {selectedUsers.length} {selectedUsers.length === 1 ? "user" : "users"} will have access to this artifact
+          {t("userSelectTable.accessSummary", { count: selectedUsers.length })}
         </p>
       )}
     </div>

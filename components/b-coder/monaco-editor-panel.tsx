@@ -56,6 +56,8 @@ import { SupabaseConnectDialog } from "./supabase-connect-dialog"
 import { useBCoderSupabase } from "@/hooks/useBCoderSupabase"
 import { GithubDeployDialog } from "./github-deploy-dialog"
 import { deployToGithubAndVercel } from "@/app/actions/deploy.action"
+import { useLocale } from "@/lib/i18n"
+
 
 interface FileNode {
   name: string
@@ -88,7 +90,9 @@ function FileTreeItem({
   openFolders: Set<string>
   toggleFolder: (path: string) => void
 }) {
+  const { t } = useLocale()
   const isOpen = openFolders.has(node.path)
+
   const isSelected = selectedPath === node.path
 
   const getIcon = () => {
@@ -155,23 +159,27 @@ function FileTreeItem({
             <>
               <ContextMenuItem onClick={() => onCreateFile(node.path)} className="gap-2">
                 <FilePlus className="h-4 w-4" />
-                New File
+                {t("bCoder.newFile")}
               </ContextMenuItem>
               <ContextMenuItem onClick={() => onCreateFolder(node.path)} className="gap-2">
                 <FolderPlus className="h-4 w-4" />
-                New Folder
+                {t("bCoder.newFolder")}
               </ContextMenuItem>
+
+
               <ContextMenuSeparator />
             </>
           )}
           <ContextMenuItem onClick={() => onRename(node.path, node.type)} className="gap-2">
             <Edit3 className="h-4 w-4" />
-            Rename
+            {t("bCoder.rename")}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => onDelete(node.path, node.type)} className="gap-2 text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400">
             <Trash2 className="h-4 w-4" />
-            Delete
+            {t("bCoder.delete")}
           </ContextMenuItem>
+
+
         </ContextMenuContent>
       </ContextMenu>
 
@@ -220,6 +228,8 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
   const [isFullscreen, setIsFullscreen] = useState(false) // Preview fullscreen mode
   const { resolvedTheme } = useTheme()
   const { connection: supabaseConn } = useBCoderSupabase()
+  const { t } = useLocale()
+
 
   const toggleFolder = useCallback((path: string) => {
     setOpenFolders(prev => {
@@ -511,10 +521,11 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
                 size="sm"
                 className="md:hidden h-8 w-8 p-0 hover:bg-muted"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                title="Toggle File Explorer"
+                title={t("bCoder.toggleExplorer")}
               >
                 <Folder className="h-4 w-4 text-muted-foreground" />
               </Button>
+
             )}
 
             {/* Code/Preview Toggle - Modern Pill Style */}
@@ -532,8 +543,9 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
                 )}
               >
                 <Code className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Code</span>
+                <span className="hidden sm:inline">{t("bCoder.code")}</span>
               </button>
+
               <button
                 onClick={() => setIsPreview(true)}
                 disabled={!isServerReady}
@@ -546,8 +558,9 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
                 )}
               >
                 <Eye className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Preview</span>
+                <span className="hidden sm:inline">{t("bCoder.preview")}</span>
               </button>
+
             </div>
 
             {/* Divider */}
@@ -564,27 +577,31 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
               {isBooting && (
                 <>
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  <span>Booting...</span>
+                  <span>{t("bCoder.booting")}</span>
                 </>
               )}
+
               {isInstalling && (
                 <>
                   <Package className="h-3 w-3" />
-                  <span>Installing...</span>
+                  <span>{t("bCoder.installing")}</span>
                 </>
               )}
+
               {isServerReady && (
                 <>
                   <div className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  <span>Ready</span>
+                  <span>{t("bCoder.ready")}</span>
                 </>
               )}
+
               {!isBooting && !isInstalling && !isServerReady && (
                 <>
                   <div className="h-1.5 w-1.5 bg-gray-400 rounded-full" />
-                  <span>Idle</span>
+                  <span>{t("bCoder.idle")}</span>
                 </>
               )}
+
             </div>
           </div>
 
@@ -594,9 +611,10 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
             {hasStoredChanges && (
               <div className="hidden sm:flex items-center gap-1.5 h-6 px-2 rounded-md bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 text-xs font-medium">
                 <HardDrive className="h-3 w-3" />
-                <span className="hidden md:inline">Saved</span>
+                <span className="hidden md:inline">{t("bCoder.saved")}</span>
               </div>
             )}
+
 
             {/* Reset Button */}
             {hasStoredChanges && (
@@ -605,12 +623,13 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
                 size="sm"
                 onClick={() => setResetDialogOpen(true)}
                 className="h-8 px-2 gap-1.5 text-xs font-medium text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                title="Reset to default template"
+                title={t("bCoder.resetTooltip")}
                 disabled={isBooting || isInstalling}
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                <span className="hidden lg:inline">Reset</span>
+                <span className="hidden lg:inline">{t("bCoder.reset")}</span>
               </Button>
+
             )}
 
             {/* Save Button */}
@@ -640,16 +659,18 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
                   ? "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
               )}
-              title={supabaseConn.connected ? `Supabase: ${supabaseConn.projectRef}` : "Connect Supabase"}
+              title={supabaseConn.connected ? `Supabase: ${supabaseConn.projectRef}` : t("bCoder.connectSupabase")}
+
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M13.277 21.998c-.403.02-.806-.102-1.124-.34a1.74 1.74 0 0 1-.627-1.084L10.47 10.47H3.03c-.522 0-1.01-.267-1.29-.707a1.49 1.49 0 0 1-.154-1.386l.002-.004C2.31 6.658 5.257 1.027 5.257 1.027c.23-.407.636-.7 1.103-.793a1.74 1.74 0 0 1 1.29.34c.38.295.627.73.627 1.084l1.056 10.105h7.44c.522 0 1.01.267 1.29.707.28.44.312.99.154 1.386l-.002.004c-.722 1.715-3.669 7.346-3.669 7.346-.23.407-.636.7-1.103.793-.09.018-.18.027-.27.027l.104-.028Z" />
               </svg>
               {supabaseConn.connected ? (
-                <span className="hidden md:inline">Connected</span>
+                <span className="hidden md:inline">{t("bCoder.connected")}</span>
               ) : (
-                <span className="hidden md:inline">Supabase</span>
+                <span className="hidden md:inline">{t("bCoder.supabase")}</span>
               )}
+
             </Button>
 
             {/* Publish Button - Accent */}
@@ -657,11 +678,12 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
               size="sm"
               onClick={() => setDeployDialogOpen(true)}
               className="h-8 px-3 gap-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-              title="Publish Project Live"
+              title={t("bCoder.publishTooltip")}
             >
               <Globe className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Publish</span>
+              <span className="hidden sm:inline">{t("bCoder.publish")}</span>
             </Button>
+
           </div>
         </div>
       </div>
@@ -690,16 +712,16 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
               sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
             )}>
               <div className="h-full flex flex-col">
-                {/* Explorer Header */}
+                 {/* Explorer Header */}
                 <div className="h-9 flex items-center justify-between px-3 border-b border-border/40 bg-muted/30 shrink-0">
-                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Explorer</span>
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{t("bCoder.explorer")}</span>
                   <div className="flex gap-0.5">
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-6 w-6 p-0 hover:bg-muted text-muted-foreground hover:text-foreground"
                       onClick={() => setCreateFileDialog({ open: true, parentPath: "" })}
-                      title="New File"
+                      title={t("bCoder.newFile")}
                     >
                       <FilePlus className="h-3.5 w-3.5" />
                     </Button>
@@ -708,12 +730,13 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
                       size="sm"
                       className="h-6 w-6 p-0 hover:bg-muted text-muted-foreground hover:text-foreground"
                       onClick={() => setCreateFolderDialog({ open: true, parentPath: "" })}
-                      title="New Folder"
+                      title={t("bCoder.newFolder")}
                     >
                       <FolderPlus className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
+
                 {/* File Tree */}
                 <div className="flex-1 overflow-y-auto py-1">
                   {localFileStructure.map((node) => (
@@ -884,13 +907,13 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
       <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reset Workspace</AlertDialogTitle>
+            <AlertDialogTitle>{t("bCoder.resetDialogTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to reset the workspace to the default template? All your changes will be permanently lost.
+              {t("bCoder.resetDialogDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-gray-200 hover:bg-gray-300 text-gray-800">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="bg-gray-200 hover:bg-gray-300 text-gray-800">{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={async () => {
                 await resetWorkspace()
@@ -898,11 +921,12 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
               }}
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              Reset Workspace
+              {t("bCoder.resetWorkspace")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   )
 }
