@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Loader2, ShoppingCart } from "lucide-react"
 import Image from "next/image"
 import { usePurchaseAssistant } from "@/hooks/useAssistantMutations"
+import { useLocale } from "@/lib/i18n"
 
 interface Assistant {
   id: string
@@ -34,6 +35,7 @@ export function PurchaseAssistantDialog({
   assistant,
 }: PurchaseAssistantDialogProps) {
   const { purchaseAssistant, isPurchasing } = usePurchaseAssistant()
+  const { t } = useLocale()
 
   if (!assistant) return null
 
@@ -54,7 +56,7 @@ export function PurchaseAssistantDialog({
         <div className="space-y-4 py-4">
           {/* Price Display */}
           <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-            <span className="text-lg font-semibold">Price</span>
+            <span className="text-lg font-semibold">{t("store.price")}</span>
             <span className="text-2xl font-bold text-[#BDA76D]">
               CHF {assistant.price.toFixed(2)}
             </span>
@@ -63,7 +65,7 @@ export function PurchaseAssistantDialog({
           {/* Category */}
           {assistant.category && (
             <div className="text-sm text-muted-foreground">
-              Category: <span className="font-medium">{assistant.category}</span>
+              {t("store.categories")}: <span className="font-medium">{assistant.category}</span>
             </div>
           )}
         </div>
@@ -74,7 +76,7 @@ export function PurchaseAssistantDialog({
             onClick={() => onOpenChange(false)}
             disabled={isPurchasing}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             onClick={handlePurchase}
@@ -84,12 +86,12 @@ export function PurchaseAssistantDialog({
             {isPurchasing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
+                {t("store.processing")}
               </>
             ) : (
               <>
                 <ShoppingCart className="mr-2 h-4 w-4" />
-                Purchase
+                {t("store.purchaseAssistant")}
               </>
             )}
           </Button>

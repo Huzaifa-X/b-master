@@ -10,17 +10,21 @@ import { useRouter } from "next/navigation"
 import { useAssistants } from "@/hooks/useAssistants"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useDebounce } from "@/hooks/useDebounce"
+import { useLocale } from "@/lib/i18n"
 
-const TABS = [
-  { id: "my", label: "My Assistants" },
-  { id: "purchased", label: "Purchased Assistants" },
-  { id: "shared", label: "Shared Assistants" },
+const getTabs = (t: any) => [
+  { id: "my", label: t("assistants.tabs.my") },
+  { id: "purchased", label: t("assistants.tabs.purchased") },
+  { id: "shared", label: t("assistants.tabs.shared") },
 ]
 
 export default function AssistantsPage() {
   const router = useRouter()
+  const { t } = useLocale()
   const [activeTab, setActiveTab] = useState<'my' | 'purchased' | 'shared'>("my")
   const [searchQuery, setSearchQuery] = useState("")
+
+  const TABS = getTabs(t)
   
   // Debounce search to avoid too many requests
   const debouncedSearch = useDebounce(searchQuery, 500)
@@ -56,9 +60,9 @@ export default function AssistantsPage() {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-medium mb-2">All Assistants</h1>
+              <h1 className="text-2xl font-medium mb-2">{t("assistants.allAssistants")}</h1>
               <p className="text-muted-foreground">
-                Manage and access your AI assistants
+                {t("assistants.manageDescription")}
               </p>
             </div>
           </div>
@@ -72,7 +76,7 @@ export default function AssistantsPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search assistants..."
+              placeholder={t("assistants.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -97,9 +101,9 @@ export default function AssistantsPage() {
         {isError && (
           <div className="text-center py-16">
             <Bot className="h-16 w-16 mx-auto mb-4 text-destructive" />
-            <h3 className="text-lg font-semibold mb-2">Error loading assistants</h3>
+            <h3 className="text-lg font-semibold mb-2">{t("assistants.errorLoading")}</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              {error || "Something went wrong"}
+              {error || t("common.error")}
             </p>
           </div>
         )}
@@ -140,10 +144,10 @@ export default function AssistantsPage() {
                       {isLoadingMore ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Loading...
+                          {t("common.loading")}
                         </>
                       ) : (
-                        `Load More (${pagination.total - assistants.length} remaining)`
+                        `${t("assistants.loadMore")} (${t("assistants.remaining", { count: pagination.total - assistants.length })})`
                       )}
                     </Button>
                   </div>
@@ -151,34 +155,34 @@ export default function AssistantsPage() {
 
                 {/* Pagination Info */}
                 <div className="text-center mt-4 text-sm text-muted-foreground">
-                  Showing {assistants.length} of {pagination.total} assistants
+                  {t("assistants.showingCount", { count: assistants.length, total: pagination.total })}
                 </div>
               </>
             ) : searchQuery ? (
               <div className="text-center py-16">
                 <Search className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">No results found</h3>
+                <h3 className="text-lg font-semibold mb-2">{t("assistants.noResults")}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Try searching with different keywords
+                  {t("assistants.tryDifferentKeywords")}
                 </p>
               </div>
             ) : (
               <div className="text-center py-16">
                 <Bot className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-lg font-semibold mb-2">
-                  {activeTab === "my" && "No assistants created yet"}
-                  {activeTab === "purchased" && "No purchased assistants"}
-                  {activeTab === "shared" && "No shared assistants"}
+                  {activeTab === "my" && t("assistants.noMyAssistants")}
+                  {activeTab === "purchased" && t("assistants.noPurchasedAssistants")}
+                  {activeTab === "shared" && t("assistants.noSharedAssistants")}
                 </h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  {activeTab === "my" && "Create your first assistant to get started"}
-                  {activeTab === "purchased" && "Browse the store to purchase assistants"}
-                  {activeTab === "shared" && "Assistants shared with you will appear here"}
+                  {activeTab === "my" && t("assistants.createFirst")}
+                  {activeTab === "purchased" && t("assistants.browseStore")}
+                  {activeTab === "shared" && t("assistants.sharedAppearHere")}
                 </p>
                 {activeTab === "my" && (
                   <Button onClick={handleCreateNew} className="mt-4">
                     <Plus className="mr-2 h-4 w-4" />
-                    Create Assistant
+                    {t("assistants.createAssistant")}
                   </Button>
                 )}
               </div>

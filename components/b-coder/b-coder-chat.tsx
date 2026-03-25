@@ -27,6 +27,8 @@ import { BoltMessageParser, BoltActionData } from "@/lib/runtime/message-parser"
 import { toast } from "sonner"
 import { fetchGithubRepo } from "@/app/actions/github.action"
 import { useArtifactById } from "@/hooks/useArtifact"
+import { useLocale } from "@/lib/i18n"
+
 
 interface BCoderChatProps {
     assistantId: string
@@ -108,6 +110,8 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
     const [currentFileContent, setCurrentFileContent] = useState<string | null>(null)
     const [filesReady, setFilesReady] = useState(false)
     const [filesError, setFilesError] = useState<string | null>(null)
+    const { t } = useLocale()
+
 
     const { artifact } = useArtifactById(artifactId || "", { enabled: !!artifactId })
     const [hasImported, setHasImported] = useState(false)
@@ -133,23 +137,24 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                         category: artifact.category || "Deployed Project"
                     });
 
-                    const toastId = toast.loading(`Importing ${instructionsObj.repo} from GitHub...`);
+                    const toastId = toast.loading(t("bCoder.importingFromGithub", { repo: instructionsObj.repo }));
                     const result = await fetchGithubRepo(instructionsObj.owner, instructionsObj.repo);
                     if (result.success && result.data) {
-                        toast.loading(`Writing ${Object.keys(result.data.files).length} files to workspace...`, { id: toastId });
+                        toast.loading(t("bCoder.writingFilesToWorkspace", { count: Object.keys(result.data.files).length }), { id: toastId });
                         for (const [path, content] of Object.entries(result.data.files)) {
                             await writeFile(path, content);
                         }
                         await buildFileTree();
-                        toast.success(`Successfully imported ${instructionsObj.repo}`, { id: toastId });
-                        setInput(`I have imported the ${instructionsObj.repo} repository into the workspace.`);
+                        toast.success(t("bCoder.successfullyImported", { repo: instructionsObj.repo }), { id: toastId });
+                        setInput(t("bCoder.importSuccessMsg", { repo: instructionsObj.repo }));
                     } else {
-                        toast.error(`Failed to import: ${result.error}`, { id: toastId });
+                        toast.error(t("bCoder.failedToImport", { error: result.error }), { id: toastId });
                     }
                 }
             } catch (err: any) {
-                toast.error(`Error importing artifact: ${err.message}`);
+                toast.error(t("bCoder.errorImportingArtifact", { error: err.message }));
             }
+
         };
 
         importArtifact();
@@ -197,10 +202,11 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                 } else {
                     // Max retries reached - set error but allow user to proceed
                     // The backend has fallback logic to use template files
-                    setFilesError('Could not load workspace files. Using template defaults.')
+                    setFilesError(t("bCoder.workspaceError"))
                     setFilesReady(true) // Allow sending, backend will use fallback
                     console.error('[BCoderChat] Max retries reached for file export')
                 }
+
             }
         }
 
@@ -489,11 +495,12 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-lg font-semibold mb-2">Welcome to B-Coder</h3>
+                                <h3 className="text-lg font-semibold mb-2">{t("bCoder.welcomeTitle")}</h3>
                                 <p className="text-sm text-muted-foreground">
-                                    Your AI-powered code playground. Describe what you want to build, and I'll generate the code and run it live in your browser.
+                                    {t("bCoder.welcomeDescription")}
                                 </p>
                             </div>
+
                         </div>
                     </div>
                 ) : (
@@ -578,9 +585,10 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                                         ) : isCurrentlyStreaming ? (
                                             <div className="flex items-center gap-2 text-muted-foreground">
                                                 <Loader2 className="h-4 w-4 animate-spin" />
-                                                <span className="text-sm">Generating...</span>
+                                                <span className="text-sm">{t("bCoder.generating")}</span>
                                             </div>
                                         ) : null}
+
 
                                         {/* Agent activity summary card */}
                                         {(artifactTitle || filePaths.length > 0 || updates.length > 0) && (
@@ -593,9 +601,10 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                                                         <Sparkles className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                                                     )}
                                                     <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 truncate">
-                                                        {artifactTitle ?? (allDone ? "Changes applied" : "Applying changes…")}
+                                                        {artifactTitle ?? (allDone ? t("bCoder.changesApplied") : t("bCoder.applyingChanges"))}
                                                     </span>
                                                     {!allDone && updates.length > 0 && (
+
                                                         <Loader2 className="h-3 w-3 animate-spin text-emerald-500 ml-auto shrink-0" />
                                                     )}
                                                 </div>
@@ -648,8 +657,9 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                                 <MessageContent>
                                     <div className="flex items-center gap-2 text-muted-foreground">
                                         <Loader2 className="h-4 w-4 animate-spin" />
-                                        <span className="text-sm">Thinking...</span>
+                                        <span className="text-sm">{t("bCoder.thinking")}</span>
                                     </div>
+
                                 </MessageContent>
                             </Message>
                         )}
@@ -658,8 +668,9 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                             <Message from="assistant">
                                 <MessageContent>
                                     <div className="text-red-500 text-sm p-2 bg-red-50 dark:bg-red-950 rounded">
-                                        Error: {error.message || "Something went wrong"}
+                                        {t("bCoder.errorTitle")}: {error.message || t("bCoder.somethingWentWrong")}
                                     </div>
+
                                 </MessageContent>
                             </Message>
                         )}
@@ -711,7 +722,9 @@ function BCoderInput({
     filesReady: boolean
     filesError: string | null
 }) {
+    const { t } = useLocale()
     const [isDragging, setIsDragging] = useState(false)
+
     const dragCounterRef = useRef(0)
 
     const handleDictate = useCallback((text: string) => {
@@ -790,9 +803,10 @@ function BCoderInput({
                             <Upload className="h-4 w-4" />
                         </div>
                         <div className="text-center">
-                            <p className="font-semibold text-sm sm:text-md">Drop files here</p>
-                            <p className="text-xs sm:text-sm text-emerald-500 dark:text-emerald-500">Images and PDFs supported</p>
+                            <p className="font-semibold text-sm sm:text-md">{t("bCoder.dropFilesHere")}</p>
+                            <p className="text-xs sm:text-sm text-emerald-500 dark:text-emerald-500">{t("bCoder.supportedFormats")}</p>
                         </div>
+
                     </div>
                 </div>
             )}
@@ -831,18 +845,20 @@ function BCoderInput({
                             {/* Label */}
                             <span className="truncate max-w-[140px]">
                                 {f.status === 'uploading'
-                                    ? `Uploading ${f.name}…`
+                                    ? t("bCoder.uploading", { name: f.name })
                                     : f.status === 'error'
-                                        ? `Failed: ${f.name}`
+                                        ? t("bCoder.failedToUpload", { name: f.name })
                                         : f.name}
                             </span>
+
 
                             {/* Remove button */}
                             <button
                                 type="button"
                                 onClick={() => onRemoveAttachment(f.id)}
                                 className="shrink-0 flex items-center justify-center h-4 w-4 rounded-full bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 transition-colors"
-                                title="Remove"
+                                title={t("bCoder.remove")}
+
                             >
                                 <X className="h-2.5 w-2.5" />
                             </button>
@@ -864,8 +880,9 @@ function BCoderInput({
                         accept="image/*,video/*,.pdf,.doc,.docx,.txt"
                     >
                         <PromptInputTextarea
-                            placeholder="Describe what you want to build..."
+                            placeholder={t("bCoder.placeholder")}
                             className="min-h-[60px] pr-32 text-[15px] leading-relaxed"
+
                             onChange={handleInputChange}
                             value={input}
                             autoFocus
@@ -884,8 +901,9 @@ function BCoderInput({
                                 onClick={() => fileInputRef.current?.click()}
                                 disabled={isLoading || !filesReady}
                                 className="flex items-center justify-center h-[34px] w-[34px] rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
-                                title="Attach image or PDF"
+                                title={t("bCoder.attachTooltip")}
                             >
+
                                 <Paperclip className="h-4 w-4" />
                             </button>
                             <DictateButton
@@ -909,8 +927,15 @@ function BCoderInput({
                     </div>
                 )}
                 <span className="text-xs text-muted-foreground/50">
-                    Press <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-muted border border-border rounded">Enter</kbd> to send • <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-muted border border-border rounded">Shift</kbd> + <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-muted border border-border rounded">Enter</kbd> for new line
+                    {t("bCoder.inputHintPrefix")}{" "}
+                    <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-muted border border-border rounded">{t("bCoder.inputHintEnter")}</kbd>{" "}
+                    {t("bCoder.inputHintToSend")} •{" "}
+                    <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-muted border border-border rounded">{t("bCoder.inputHintShift")}</kbd> +{" "}
+                    <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-muted border border-border rounded">{t("bCoder.inputHintEnter")}</kbd>{" "}
+                    {t("bCoder.inputHintNewLine")}
                 </span>
+
+
             </div>
 
         </div>

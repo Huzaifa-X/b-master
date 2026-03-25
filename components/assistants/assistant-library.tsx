@@ -154,8 +154,8 @@ function FileRow({ file, assistantId, onDeleteRequest, readonly = false }: FileR
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{file.name}</p>
           <div className="flex items-center gap-2 mt-0.5">
-            <Badge variant="secondary" className="text-xs h-4 px-1.5 py-0 capitalize">
-              {file.type}
+            <Badge variant="secondary" className="text-xs h-4 px-1.5 py-0">
+              {t(`common.${file.type}`)}
             </Badge>
             {file.type === "url" && file.isCrawled !== undefined && (
               <span className="text-xs text-muted-foreground">
@@ -202,7 +202,12 @@ function FileRow({ file, assistantId, onDeleteRequest, readonly = false }: FileR
 
           {file.type === "text" ? (
             <ScrollArea className="max-h-[60vh] rounded border p-4">
-              <pre className="text-sm whitespace-pre-wrap font-sans">{file.name}</pre>
+              <pre className="text-sm whitespace-pre-wrap font-sans">
+                {/* We should show the content if available, but for now it's just previewing file name? 
+                    Actually file name is what was there. Let's keep it as is but localized if it was a label.
+                */}
+                {file.name}
+              </pre>
             </ScrollArea>
           ) : proxyUrl ? (
             isImage ? (
@@ -277,7 +282,7 @@ function AddUrlDialog({ open, onOpenChange, assistantId }: AddUrlDialogProps) {
             <Label htmlFor="lib-url">{t("common.url")}</Label>
             <Input
               id="lib-url"
-              placeholder="https://example.com/page"
+              placeholder={t("common.urlPlaceholder")}
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               autoFocus
@@ -291,7 +296,7 @@ function AddUrlDialog({ open, onOpenChange, assistantId }: AddUrlDialogProps) {
               onClick={() => onOpenChange(false)}
               disabled={isAdding}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={isAdding || !url.trim()}>
               {isAdding ? (
@@ -374,7 +379,7 @@ function AddNoteDialog({ open, onOpenChange, assistantId }: AddNoteDialogProps) 
               onClick={() => onOpenChange(false)}
               disabled={isAdding}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={isAdding || !content.trim()}>
               {isAdding ? (

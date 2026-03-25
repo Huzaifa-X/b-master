@@ -6,6 +6,8 @@ import { AssistantMessage } from "@/components/assistants/message-components/ass
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { MessageSquare, User, Bot } from "lucide-react"
 
+import { useLocale } from "@/lib/i18n"
+
 interface SharedChat {
   id: number
   topic: string
@@ -36,6 +38,8 @@ interface SharedChatViewProps {
 }
 
 export const SharedChatView: FC<SharedChatViewProps> = ({ chat }) => {
+  const { t } = useLocale()
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -48,7 +52,9 @@ export const SharedChatView: FC<SharedChatViewProps> = ({ chat }) => {
             <div>
               <h1 className="text-lg font-semibold">{chat.topic}</h1>
               <p className="text-sm text-muted-foreground">
-                {chat.assistant ? `Conversation with ${chat.assistant.name}` : "Shared Conversation"}
+                {chat.assistant 
+                  ? t("chat.view.conversationWith", { name: chat.assistant.name }) 
+                  : t("chat.view.sharedConversation")}
               </p>
             </div>
           </div>
@@ -71,7 +77,7 @@ export const SharedChatView: FC<SharedChatViewProps> = ({ chat }) => {
                     <div className="mb-4">
                       <p className="text-sm text-muted-foreground mb-1">
                         <Bot className="inline size-4 mr-1" />
-                        Assistant: {chat.assistant.name}
+                        {t("chat.view.assistant")}: {chat.assistant.name}
                       </p>
                       {chat.assistant.description && (
                         <p className="text-sm text-muted-foreground">
@@ -81,7 +87,7 @@ export const SharedChatView: FC<SharedChatViewProps> = ({ chat }) => {
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Created on {chat.createdAtFormatted} • {chat.messages.length} messages
+                    {t("chat.view.createdOn", { date: chat.createdAtFormatted })} • {t("chat.view.messagesCount", { count: chat.messages.length })}
                   </p>
                 </div>
               </div>
@@ -120,7 +126,7 @@ export const SharedChatView: FC<SharedChatViewProps> = ({ chat }) => {
             {/* Footer */}
             <div className="mt-12 text-center">
               <p className="text-sm text-muted-foreground">
-                This is a shared conversation. You can view it but cannot reply.
+                {t("chat.view.readOnlyNotice")}
               </p>
             </div>
           </div>

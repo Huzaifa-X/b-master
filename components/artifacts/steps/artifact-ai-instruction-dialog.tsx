@@ -11,6 +11,8 @@ import { ArtifactPromptInputSection } from "./artifact-prompt-input-section"
 import { ArtifactGenerationResultSection } from "./artifact-generation-result-section"
 import { ArtifactActionButtons } from "./artifact-action-buttons"
 
+import { useLocale } from "@/lib/i18n"
+
 export function ArtifactAIInstructionDialog({ open, onOpenChange, onInsert }: ArtifactAIInstructionDialogProps) {
     const [prompt, setPrompt] = useState("")
     const [isLoading, setIsLoading] = useState(false)
@@ -18,6 +20,7 @@ export function ArtifactAIInstructionDialog({ open, onOpenChange, onInsert }: Ar
     const [generatedInstructions, setGeneratedInstructions] = useState("")
     const [copied, setCopied] = useState(false)
     const [feedbackSent, setFeedbackSent] = useState(false)
+    const { t } = useLocale()
 
     const handleGenerate = async () => {
         if (!prompt.trim()) return
@@ -34,10 +37,10 @@ export function ArtifactAIInstructionDialog({ open, onOpenChange, onInsert }: Ar
             if (result.success && result.instructions) {
                 setGeneratedInstructions(result.instructions)
             } else {
-                setError(result.error || 'Failed to generate instructions')
+                setError(result.error || t("artifacts.errors.failedToGenerateInstructions"))
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to generate instructions')
+            setError(err instanceof Error ? err.message : t("artifacts.errors.failedToGenerateInstructions"))
         } finally {
             setIsLoading(false)
         }
@@ -90,9 +93,9 @@ export function ArtifactAIInstructionDialog({ open, onOpenChange, onInsert }: Ar
                             <Cpu className="w-5 h-5 text-primary" />
                         </div>
                         <div>
-                            <DialogTitle>AI Artifact Instructions Generator</DialogTitle>
+                            <DialogTitle>{t("artifacts.aiGeneratorTitle")}</DialogTitle>
                             <DialogDescription>
-                                Describe the artifact you want to create and let AI generate detailed instructions
+                                {t("artifacts.aiGeneratorDescription")}
                             </DialogDescription>
                         </div>
                     </div>
@@ -128,7 +131,7 @@ export function ArtifactAIInstructionDialog({ open, onOpenChange, onInsert }: Ar
 
                 <DialogFooter className="flex-shrink-0">
                     <Button variant="outline" onClick={handleClear}>
-                        Cancel
+                        {t("common.cancel")}
                     </Button>
 
                     <ArtifactActionButtons

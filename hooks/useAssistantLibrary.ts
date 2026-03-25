@@ -12,6 +12,8 @@ import {
 } from "@/app/actions/library.action"
 import { toast } from "sonner"
 
+import { useLocale } from "@/lib/i18n"
+
 // ---------------------------------------------------------------
 // Fetch library files
 // ---------------------------------------------------------------
@@ -52,22 +54,23 @@ export function useUploadLibraryFile(
   }
 ) {
   const queryClient = useQueryClient()
+  const { t } = useLocale()
 
   const mutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const result = await uploadLibraryFile(assistantId, formData)
       if (!result.success || !result.file) {
-        throw new Error(result.error ?? "Upload failed")
+        throw new Error(result.error ?? t("library.uploadFailed"))
       }
       return result.file
     },
     onSuccess: (file) => {
       queryClient.invalidateQueries({ queryKey: ["assistant-library", assistantId] })
-      toast.success(`"${file.name}" uploaded successfully`)
+      toast.success(t("library.uploadSuccess", { name: file.name }))
       options?.onSuccess?.(file)
     },
     onError: (error: Error) => {
-      toast.error(error.message ?? "Upload failed")
+      toast.error(error.message)
       options?.onError?.(error.message)
     },
   })
@@ -92,19 +95,20 @@ export function useDeleteLibraryFile(
   }
 ) {
   const queryClient = useQueryClient()
+  const { t } = useLocale()
 
   const mutation = useMutation({
     mutationFn: async (kbEntryId: number) => {
       const result = await deleteLibraryFile(assistantId, kbEntryId)
-      if (!result.success) throw new Error(result.error ?? "Delete failed")
+      if (!result.success) throw new Error(result.error ?? t("library.deleteFailed"))
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["assistant-library", assistantId] })
-      toast.success("File removed from library")
+      toast.success(t("library.deleteSuccess"))
       options?.onSuccess?.()
     },
     onError: (error: Error) => {
-      toast.error(error.message ?? "Delete failed")
+      toast.error(error.message)
     },
   })
 
@@ -126,22 +130,23 @@ export function useAddLibraryUrl(
   }
 ) {
   const queryClient = useQueryClient()
+  const { t } = useLocale()
 
   const mutation = useMutation({
     mutationFn: async (url: string) => {
       const result = await addLibraryUrl(assistantId, url)
       if (!result.success || !result.file) {
-        throw new Error(result.error ?? "Failed to add URL")
+        throw new Error(result.error ?? t("library.addUrlFailed"))
       }
       return result.file
     },
     onSuccess: (file) => {
       queryClient.invalidateQueries({ queryKey: ["assistant-library", assistantId] })
-      toast.success(`URL added to library`)
+      toast.success(t("library.addUrlSuccess"))
       options?.onSuccess?.(file)
     },
     onError: (error: Error) => {
-      toast.error(error.message ?? "Failed to add URL")
+      toast.error(error.message)
     },
   })
 
@@ -163,22 +168,23 @@ export function useAddLibraryNote(
   }
 ) {
   const queryClient = useQueryClient()
+  const { t } = useLocale()
 
   const mutation = useMutation({
     mutationFn: async ({ title, content }: { title: string; content: string }) => {
       const result = await addLibraryNote(assistantId, title, content)
       if (!result.success || !result.file) {
-        throw new Error(result.error ?? "Failed to add note")
+        throw new Error(result.error ?? t("library.addNoteFailed"))
       }
       return result.file
     },
     onSuccess: (file) => {
       queryClient.invalidateQueries({ queryKey: ["assistant-library", assistantId] })
-      toast.success(`Note added to library`)
+      toast.success(t("library.addNoteSuccess"))
       options?.onSuccess?.(file)
     },
     onError: (error: Error) => {
-      toast.error(error.message ?? "Failed to add note")
+      toast.error(error.message)
     },
   })
 
@@ -194,6 +200,7 @@ export function useAddLibraryNote(
 // ---------------------------------------------------------------
 
 export function useLibraryFilePresignedUrl() {
+  const { t } = useLocale()
   const mutation = useMutation({
     mutationFn: async ({
       assistantId,
@@ -204,12 +211,12 @@ export function useLibraryFilePresignedUrl() {
     }) => {
       const result = await getLibraryFilePresignedUrl(assistantId, kbEntryId)
       if (!result.success || !result.url) {
-        throw new Error(result.error ?? "Failed to get file URL")
+        throw new Error(result.error ?? t("library.getUrlFailed"))
       }
       return result.url
     },
     onError: (error: Error) => {
-      toast.error(error.message ?? "Failed to get file URL")
+      toast.error(error.message)
     },
   })
 

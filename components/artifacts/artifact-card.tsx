@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { useLocale } from "@/lib/i18n"
 
 export interface Artifact {
   id: string
@@ -29,6 +30,11 @@ const getCategoryColor = (category: string) => {
 }
 
 export function ArtifactCard({ artifact, onClick }: ArtifactCardProps) {
+  const { t } = useLocale()
+  
+  // Map category to translation key (replace space with underscore)
+  const categoryKey = artifact.category.toLowerCase().replace(/\s+/g, '_')
+  
   return (
     <div
       onClick={onClick}
@@ -38,7 +44,7 @@ export function ArtifactCard({ artifact, onClick }: ArtifactCardProps) {
       <div className="p-4 space-y-2">
         <h3 className="font-bold text-lg truncate">{artifact.name}</h3>
         <Badge className={cn("text-xs", getCategoryColor(artifact.category))}>
-          {artifact.category.charAt(0).toUpperCase() + artifact.category.slice(1)}
+          {t(`artifacts.categories.${categoryKey}`, { defaultValue: artifact.category })}
         </Badge>
       </div>
 

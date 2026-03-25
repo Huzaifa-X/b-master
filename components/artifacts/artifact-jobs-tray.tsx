@@ -13,6 +13,7 @@ import { useState, useEffect } from "react"
 import { Loader2, CheckCircle2, XCircle, ChevronDown, ChevronUp, Zap, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useArtifactJobs, type ArtifactJob } from "@/hooks/useArtifactJobs"
+import { useLocale } from "@/lib/i18n"
 
 // ── Progress bar ──────────────────────────────────────────────────────────────
 function ProgressBar({ value }: { value: number }) {
@@ -32,18 +33,19 @@ function JobRow({ job }: { job: ArtifactJob }) {
   const isDone    = job.status === "completed"
   const isFailed  = job.status === "failed"
 
+  const { t } = useLocale()
   const statusLabel =
-    job.status === "pending"    ? "Queued"
-    : job.status === "processing" ? `Generating… ${job.progress}%`
-    : job.status === "completed"  ? "Done"
-    : "Failed"
+    job.status === "pending"    ? t("artifacts.jobsTray.queued")
+    : job.status === "processing" ? t("artifacts.jobsTray.generating", { progress: job.progress })
+    : job.status === "completed"  ? t("artifacts.jobsTray.done")
+    : t("artifacts.jobsTray.failed")
 
   return (
     <div className="flex flex-col gap-1 py-2.5 px-3 border-b last:border-b-0 border-border/50">
       {/* Name + status icon */}
       <div className="flex items-start justify-between gap-2">
         <span className="text-sm font-medium leading-tight line-clamp-1 flex-1">
-          {job.artifactName ?? "Artifact"}
+          {job.artifactName ?? t("artifacts.artifactTitleShort")}
         </span>
         {isRunning && (
           <Loader2 className="shrink-0 h-3.5 w-3.5 animate-spin text-primary mt-0.5" />
@@ -80,6 +82,7 @@ function JobRow({ job }: { job: ArtifactJob }) {
 // ── Main tray ─────────────────────────────────────────────────────────────────
 export function ArtifactJobsTray() {
   const { activeJobs, recentlyCompleted, allJobs } = useArtifactJobs()
+  const { t } = useLocale()
   const [expanded,  setExpanded]  = useState(true)
   const [dismissed, setDismissed] = useState(false)
 
@@ -99,8 +102,8 @@ export function ArtifactJobsTray() {
 
   const headerLabel =
     activeCount > 0
-      ? `${activeCount} artifact${activeCount !== 1 ? "s" : ""} generating…`
-      : `${recentlyCompleted.length} artifact${recentlyCompleted.length !== 1 ? "s" : ""} finished`
+      ? activeCount === 1 ? t("artifacts.jobsTray.artifactGenerating") : t("artifacts.jobsTray.artifactsGenerating", { count: activeCount })
+      : recentlyCompleted.length === 1 ? t("artifacts.jobsTray.artifactFinished") : t("artifacts.jobsTray.artifactsFinished", { count: recentlyCompleted.length })
 
   return (
     <div
@@ -142,7 +145,7 @@ export function ArtifactJobsTray() {
             <button
               onClick={(e) => { e.stopPropagation(); setDismissed(true) }}
               className="ml-1 rounded p-0.5 hover:bg-muted transition-colors"
-              title="Dismiss"
+              title={t("artifacts.jobsTray.dismiss")}
             >
               <X className="h-3 w-3 text-muted-foreground" />
             </button>

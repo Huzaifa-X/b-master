@@ -56,6 +56,8 @@ interface ArtifactCustomizationStepProps {
   chatError: Error | null
 }
 
+import { useLocale } from "@/lib/i18n"
+
 export function ArtifactCustomizationStep({
   selectedTemplate,
   formData,
@@ -74,6 +76,7 @@ export function ArtifactCustomizationStep({
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string>("")
+  const { t } = useLocale()
 
   // Delete file mutation
   const { deleteFileAsync } = useDeleteArtifactFile()
@@ -91,7 +94,7 @@ export function ArtifactCustomizationStep({
       // IMPORTANT: Use userId (the actual user ID from users table), not contact.id (contact record ID)
       if (!contact.userId) {
         console.error('[Artifact] Contact missing userId:', contact)
-        toast.error('Invalid contact - missing user ID')
+        toast.error(t("artifacts.errors.invalidContact"))
         return
       }
 
@@ -172,7 +175,7 @@ export function ArtifactCustomizationStep({
   // File Upload Handler
   const handleFileUpload = async (file: File, type: "image" | "document") => {
     setIsUploading(true)
-    setUploadProgress(`Uploading ${file.name}...`)
+    setUploadProgress(t("artifacts.uploadingProgress", { name: file.name }))
 
     try {
       const uploadFormData = new FormData()
@@ -192,7 +195,7 @@ export function ArtifactCustomizationStep({
             ...prev,
             uploadedImages: [...(prev.uploadedImages || []), result.file],
           }))
-          toast.success(`Image uploaded: ${file.name}`)
+          toast.success(t("artifacts.imageUploaded", { name: file.name }))
         } else {
           setFormData((prev) => ({
             ...prev,
@@ -200,17 +203,17 @@ export function ArtifactCustomizationStep({
           }))
 
           if (result.file.extractionError) {
-            toast.warning(`Uploaded ${file.name}, but content extraction failed`)
+            toast.warning(t("artifacts.uploadWarning", { name: file.name }))
           } else {
-            toast.success(`Document processed: ${file.name}`)
+            toast.success(t("artifacts.documentProcessed", { name: file.name }))
           }
         }
       } else {
-        toast.error(result.error || "Upload failed")
+        toast.error(result.error || t("artifacts.errors.uploadFailed"))
       }
     } catch (error) {
       console.error("Upload error:", error)
-      toast.error("Upload failed")
+      toast.error(t("artifacts.errors.uploadFailed"))
     } finally {
       setIsUploading(false)
       setUploadProgress("")
@@ -259,12 +262,12 @@ export function ArtifactCustomizationStep({
                 })()}
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Selected Template</p>
+                <p className="text-sm text-muted-foreground">{t("artifacts.selectedTemplate")}</p>
                 <p className="font-semibold">{selectedTemplate.name}</p>
               </div>
             </div>
             <Button variant="outline" size="sm" onClick={onBack}>
-              Change Template
+              {t("artifacts.changeTemplate")}
             </Button>
           </div>
         )}
@@ -274,7 +277,7 @@ export function ArtifactCustomizationStep({
           {/* Show artifact name in edit mode but make it read-only */}
           {isEditMode ? (
             <div>
-              <Label htmlFor="name">Artifact Name</Label>
+              <Label htmlFor="name">{t("artifacts.artifactName")}</Label>
               <Input
                 id="name"
                 value={formData.name}
@@ -282,13 +285,13 @@ export function ArtifactCustomizationStep({
                 className="mt-2 bg-muted cursor-not-allowed"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Artifact name cannot be changed
+                {t("artifacts.nameChangeDisabled")}
               </p>
             </div>
           ) : (
             <div>
               <Label htmlFor="name">
-                Artifact Name <span className="text-destructive">*</span>
+                {t("artifacts.artifactName")} <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="name"
@@ -297,7 +300,7 @@ export function ArtifactCustomizationStep({
                   setFormData({ ...formData, name: e.target.value })
                   if (errors.name) setErrors({ ...errors, name: undefined })
                 }}
-                placeholder="Enter artifact name"
+                placeholder={t("artifacts.placeholders.enterName")}
                 className="mt-2"
               />
               {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
@@ -308,7 +311,7 @@ export function ArtifactCustomizationStep({
           {isVideoGeneration && !isEditMode && (
             <div>
               <Label htmlFor="video-duration">
-                Video Duration <span className="text-destructive">*</span>
+                {t("artifacts.videoDuration")} <span className="text-destructive">*</span>
               </Label>
               <Select
                 value={formData.videoDuration || "8"}
@@ -320,12 +323,12 @@ export function ArtifactCustomizationStep({
                 }}
               >
                 <SelectTrigger id="video-duration" className="mt-2 w-full">
-                  <SelectValue placeholder="Select duration" />
+                  <SelectValue placeholder={t("artifacts.placeholders.selectDuration")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="4">4 seconds</SelectItem>
-                  <SelectItem value="8">8 seconds</SelectItem>
-                  <SelectItem value="12">12 seconds</SelectItem>
+                  <SelectItem value="4">{t("artifacts.seconds", { count: 4 })}</SelectItem>
+                  <SelectItem value="8">{t("artifacts.seconds", { count: 8 })}</SelectItem>
+                  <SelectItem value="12">{t("artifacts.seconds", { count: 12 })}</SelectItem>
                 </SelectContent>
               </Select>
               {errors.videoDuration && (
@@ -337,7 +340,7 @@ export function ArtifactCustomizationStep({
           <div>
             <div className="flex items-center justify-between mb-2">
               <Label htmlFor="instructions">
-                Instructions <span className="text-destructive">*</span>
+                {t("artifacts.instructions")} <span className="text-destructive">*</span>
               </Label>
               <Button
                 type="button"
@@ -356,7 +359,7 @@ export function ArtifactCustomizationStep({
                 setFormData({ ...formData, instructions: e.target.value })
                 if (errors.instructions) setErrors({ ...errors, instructions: undefined })
               }}
-              placeholder="Describe what this artifact should do..."
+              placeholder={t("artifacts.placeholders.describeArtifact")}
               className="min-h-[120px]"
               rows={5}
             />
@@ -369,11 +372,11 @@ export function ArtifactCustomizationStep({
         {/* File Upload Section - Now editable in edit mode */}
         <div className="space-y-4">
           <div>
-            <Label className="text-base font-semibold">Documents & Images</Label>
+            <Label className="text-base font-semibold">{t("artifacts.documentsAndImages")}</Label>
             <p className="text-sm text-muted-foreground mt-1">
               {isEditMode
-                ? "Manage documents and images for your artifact"
-                : "Upload documents (PDF, Word) or images to include in your artifact"
+                ? t("artifacts.manageDocs")
+                : t("artifacts.uploadDocsDescription")
               }
             </p>
           </div>
@@ -387,7 +390,7 @@ export function ArtifactCustomizationStep({
                     htmlFor="document-upload"
                     className="cursor-pointer text-sm font-medium text-primary hover:underline"
                   >
-                    Click to upload document
+                    {t("artifacts.clickToUploadDoc")}
                   </Label>
                   <Input
                     id="document-upload"
@@ -402,7 +405,7 @@ export function ArtifactCustomizationStep({
                     disabled={isUploading}
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    PDF, Word, or text files
+                    {t("artifacts.docFormats")}
                   </p>
                 </div>
               </div>
@@ -416,7 +419,7 @@ export function ArtifactCustomizationStep({
                     htmlFor="image-upload"
                     className="cursor-pointer text-sm font-medium text-primary hover:underline"
                   >
-                    Click to upload images
+                    {t("artifacts.clickToUploadImages")}
                   </Label>
                   <Input
                     id="image-upload"
@@ -432,7 +435,7 @@ export function ArtifactCustomizationStep({
                     disabled={isUploading}
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    PNG, JPG, WebP, etc.
+                    {t("artifacts.imageFormats")}
                   </p>
                 </div>
               </div>
@@ -451,7 +454,7 @@ export function ArtifactCustomizationStep({
           {formData.uploadedFiles && formData.uploadedFiles.length > 0 && (
             <div className="space-y-2">
               <Label className="text-sm font-medium">
-                Uploaded Documents ({formData.uploadedFiles.length})
+                {t("artifacts.uploadedDocuments", { count: formData.uploadedFiles.length })}
               </Label>
               <div className="space-y-2">
                 {formData.uploadedFiles.map((file, idx) => (
@@ -466,19 +469,11 @@ export function ArtifactCustomizationStep({
                         {(file.size / 1024).toFixed(1)} KB
                         {file.extractedContent && (
                           <span className="ml-2">
-                            • {file.extractedContent.metadata?.pages || 0} pages
-                            • {file.extractedContent.text.length.toLocaleString()} characters
+                            • {t("artifacts.pagesCount", { count: file.extractedContent.metadata?.pages || 0 })}
+                            • {t("artifacts.charactersCount", { count: file.extractedContent.text.length })}
                           </span>
                         )}
-                        {/* {file.extractionError && (
-                          <span className="ml-2 text-destructive">• Extraction failed</span>
-                        )} */}
                       </p>
-                      {/* {file.extractedContent?.tables && file.extractedContent.tables.length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          📊 Contains {file.extractedContent.tables.length} table(s)
-                        </p>
-                      )} */}
                     </div>
                     <Button
                       variant="ghost"
@@ -498,7 +493,7 @@ export function ArtifactCustomizationStep({
           {formData.uploadedImages && formData.uploadedImages.length > 0 && (
             <div className="space-y-2">
               <Label className="text-sm font-medium">
-                Uploaded Images ({formData.uploadedImages.length})
+                {t("artifacts.uploadedImagesCount", { count: formData.uploadedImages.length })}
               </Label>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {formData.uploadedImages.map((img, idx) => (
@@ -515,7 +510,7 @@ export function ArtifactCustomizationStep({
                         onClick={() => removeImage(idx)}
                       >
                         <X className="h-4 w-4 mr-1" />
-                        Remove
+                        {t("common.remove")}
                       </Button>
                     </div>
                     <div className="absolute bottom-0 left-0 right-0 bg-black/75 text-white text-xs p-1 truncate rounded-b-lg">
@@ -542,15 +537,15 @@ export function ArtifactCustomizationStep({
         {/* Sharing & Permissions */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Sharing & Permissions</h3>
+            <h3 className="text-lg font-semibold">{t("artifacts.sharingPermissions")}</h3>
             <Badge variant={formData.permissions === 'team' ? 'default' : 'secondary'}>
-              {formData.permissions === 'team' ? '🔓 Team Access' : '🔒 Private'}
+              {formData.permissions === 'team' ? `🔓 ${t("artifacts.teamAccess")}` : `🔒 ${t("artifacts.private")}`}
             </Badge>
           </div>
           {loadingContacts ? (
             <div className="text-center py-8 border rounded-lg border-dashed">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">Loading contacts...</p>
+              <p className="text-sm text-muted-foreground">{t("artifacts.loadingContacts")}</p>
             </div>
           ) : (
             <UserSelectTable
@@ -568,7 +563,7 @@ export function ArtifactCustomizationStep({
             <Button variant="outline" className="w-full justify-between hover:text-primary hover:bg-transparent">
               <div className="flex items-center gap-2">
                 <Settings className="h-4 w-4" />
-                <span>Advanced: API Configuration</span>
+                <span>{t("artifacts.advancedApiConfig")}</span>
                 {formData.apiConfigs.length > 0 && (
                   <Badge variant="secondary" className="ml-2">
                     {formData.apiConfigs.length}
@@ -576,7 +571,7 @@ export function ArtifactCustomizationStep({
                 )}
                 {isVideoGeneration && !hasOpenAIApiKey && (
                   <Badge variant="destructive" className="ml-2">
-                    OPENAI_API_KEY Required
+                    {t("artifacts.openaiKeyRequired")}
                   </Badge>
                 )}
               </div>
@@ -589,10 +584,10 @@ export function ArtifactCustomizationStep({
             {isVideoGeneration && (
               <div className="p-3 bg-muted rounded-lg border border-primary/20">
                 <p className="text-sm font-medium text-primary mb-1">
-                  ⚠️ OPENAI_API_KEY Required for Video Generation
+                  ⚠️ {t("artifacts.openaiKeyRequired")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  You must provide an OPENAI_API_KEY in the API Configuration section below to generate videos.
+                  {t("artifacts.openaiKeyDescription")}
                 </p>
                 {errors.apiConfigs && (
                   <p className="text-xs text-destructive mt-2">{errors.apiConfigs}</p>
@@ -601,7 +596,7 @@ export function ArtifactCustomizationStep({
             )}
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Add API key-value pairs to configure external integrations
+                {t("artifacts.apiConfigDescription")}
               </p>
               <Button
                 type="button"
@@ -610,7 +605,7 @@ export function ArtifactCustomizationStep({
                 onClick={handleAddApiConfig}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Config
+                {t("artifacts.addConfig")}
               </Button>
             </div>
 
@@ -620,7 +615,7 @@ export function ArtifactCustomizationStep({
                   <div key={config.id} className="flex gap-2 items-start p-3 border rounded-lg">
                     <div className="flex-1 grid grid-cols-2 gap-2">
                       <div>
-                        <Label className="text-xs text-muted-foreground">Key</Label>
+                        <Label className="text-xs text-muted-foreground">{t("artifacts.key")}</Label>
                         <Input
                           value={config.key}
                           onChange={(e) => handleUpdateApiConfig(config.id, "key", e.target.value)}
@@ -629,7 +624,7 @@ export function ArtifactCustomizationStep({
                         />
                       </div>
                       <div>
-                        <Label className="text-xs text-muted-foreground">Value</Label>
+                        <Label className="text-xs text-muted-foreground">{t("artifacts.value")}</Label>
                         <Input
                           value={config.value}
                           onChange={(e) => handleUpdateApiConfig(config.id, "value", e.target.value)}
@@ -654,7 +649,7 @@ export function ArtifactCustomizationStep({
             ) : (
               <div className="text-center py-6 border rounded-lg border-dashed">
                 <Settings className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">No API configurations added</p>
+                <p className="text-sm text-muted-foreground">{t("artifacts.noApiConfigs")}</p>
               </div>
             )}
           </CollapsibleContent>

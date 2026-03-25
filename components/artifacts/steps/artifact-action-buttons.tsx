@@ -12,6 +12,8 @@ interface ArtifactActionButtonsProps {
     onInsert: () => void
 }
 
+import { useLocale } from "@/lib/i18n"
+
 export function ArtifactActionButtons({
     isLoading,
     hasInstructions,
@@ -20,6 +22,8 @@ export function ArtifactActionButtons({
     onGenerate,
     onInsert,
 }: ArtifactActionButtonsProps) {
+    const { t } = useLocale()
+
     if (isLoading) {
         return (
             <Button
@@ -28,7 +32,7 @@ export function ArtifactActionButtons({
                 className="gap-2"
             >
                 <StopCircle className="h-4 w-4" />
-                Stop Generation
+                {t("artifacts.stopGeneration")}
             </Button>
         )
     }
@@ -37,7 +41,7 @@ export function ArtifactActionButtons({
         return (
             <Button onClick={onInsert} className="gap-2">
                 <Sparkles className="h-4 w-4" />
-                Insert Instructions
+                {t("artifacts.insertInstructions")}
             </Button>
         )
     }
@@ -49,7 +53,7 @@ export function ArtifactActionButtons({
             className="gap-2"
         >
             <Sparkles className="h-4 w-4" />
-            Generate Instructions
+            {t("artifacts.generateInstructionsAction")}
         </Button>
     )
 }

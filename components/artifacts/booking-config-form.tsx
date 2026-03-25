@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Trash2 } from "lucide-react"
 import type { BookingConfig } from "@/types/artifacts"
+import { useLocale } from "@/lib/i18n"
 
 interface TimeSlot {
   start: string
@@ -48,6 +49,7 @@ const TIMEZONES = [
 ]
 
 export function BookingConfigForm({ config, onChange }: BookingConfigFormProps) {
+  const { t } = useLocale()
   const [useDateRange, setUseDateRange] = useState(!!config.dateRange)
 
   const handleDayToggle = (day: keyof WeekSchedule) => {
@@ -111,23 +113,23 @@ export function BookingConfigForm({ config, onChange }: BookingConfigFormProps) 
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Event Configuration</CardTitle>
-          <CardDescription>Configure your booking event details</CardDescription>
+          <CardTitle>{t("artifacts.booking.eventConfiguration")}</CardTitle>
+          <CardDescription>{t("artifacts.booking.configureDetails")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="eventTitle">Event Title</Label>
+              <Label htmlFor="eventTitle">{t("artifacts.booking.eventTitle")}</Label>
               <Input
                 id="eventTitle"
-                placeholder="e.g., 30-min Consultation"
+                placeholder={t("artifacts.booking.eventTitlePlaceholder")}
                 value={config.eventTitle}
                 onChange={(e) => onChange({ ...config, eventTitle: e.target.value })}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="timezone">Timezone</Label>
+              <Label htmlFor="timezone">{t("artifacts.booking.timezone")}</Label>
               <Select
                 value={config.availability.timezone}
                 onValueChange={(value) =>
@@ -152,10 +154,10 @@ export function BookingConfigForm({ config, onChange }: BookingConfigFormProps) 
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="eventDescription">Event Description</Label>
+            <Label htmlFor="eventDescription">{t("artifacts.booking.eventDescription")}</Label>
             <Textarea
               id="eventDescription"
-              placeholder="Describe what this booking is for..."
+              placeholder={t("artifacts.booking.eventDescriptionPlaceholder")}
               value={config.eventDescription}
               onChange={(e) => onChange({ ...config, eventDescription: e.target.value })}
               rows={3}
@@ -164,7 +166,7 @@ export function BookingConfigForm({ config, onChange }: BookingConfigFormProps) 
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="duration">Duration (minutes)</Label>
+              <Label htmlFor="duration">{t("artifacts.booking.duration")}</Label>
               <Input
                 id="duration"
                 type="number"
@@ -176,7 +178,7 @@ export function BookingConfigForm({ config, onChange }: BookingConfigFormProps) 
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="bufferTime">Buffer Time (minutes)</Label>
+              <Label htmlFor="bufferTime">{t("artifacts.booking.bufferTime")}</Label>
               <Input
                 id="bufferTime"
                 type="number"
@@ -192,8 +194,8 @@ export function BookingConfigForm({ config, onChange }: BookingConfigFormProps) 
 
       <Card>
         <CardHeader>
-          <CardTitle>Availability Schedule</CardTitle>
-          <CardDescription>Set your available hours for each day</CardDescription>
+          <CardTitle>{t("artifacts.booking.availabilitySchedule")}</CardTitle>
+          <CardDescription>{t("artifacts.booking.setAvailableHours")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {DAYS.map((day) => {
@@ -208,7 +210,7 @@ export function BookingConfigForm({ config, onChange }: BookingConfigFormProps) 
                       checked={isEnabled}
                       onCheckedChange={() => handleDayToggle(day)}
                     />
-                    <Label className="text-base font-medium">{day}</Label>
+                    <Label className="text-base font-medium">{t(`artifacts.booking.days.${day}`)}</Label>
                   </div>
                   {isEnabled && (
                     <Button
@@ -217,7 +219,7 @@ export function BookingConfigForm({ config, onChange }: BookingConfigFormProps) 
                       onClick={() => handleAddTimeSlot(day)}
                     >
                       <Plus className="h-4 w-4 mr-1" />
-                      Add Hours
+                      {t("artifacts.booking.addHours")}
                     </Button>
                   )}
                 </div>
@@ -235,7 +237,7 @@ export function BookingConfigForm({ config, onChange }: BookingConfigFormProps) 
                             }
                             className="w-32"
                           />
-                          <span className="text-muted-foreground">to</span>
+                          <span className="text-muted-foreground">{t("artifacts.booking.to")}</span>
                           <Input
                             type="time"
                             value={slot.end}
@@ -266,8 +268,8 @@ export function BookingConfigForm({ config, onChange }: BookingConfigFormProps) 
 
       <Card>
         <CardHeader>
-          <CardTitle>Booking Window</CardTitle>
-          <CardDescription>Limit the date range when bookings are allowed (optional)</CardDescription>
+          <CardTitle>{t("artifacts.booking.bookingWindow")}</CardTitle>
+          <CardDescription>{t("artifacts.booking.limitDateRange")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-3">
@@ -289,13 +291,13 @@ export function BookingConfigForm({ config, onChange }: BookingConfigFormProps) 
                 }
               }}
             />
-            <Label>Enable date range restriction</Label>
+            <Label>{t("artifacts.booking.enableDateRestriction")}</Label>
           </div>
 
           {useDateRange && config.dateRange && (
             <div className="ml-11 grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="dateStart">Start Date</Label>
+                <Label htmlFor="dateStart">{t("artifacts.booking.startDate")}</Label>
                 <Input
                   id="dateStart"
                   type="date"
@@ -310,7 +312,7 @@ export function BookingConfigForm({ config, onChange }: BookingConfigFormProps) 
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="dateEnd">End Date</Label>
+                <Label htmlFor="dateEnd">{t("artifacts.booking.endDate")}</Label>
                 <Input
                   id="dateEnd"
                   type="date"

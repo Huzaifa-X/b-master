@@ -27,6 +27,7 @@ import { toast } from "sonner"
 import { useAssistantContacts } from "@/hooks/useContacts"
 import { useSession } from "next-auth/react"
 import { uploadNewsfeedMediaToS3 } from "@/app/actions/upload.action"
+import { useLocale } from "@/lib/i18n"
 
 // Constants
 const MAX_TITLE_LENGTH = 100
@@ -74,6 +75,7 @@ export function AddFeedDialog({
     initialTitle = "",
     initialContent = ""
 }: AddFeedDialogProps) {
+    const { t } = useLocale()
     const { data: session } = useSession()
     const [title, setTitle] = useState("")
     const [content, setContent] = useState("")
@@ -101,8 +103,8 @@ export function AddFeedDialog({
     })
 
     // Filter contacts who have newsfeed permission
-    const contactsWithNewsfeedPermission = contacts.filter((contact: any) => {
-        if (!contact.permissions) return false
+    const contactsWithNewsfeedPermission = (contacts || []).filter((contact: any) => {
+        if (!contact?.permissions) return false
         try {
             // Handle both string and array formats
             const permissions = typeof contact.permissions === 'string' 
@@ -136,17 +138,17 @@ export function AddFeedDialog({
     const handleSubmit = () => {
         // Validation
         if (!title.trim()) {
-            toast.error("Please enter a title")
+            toast.error(t("feed.errorTitle"))
             return
         }
         if (!content.trim()) {
-            toast.error("Please enter content")
+            toast.error(t("feed.errorContent"))
             return
         }
 
         // Validation for private posts
         if (privacy === "private" && selectedUserIds.length === 0) {
-            toast.error("Please select at least one contact to share with")
+            toast.error(t("feed.errorContact"))
             return
         }
 
@@ -169,7 +171,7 @@ export function AddFeedDialog({
 
         const type = getMediaTypeFromFile(file)
         if (!type) {
-            toast.error("Unsupported file type")
+            toast.error(t("feed.errorType"))
             return
         }
 
@@ -177,7 +179,7 @@ export function AddFeedDialog({
         const maxSize = type === "video" ? MAX_VIDEO_SIZE : type === "pdf" ? MAX_PDF_SIZE : MAX_IMAGE_SIZE
         if (file.size > maxSize) {
             const limitMB = maxSize / (1024 * 1024)
-            toast.error(`File too large. ${type === "video" ? "Videos" : type === "pdf" ? "PDFs" : "Images"} must be under ${limitMB}MB`)
+            toast.error(t("feed.errorSize", { type: type === "video" ? "Videos" : type === "pdf" ? "PDFs" : "Images", limit: limitMB }))
             if (fileInputRef.current) fileInputRef.current.value = ""
             return
         }
@@ -212,14 +214,14 @@ export function AddFeedDialog({
             clearInterval(ticker)
 
             if (!result.success || !result.url) {
-                throw new Error(result.error || "Upload failed")
+                throw new Error(result.error || t("feed.uploadFailed"))
             }
 
             setImage(result.url)
             setUploadProgress(100)
-            toast.success("Media uploaded successfully")
+            toast.success(t("feed.mediaUploaded"))
         } catch (err: any) {
-            toast.error(err.message || "Failed to upload media")
+            toast.error(err.message || t("feed.errorFailed"))
             if (previewUrl) URL.revokeObjectURL(previewUrl)
             setPreviewUrl(null)
             setMediaFile(null)
@@ -276,9 +278,9 @@ export function AddFeedDialog({
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Create New Post</DialogTitle>
+                    <DialogTitle>{t("feed.createPost")}</DialogTitle>
                     <DialogDescription>
-                        Share your thoughts, updates, or important information with your team.
+                        {t("feed.dialogDescription")}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -286,7 +288,7 @@ export function AddFeedDialog({
                     {/* Privacy Selector */}
                     <div className="space-y-2 w-full">
                         <Label htmlFor="privacy">
-                            Privacy <span className="text-destructive">*</span>
+                            {t("feed.privacyRequired")}
                         </Label>
                         <Select 
                             value={privacy} 
@@ -294,7 +296,7 @@ export function AddFeedDialog({
                             disabled={isLoading}
                         >
                             <SelectTrigger id="privacy" className="w-full">
-                                <SelectValue placeholder="Select privacy" />
+                                <SelectValue placeholder={t("feed.selectPrivacy")} />
                             </SelectTrigger>
                             <SelectContent className="w-full">
                                 <SelectItem value="public" className="focus:bg-muted focus:text-foreground">
@@ -303,7 +305,7 @@ export function AddFeedDialog({
                                             <Globe className="h-3 w-3 text-green-700 dark:text-green-400" />
                                         </div>
                                         <div className="flex flex-col">
-                                            <span className="font-medium">Public</span>
+                                            <span className="font-medium">{t("feed.public")}</span>
                                         </div>
                                     </div>
                                 </SelectItem>
@@ -313,7 +315,7 @@ export function AddFeedDialog({
                                             <Lock className="h-3 w-3 text-orange-700 dark:text-orange-400" />
                                         </div>
                                         <div className="flex flex-col">
-                                            <span className="font-medium">Private</span>
+                                            <span className="font-medium">{t("feed.private")}</span>
                                         </div>
                                     </div>
                                 </SelectItem>
@@ -325,19 +327,19 @@ export function AddFeedDialog({
                     {privacy === "private" && (
                         <div className="space-y-3">
                             <Label className="text-sm font-medium">
-                                Share with specific contacts <span className="text-destructive">*</span>
+                                {t("feed.shareWithRequired")}
                             </Label>
                             <div className="border rounded-md p-3 bg-muted/20">
                                 {contactsLoading ? (
                                     <div className="flex items-center justify-center py-4">
                                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                        <span className="text-sm text-muted-foreground">Loading contacts...</span>
+                                        <span className="text-sm text-muted-foreground">{t("feed.contactsLoading")}</span>
                                     </div>
                                 ) : contactsWithNewsfeedPermission.length === 0 ? (
                                     <div className="text-center py-4">
                                         <Users className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                                         <p className="text-sm text-muted-foreground">
-                                            No contacts with newsfeed permission found
+                                            {t("feed.noPermissionContacts")}
                                         </p>
                                     </div>
                                 ) : (
@@ -372,7 +374,7 @@ export function AddFeedDialog({
                                 {selectedUserIds.length > 0 && (
                                     <div className="mt-3 pt-3 border-t">
                                         <p className="text-xs text-muted-foreground">
-                                            {selectedUserIds.length} contact{selectedUserIds.length !== 1 ? 's' : ''} selected
+                                            {t("feed.contactsSelected", { n: selectedUserIds.length })}
                                         </p>
                                     </div>
                                 )}
@@ -383,11 +385,11 @@ export function AddFeedDialog({
                     {/* Title Input */}
                     <div className="space-y-2">
                         <Label htmlFor="title">
-                            Title <span className="text-destructive">*</span>
+                            {t("feed.titleRequired")}
                         </Label>
                         <Input
                             id="title"
-                            placeholder="Enter a catchy title..."
+                            placeholder={t("feed.postTitlePlaceholder")}
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             maxLength={MAX_TITLE_LENGTH}
@@ -402,11 +404,11 @@ export function AddFeedDialog({
                     {/* Content Textarea */}
                     <div className="space-y-2">
                         <Label htmlFor="content">
-                            Content <span className="text-destructive">*</span>
+                            {t("feed.contentRequired")}
                         </Label>
                         <Textarea
                             id="content"
-                            placeholder="What's on your mind?"
+                            placeholder={t("feed.postContentPlaceholder")}
                             value={content}
                             onChange={(e) => setContent(e.target.value)}
                             className="min-h-[150px] resize-none"
@@ -421,13 +423,13 @@ export function AddFeedDialog({
 
                     {/* Media Upload */}
                     <div className="space-y-2">
-                        <Label htmlFor="media">Media (Optional)</Label>
+                        <Label htmlFor="media">{t("feed.mediaOptional")}</Label>
                         <div className="flex flex-col gap-3">
                             {/* Uploading progress */}
                             {isUploadingMedia && (
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                        <span>Uploading {mediaFile?.name}…</span>
+                                        <span>{t("feed.loading")} {mediaFile?.name}…</span>
                                         <span>{uploadProgress}%</span>
                                     </div>
                                     <div className="w-full bg-muted rounded-full h-1.5">
@@ -522,13 +524,13 @@ export function AddFeedDialog({
                                         className="w-full"
                                     >
                                         <Upload className="h-4 w-4 mr-2" />
-                                        Upload Image, PDF, or Video
+                                        {t("feed.uploadMedia")}
                                     </Button>
                                 </div>
                             )}
 
                             <p className="text-xs text-muted-foreground">
-                                Images up to 100MB · PDFs up to 100MB · Videos (MP4/WebM) up to 500MB
+                                {t("feed.mediaHint")}
                             </p>
                         </div>
                     </div>
@@ -541,7 +543,7 @@ export function AddFeedDialog({
                         disabled={isLoading}
                         className="hover:cursor-pointer hover:bg-transparent hover:text-primary"
                     >
-                        Cancel
+                        {t("common.cancel")}
                     </Button>
                     <Button
                         onClick={handleSubmit}
@@ -550,17 +552,17 @@ export function AddFeedDialog({
                         {isLoading ? (
                             <>
                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Posting...
+                                {t("feed.posting")}
                             </>
                         ) : isUploadingMedia ? (
                             <>
                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Uploading media...
+                                {t("feed.uploadingMedia")}
                             </>
                         ) : (
                             <>
                                 <ImageIcon className="h-4 w-4 mr-2" />
-                                Post
+                                {t("feed.post")}
                             </>
                         )}
                     </Button>

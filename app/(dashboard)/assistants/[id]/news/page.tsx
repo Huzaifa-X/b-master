@@ -24,6 +24,7 @@ import {
 } from "@/hooks/use-newFeed"
 import { useSession } from "next-auth/react"
 import { useDebounce } from "@/hooks/useDebounce"
+import { useLocale } from "@/lib/i18n"
 
 // Current user from session
 const getCurrentUser = (session: any) => ({
@@ -40,6 +41,7 @@ interface PageProps {
 
 export default function NewsFeedPage({ params }: PageProps) {
   const { id: assistantId } = use(params)
+  const { t } = useLocale()
   const { data: session } = useSession()
   const currentUser = getCurrentUser(session)
 
@@ -111,10 +113,10 @@ export default function NewsFeedPage({ params }: PageProps) {
   }, [createCommentMutation])
 
   const handleDeleteFeed = useCallback((postId: string) => {
-    if (window.confirm('Are you sure you want to delete this post?')) {
+    if (window.confirm(t("feed.confirmDelete"))) {
       deletePostMutation.mutate(postId)
     }
-  }, [deletePostMutation])
+  }, [deletePostMutation, t])
 
   // Filter and sort posts
   const filteredAndSortedPosts = useMemo(() => {
@@ -153,7 +155,7 @@ export default function NewsFeedPage({ params }: PageProps) {
         <div className="container max-w-4xl mx-auto py-6 px-4">
           <div className="text-center py-12">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading posts...</p>
+            <p className="text-muted-foreground">{t("feed.loadingPosts")}</p>
           </div>
         </div>
       </div>
@@ -167,10 +169,10 @@ export default function NewsFeedPage({ params }: PageProps) {
         <div className="container max-w-4xl mx-auto py-6 px-4">
           <div className="text-center py-12">
             <p className="text-lg text-muted-foreground mb-4">
-              Failed to load posts. {error?.message || 'Please try again.'}
+              {t("feed.failedToLoad")} {error?.message || t("feed.tryAgain")}
             </p>
             <Button variant="outline" onClick={() => refetch()}>
-              Retry
+              {t("feed.retry")}
             </Button>
           </div>
         </div>
@@ -184,8 +186,8 @@ export default function NewsFeedPage({ params }: PageProps) {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">News Feed</h1>
-            <p className="text-muted-foreground">Stay updated with the latest from your team</p>
+            <h1 className="text-3xl font-bold tracking-tight">{t("feed.title")}</h1>
+            <p className="text-muted-foreground">{t("feed.description")}</p>
           </div>
           <Button 
             onClick={() => setAddFeedOpen(true)} 
@@ -193,7 +195,7 @@ export default function NewsFeedPage({ params }: PageProps) {
             disabled={createPostMutation.isPending}
           >
             <Plus className="h-4 w-4 mr-2" />
-            Create Post
+            {t("feed.createPost")}
           </Button>
         </div>
 
@@ -203,26 +205,26 @@ export default function NewsFeedPage({ params }: PageProps) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search posts..."
+              placeholder={t("feed.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9"
-              aria-label="Search posts"
+              aria-label={t("feed.searchPlaceholder")}
             />
           </div>
           <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
             <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder="Sort by" />
+              <SelectValue placeholder={t("feed.sortBy")} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="recent" className="focus:bg-muted focus:text-foreground">
-                Most Recent
+                {t("feed.mostRecent")}
               </SelectItem>
               <SelectItem value="most-liked" className="focus:bg-muted focus:text-foreground">
-                Most Liked
+                {t("feed.mostLiked")}
               </SelectItem>
               <SelectItem value="most-commented" className="focus:bg-muted focus:text-foreground">
-                Most Commented
+                {t("feed.mostCommented")}
               </SelectItem>
             </SelectContent>
           </Select>
@@ -234,8 +236,8 @@ export default function NewsFeedPage({ params }: PageProps) {
             <div className="text-center py-12">
               <p className="text-lg text-muted-foreground mb-4">
                 {debouncedSearchQuery 
-                  ? "No posts found matching your search." 
-                  : "No posts yet. Create the first post!"
+                  ? t("feed.noResults") 
+                  : t("feed.noFeedGeneral")
                 }
               </p>
               {!debouncedSearchQuery && (
@@ -244,7 +246,7 @@ export default function NewsFeedPage({ params }: PageProps) {
                   disabled={createPostMutation.isPending}
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Create First Post
+                  {t("feed.createFirstPost")}
                 </Button>
               )}
             </div>
@@ -274,10 +276,10 @@ export default function NewsFeedPage({ params }: PageProps) {
                     {isFetchingNextPage ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Loading...
+                        {t("feed.loading")}
                       </>
                     ) : (
-                      "Load More Posts"
+                      t("feed.loadMore")
                     )}
                   </Button>
                 </div>

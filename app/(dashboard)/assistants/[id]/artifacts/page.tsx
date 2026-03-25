@@ -11,6 +11,8 @@ import { useSetAssistantMode } from "@/hooks/useAssistant"
 import { useAssistantPermissions } from "@/hooks/usePermissions"
 import { TemplateSelectionModal } from "@/components/b-coder/template-selection-modal"
 
+import { useLocale } from "@/lib/i18n"
+
 // Lazy load the CreateArtifactDialog to reduce initial bundle size
 const CreateArtifactDialog = lazy(() =>
     import("@/components/artifacts/create-artifact-dialog").then(module => ({
@@ -29,6 +31,7 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
     // Unwrap params promise for Next.js 15
     const { id: assistantId } = use(params)
     const router = useRouter()
+    const { t } = useLocale()
 
     // Set assistant mode in header (automatically handles fetching and cleanup)
     useSetAssistantMode(assistantId)
@@ -95,9 +98,9 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                 <div className="mb-6">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                         <div>
-                            <h1 className="text-3xl font-bold tracking-tight">Artifacts</h1>
+                            <h1 className="text-3xl font-bold tracking-tight">{t("artifacts.title")}</h1>
                             <p className="text-sm text-muted-foreground mt-1">
-                                Create and manage your AI-powered artifacts
+                                {t("artifacts.description")}
                             </p>
                         </div>
                         {canCreateArtifacts && (
@@ -115,7 +118,7 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                                     className="w-full sm:w-auto"
                                 >
                                     <Plus className="h-4 w-4 mr-2" />
-                                    Create Artifact
+                                    {t("artifacts.createArtifact")}
                                 </Button>
                             </div>
                         )}
@@ -127,7 +130,7 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
-                            placeholder="Search artifacts..."
+                            placeholder={t("artifacts.searchPlaceholder")}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="pl-10"
@@ -139,14 +142,14 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-16">
                         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-                        <p className="text-sm text-muted-foreground">Loading artifacts...</p>
+                        <p className="text-sm text-muted-foreground">{t("artifacts.loadingArtifacts")}</p>
                     </div>
                 ) : isError ? (
                     <div className="flex flex-col items-center justify-center py-16 text-center">
                         <FolderOpen className="h-16 w-16 text-muted-foreground mb-4" />
-                        <h3 className="text-lg font-semibold mb-2">Failed to load artifacts</h3>
+                        <h3 className="text-lg font-semibold mb-2">{t("artifacts.loadFailed")}</h3>
                         <p className="text-sm text-muted-foreground mb-4">
-                            There was an error loading your artifacts. Please try again.
+                            {t("artifacts.loadError")}
                         </p>
                     </div>
                 ) : filteredArtifacts.length > 0 ? (
@@ -165,17 +168,17 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                     <div className="flex flex-col items-center justify-center py-16 text-center">
                         <FolderOpen className="h-16 w-16 text-muted-foreground mb-4" />
                         <h3 className="text-lg font-semibold mb-2">
-                            {searchQuery ? "No artifacts found" : "No artifacts yet"}
+                            {searchQuery ? t("artifacts.noResults") : t("artifacts.noArtifacts")}
                         </h3>
                         <p className="text-sm text-muted-foreground mb-4">
                             {searchQuery
-                                ? "Try a different search term"
-                                : "Create your first artifact to get started"}
+                                ? t("artifacts.tryDifferentSearch")
+                                : t("artifacts.createFirstArtifact")}
                         </p>
                         {!searchQuery && canCreateArtifacts && (
                             <Button onClick={handleCreateArtifact}>
                                 <Plus className="h-4 w-4 mr-2" />
-                                Create Artifact
+                                {t("artifacts.createArtifact")}
                             </Button>
                         )}
                     </div>

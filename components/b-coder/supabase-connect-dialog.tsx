@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle2, ExternalLink, Loader2, PlugZap, Unplug } from 'lucide-react'
 import { useBCoderSupabase } from '@/hooks/useBCoderSupabase'
+import { useLocale } from "@/lib/i18n"
 
 interface SupabaseConnectDialogProps {
     open: boolean
@@ -22,52 +23,57 @@ interface SupabaseConnectDialogProps {
 }
 
 export function SupabaseConnectDialog({ open, onOpenChange }: SupabaseConnectDialogProps) {
+    const { t } = useLocale()
     const { connection, isConnecting, isDisconnecting, connect, disconnect } = useBCoderSupabase()
+
 
     const [pat, setPat] = useState('')
     const [projectRef, setProjectRef] = useState('')
 
     const handleConnect = async () => {
         if (!pat.trim() || !projectRef.trim()) {
-            toast.error('Please enter both your PAT and project ref')
+            toast.error(t("bCoder.toastEnterPatAndProject"))
             return
         }
         const result = await connect(pat.trim(), projectRef.trim())
         if (result.success) {
-            toast.success('Supabase connected! The AI can now create tables and manage your database.')
+            toast.success(t("bCoder.toastSupabaseConnected"))
             setPat('')
             setProjectRef('')
             onOpenChange(false)
         } else {
-            toast.error(result.error || 'Failed to connect to Supabase')
+            toast.error(result.error || t("bCoder.toastFailedToConnect"))
         }
     }
 
     const handleDisconnect = async () => {
         await disconnect()
-        toast.success('Supabase disconnected')
+        toast.success(t("bCoder.toastSupabaseDisconnected"))
         onOpenChange(false)
     }
+
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
-                <DialogHeader>
+                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <SupabaseLogo className="h-5 w-5" />
-                        Connect Supabase
+                        {t("bCoder.connectSupabaseTitle")}
                     </DialogTitle>
                     <DialogDescription>
-                        Give the B-Coder AI access to your Supabase project to create tables, enable RLS, and manage your database automatically.
+                        {t("bCoder.connectSupabaseDescription")}
                     </DialogDescription>
                 </DialogHeader>
+
 
                 {connection.connected ? (
                     <div className="space-y-4 py-2">
                         <div className="flex items-center gap-3 rounded-lg border p-3 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
                             <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
                             <div className="min-w-0">
-                                <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">Connected</p>
+                                <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">{t("bCoder.connectedText")}</p>
+
                                 {connection.providerEmail && (
                                     <p className="text-xs text-emerald-600 dark:text-emerald-400 truncate">{connection.providerEmail}</p>
                                 )}
@@ -78,9 +84,10 @@ export function SupabaseConnectDialog({ open, onOpenChange }: SupabaseConnectDia
                         </div>
 
                         <div className="rounded-lg border p-3 bg-muted/40 space-y-2">
-                            <p className="text-xs font-medium text-muted-foreground uppercase">Project URL</p>
+                            <p className="text-xs font-medium text-muted-foreground uppercase">{t("bCoder.projectUrlLabel")}</p>
                             <p className="text-sm font-mono break-all">{connection.projectUrl}</p>
                         </div>
+
 
                         <Button
                             variant="destructive"
@@ -89,25 +96,29 @@ export function SupabaseConnectDialog({ open, onOpenChange }: SupabaseConnectDia
                             disabled={isDisconnecting}
                         >
                             {isDisconnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Unplug className="mr-2 h-4 w-4" />}
-                            Disconnect Supabase
+                            {t("bCoder.disconnectSupabase")}
                         </Button>
+
                     </div>
                 ) : (
                     <div className="space-y-4 py-2">
                         <div className="space-y-2">
                             <Label htmlFor="pat">
-                                Personal Access Token (PAT)
+                                {t("bCoder.connectionPatLabel")}
                             </Label>
+
                             <Input
                                 id="pat"
                                 type="password"
-                                placeholder="sbp_xxxxxxxxxxxxxxxxxxxx"
+                                placeholder={t("bCoder.connectionPatPlaceholder")}
                                 value={pat}
                                 onChange={e => setPat(e.target.value)}
                             />
+
                             <p className="text-xs text-muted-foreground">
-                                Generate one at{' '}
+                                {t("bCoder.connectionPatHint")}{' '}
                                 <a
+
                                     href="https://supabase.com/dashboard/account/tokens"
                                     target="_blank"
                                     rel="noopener noreferrer"
@@ -119,16 +130,18 @@ export function SupabaseConnectDialog({ open, onOpenChange }: SupabaseConnectDia
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="projectRef">Project Reference</Label>
+                            <Label htmlFor="projectRef">{t("bCoder.connectionProjectRefLabel")}</Label>
                             <Input
                                 id="projectRef"
-                                placeholder="abcdefghijklmnop"
+                                placeholder={t("bCoder.connectionProjectRefPlaceholder")}
                                 value={projectRef}
                                 onChange={e => setProjectRef(e.target.value)}
                             />
+
                             <p className="text-xs text-muted-foreground">
-                                Found in your project URL: supabase.com/dashboard/project/<strong className="text-foreground">{"<project-ref>"}</strong>
+                                {t("bCoder.connectionProjectRefHint")}<strong className="text-foreground">{"<project-ref>"}</strong>
                             </p>
+
                         </div>
 
                         <Button
@@ -137,8 +150,9 @@ export function SupabaseConnectDialog({ open, onOpenChange }: SupabaseConnectDia
                             disabled={isConnecting || !pat.trim() || !projectRef.trim()}
                         >
                             {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlugZap className="mr-2 h-4 w-4" />}
-                            Connect Supabase
+                            {t("bCoder.connectSupabaseTitle")}
                         </Button>
+
                     </div>
                 )}
             </DialogContent>

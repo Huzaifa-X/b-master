@@ -21,6 +21,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
+import { useLocale } from "@/lib/i18n"
+
 export interface SharedUser {
   id: string
   name: string
@@ -55,14 +57,16 @@ export function PermissionsTable({
   onRemoveUser,
   onUpdatePermission,
 }: PermissionsTableProps) {
+  const { t } = useLocale()
+
   return (
     <div className="space-y-4">
-      <Label>Select Users</Label>
+      <Label>{t("permissionsTable.selectUsers")}</Label>
 
       {/* Select Contact Dropdown */}
       <Select value="" onValueChange={onAddUser}>
         <SelectTrigger className="w-full">
-          <SelectValue placeholder="Select a contact to add..." />
+          <SelectValue placeholder={t("permissionsTable.addContactPlaceholder")} />
         </SelectTrigger>
         <SelectContent>
           {availableContacts.length > 0 ? (
@@ -83,7 +87,7 @@ export function PermissionsTable({
             ))
           ) : (
             <SelectItem value="none" disabled>
-              All contacts have been added
+              {t("permissionsTable.allContactsAdded")}
             </SelectItem>
           )}
         </SelectContent>
@@ -95,12 +99,12 @@ export function PermissionsTable({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[250px]">User</TableHead>
-                <TableHead className="text-center">Chat</TableHead>
-                <TableHead className="text-center">Contact</TableHead>
-                <TableHead className="text-center">News Feed</TableHead>
-                <TableHead className="text-center">Messenger</TableHead>
-                <TableHead className="text-center">Artifact</TableHead>
+                <TableHead className="w-[250px]">{t("permissionsTable.user")}</TableHead>
+                <TableHead className="text-center">{t("permissions.chat")}</TableHead>
+                <TableHead className="text-center">{t("permissions.contacts")}</TableHead>
+                <TableHead className="text-center">{t("permissions.newsfeed")}</TableHead>
+                <TableHead className="text-center">{t("permissions.messenger")}</TableHead>
+                <TableHead className="text-center">{t("permissions.artifacts")}</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -186,8 +190,8 @@ export function PermissionsTable({
       ) : (
         <div className="text-center py-8 border rounded-lg border-dashed">
           <User className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-          <p className="text-sm font-medium mb-1">No users added yet</p>
-          <p className="text-xs text-muted-foreground">Select a contact from the dropdown above</p>
+          <p className="text-sm font-medium mb-1">{t("permissionsTable.noUsersAdded")}</p>
+          <p className="text-xs text-muted-foreground">{t("permissionsTable.selectContactHint")}</p>
         </div>
       )}
     </div>

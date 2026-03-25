@@ -30,6 +30,8 @@ import { useArtifactEditData, useUpdateArtifactMutation, useCreateArtifact, useD
 import { useAssistantContacts } from "@/hooks/useContacts"
 import { useChatHistory } from "@/hooks/useChatHistory"
 
+import { useLocale } from "@/lib/i18n"
+
 interface CreateArtifactDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -39,6 +41,7 @@ interface CreateArtifactDialogProps {
 
 export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArtifactId }: CreateArtifactDialogProps) {
   const router = useRouter()
+  const { t } = useLocale()
   const isEditMode = Boolean(editArtifactId)
   const [step, setStep] = useState(isEditMode ? 2 : 1) // Start at step 2 for edit mode
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
@@ -208,17 +211,17 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
 
     // In edit mode, name is not editable but still required
     if (!isEditMode && !formData.name.trim()) {
-      newErrors.name = "Artifact name is required"
+      newErrors.name = t("artifacts.errors.nameRequired")
     }
 
     if (!formData.instructions.trim()) {
-      newErrors.instructions = "Instructions are required"
+      newErrors.instructions = t("artifacts.errors.instructionsRequired")
     }
 
     // Validate video generation requirements (only for create mode)
     if (!isEditMode && selectedTemplate?.category === "video_generation") {
       if (!formData.videoDuration) {
-        newErrors.videoDuration = "Video duration is required"
+        newErrors.videoDuration = t("artifacts.errors.apiKeyRequired", { name: "Video duration" })
       }
 
       const hasOpenAIApiKey = formData.apiConfigs.some(
@@ -226,7 +229,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
       )
 
       if (!hasOpenAIApiKey) {
-        newErrors.apiConfigs = "OPENAI_API_KEY is required for video generation"
+        newErrors.apiConfigs = t("artifacts.errors.apiKeyRequired", { name: "OPENAI_API_KEY" })
       }
     }
 
@@ -258,7 +261,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
         })
       } else {
         // Create mode - create new artifact
-        toast.loading("Generating artifact...", { id: "artifact-creation" })
+        toast.loading(t("artifacts.updating"), { id: "artifact-creation" })
 
         await createArtifactAsync({
           assistantId: assistantId,
@@ -304,10 +307,10 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
           <div className="flex items-center justify-between">
             <div>
               <DialogTitle className="text-2xl">
-                {isEditMode ? "Edit Artifact" : "Create Artifact"}
+                {isEditMode ? t("artifacts.editArtifact") : t("artifacts.createArtifact")}
               </DialogTitle>
               <DialogDescription className="mt-1">
-                {isEditMode ? "Update instructions, contacts, and API configurations" : `Step ${step} of 2`}
+                {isEditMode ? t("artifacts.updateArtifact") : t("artifacts.stepOf", { step, total: 2 })}
               </DialogDescription>
             </div>
           </div>
@@ -319,7 +322,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-                <p className="text-sm text-muted-foreground">Loading artifact data...</p>
+                <p className="text-sm text-muted-foreground">{t("artifacts.loadingData")}</p>
               </div>
             </div>
           ) : (
@@ -366,7 +369,7 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
                 className="mr-auto"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
-                Delete Artifact
+                {t("artifacts.deleteArtifact")}
               </Button>
               <div className="flex gap-2">
                 <Button
@@ -375,13 +378,13 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
                   className="hover:text-primary hover:bg-transparent"
                   disabled={isSubmitting || isUpdating || isDeleting}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
                 <Button
                   onClick={handleSubmit}
                   disabled={isSubmitting || isUpdating || isDeleting || isLoadingEditData}
                 >
-                  {isSubmitting || isUpdating ? "Updating..." : "Update Artifact"}
+                  {isSubmitting || isUpdating ? t("artifacts.updating") : t("artifacts.updateArtifact")}
                 </Button>
               </div>
             </div>
@@ -391,13 +394,13 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
               {step === 1 ? (
                 <>
                   <Button variant="outline" onClick={() => onOpenChange(false)} className="hover:text-primary hover:bg-transparent">
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                   <Button
                     onClick={handleNextStep}
                     disabled={!selectedTemplate}
                   >
-                    {selectedTemplate?.isCustom ? "Customize Template" : "Select Custom Template"}
+                    {selectedTemplate?.isCustom ? t("artifacts.customizeTemplate") : t("artifacts.selectCustomTemplate")}
                     <ChevronRight className="h-4 w-4 ml-2" />
                   </Button>
                 </>
@@ -405,10 +408,10 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
                 <>
                   <Button variant="outline" onClick={handleBackStep} className="hover:text-primary hover:bg-transparent">
                     <ChevronLeft className="h-4 w-4 mr-2" />
-                    Back
+                    {t("common.back")}
                   </Button>
                   <Button onClick={handleSubmit} disabled={isSubmitting}>
-                    {isSubmitting ? "Creating..." : "Create Artifact"}
+                    {isSubmitting ? t("common.loading") : t("artifacts.createArtifact")}
                   </Button>
                 </>
               )}
@@ -422,14 +425,13 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
     <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete Artifact?</AlertDialogTitle>
+          <AlertDialogTitle>{t("artifacts.deleteConfirmTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete this artifact, all its versions, permissions, and related data.
-            This action cannot be undone.
+            {t("artifacts.deleteConfirmDescription")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={isDeleting}>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={handleDeleteArtifact}
             disabled={isDeleting}
@@ -438,10 +440,10 @@ export function CreateArtifactDialog({ open, onOpenChange, assistantId, editArti
             {isDeleting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Deleting...
+                {t("common.deleting")}
               </>
             ) : (
-              "Delete Artifact"
+              t("artifacts.deleteArtifact")
             )}
           </AlertDialogAction>
         </AlertDialogFooter>

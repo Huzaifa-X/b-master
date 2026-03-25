@@ -76,12 +76,15 @@ const getCategoryColor = (category: string) => {
   return colors[category.toLowerCase()] || colors.others
 }
 
+import { useLocale } from "@/lib/i18n"
+
 export function ViewArtifactDialog({
   artifact,
   open,
   onOpenChange,
 }: ViewArtifactDialogProps) {
   const [blobUrl, setBlobUrl] = useState<string>("")
+  const { t, locale } = useLocale()
 
   // Create blob URL for secure iframe isolation
   useEffect(() => {
@@ -114,28 +117,31 @@ export function ViewArtifactDialog({
     URL.revokeObjectURL(url)
   }
 
+  // Map category to translation key (replace space with underscore)
+  const categoryKey = artifact?.category.toLowerCase().replace(/\s+/g, '_') || "others"
+
   // ── HTML ───────────────────────────────────────────────────────────────────
   const handleDownloadHTML = () => {
-    if (!artifact?.htmlContent) { toast.error("No content to download"); return }
+    if (!artifact?.htmlContent) { toast.error(t("artifacts.errors.noContent")); return }
     try {
       triggerDownload(
         new Blob([artifact.htmlContent], { type: "text/html" }),
         `${safeName}.html`,
       )
-      toast.success("HTML downloaded")
+      toast.success(t("artifactPanel.downloadedAsHtml"))
     } catch (e) {
       console.error(e)
-      toast.error("Failed to download HTML")
+      toast.error(t("common.error"))
     }
   }
 
   // ── DOCX ──────────────────────────────────────────────────────────────────
   const [isGeneratingDOCX, setIsGeneratingDOCX] = useState(false)
   const handleDownloadDOCX = async () => {
-    if (!artifact?.htmlContent) { toast.error("No content to download"); return }
+    if (!artifact?.htmlContent) { toast.error(t("artifacts.errors.noContent")); return }
     if (isGeneratingDOCX) return
     setIsGeneratingDOCX(true)
-    toast.loading("Generating Word document…", { id: "docx-export" })
+    toast.loading(t("artifacts.generatingWord"), { id: "docx-export" })
     try {
       const res = await fetch("/api/artifacts/generate-docx", {
         method: "POST",
@@ -147,10 +153,10 @@ export function ViewArtifactDialog({
       const link = document.createElement("a")
       link.href = docxUrl; link.download = `${safeName}.docx`; link.target = "_blank"
       document.body.appendChild(link); link.click(); document.body.removeChild(link)
-      toast.success("Word document downloaded", { id: "docx-export" })
+      toast.success(t("artifactPanel.docxGenerated"), { id: "docx-export" })
     } catch (e: any) {
       console.error(e)
-      toast.error(e?.message ?? "Failed to export as DOCX", { id: "docx-export" })
+      toast.error(t("artifactPanel.failedToGenerateDocx"), { id: "docx-export" })
     } finally {
       setIsGeneratingDOCX(false)
     }
@@ -158,7 +164,7 @@ export function ViewArtifactDialog({
 
   // ── PPTX ──────────────────────────────────────────────────────────────────
   const handleDownloadPPTX = async () => {
-    if (!artifact?.htmlContent) { toast.error("No content to download"); return }
+    if (!artifact?.htmlContent) { toast.error(t("artifacts.errors.noContent")); return }
     try {
       const pptxgen = (await import("pptxgenjs")).default
       const pres = new pptxgen()
@@ -180,10 +186,10 @@ export function ViewArtifactDialog({
       })
 
       await pres.writeFile({ fileName: `${safeName}.pptx` })
-      toast.success("PowerPoint downloaded")
+      toast.success(t("artifactPanel.pptxGenerated"))
     } catch (e) {
       console.error(e)
-      toast.error("Failed to export as PPTX")
+      toast.error(t("artifactPanel.failedToGeneratePptx"))
     }
   }
 
@@ -191,10 +197,10 @@ export function ViewArtifactDialog({
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
 
   const handleDownloadPDF = async () => {
-    if (!artifact?.htmlContent) { toast.error("No content to download"); return }
+    if (!artifact?.htmlContent) { toast.error(t("artifacts.errors.noContent")); return }
     if (isGeneratingPDF) return
     setIsGeneratingPDF(true)
-    toast.loading("Generating PDF…", { id: "pdf-export" })
+    toast.loading(t("artifacts.generatingPdf"), { id: "pdf-export" })
     try {
       const res = await fetch("/api/artifacts/generate-pdf", {
         method: "POST",
@@ -213,10 +219,10 @@ export function ViewArtifactDialog({
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      toast.success("PDF downloaded", { id: "pdf-export" })
+      toast.success(t("artifactPanel.pdfGenerated"), { id: "pdf-export" })
     } catch (e: any) {
       console.error(e)
-      toast.error(e?.message ?? "Failed to export as PDF", { id: "pdf-export" })
+      toast.error(t("artifactPanel.failedToGeneratePdf"), { id: "pdf-export" })
     } finally {
       setIsGeneratingPDF(false)
     }
@@ -224,17 +230,17 @@ export function ViewArtifactDialog({
 
   // ── TXT ───────────────────────────────────────────────────────────────────
   const handleDownloadTXT = () => {
-    if (!artifact?.htmlContent) { toast.error("No content to download"); return }
+    if (!artifact?.htmlContent) { toast.error(t("artifacts.errors.noContent")); return }
     try {
       const text = htmlToPlainText(artifact.htmlContent)
       triggerDownload(
         new Blob([text], { type: "text/plain;charset=utf-8" }),
         `${safeName}.txt`,
       )
-      toast.success("Text file downloaded")
+      toast.success(t("artifactPanel.downloadedSuccessfully"))
     } catch (e) {
       console.error(e)
-      toast.error("Failed to export as TXT")
+      toast.error(t("common.error"))
     }
   }
 
@@ -249,13 +255,15 @@ export function ViewArtifactDialog({
               <DialogTitle className="text-2xl">{artifact.name}</DialogTitle>
               <div className="flex items-center gap-2 mt-2">
                 <Badge className={cn("text-xs", getCategoryColor(artifact.category))}>
-                  {artifact.category.charAt(0).toUpperCase() + artifact.category.slice(1)}
+                  {t(`artifacts.categories.${categoryKey}`, { defaultValue: artifact.category })}
                 </Badge>
                 <span className="text-sm text-muted-foreground">
-                  Created {artifact.createdAt.toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
+                  {t("artifacts.createdOn", { 
+                    date: artifact.createdAt.toLocaleDateString(locale === "en" ? "en-US" : "fr-FR", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })
                   })}
                 </span>
               </div>
@@ -267,32 +275,32 @@ export function ViewArtifactDialog({
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="flex items-center gap-1.5 flex-shrink-0">
                     <Download className="h-4 w-4" />
-                    Export
+                    {t("artifacts.export")}
                     <ChevronDown className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Download as</DropdownMenuLabel>
+                  <DropdownMenuLabel>{t("artifacts.downloadAs")}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleDownloadHTML}>
                     <FileCode className="h-4 w-4 mr-2" />
-                    HTML
+                    {t("artifacts.html")}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleDownloadPDF} disabled={isGeneratingPDF}>
                     <File className="h-4 w-4 mr-2" />
-                    {isGeneratingPDF ? "Generating PDF…" : "PDF (.pdf)"}
+                    {isGeneratingPDF ? t("artifacts.generatingPdf") : t("artifacts.pdf")}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleDownloadDOCX} disabled={isGeneratingDOCX}>
                     <FileText className="h-4 w-4 mr-2" />
-                    {isGeneratingDOCX ? "Generating Word…" : "Word (.docx)"}
+                    {isGeneratingDOCX ? t("artifacts.generatingWord") : t("artifacts.wordDoc")}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleDownloadPPTX}>
                     <Layers className="h-4 w-4 mr-2" />
-                    PowerPoint (.pptx)
+                    {t("artifacts.powerpoint")}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleDownloadTXT}>
                     <AlignLeft className="h-4 w-4 mr-2" />
-                    Plain Text (.txt)
+                    {t("artifacts.plainText")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -337,7 +345,7 @@ export function ViewArtifactDialog({
               <div className="w-full h-full flex items-center justify-center">
                 <div className="text-center">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                  <p className="text-sm text-muted-foreground">Loading artifact...</p>
+                  <p className="text-sm text-muted-foreground">{t("artifacts.loadingArtifacts")}</p>
                 </div>
               </div>
             )}

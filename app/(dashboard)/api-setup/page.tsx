@@ -28,6 +28,7 @@ import {
   Info,
   Lightbulb,
 } from "lucide-react"
+import { useLocale } from "@/lib/i18n"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,152 +55,6 @@ interface Integration {
 }
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
-
-const INTEGRATIONS: Integration[] = [
-  {
-    id: "alpaca",
-    number: 1,
-    title: "Trading API",
-    subtitle: "Alpaca Markets",
-    icon: <TrendingUp className="h-5 w-5" />,
-    color: "from-emerald-500/10 to-emerald-500/5",
-    badgeColor: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    free: true,
-    authType: "API Key (2 headers)",
-    getKeysUrl: "https://alpaca.markets",
-    getKeysLabel: "alpaca.markets",
-    scopeOrHeaders: "APCA-API-KEY-ID · APCA-API-SECRET-KEY",
-    steps: [
-      { label: "Schema", content: "Select or paste the Alpaca Trading schema in the Advanced Config step when creating your assistant." },
-      { label: "Auth Type", content: "Choose API Key authentication." },
-      { label: "Header 1", content: "Set custom header name to APCA-API-KEY-ID and enter your Alpaca Key ID as the value." },
-      { label: "Header 2", content: "Add a second header APCA-API-SECRET-KEY with your Alpaca Secret Key." },
-      { label: "Get Keys", content: "Sign up free at alpaca.markets → go to Paper Trading dashboard → copy your Key ID and Secret Key." },
-    ],
-    tip: "Always start with the paper trading URL (paper-api.alpaca.markets) — it costs nothing and behaves identically to live trading.",
-  },
-  {
-    id: "dataforseo",
-    number: 2,
-    title: "SEO API",
-    subtitle: "DataForSEO",
-    icon: <Search className="h-5 w-5" />,
-    color: "from-blue-500/10 to-blue-500/5",
-    badgeColor: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-    free: false,
-    authType: "Basic Auth",
-    getKeysUrl: "https://dataforseo.com",
-    getKeysLabel: "dataforseo.com",
-    scopeOrHeaders: "Email + API password",
-    steps: [
-      { label: "Schema", content: "Select or paste the DataForSEO SEO schema when creating your assistant." },
-      { label: "Auth Type", content: "Choose Basic Auth." },
-      { label: "Username", content: "Enter your DataForSEO account email address." },
-      { label: "Password", content: "Enter your DataForSEO API password (from the API Access page, not your login password)." },
-      { label: "Get Keys", content: "Go to dataforseo.com → Sign up → Account → API Access. New accounts get $1 free credit." },
-    ],
-    tip: "Start with getKeywordSearchVolume and getSerpResults to validate your setup. DataForSEO is pay-per-call — batch keyword requests to keep costs minimal.",
-  },
-  {
-    id: "pipedream",
-    number: 3,
-    title: "Diese Integration API",
-    subtitle: "Pipedream",
-    icon: <Zap className="h-5 w-5" />,
-    color: "from-violet-500/10 to-violet-500/5",
-    badgeColor: "bg-violet-500/10 text-violet-400 border-violet-500/20",
-    free: true,
-    authType: "Bearer Token",
-    getKeysUrl: "https://pipedream.com",
-    getKeysLabel: "pipedream.com",
-    scopeOrHeaders: "Pipedream API key",
-    steps: [
-      { label: "Schema", content: "Select or paste the Diese Integration (Pipedream) schema when creating your assistant." },
-      { label: "Auth Type", content: "Choose Bearer Token authentication." },
-      { label: "Token", content: "Paste your Pipedream API key as the bearer token." },
-      { label: "Get Keys", content: "Login to pipedream.com → click your avatar → Settings → API → copy your API key." },
-    ],
-    tip: "Use listApps first to browse 2,000+ available connectors, then createSource to set up event triggers. Free tier includes 10,000 invocations/month.",
-  },
-  {
-    id: "onenote",
-    number: 4,
-    title: "OneNote API",
-    subtitle: "Microsoft Graph",
-    icon: <BookOpen className="h-5 w-5" />,
-    color: "from-orange-500/10 to-orange-500/5",
-    badgeColor: "bg-orange-500/10 text-orange-400 border-orange-500/20",
-    free: true,
-    authType: "OAuth 2.0",
-    getKeysUrl: "https://portal.azure.com",
-    getKeysLabel: "portal.azure.com",
-    scopeOrHeaders: "Notes.ReadWrite User.Read offline_access",
-    steps: [
-      { label: "Schema", content: "Select or paste the OneNote Integration API schema when creating your assistant." },
-      { label: "Auth Type", content: "Choose OAuth." },
-      { label: "Auth URL", content: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize" },
-      { label: "Token URL", content: "https://login.microsoftonline.com/common/oauth2/v2.0/token" },
-      { label: "Client ID & Secret", content: "Use the Client ID and Secret from your Azure App Registration (see Step 1 above)." },
-      { label: "Scope", content: "Notes.ReadWrite User.Read offline_access" },
-    ],
-    tip: "Use getDeltaPages with the saved @odata.deltaLink for efficient incremental sync — only pages that changed since your last call are returned.",
-  },
-  {
-    id: "teams",
-    number: 5,
-    title: "Microsoft Teams API",
-    subtitle: "Microsoft Graph",
-    icon: <MessageSquare className="h-5 w-5" />,
-    color: "from-sky-500/10 to-sky-500/5",
-    badgeColor: "bg-sky-500/10 text-sky-400 border-sky-500/20",
-    free: true,
-    authType: "OAuth 2.0",
-    getKeysUrl: "https://portal.azure.com",
-    getKeysLabel: "Same Azure app",
-    scopeOrHeaders: "ChannelMessage.Send Chat.ReadWrite Team.ReadBasic.All OnlineMeetings.ReadWrite User.Read offline_access",
-    steps: [
-      { label: "Schema", content: "Select or paste the Microsoft Teams Integration API schema when creating your assistant." },
-      { label: "Auth Type", content: "Choose OAuth — same app registration as OneNote." },
-      { label: "Auth URL", content: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize" },
-      { label: "Token URL", content: "https://login.microsoftonline.com/common/oauth2/v2.0/token" },
-      { label: "Client ID & Secret", content: "Same Azure App Registration as OneNote — no new registration needed." },
-      { label: "Scope", content: "ChannelMessage.Send Chat.ReadWrite Team.ReadBasic.All OnlineMeetings.ReadWrite User.Read offline_access" },
-    ],
-    tip: "Use createSubscription with your webhook URL to receive real-time push events for new messages instead of polling — far more efficient.",
-  },
-  {
-    id: "project",
-    number: 6,
-    title: "MS Project API",
-    subtitle: "Microsoft Graph / Planner",
-    icon: <ClipboardList className="h-5 w-5" />,
-    color: "from-rose-500/10 to-rose-500/5",
-    badgeColor: "bg-rose-500/10 text-rose-400 border-rose-500/20",
-    free: true,
-    authType: "OAuth 2.0",
-    getKeysUrl: "https://portal.azure.com",
-    getKeysLabel: "Same Azure app",
-    scopeOrHeaders: "Tasks.ReadWrite Group.ReadWrite.All Sites.ReadWrite.All User.Read offline_access",
-    steps: [
-      { label: "Schema", content: "Select or paste the Microsoft Project Integration API schema when creating your assistant." },
-      { label: "Auth Type", content: "Choose OAuth — same Azure app as OneNote and Teams." },
-      { label: "Auth URL", content: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize" },
-      { label: "Token URL", content: "https://login.microsoftonline.com/common/oauth2/v2.0/token" },
-      { label: "Client ID & Secret", content: "Same Azure App Registration — just ensure these additional scopes are granted." },
-      { label: "Scope", content: "Tasks.ReadWrite Group.ReadWrite.All Sites.ReadWrite.All User.Read offline_access" },
-    ],
-    tip: "Always include the If-Match header (ETag from your GET response) when doing PATCH updates — this prevents conflicts in concurrent edits.",
-  },
-]
-
-const QUICK_REFERENCE = [
-  { num: 1, name: "Trading (Alpaca)", auth: "API Key", where: "alpaca.markets", free: true },
-  { num: 2, name: "SEO (DataForSEO)", auth: "Basic Auth", where: "dataforseo.com", free: false },
-  { num: 3, name: "Diese (Pipedream)", auth: "Bearer Token", where: "pipedream.com", free: true },
-  { num: 4, name: "OneNote", auth: "OAuth 2.0", where: "portal.azure.com", free: true },
-  { num: 5, name: "Teams", auth: "OAuth 2.0", where: "Same Azure app", free: true },
-  { num: 6, name: "MS Project", auth: "OAuth 2.0", where: "Same Azure app", free: true },
-]
 
 const AZURE_SCOPES = [
   "Notes.ReadWrite",
@@ -238,6 +93,7 @@ function CopyButton({ text }: { text: string }) {
 
 function IntegrationCard({ integration }: { integration: Integration }) {
   const [expanded, setExpanded] = useState(false)
+  const { t } = useLocale()
 
   return (
     <Card className="overflow-hidden border-border/60 bg-card/50 backdrop-blur-sm transition-all duration-200 hover:border-border">
@@ -275,7 +131,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
                   {integration.authType}
                 </span>
                 <span>·</span>
-                <span>{integration.free ? "✅ Free" : "💰 Pay-per-use"}</span>
+                <span>{integration.free ? `✅ ${t("apiSetup.step2.free")}` : `💰 ${t("apiSetup.step2.payPerUse")}`}</span>
               </CardDescription>
             </div>
           </div>
@@ -297,7 +153,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
                 <div className="min-w-0 flex-1">
                   <span className="text-xs font-semibold text-foreground">{step.label}: </span>
                   <span className="break-all text-xs text-muted-foreground">{step.content}</span>
-                  {(step.label === "Auth URL" || step.label === "Token URL" || step.label === "Scope") && (
+                  {(step.label === "Auth URL" || step.label === "Token URL" || step.label === "Scope" || step.label === "Header 1" || step.label === "Header 2") && (
                     <CopyButton text={step.content} />
                   )}
                 </div>
@@ -311,7 +167,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
           {integration.scopeOrHeaders && (
             <div className="rounded-md bg-muted/50 px-3 py-2">
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {integration.authType === "OAuth 2.0" ? "Required Scopes" : "Required Headers"}
+                {integration.authType === "OAuth 2.0" ? t("apiSetup.step2.requiredScopes") : t("apiSetup.step2.requiredHeaders")}
               </p>
               <p className="break-all font-mono text-xs text-foreground">
                 {integration.scopeOrHeaders}
@@ -323,7 +179,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
           <div className="flex gap-2 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2">
             <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
             <p className="text-xs text-muted-foreground">
-              <span className="font-semibold text-amber-400">Tip: </span>
+              <span className="font-semibold text-amber-400">{t("apiSetup.step2.tip")} </span>
               {integration.tip}
             </p>
           </div>
@@ -336,7 +192,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
           >
             <ExternalLink className="h-3 w-3" />
-            Get API keys → {integration.getKeysLabel}
+            {t("apiSetup.step2.getKeys", { label: integration.getKeysLabel })}
           </a>
         </CardContent>
       )}
@@ -347,8 +203,155 @@ function IntegrationCard({ integration }: { integration: Integration }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ApiSetupGuidePage() {
+  const { t } = useLocale()
   const [azureExpanded, setAzureExpanded] = useState(false)
   const [tipsExpanded, setTipsExpanded] = useState(false)
+
+  const INTEGRATIONS: Integration[] = [
+    {
+      id: "alpaca",
+      number: 1,
+      title: t("apiSetup.integrations.alpaca.title"),
+      subtitle: t("apiSetup.integrations.alpaca.subtitle"),
+      icon: <TrendingUp className="h-5 w-5" />,
+      color: "from-emerald-500/10 to-emerald-500/5",
+      badgeColor: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+      free: true,
+      authType: "API Key (2 headers)",
+      getKeysUrl: "https://alpaca.markets",
+      getKeysLabel: "alpaca.markets",
+      scopeOrHeaders: "APCA-API-KEY-ID · APCA-API-SECRET-KEY",
+      steps: [
+        { label: "Schema", content: t("apiSetup.integrations.alpaca.steps.1") },
+        { label: "Auth Type", content: t("apiSetup.integrations.alpaca.steps.2") },
+        { label: "Header 1", content: t("apiSetup.integrations.alpaca.steps.3") },
+        { label: "Header 2", content: t("apiSetup.integrations.alpaca.steps.4") },
+        { label: "Get Keys", content: t("apiSetup.integrations.alpaca.steps.5") },
+      ],
+      tip: t("apiSetup.integrations.alpaca.tip"),
+    },
+    {
+      id: "dataforseo",
+      number: 2,
+      title: t("apiSetup.integrations.dataforseo.title"),
+      subtitle: t("apiSetup.integrations.dataforseo.subtitle"),
+      icon: <Search className="h-5 w-5" />,
+      color: "from-blue-500/10 to-blue-500/5",
+      badgeColor: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+      free: false,
+      authType: "Basic Auth",
+      getKeysUrl: "https://dataforseo.com",
+      getKeysLabel: "dataforseo.com",
+      scopeOrHeaders: "Email + API password",
+      steps: [
+        { label: "Schema", content: t("apiSetup.integrations.dataforseo.steps.1") },
+        { label: "Auth Type", content: t("apiSetup.integrations.dataforseo.steps.2") },
+        { label: "Username", content: t("apiSetup.integrations.dataforseo.steps.3") },
+        { label: "Password", content: t("apiSetup.integrations.dataforseo.steps.4") },
+        { label: "Get Keys", content: t("apiSetup.integrations.dataforseo.steps.5") },
+      ],
+      tip: t("apiSetup.integrations.dataforseo.tip"),
+    },
+    {
+      id: "pipedream",
+      number: 3,
+      title: t("apiSetup.integrations.pipedream.title"),
+      subtitle: t("apiSetup.integrations.pipedream.subtitle"),
+      icon: <Zap className="h-5 w-5" />,
+      color: "from-violet-500/10 to-violet-500/5",
+      badgeColor: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+      free: true,
+      authType: "Bearer Token",
+      getKeysUrl: "https://pipedream.com",
+      getKeysLabel: "pipedream.com",
+      scopeOrHeaders: "Pipedream API key",
+      steps: [
+        { label: "Schema", content: t("apiSetup.integrations.pipedream.steps.1") },
+        { label: "Auth Type", content: t("apiSetup.integrations.pipedream.steps.2") },
+        { label: "Token", content: t("apiSetup.integrations.pipedream.steps.3") },
+        { label: "Get Keys", content: t("apiSetup.integrations.pipedream.steps.4") },
+      ],
+      tip: t("apiSetup.integrations.pipedream.tip"),
+    },
+    {
+      id: "onenote",
+      number: 4,
+      title: t("apiSetup.integrations.onenote.title"),
+      subtitle: t("apiSetup.integrations.onenote.subtitle"),
+      icon: <BookOpen className="h-5 w-5" />,
+      color: "from-orange-500/10 to-orange-500/5",
+      badgeColor: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+      free: true,
+      authType: "OAuth 2.0",
+      getKeysUrl: "https://portal.azure.com",
+      getKeysLabel: "portal.azure.com",
+      scopeOrHeaders: "Notes.ReadWrite User.Read offline_access",
+      steps: [
+        { label: "Schema", content: t("apiSetup.integrations.onenote.steps.1") },
+        { label: "Auth Type", content: t("apiSetup.integrations.onenote.steps.2") },
+        { label: "Auth URL", content: t("apiSetup.integrations.onenote.steps.3") },
+        { label: "Token URL", content: t("apiSetup.integrations.onenote.steps.4") },
+        { label: "Client ID & Secret", content: t("apiSetup.integrations.onenote.steps.5") },
+        { label: "Scope", content: t("apiSetup.integrations.onenote.steps.6") },
+      ],
+      tip: t("apiSetup.integrations.onenote.tip"),
+    },
+    {
+      id: "teams",
+      number: 5,
+      title: t("apiSetup.integrations.teams.title"),
+      subtitle: t("apiSetup.integrations.teams.subtitle"),
+      icon: <MessageSquare className="h-5 w-5" />,
+      color: "from-sky-500/10 to-sky-500/5",
+      badgeColor: "bg-sky-500/10 text-sky-400 border-sky-500/20",
+      free: true,
+      authType: "OAuth 2.0",
+      getKeysUrl: "https://portal.azure.com",
+      getKeysLabel: t("apiSetup.integrations.onenote.steps.5"), // Same azure app
+      scopeOrHeaders: "ChannelMessage.Send Chat.ReadWrite Team.ReadBasic.All OnlineMeetings.ReadWrite User.Read offline_access",
+      steps: [
+        { label: "Schema", content: t("apiSetup.integrations.teams.steps.1") },
+        { label: "Auth Type", content: t("apiSetup.integrations.teams.steps.2") },
+        { label: "Auth URL", content: t("apiSetup.integrations.teams.steps.3") },
+        { label: "Token URL", content: t("apiSetup.integrations.teams.steps.4") },
+        { label: "Client ID & Secret", content: t("apiSetup.integrations.teams.steps.5") },
+        { label: "Scope", content: t("apiSetup.integrations.teams.steps.6") },
+      ],
+      tip: t("apiSetup.integrations.teams.tip"),
+    },
+    {
+      id: "project",
+      number: 6,
+      title: t("apiSetup.integrations.project.title"),
+      subtitle: t("apiSetup.integrations.project.subtitle"),
+      icon: <ClipboardList className="h-5 w-5" />,
+      color: "from-rose-500/10 to-rose-500/5",
+      badgeColor: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+      free: true,
+      authType: "OAuth 2.0",
+      getKeysUrl: "https://portal.azure.com",
+      getKeysLabel: t("apiSetup.integrations.onenote.steps.5"), // Same azure app
+      scopeOrHeaders: "Tasks.ReadWrite Group.ReadWrite.All Sites.ReadWrite.All User.Read offline_access",
+      steps: [
+        { label: "Schema", content: t("apiSetup.integrations.project.steps.1") },
+        { label: "Auth Type", content: t("apiSetup.integrations.project.steps.2") },
+        { label: "Auth URL", content: t("apiSetup.integrations.project.steps.3") },
+        { label: "Token URL", content: t("apiSetup.integrations.project.steps.4") },
+        { label: "Client ID & Secret", content: t("apiSetup.integrations.project.steps.5") },
+        { label: "Scope", content: t("apiSetup.integrations.project.steps.6") },
+      ],
+      tip: t("apiSetup.integrations.project.tip"),
+    },
+  ]
+
+  const QUICK_REFERENCE = [
+    { num: 1, name: t("apiSetup.integrations.alpaca.title"), auth: "API Key", where: "alpaca.markets", free: true },
+    { num: 2, name: t("apiSetup.integrations.dataforseo.title"), auth: "Basic Auth", where: "dataforseo.com", free: false },
+    { num: 3, name: t("apiSetup.integrations.pipedream.title"), auth: "Bearer Token", where: "pipedream.com", free: true },
+    { num: 4, name: t("apiSetup.integrations.onenote.title"), auth: "OAuth 2.0", where: "portal.azure.com", free: true },
+    { num: 5, name: t("apiSetup.integrations.teams.title"), auth: "OAuth 2.0", where: t("apiSetup.integrations.onenote.steps.5"), free: true },
+    { num: 6, name: t("apiSetup.integrations.project.title"), auth: "OAuth 2.0", where: t("apiSetup.integrations.onenote.steps.5"), free: true },
+  ]
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
@@ -356,15 +359,14 @@ export default function ApiSetupGuidePage() {
       <div className="mb-8">
         <div className="mb-2 flex items-center gap-2">
           <Badge variant="outline" className="border-border/60 text-xs text-muted-foreground">
-            Setup Guide
+            {t("apiSetup.badge")}
           </Badge>
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-          🗺️ API Integration Setup Guide
+          🗺️ {t("apiSetup.title")}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Everything you need to configure all 6 API integrations for your assistants — from
-          authentication to first API call.
+          {t("apiSetup.description")}
         </p>
       </div>
 
@@ -382,10 +384,10 @@ export default function ApiSetupGuidePage() {
                 </div>
                 <div>
                   <CardTitle className="text-base font-semibold">
-                    Step 1 — Azure App Registration
+                    {t("apiSetup.step1.title")}
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    One-time setup · Covers OneNote, Teams & MS Project
+                    {t("apiSetup.step1.description")}
                   </CardDescription>
                 </div>
               </div>
@@ -400,20 +402,12 @@ export default function ApiSetupGuidePage() {
           {azureExpanded && (
             <CardContent className="space-y-4 pt-4">
               <div className="space-y-3">
-                {[
-                  { step: 1, text: "Go to portal.azure.com → Azure Active Directory → App registrations → New registration." },
-                  { step: 2, text: "Give it a name like \"My Custom GPT App\" and set the redirect URI to your OAuth callback URL." },
-                  { step: 3, text: "Go to API Permissions → Add a permission → Microsoft Graph → Delegated permissions." },
-                  { step: 4, text: "Add all scopes for all three Microsoft integrations at once (see list below)." },
-                  { step: 5, text: "Click Grant admin consent for your organisation." },
-                  { step: 6, text: "Copy your Client ID from the Overview page." },
-                  { step: 7, text: "Go to Certificates & Secrets → New client secret → copy the value immediately." },
-                ].map(({ step, text }) => (
-                  <div key={step} className="flex gap-3">
+                {[1, 2, 3, 4, 5, 6, 7].map((num) => (
+                  <div key={num} className="flex gap-3">
                     <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500/10 text-[10px] font-semibold text-indigo-400">
-                      {step}
+                      {num}
                     </div>
-                    <p className="text-xs text-muted-foreground">{text}</p>
+                    <p className="text-xs text-muted-foreground">{t(`apiSetup.step1.steps.${num}` as any)}</p>
                   </div>
                 ))}
               </div>
@@ -424,7 +418,7 @@ export default function ApiSetupGuidePage() {
               <div>
                 <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-foreground">
                   <Info className="h-3.5 w-3.5 text-indigo-400" />
-                  All scopes you need (add these all at once)
+                  {t("apiSetup.step1.scopesTitle")}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {AZURE_SCOPES.map((scope) => (
@@ -446,7 +440,7 @@ export default function ApiSetupGuidePage() {
                 className="inline-flex items-center gap-1.5 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
               >
                 <ExternalLink className="h-3 w-3" />
-                Open Azure Portal
+                {t("apiSetup.step1.openAzure")}
               </a>
             </CardContent>
           )}
@@ -460,12 +454,11 @@ export default function ApiSetupGuidePage() {
             2
           </div>
           <h2 className="text-sm font-semibold text-foreground">
-            Step 2 — Configure Each Integration
+            {t("apiSetup.step2.title")}
           </h2>
         </div>
         <p className="mb-4 text-xs text-muted-foreground">
-          Click any integration below to expand its configuration steps. Each one maps directly to an
-          example schema in the assistant&apos;s Advanced Config step.
+          {t("apiSetup.step2.description")}
         </p>
         <div className="space-y-3">
           {INTEGRATIONS.map((integration) => (
@@ -488,10 +481,10 @@ export default function ApiSetupGuidePage() {
                 </div>
                 <div>
                   <CardTitle className="text-base font-semibold">
-                    Step 3 — Pro Tips Across All APIs
+                    {t("apiSetup.step3.title")}
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Best practices for efficiency, cost saving, and reliability
+                    {t("apiSetup.step3.description")}
                   </CardDescription>
                 </div>
               </div>
@@ -505,39 +498,14 @@ export default function ApiSetupGuidePage() {
 
           {tipsExpanded && (
             <CardContent className="space-y-3 pt-4">
-              {[
-                {
-                  title: "One Azure app for all 3 Microsoft integrations",
-                  body: "OneNote, Teams, and MS Project all use Microsoft Graph. Add all scopes to a single app registration — no need to manage multiple Client IDs or secrets.",
-                },
-                {
-                  title: "Save Delta tokens for incremental sync",
-                  body: "getDeltaPages (OneNote), getDeltaTasks (MS Project), and getDeltaMessages (Teams) all return an @odata.deltaLink. Save this token — your next call will only return what changed, not everything.",
-                },
-                {
-                  title: "Paper trade before going live",
-                  body: "For the Trading API, always test on paper-api.alpaca.markets before switching to live trading. The schema defaults to paper mode — zero financial risk while you build.",
-                },
-                {
-                  title: "DataForSEO is pay-per-call, not subscription",
-                  body: "$10 gives you thousands of SEO lookups. Batch keyword requests to keep costs minimal — use the bulk keyword endpoint rather than individual calls.",
-                },
-                {
-                  title: "Pipedream free tier is generous",
-                  body: "10,000 invocations/month free. Use webhook subscriptions and delta patterns to avoid polling and burning your quota unnecessarily.",
-                },
-                {
-                  title: "Always send If-Match for PATCH requests (MS APIs)",
-                  body: "Microsoft Graph PATCH operations require the ETag from your preceding GET response as the If-Match header. This prevents lost updates in concurrent scenarios.",
-                },
-              ].map((tip, i) => (
-                <div key={i} className="flex gap-3">
+              {[1, 2, 3, 4, 5, 6].map((num) => (
+                <div key={num} className="flex gap-3">
                   <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-[10px] font-semibold text-amber-400">
-                    {i + 1}
+                    {num}
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-foreground">{tip.title}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{tip.body}</p>
+                    <p className="text-xs font-semibold text-foreground">{t(`apiSetup.step3.tips.${num}.title` as any)}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{t(`apiSetup.step3.tips.${num}.body` as any)}</p>
                   </div>
                 </div>
               ))}
@@ -549,18 +517,18 @@ export default function ApiSetupGuidePage() {
       {/* Quick Reference Table */}
       <section>
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          📊 Quick Reference
+          📊 {t("apiSetup.quickReference.title")}
         </h2>
         <Card className="overflow-hidden border-border/60 bg-card/50">
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border/60 bg-muted/30">
-                  <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">#</th>
-                  <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">Integration</th>
-                  <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">Auth Type</th>
-                  <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">Where to Get Keys</th>
-                  <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">Cost</th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">{t("apiSetup.quickReference.headers.num")}</th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">{t("apiSetup.quickReference.headers.integration")}</th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">{t("apiSetup.quickReference.headers.authType")}</th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">{t("apiSetup.quickReference.headers.where")}</th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-muted-foreground">{t("apiSetup.quickReference.headers.cost")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -585,14 +553,14 @@ export default function ApiSetupGuidePage() {
                           variant="outline"
                           className="border-emerald-500/20 bg-emerald-500/10 text-[10px] text-emerald-400"
                         >
-                          Free
+                          {t("apiSetup.step2.free")}
                         </Badge>
                       ) : (
                         <Badge
                           variant="outline"
                           className="border-amber-500/20 bg-amber-500/10 text-[10px] text-amber-400"
                         >
-                          Pay-per-use
+                          {t("apiSetup.step2.payPerUse")}
                         </Badge>
                       )}
                     </td>
@@ -607,10 +575,10 @@ export default function ApiSetupGuidePage() {
       {/* Footer CTA */}
       <div className="mt-8 flex flex-col items-center gap-3 rounded-xl border border-border/60 bg-muted/20 px-6 py-5 text-center">
         <p className="text-sm font-medium text-foreground">
-          Ready to build your first integration assistant?
+          {t("apiSetup.footer.title")}
         </p>
         <p className="text-xs text-muted-foreground">
-          Go to Assistants → Create New → Advanced Config → pick an example schema from the dropdown.
+          {t("apiSetup.footer.description")}
         </p>
         <Button
           size="sm"
@@ -618,7 +586,7 @@ export default function ApiSetupGuidePage() {
           className="mt-1"
           onClick={() => window.location.href = "/assistants/add"}
         >
-          Create an Assistant →
+          {t("apiSetup.footer.button")}
         </Button>
       </div>
     </div>

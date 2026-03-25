@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useOnboardingTour, TourStep } from "@/hooks/useOnboardingTour"
 import { AnimatePresence, motion } from "motion/react"
+import { useLocale } from "@/lib/i18n"
 
 const PADDING = 10 // px around spotlight target
 const TOOLTIP_WIDTH = 320
@@ -111,6 +112,7 @@ function computeTooltipPosition(
 
 export function OnboardingTour() {
   const { isOpen, currentStep, totalSteps, step, next, prev, skip, mounted } = useOnboardingTour()
+  const { t } = useLocale()
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null)
   const [winSize, setWinSize] = useState({ w: 1200, h: 800 })
   const tooltipRef = useRef<HTMLDivElement>(null)
@@ -289,7 +291,7 @@ export function OnboardingTour() {
                   <Sparkles className="h-3.5 w-3.5 text-[#BDA76D]" />
                 </div>
                 <span className="text-xs font-medium text-muted-foreground">
-                  Step {currentStep + 1} of {totalSteps}
+                  {t("tour.currentStep")} {currentStep + 1} {t("tour.progress")} {totalSteps}
                 </span>
               </div>
               <Button
@@ -304,8 +306,8 @@ export function OnboardingTour() {
 
             {/* Content */}
             <div className="px-4 pb-2">
-              <h3 className="font-bold text-base text-foreground mb-1">{step.title}</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">{step.description}</p>
+              <h3 className="font-bold text-base text-foreground mb-1">{t(`tour.steps.${step.id}.title`)}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{t(`tour.steps.${step.id}.description`)}</p>
             </div>
 
             {/* Progress bar */}
@@ -345,7 +347,7 @@ export function OnboardingTour() {
                 className="text-muted-foreground hover:text-foreground"
                 onClick={skip}
               >
-                Skip tour
+                {t("tour.skip")}
               </Button>
               <div className="flex gap-2">
                 {!isFirst && (
@@ -363,9 +365,9 @@ export function OnboardingTour() {
                   className="bg-[#BDA76D] hover:bg-[#BDA76D]/90 text-white px-4"
                   onClick={next}
                 >
-                  {isLast ? "Finish" : (
+                  {isLast ? t("tour.finish") : (
                     <>
-                      Next
+                      {t("tour.next")}
                       <ChevronRight className="h-4 w-4 ml-1" />
                     </>
                   )}
