@@ -156,7 +156,10 @@ export default function PricingPage() {
         ) : (
           <div className={cn(
             "grid gap-6 mx-auto",
-            billingCycle === "monthly" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-6xl"
+            currentPlans.length === 2 && "grid-cols-1 md:grid-cols-2 max-w-4xl",
+            currentPlans.length === 3 && "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-6xl",
+            currentPlans.length === 4 && "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl",
+            currentPlans.length > 4 && "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 max-w-7xl"
           )}>
             {currentPlans.map((plan) => {
               const features = Array.isArray(plan.features) ? plan.features : []
