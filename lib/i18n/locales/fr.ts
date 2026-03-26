@@ -782,6 +782,9 @@ export const fr: TranslationKeys = {
     inputHintShift: "Maj",
     inputHintEnter: "Entrée",
     inputHintNewLine: "pour une nouvelle ligne",
+    resetDialogTitle: "Réinitialiser l'espace de travail",
+    resetDialogDescription: "Êtes-vous sûr de vouloir réinitialiser l'espace de travail ? Toutes les modifications non enregistrées seront définitivement perdues.",
+    resetWorkspace: "Réinitialiser l'espace de travail",
 
     explorer: "Explorateur",
     newFile: "Nouveau fichier",

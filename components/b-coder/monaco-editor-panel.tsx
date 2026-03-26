@@ -772,7 +772,7 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
                   <div className="flex items-center gap-2 h-7 px-3 bg-background rounded-md border border-border/50 shadow-sm">
                     <FileCode className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                     <span className="text-xs font-medium truncate max-w-[200px]">
-                      {selectedFilePath ? selectedFilePath.split('/').pop() : "No file"}
+                      {selectedFilePath ? selectedFilePath.split('/').pop() : t("bCoder.noFileSelected")}
                     </span>
                   </div>
                   {/* Breadcrumb Path */}
@@ -815,7 +815,7 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2 h-7 px-3 bg-background rounded-md border border-border/50 shadow-sm">
                   <Eye className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                  <span className="text-xs font-medium">Live Preview</span>
+                  <span className="text-xs font-medium">{t("bCoder.livePreview")}</span>
                 </div>
                 {/* {serverUrl && (
                   <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
@@ -831,7 +831,7 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
                   size="sm"
                   onClick={() => setIsFullscreen(!isFullscreen)}
                   className="h-7 w-7 p-0 hover:bg-muted text-muted-foreground hover:text-foreground"
-                  title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  title={isFullscreen ? t("bCoder.exitFullscreen") : t("bCoder.fullscreen")}
                 >
                   {isFullscreen ? (
                     <Minimize2 className="h-3.5 w-3.5" />
@@ -844,7 +844,7 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
             {/* Preview Content */}
             <div className="flex-1 bg-white dark:bg-zinc-950 overflow-hidden relative w-full h-full">
               {serverUrl ? (
-                <iframe src={serverUrl} className="w-full h-full absolute inset-0 border-0" title="Preview" />
+                <iframe src={serverUrl} className="w-full h-full absolute inset-0 border-0" title={t("bCoder.preview")} />
               ) : (
                 <div className="flex items-center justify-center h-full bg-muted/10">
                   <div className="text-center">
@@ -852,7 +852,7 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
                       <div className="absolute inset-0 bg-emerald-500/20 blur-xl rounded-full animate-pulse" />
                       <Loader2 className="relative h-8 w-8 animate-spin text-emerald-500" />
                     </div>
-                    <p className="text-sm text-muted-foreground mt-3">Starting dev server...</p>
+                    <p className="text-sm text-muted-foreground mt-3">{t("bCoder.startingDevServer")}</p>
                   </div>
                 </div>
               )}

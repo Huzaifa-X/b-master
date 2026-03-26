@@ -1,7 +1,9 @@
-export const bookingSystemTemplate = {
+import { TemplateDefinition } from './index';
+
+export const bookingSystemTemplate: TemplateDefinition = {
   id: "booking-system",
   name: "Booking System",
-  description: "Personal meeting scheduler (Calendly clone)",
+  description: "Personal meeting scheduler (Calendly clone) with Tailwind CSS",
   category: "booking",
   files: {
     "package.json": JSON.stringify(
@@ -24,6 +26,9 @@ export const bookingSystemTemplate = {
         devDependencies: {
           "@vitejs/plugin-react": "^4.2.1",
           vite: "^5.0.8",
+          tailwindcss: "^3.4.1",
+          postcss: "^8.4.35",
+          autoprefixer: "^10.4.17",
         },
       },
       null,
@@ -36,13 +41,39 @@ export const bookingSystemTemplate = {
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <title>Meeting Scheduler</title>
   </head>
-  <body>
+  <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>`,
+
+    "tailwind.config.js": `/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}`,
+
+    "postcss.config.js": `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}`,
 
     "vite.config.js": `import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -50,6 +81,16 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
 })`,
+
+    "src/index.css": `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900;
+  }
+}`,
 
     "src/main.jsx": `import React from 'react'
 import ReactDOM from 'react-dom/client'
@@ -69,9 +110,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   avatar: "https://i.pravatar.cc/150?u=sarahj",
   company: "DesignCo",
   meetingTypes: [
-    { id: '15min', duration: 15, title: "15 Min Quick Sync", color: "var(--blue)" },
-    { id: '30min', duration: 30, title: "30 Min Introduction", color: "var(--emerald)" },
-    { id: '60min', duration: 60, title: "60 Min Deep Dive", color: "var(--purple)" }
+    { id: '15min', duration: 15, title: "15 Min Quick Sync", color: "bg-blue-600" },
+    { id: '30min', duration: 30, title: "30 Min Introduction", color: "bg-emerald-500" },
+    { id: '60min', duration: 60, title: "60 Min Deep Dive", color: "bg-purple-600" }
   ]
 };
 
@@ -93,15 +134,15 @@ export const generateSlots = (date) => {
     // --- LAYOUT COMPONENTS ---
     "src/components/layout/Header.jsx": `export default function Header() {
   return (
-    <header className="site-header">
-      <div className="logo">
-        <span className="logo-icon">M</span>
-        <span className="logo-text">MeetSync</span>
+    <header className="h-16 flex items-center justify-between px-8 bg-white border-b border-slate-200">
+      <div className="flex items-center gap-2 cursor-pointer">
+        <span className="bg-blue-600 text-white w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm">M</span>
+        <span className="font-bold text-lg tracking-tight">MeetSync</span>
       </div>
-      <div className="nav-links">
-        <a href="#">Solutions</a>
-        <a href="#">Features</a>
-        <a href="#">Pricing</a>
+      <div className="flex gap-6">
+        <a href="#" className="text-slate-500 hover:text-slate-900 text-sm font-semibold transition-colors">Solutions</a>
+        <a href="#" className="text-slate-500 hover:text-slate-900 text-sm font-semibold transition-colors">Features</a>
+        <a href="#" className="text-slate-500 hover:text-slate-900 text-sm font-semibold transition-colors">Pricing</a>
       </div>
     </header>
   );
@@ -109,7 +150,7 @@ export const generateSlots = (date) => {
 
     "src/components/layout/Footer.jsx": `export default function Footer() {
   return (
-    <footer className="site-footer">
+    <footer className="py-8 text-center text-slate-400 text-sm">
       Powered by MeetSync
     </footer>
   );
@@ -120,7 +161,7 @@ export const generateSlots = (date) => {
 
 export default function BackButton({ onClick }) {
   return (
-    <button className="back-btn" onClick={onClick}>
+    <button className="w-9 h-9 border border-slate-200 rounded-full flex items-center justify-center cursor-pointer mb-6 text-blue-600 hover:bg-blue-600 hover:border-blue-600 hover:text-white transition-all shadow-sm" onClick={onClick}>
       <ChevronLeft size={20} />
     </button>
   );
@@ -128,7 +169,7 @@ export default function BackButton({ onClick }) {
 
     "src/components/ui/MetaRow.jsx": `export default function MetaRow({ icon: Icon, children, highlight = false }) {
   return (
-    <div className={\`meta-row \${highlight ? 'highlight' : ''}\`}>
+    <div className={\`flex items-center gap-2 \${highlight ? 'text-blue-600' : 'text-slate-500'} font-semibold text-sm mb-3\`}>
       <Icon size={16} />
       <span>{children}</span>
     </div>
@@ -140,11 +181,11 @@ export default function BackButton({ onClick }) {
 
 export default function HostProfile() {
   return (
-    <div className="host-profile">
-      <img src={HOST_INFO.avatar} alt="Profile" className="avatar" />
-      <h2>{HOST_INFO.name}</h2>
-      <p>{HOST_INFO.role} @ {HOST_INFO.company}</p>
-      <p className="description">
+    <div className="text-center p-12 border-b border-slate-100">
+      <img src={HOST_INFO.avatar} alt="Profile" className="w-20 h-20 rounded-full mx-auto mb-4 border-2 border-white shadow-sm" />
+      <h2 className="text-xl font-bold text-slate-900">{HOST_INFO.name}</h2>
+      <p className="text-slate-500 text-sm font-medium">{HOST_INFO.role} @ {HOST_INFO.company}</p>
+      <p className="max-w-[500px] mx-auto mt-4 text-slate-600 text-[15px] leading-relaxed">
         Welcome to my scheduling page. Please follow the instructions to add an event to my calendar.
       </p>
     </div>
@@ -155,16 +196,16 @@ export default function HostProfile() {
 
 export default function MeetingTypeCard({ type, onClick }) {
   return (
-    <button className="meeting-type-card" onClick={onClick}>
-      <div className="type-color-bar" style={{ backgroundColor: type.color }} />
-      <div className="type-content">
-        <h3>{type.title}</h3>
-        <div className="type-meta">
+    <button className="flex items-center w-full p-6 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-all text-left relative group" onClick={onClick}>
+      <div className={\`absolute left-0 top-0 bottom-0 w-1.5 \${type.color}\`} />
+      <div className="flex-1 pl-4">
+        <h3 className="text-[17px] font-bold text-slate-900 mb-1">{type.title}</h3>
+        <div className="flex items-center gap-1.5 text-slate-500 text-sm font-semibold">
           <Clock size={16} />
           <span>{type.duration} min</span>
         </div>
       </div>
-      <ChevronRight className="type-arrow" />
+      <ChevronRight className="text-slate-300 group-hover:text-slate-600 transition-colors" />
     </button>
   );
 }`,
@@ -174,7 +215,7 @@ import MeetingTypeCard from './MeetingTypeCard';
 
 export default function MeetingTypeList({ onSelectType }) {
   return (
-    <div className="meeting-list">
+    <div className="flex flex-col">
       {HOST_INFO.meetingTypes.map(type => (
         <MeetingTypeCard
           key={type.id}
@@ -217,22 +258,22 @@ export default function Calendar({
   const prevMonth = () => onMonthChange(subMonths(currentMonth, 1));
 
   return (
-    <div className="calendar-panel">
-      <h3 className="panel-title">Select a Date & Time</h3>
+    <div className="flex-1 p-8 md:border-r border-slate-100">
+      <h3 className="text-lg font-bold text-slate-900 mb-6">Select a Date & Time</h3>
 
-      <div className="calendar-header">
-        <button className="icon-btn" onClick={prevMonth}>
+      <div className="flex items-center justify-between mb-8">
+        <button className="p-2 hover:bg-slate-50 rounded-full text-blue-600 transition-colors" onClick={prevMonth}>
           <ChevronLeft size={20} />
         </button>
-        <span className="current-month">{format(currentMonth, 'MMMM yyyy')}</span>
-        <button className="icon-btn" onClick={nextMonth}>
+        <span className="font-bold text-[15px] uppercase tracking-wide text-slate-700">{format(currentMonth, 'MMMM yyyy')}</span>
+        <button className="p-2 hover:bg-slate-50 rounded-full text-blue-600 transition-colors" onClick={nextMonth}>
           <ChevronRight size={20} />
         </button>
       </div>
 
-      <div className="calendar-grid">
+      <div className="grid grid-cols-7 gap-1">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-          <div key={day} className="day-name">{day}</div>
+          <div key={day} className="text-center text-[11px] font-bold text-slate-400 uppercase mb-4">{day}</div>
         ))}
 
         {calendarDays.map((day, idx) => {
@@ -240,21 +281,21 @@ export default function Calendar({
           const isCurrentMonth = isSameMonth(day, monthStart);
           const isPast = day < new Date(new Date().setHours(0, 0, 0, 0));
 
-          let classes = "day-cell";
-          if (!isCurrentMonth) classes += " outside-month";
-          if (isSelected) classes += " selected";
-          if (isToday(day)) classes += " today";
-          if (isPast) classes += " past";
+          if (!isCurrentMonth) return <div key={idx} className="aspect-square" />;
 
           return (
             <button
               key={idx}
-              className={classes}
+              className={\`aspect-square flex flex-col items-center justify-center rounded-full text-sm font-bold transition-all relative
+                \${isPast ? 'text-slate-200 cursor-default' : 'text-blue-600 cursor-pointer hover:bg-blue-50'}
+                \${isSelected ? 'bg-blue-600 text-white hover:bg-blue-700' : ''}
+              \`}
               onClick={() => !isPast && onDateSelect(day)}
-              disabled={isPast || !isCurrentMonth}
+              disabled={isPast}
             >
-              <span className="day-number">{format(day, 'd')}</span>
-              {isCurrentMonth && !isPast && <span className="availability-dot" />}
+              <span>{format(day, 'd')}</span>
+              {isToday(day) && !isSelected && <div className="absolute bottom-1.5 w-1 h-1 bg-current rounded-full" />}
+              {!isPast && !isSelected && <div className="mt-1 w-1 h-1 bg-slate-200 rounded-full" />}
             </button>
           );
         })}
@@ -275,19 +316,19 @@ export default function TimeSlots({
   if (!selectedDate) return null;
 
   return (
-    <div className="slots-panel">
-      <p className="slots-date">{format(selectedDate, 'EEEE, MMMM d')}</p>
-      <div className="slots-list">
+    <div className="w-full md:w-[250px] p-8 bg-slate-50/50">
+      <p className="text-[17px] font-bold text-slate-900 mb-6">{format(selectedDate, 'EEEE, MMMM d')}</p>
+      <div className="flex flex-col gap-2 max-h-[380px] overflow-y-auto pr-2 scrollbar-thin">
         {availableSlots.map((slot, idx) => (
-          <div key={idx} className="slot-container">
+          <div key={idx} className="flex gap-2">
             <button
-              className={\`slot-btn \${selectedSlot === slot ? 'active' : ''}\`}
+              className={\`flex-1 p-3.5 border font-bold text-sm rounded-lg transition-all \${selectedSlot === slot ? 'bg-slate-600 border-slate-600 text-white' : 'bg-white border-blue-500 text-blue-600 hover:border-2 hover:p-[13px]'}\`}
               onClick={() => onSlotSelect(slot)}
             >
               {slot}
             </button>
             {selectedSlot === slot && (
-              <button className="confirm-btn slide-in" onClick={onConfirm}>
+              <button className="flex-1 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-all animate-in slide-in-from-right-2 duration-300" onClick={onConfirm}>
                 Confirm
               </button>
             )}
@@ -304,69 +345,40 @@ export default function TimeSlots({
   };
 
   return (
-    <form onSubmit={onSubmit} className="booking-form">
-      <div className="form-group">
-        <label>Name *</label>
+    <form onSubmit={onSubmit} className="flex flex-col gap-5">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-bold text-slate-700">Name *</label>
         <input
           type="text"
           required
           value={formData.name}
           onChange={handleChange('name')}
+          className="w-full px-4 py-2.5 border border-slate-200 rounded-lg outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all shadow-sm"
         />
       </div>
 
-      <div className="form-group">
-        <label>Email *</label>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-bold text-slate-700">Email *</label>
         <input
           type="email"
           required
           value={formData.email}
           onChange={handleChange('email')}
+          className="w-full px-4 py-2.5 border border-slate-200 rounded-lg outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all shadow-sm"
         />
       </div>
 
-      <div className="form-group">
-        <label>Guests</label>
-        <div className="guests-input-group">
-          {formData.guests?.map((guest, idx) => (
-            <div key={idx} className="guest-item">
-              <input
-                type="text"
-                value={guest}
-                onChange={(e) => {
-                  const newGuests = [...(formData.guests || [])];
-                  newGuests[idx] = e.target.value;
-                  setFormData({ ...formData, guests: newGuests });
-                }}
-                placeholder={\`Guest \${idx + 1} name\`}
-              />
-            </div>
-          ))}
-          <button 
-            type="button" 
-            onClick={() => {
-              setFormData({ 
-                ...formData, 
-                guests: [...(formData.guests || []), ''] 
-              });
-            }} 
-            className="add-guests-btn-link"
-          >
-            + Add Guest
-          </button>
-        </div>
-      </div>
-
-      <div className="form-group mt-4">
-        <label>Please share anything that will help prepare for our meeting.</label>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-bold text-slate-700">What is this meeting about?</label>
         <textarea
           rows={4}
           value={formData.notes}
           onChange={handleChange('notes')}
+          className="w-full px-4 py-2.5 border border-slate-200 rounded-lg outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all shadow-sm resize-none"
         />
       </div>
 
-      <button type="submit" className="submit-btn">
+      <button type="submit" className="mt-4 bg-blue-600 text-white py-3.5 px-6 rounded-full font-bold text-[15px] hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 active:scale-[0.98]">
         Schedule Event
       </button>
     </form>
@@ -379,25 +391,26 @@ import { HOST_INFO } from '../../data/host';
 
 export default function SuccessView({ meetingType, selectedDate }) {
   return (
-    <div className="view-container success-view">
-      <div className="success-content">
-        <div className="success-icon">
-          <CheckCircle2 size={64} color="var(--emerald)" />
-        </div>
-        <h2>You are scheduled</h2>
-        <p>A calendar invitation has been sent to your email address.</p>
+    <div className="flex flex-col items-center justify-center p-12 text-center animate-in fade-in duration-700">
+      <div className="mb-6">
+        <CheckCircle2 size={64} className="text-emerald-500 mx-auto" />
+      </div>
+      <h2 className="text-2xl font-bold text-slate-900 mb-2">You are scheduled</h2>
+      <p className="text-slate-500 mb-10 max-w-[350px]">A calendar invitation has been sent to your email address.</p>
 
-        <div className="success-details-card">
-          <h3>{meetingType.title}</h3>
-          <div className="meta-row">
+      <div className="w-full max-w-md bg-slate-50 border border-slate-100 rounded-2xl p-8 text-left shadow-sm">
+        <h3 className="text-lg font-bold text-slate-900 mb-6">{meetingType.title}</h3>
+        
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-3 text-slate-600 font-semibold text-sm">
             <User size={18} />
             <span>{HOST_INFO.name}</span>
           </div>
-          <div className="meta-row highlight">
+          <div className="flex items-center gap-3 text-blue-600 font-bold text-sm">
             <Calendar size={18} />
             <span>{format(selectedDate, 'h:mma')} - {format(selectedDate, 'EEEE, MMMM d, yyyy')}</span>
           </div>
-          <div className="meta-row">
+          <div className="flex items-center gap-3 text-slate-600 font-semibold text-sm">
             <Video size={18} />
             <span>Web conferencing details to follow.</span>
           </div>
@@ -413,7 +426,7 @@ import MeetingTypeList from '../components/booking/MeetingTypeList';
 
 export default function SelectTypeView({ onSelectType }) {
   return (
-    <div className="view-container types-view">
+    <div className="flex flex-col h-full animate-in fade-in duration-500">
       <HostProfile />
       <MeetingTypeList onSelectType={onSelectType} />
     </div>
@@ -441,18 +454,18 @@ export default function SelectTimeView({
   const availableSlots = generateSlots(selectedDate);
 
   return (
-    <div className="view-container schedule-view">
-      <div className="schedule-sidebar">
+    <div className="flex flex-col md:flex-row h-full animate-in fade-in duration-500">
+      <div className="w-full md:w-[320px] p-8 border-b md:border-b-0 md:border-r border-slate-100 flex flex-col">
         <BackButton onClick={onBack} />
-        <div className="sidebar-details">
-          <p className="subtitle">{HOST_INFO.name}</p>
-          <h2 className="title">{meetingType.title}</h2>
+        <div className="flex flex-col">
+          <p className="text-slate-500 text-sm font-bold mb-1 uppercase tracking-tight">{HOST_INFO.name}</p>
+          <h2 className="text-2xl font-bold text-slate-900 mb-6">{meetingType.title}</h2>
           <MetaRow icon={Clock}>{meetingType.duration} min</MetaRow>
           <MetaRow icon={Video}>Google Meet or Zoom</MetaRow>
         </div>
       </div>
 
-      <div className="schedule-main">
+      <div className="flex flex-1 flex-col md:flex-row h-full">
         <Calendar
           currentMonth={currentMonth}
           selectedDate={selectedDate}
@@ -487,12 +500,12 @@ export default function EnterDetailsView({
   onSubmit
 }) {
   return (
-    <div className="view-container details-view">
-      <div className="schedule-sidebar">
+    <div className="flex flex-col md:flex-row h-full animate-in fade-in duration-500">
+      <div className="w-full md:w-[320px] p-8 border-b md:border-b-0 md:border-r border-slate-100 flex flex-col">
         <BackButton onClick={onBack} />
-        <div className="sidebar-details">
-          <p className="subtitle">{HOST_INFO.name}</p>
-          <h2 className="title">{meetingType.title}</h2>
+        <div className="flex flex-col">
+          <p className="text-slate-500 text-sm font-bold mb-1 uppercase tracking-tight">{HOST_INFO.name}</p>
+          <h2 className="text-2xl font-bold text-slate-900 mb-6">{meetingType.title}</h2>
           <MetaRow icon={Clock}>{meetingType.duration} min</MetaRow>
           <MetaRow icon={Calendar} highlight>
             {format(selectedDate, 'h:mma')} - {format(selectedDate, 'EEEE, MMMM d, yyyy')}
@@ -503,8 +516,8 @@ export default function EnterDetailsView({
         </div>
       </div>
 
-      <div className="schedule-main form-main">
-        <h3 className="panel-title">Enter Details</h3>
+      <div className="flex-1 p-8 md:p-12 max-w-[600px]">
+        <h3 className="text-xl font-bold text-slate-900 mb-8">Enter Details</h3>
         <BookingForm
           formData={formData}
           onChange={onFormChange}
@@ -523,7 +536,6 @@ import SelectTypeView from './views/SelectTypeView';
 import SelectTimeView from './views/SelectTimeView';
 import EnterDetailsView from './views/EnterDetailsView';
 import SuccessView from './components/booking/SuccessView';
-import './App.css';
 
 function App() {
   const [currentStep, setCurrentStep] = useState('select-type');
@@ -553,11 +565,11 @@ function App() {
   };
 
   return (
-    <div className="app-wrapper">
+    <div className="min-h-screen flex flex-col font-sans bg-slate-50">
       <Header />
 
-      <main className="main-stage">
-        <div className="booking-card">
+      <main className="flex-1 flex items-center justify-center p-6 md:p-12">
+        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-[1000px] min-h-[500px] overflow-hidden">
           {currentStep === 'select-type' && (
             <SelectTypeView onSelectType={handleSelectType} />
           )}
@@ -602,164 +614,5 @@ function App() {
 }
 
 export default App`,
-
-    // --- STYLES ---
-    "src/App.css": `
-:root {
-  --blue: #006BFF;
-  --blue-hover: #0056CC;
-  --emerald: #10B981;
-  --purple: #8B5CF6;
-
-  --bg-color: #F8F9FA;
-  --surface: #FFFFFF;
-  --text-main: #1A1A1A;
-  --text-muted: #666666;
-  --text-light: #999999;
-  --border: #E5E5E5;
-  --border-light: #F2F2F2;
-  --border-focus: #B3D4FF;
-
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.05);
-  --shadow-lg: 0 8px 30px rgba(0,0,0,0.08);
-}
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Inter', system-ui, sans-serif; background-color: var(--bg-color); color: var(--text-main); line-height: 1.5; -webkit-font-smoothing: antialiased; }
-
-/* Base Layout */
-.app-wrapper { min-height: 100vh; display: flex; flex-direction: column; }
-
-.site-header { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; background: var(--surface); border-bottom: 1px solid var(--border); }
-.logo { display: flex; align-items: center; gap: 0.5rem; }
-.logo-icon { background: var(--blue); color: white; width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
-.logo-text { font-weight: 700; font-size: 1.125rem; }
-.nav-links { display: flex; gap: 1.5rem; }
-.nav-links a { text-decoration: none; color: var(--text-muted); font-weight: 500; font-size: 0.875rem; }
-.nav-links a:hover { color: var(--text-main); }
-
-.site-footer { text-align: center; padding: 2rem; color: var(--text-light); font-size: 0.875rem; }
-
-/* Main Container */
-.main-stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem; }
-.booking-card { background: var(--surface); border-radius: 12px; box-shadow: var(--shadow-lg); border: 1px solid var(--border); width: 100%; max-width: 1000px; min-height: 500px; overflow: hidden; }
-.view-container { display: flex; height: 100%; min-height: 500px; }
-
-/* Shared Typography */
-.meta-row { display: flex; align-items: center; gap: 0.5rem; color: var(--text-muted); font-weight: 500; font-size: 0.875rem; margin-bottom: 0.75rem; line-height: 1.4; }
-.meta-row.highlight { color: var(--blue); }
-.subtitle { color: var(--text-muted); font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; }
-.title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.25rem; color: var(--text-main); }
-.panel-title { font-size: 1.125rem; font-weight: 700; margin-bottom: 1.5rem; }
-
-/* Select Type View */
-.types-view { flex-direction: column; }
-.host-profile { text-align: center; padding: 3rem 2rem 2rem; border-bottom: 1px solid var(--border); }
-.avatar { width: 80px; height: 80px; border-radius: 50%; margin-bottom: 1rem; }
-.host-profile h2 { font-size: 1.25rem; margin-bottom: 0.25rem; }
-.host-profile p { color: var(--text-muted); font-size: 0.875rem; }
-.host-profile .description { max-width: 500px; margin: 1rem auto 0; color: var(--text-main); }
-
-.meeting-list { padding: 0; display: flex; flex-direction: column; }
-.meeting-type-card { display: flex; align-items: center; background: transparent; border: none; border-bottom: 1px solid var(--border); padding: 1.5rem 2rem; cursor: pointer; text-align: left; transition: background 0.2s; position: relative; }
-.meeting-type-card:hover { background: var(--bg-color); }
-.meeting-type-card:last-child { border-bottom: none; }
-.type-color-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; }
-.type-content { flex: 1; padding-left: 1rem; }
-.type-content h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem; }
-.type-meta { display: flex; align-items: center; gap: 0.25rem; color: var(--text-muted); font-size: 0.875rem; font-weight: 500; }
-.type-arrow { color: var(--text-light); }
-
-/* Split Layout */
-.schedule-sidebar { width: 320px; border-right: 1px solid var(--border); padding: 2rem; background: var(--surface); }
-.back-btn { background: transparent; border: 1px solid var(--border); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; margin-bottom: 1.5rem; color: var(--blue); transition: all 0.2s; }
-.back-btn:hover { background: var(--blue); border-color: var(--blue); color: white; }
-.schedule-main { flex: 1; display: flex; background: var(--surface); }
-
-/* Calendar Panel */
-.calendar-panel { flex: 1; padding: 2rem; border-right: 1px solid var(--border); }
-.calendar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
-.current-month { font-weight: 600; font-size: 1rem; }
-.icon-btn { background: transparent; border: none; color: var(--blue); cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-.icon-btn:hover { background: var(--bg-color); }
-
-.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-.day-name { text-align: center; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; padding-bottom: 0.5rem; }
-.day-cell { aspect-ratio: 1; border: none; background: transparent; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; cursor: pointer; font-family: inherit; font-size: 0.875rem; font-weight: 600; color: var(--blue); transition: all 0.2s; }
-.day-cell:hover:not(:disabled) { background: #EBF4FF; }
-.day-cell.selected { background: var(--blue); color: white; }
-.day-cell.today::after { content: ''; position: absolute; bottom: 4px; width: 4px; height: 4px; background: currentColor; border-radius: 50%; }
-.day-cell:disabled { color: var(--text-light); cursor: default; font-weight: 400; }
-.day-cell.outside-month { opacity: 0; pointer-events: none; }
-.availability-dot { width: 4px; height: 4px; background: var(--border); border-radius: 50%; margin-top: 2px; }
-.day-cell.selected .availability-dot { background: rgba(255,255,255,0.5); }
-
-/* Slots Panel */
-.slots-panel { width: 250px; padding: 2rem; background: var(--bg-color); }
-.slots-date { font-size: 1rem; font-weight: 600; margin-bottom: 1.5rem; }
-.slots-list { display: flex; flex-direction: column; gap: 0.5rem; height: 380px; overflow-y: auto; padding-right: 0.5rem; }
-.slots-list::-webkit-scrollbar { width: 4px; }
-.slots-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-.slot-container { display: flex; gap: 0.5rem; }
-.slot-btn { flex: 1; padding: 0.875rem; background: var(--surface); border: 1px solid var(--blue); color: var(--blue); border-radius: 4px; font-weight: 600; font-size: 0.875rem; cursor: pointer; transition: all 0.2s; font-family: inherit; }
-.slot-btn:hover { border-width: 2px; padding: calc(0.875rem - 1px); }
-.slot-btn.active { background: var(--text-muted); border-color: var(--text-muted); color: white; }
-.confirm-btn { flex: 1; background: var(--blue); color: white; border: none; border-radius: 4px; font-weight: 600; font-size: 0.875rem; cursor: pointer; font-family: inherit; transition: background 0.2s; }
-.confirm-btn:hover { background: var(--blue-hover); }
-
-@keyframes slideIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
-.slide-in { animation: slideIn 0.2s ease forwards; }
-
-/* Form View */
-.form-main { flex-direction: column; padding: 2rem; max-width: 500px; }
-.form-group { margin-bottom: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; }
-.form-group label { font-size: 0.875rem; font-weight: 600; color: var(--text-main); }
-.form-group input, .form-group textarea { padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 0.875rem; outline: none; transition: border 0.2s, box-shadow 0.2s; }
-.form-group input:focus, .form-group textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--border-focus); }
-.add-guests-btn { background: transparent; border: 1px solid currentColor; color: var(--blue); padding: 0.5rem 1rem; border-radius: 20px; font-weight: 600; font-size: 0.875rem; cursor: pointer; align-self: flex-start; margin-bottom: 1rem; transition: all 0.2s; }
-.add-guests-btn:hover { background: var(--bg-color); }
-.mt-4 { margin-top: 1rem; }
-.submit-btn { background: var(--blue); color: white; border: none; padding: 0.875rem 1.5rem; border-radius: 8px; font-weight: 600; font-size: 0.875rem; cursor: pointer; margin-top: 1rem; transition: background 0.2s; }
-.submit-btn:hover { background: var(--blue-hover); }
-
-/* Success View */
-.success-view { align-items: center; justify-content: center; text-align: center; padding: 2rem; }
-.success-content { max-width: 400px; width: 100%; }
-.success-icon { display: flex; justify-content: center; margin-bottom: 1.5rem; }
-.success-content h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
-.success-content p { color: var(--text-muted); margin-bottom: 2rem; }
-.success-details-card { text-align: left; border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; }
-.success-details-card h3 { font-size: 1.125rem; font-weight: 700; margin-bottom: 1rem; }
-
-/* Responsive */
-@media (max-width: 800px) {
-  .view-container { flex-direction: column; height: auto; }
-  .schedule-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); padding: 1.5rem; }
-  .schedule-main { flex-direction: column; }
-  .calendar-panel { border-right: none; border-bottom: 1px solid var(--border); }
-  .slots-panel { width: 100%; }
-  .slots-list { height: auto; max-height: 300px; }
-}
-`,
-
-    "src/index.css": `:root {
-  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color-scheme: light;
-  background-color: #F8F9FA;
-  text-rendering: optimizeLegibility;
-}
-
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-#root {
-  width: 100%;
-}`
   }
 };

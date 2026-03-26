@@ -1,7 +1,9 @@
-export const seoContentTemplate = {
+import { TemplateDefinition } from './index';
+
+export const seoContentTemplate: TemplateDefinition = {
   id: "seo-content",
   name: "SEO Content",
-  description: "SEO analysis and content optimization tool powered by AI",
+  description: "SEO analysis and content optimization tool powered by AI with Tailwind CSS",
   category: "Marketing",
   icon: "Search",
   files: {
@@ -24,6 +26,9 @@ export const seoContentTemplate = {
         devDependencies: {
           "@vitejs/plugin-react": "^4.2.1",
           vite: "^5.0.8",
+          tailwindcss: "^3.4.1",
+          postcss: "^8.4.35",
+          autoprefixer: "^10.4.17",
         },
       },
       null,
@@ -38,14 +43,52 @@ export const seoContentTemplate = {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <title>SEO Content Optimizer</title>
   </head>
-  <body>
+  <body class="bg-[#0b0c10] text-slate-200">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>`,
+
+    "tailwind.config.js": `/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+      },
+      colors: {
+        brand: {
+          50: '#f0f9ff',
+          100: '#e0f2fe',
+          200: '#bae6fd',
+          300: '#7dd3fc',
+          400: '#38bdf8',
+          500: '#0ea5e9',
+          600: '#0284c7',
+          700: '#0369a1',
+          800: '#075985',
+          900: '#0c4a6e',
+          950: '#082f49',
+        },
+      },
+    },
+  },
+  plugins: [],
+}`,
+
+    "postcss.config.js": `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}`,
 
     "vite.config.js": `import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -53,6 +96,31 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
 })`,
+
+    "src/index.css": `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased text-slate-200;
+    background: radial-gradient(circle at top right, #1e293b, #0f172a, #0b0c10);
+    min-height: 100vh;
+  }
+}
+
+.glass-card {
+  @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}`,
 
     "src/main.jsx": `import React from 'react'
 import ReactDOM from 'react-dom/client'
@@ -64,13 +132,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>,
 )`,
-
-    "src/index.css": `* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-`,
 
     // --- DATA ---
     "src/data/mockData.js": `export const sampleKeywords = [
@@ -91,100 +152,125 @@ export const seoChecklist = [
 
     // --- COMPONENTS ---
     "src/components/SEOScore.jsx": `export default function SEOScore({ score }) {
-  const getColorClass = () => {
-    if (score >= 80) return 'score-good'
-    if (score >= 60) return 'score-warning'
-    return 'score-bad'
+  const getColor = () => {
+    if (score >= 80) return 'stroke-emerald-500'
+    if (score >= 60) return 'stroke-amber-500'
+    return 'stroke-rose-500'
   }
 
+  const getTextColor = () => {
+    if (score >= 80) return 'text-emerald-500'
+    if (score >= 60) return 'text-amber-500'
+    return 'text-rose-500'
+  }
+
+  const circumference = 351.86; // 2 * PI * 56
+  const offset = circumference - (score / 100) * circumference;
+
   return (
-    <div className="seo-score">
-      <svg className="score-ring" viewBox="0 0 128 128">
+    <div className="relative w-32 h-32 shrink-0">
+      <svg className="w-full h-full -rotate-90" viewBox="0 0 128 128">
         <circle
           cx="64"
           cy="64"
           r="56"
-          strokeWidth="12"
+          strokeWidth="10"
           fill="none"
-          className="score-bg"
+          className="stroke-white/5"
         />
         <circle
           cx="64"
           cy="64"
           r="56"
-          strokeWidth="12"
+          strokeWidth="10"
           fill="none"
-          strokeDasharray={350}
-          strokeDashoffset={350 - (350 * score) / 100}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
           strokeLinecap="round"
-          className={\`score-progress \${getColorClass()}\`}
+          className={\`transition-all duration-1000 ease-out \${getColor()}\`}
         />
       </svg>
-      <div className="score-value-wrapper">
-        <span className={\`score-value \${getColorClass()}\`}>{score}</span>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className={\`text-3xl font-black tracking-tighter leading-none \${getTextColor()}\`}>{score}</span>
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Score</span>
       </div>
     </div>
   )
 }`,
 
-    "src/components/KeywordItem.jsx": `import { Hash, TrendingUp } from 'lucide-react'
+    "src/components/KeywordItem.jsx": `import { Hash, TrendingUp, BarChart3 } from 'lucide-react'
 
 export default function KeywordItem({ keyword, volume, difficulty, trend }) {
-  const getDifficultyClass = () => {
-    if (difficulty <= 30) return 'difficulty-easy'
-    if (difficulty <= 60) return 'difficulty-medium'
-    return 'difficulty-hard'
+  const getDifficultyColor = () => {
+    if (difficulty <= 40) return 'text-emerald-400 bg-emerald-400/10'
+    if (difficulty <= 70) return 'text-amber-400 bg-amber-400/10'
+    return 'text-rose-400 bg-rose-400/10'
   }
 
   return (
-    <div className="keyword-item">
-      <div className="keyword-left">
-        <Hash className="icon-sm" />
-        <span className="keyword-text">{keyword}</span>
-      </div>
-      <div className="keyword-right">
-        <div className="keyword-volume">
-          <div className="volume-value">{volume.toLocaleString()}</div>
-          <div className="volume-label">monthly</div>
+    <div className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl hover:bg-white/10 hover:border-white/10 transition-all group">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 bg-brand-500/10 text-brand-400 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+          <Hash size={18} />
         </div>
-        <span className={\`difficulty-badge \${getDifficultyClass()}\`}>
-          {difficulty}% hard
+        <div>
+          <span className="text-sm font-bold text-slate-100 block group-hover:text-brand-400 transition-colors">{keyword}</span>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1">
+                <BarChart3 size={10} /> {volume.toLocaleString()}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-4">
+        <span className={\`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest \${getDifficultyColor()}\`}>
+          {difficulty}% KD
         </span>
-        {trend === 'up' && <TrendingUp className="trend-icon" />}
+        {trend === 'up' && (
+            <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center animate-bounce">
+                <TrendingUp size={14} />
+            </div>
+        )}
       </div>
     </div>
   )
 }`,
 
-    "src/components/ChecklistItem.jsx": `import { CheckCircle, AlertCircle } from 'lucide-react'
+    "src/components/ChecklistItem.jsx": `import { CheckCircle2, AlertCircle, ChevronRight } from 'lucide-react'
 
 export default function ChecklistItem({ text, passed, priority }) {
   return (
-    <div className={\`checklist-item \${passed ? 'passed' : 'warning'}\`}>
-      <div className={\`checklist-icon \${passed ? 'passed' : 'warning'}\`}>
-        {passed ? (
-          <CheckCircle className="icon-xs" />
-        ) : (
-          <AlertCircle className="icon-xs" />
-        )}
+    <div className={\`flex items-start gap-4 p-4 rounded-2xl border transition-all \${passed ? 'bg-emerald-500/5 border-emerald-500/10 opacity-70' : 'glass-card border-rose-500/20'}\`}>
+      <div className={\`mt-0.5 shrink-0 \${passed ? 'text-emerald-500' : 'text-rose-500'}\`}>
+        {passed ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
       </div>
-      <div className="checklist-content">
-        <p className="checklist-text">{text}</p>
-        <span className="checklist-priority">{priority} priority</span>
+      <div className="flex-1 min-w-0">
+        <p className={\`text-sm font-bold leading-snug mb-1 \${passed ? 'text-slate-400 line-through' : 'text-slate-100'}\`}>{text}</p>
+        <span className={\`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border \${
+            priority === 'High' ? 'bg-rose-500/10 text-rose-400 border-rose-500/10' : 'bg-slate-500/10 text-slate-400 border-slate-500/10'
+        }\`}>
+          {priority} Priority
+        </span>
       </div>
+      {!passed && <ChevronRight size={14} className="text-slate-600 mt-1" />}
     </div>
   )
 }`,
 
-    "src/components/SuggestionCard.jsx": `export default function SuggestionCard({ title, description, icon: Icon }) {
+    "src/components/SuggestionCard.jsx": `import { ArrowUpRight } from 'lucide-react'
+
+export default function SuggestionCard({ title, description, icon: Icon }) {
   return (
-    <div className="suggestion-card">
-      <div className="suggestion-icon">
-        <Icon className="icon-md" />
+    <button className="flex items-start gap-4 p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-brand-500/30 hover:bg-white/10 transition-all text-left group">
+      <div className="w-10 h-10 bg-brand-500/10 text-brand-400 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-brand-500 group-hover:text-white transition-all">
+        <Icon size={20} />
       </div>
-      <h4 className="suggestion-title">{title}</h4>
-      <p className="suggestion-desc">{description}</p>
-    </div>
+      <div className="flex-1 min-w-0">
+        <h4 className="text-sm font-black text-slate-100 mb-1 group-hover:text-brand-400 transition-colors uppercase tracking-tight">{title}</h4>
+        <p className="text-xs font-medium text-slate-500 leading-relaxed group-hover:text-slate-300">{description}</p>
+      </div>
+      <ArrowUpRight size={16} className="text-slate-700 group-hover:text-brand-400 transition-colors" />
+    </button>
   )
 }`,
 
@@ -192,14 +278,13 @@ export default function ChecklistItem({ text, passed, priority }) {
     "src/App.jsx": `import { useState } from 'react'
 import {
   Search, Target, FileText, Lightbulb, BarChart2, Globe, Hash, Zap, ArrowRight, RefreshCw,
-  Sparkles
+  Sparkles, History, Settings, Bell, ChevronRight, LayoutGrid
 } from 'lucide-react'
 import SEOScore from './components/SEOScore'
 import KeywordItem from './components/KeywordItem'
 import ChecklistItem from './components/ChecklistItem'
 import SuggestionCard from './components/SuggestionCard'
 import { sampleKeywords, seoChecklist } from './data/mockData'
-import './App.css'
 
 export default function App() {
   const [url, setUrl] = useState('')
@@ -215,8 +300,8 @@ export default function App() {
     setTimeout(() => {
       setIsAnalyzing(false)
       setHasResults(true)
-      setScore(Math.floor(Math.random() * 20) + 75) // New score between 75-95
-      showNotification('Analysis Complete!')
+      setScore(Math.floor(Math.random() * 20) + 75)
+      showNotification('AI Engine: Content Indexed Successfully')
     }, 2000)
   }
 
@@ -224,873 +309,230 @@ export default function App() {
     setActiveAction(actionName)
     setTimeout(() => {
       setActiveAction(null)
-      showNotification(\`\${actionName} Generated!\`)
+      showNotification(\`Successfully generated \${actionName}\`)
     }, 1500)
   }
 
   const showNotification = (msg) => {
     setNotification(msg)
-    setTimeout(() => setNotification(null), 3000)
+    setTimeout(() => setNotification(null), 3500)
   }
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="header-container">
-          <div className="header-content">
-            <div className="brand">
-              <div className="brand-icon">
-                <Search className="icon-md" />
-              </div>
-              <div>
-                <h1 className="brand-title">SEO Optimizer</h1>
-                <p className="brand-subtitle">AI-Powered Content Analysis</p>
-              </div>
-            </div>
-            <button 
-              onClick={() => showNotification('Upgrade to Pro started!')}
-              className="upgrade-btn font-bold active:scale-95 transition-all"
-            >
-              <Sparkles className="icon-sm" />
-              Upgrade Pro
-            </button>
+    <div className="max-w-7xl mx-auto min-h-screen py-10 px-6 font-sans">
+      {/* Sidebar Sim (Nav) */}
+      <nav className="fixed left-6 top-1/2 -translate-y-1/2 hidden xl:flex flex-col gap-6 p-4 glass-card rounded-3xl z-50">
+          <button className="w-12 h-12 flex items-center justify-center text-brand-400 hover:bg-brand-500 hover:text-white rounded-2xl transition-all"><LayoutGrid size={24} /></button>
+          <button className="w-12 h-12 flex items-center justify-center text-slate-500 hover:bg-white/10 rounded-2xl transition-all"><Search size={24} /></button>
+          <button className="w-12 h-12 flex items-center justify-center text-slate-500 hover:bg-white/10 rounded-2xl transition-all"><History size={24} /></button>
+          <div className="h-px bg-white/10 w-8 mx-auto" />
+          <button className="w-12 h-12 flex items-center justify-center text-slate-500 hover:bg-white/10 rounded-2xl transition-all"><Settings size={24} /></button>
+      </nav>
+
+      {/* Header */}
+      <header className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
+        <div className="flex items-center gap-5">
+          <div className="w-14 h-14 bg-gradient-to-tr from-brand-600 to-brand-400 rounded-2xl flex items-center justify-center shadow-xl shadow-brand-500/20 active:scale-95 transition-transform rotate-3">
+            <Search className="text-white" size={30} strokeWidth={3} />
           </div>
+          <div>
+            <h1 className="text-3xl font-black tracking-tighter leading-none mb-1 text-white">SEO Indexer</h1>
+            <p className="text-xs font-black uppercase tracking-[0.4em] text-slate-500">Autonomous Content Intelligence</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+            <button className="w-12 h-12 flex items-center justify-center glass-card rounded-2xl text-slate-400 hover:text-white transition-colors relative">
+                <Bell size={20} />
+                <span className="absolute top-3 right-3 w-2 h-2 bg-rose-500 rounded-full border-2 border-[#0b0c10]" />
+            </button>
+            <button 
+                onClick={() => handleAction('Pro Upgrade')}
+                className="flex items-center gap-3 px-6 py-4 bg-brand-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-brand-500/20 hover:bg-brand-600 hover:-translate-y-1 active:scale-95 transition-all"
+            >
+                <Sparkles size={16} />
+                Upgrade Pro
+            </button>
         </div>
       </header>
 
-      <main className="main-content">
-        {notification && (
-          <div className="notification">
-            <Zap className="icon-sm" />
-            {notification}
-          </div>
-        )}
-
-        <div className="card input-card">
-          <h2 className="card-title">Analyze Your Content</h2>
-          <div className="input-row">
-            <div className="input-wrapper">
-              <Globe className="input-icon" />
-              <input
-                type="text"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="Enter URL or paste content to analyze..."
-                className="url-input"
-              />
+      {/* Main Grid */}
+      <main className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        
+        {/* Left Column: Input & Checklist */}
+        <div className="lg:col-span-8 space-y-10">
+          
+          {/* Analysis Form */}
+          <div className="glass-card rounded-[2.5rem] p-10 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-500/5 blur-[80px] rounded-full group-hover:scale-150 transition-transform duration-1000" />
+            <h2 className="text-xl font-black text-white tracking-tight leading-none mb-8 uppercase italic flex items-center gap-3">
+                <div className="w-2 h-6 bg-brand-500 rounded-full" />
+                Initialize Audit
+            </h2>
+            <div className="flex flex-col sm:flex-row gap-4 relative z-10">
+              <div className="flex-1 relative group/input">
+                <Globe className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/input:text-brand-400 transition-colors" size={20} />
+                <input
+                  type="text"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="Insert domain URL or content string..."
+                  className="w-full h-16 bg-white/5 border border-white/10 rounded-[1.5rem] pl-16 pr-6 text-slate-100 font-bold outline-none focus:border-brand-500/50 transition-all placeholder:text-slate-600"
+                />
+              </div>
+              <button
+                onClick={handleAnalyze}
+                disabled={isAnalyzing}
+                className="h-16 px-8 bg-slate-100 text-slate-900 rounded-[1.5rem] font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-white active:scale-95 transition-all disabled:opacity-50 shadow-xl shadow-white/5"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <RefreshCw className="spinning" size={20} strokeWidth={3} />
+                    Processing
+                  </>
+                ) : (
+                  <>
+                    <Zap size={20} fill="currentColor" strokeWidth={0} />
+                    Run Audit
+                  </>
+                )}
+              </button>
             </div>
-            <button
-              onClick={handleAnalyze}
-              disabled={isAnalyzing}
-              className="analyze-btn"
-            >
-              {isAnalyzing ? (
-                <>
-                  <RefreshCw className="icon-sm spinning" />
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Search className="icon-sm" />
-                  Analyze
-                </>
-              )}
-            </button>
           </div>
+
+          {hasResults && (
+            <div className="space-y-10 animate-in slide-in-from-bottom-10 duration-1000">
+                {/* Score Summary */}
+                <div className="glass-card rounded-[2.5rem] p-10 flex flex-col md:flex-row items-center gap-10">
+                    <SEOScore score={score} />
+                    <div className="flex-1 text-center md:text-left">
+                        <h3 className="text-2xl font-black text-white tracking-tight leading-none mb-3">
+                            {score > 80 ? 'Superior Optimization' : 'Optimization Signal Detected'}
+                        </h3>
+                        <p className="text-slate-400 font-medium text-lg mb-6 leading-snug">
+                            {score > 80 
+                                ? 'Your index score exceeds 92% of the global marketing pool.' 
+                                : 'Baseline requirements met. Significant crawlability updates available.'}
+                        </p>
+                        <div className="flex flex-wrap justify-center md:justify-start gap-4">
+                            <div className="px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-emerald-500/10">6 Audit Passes</div>
+                            <div className="px-4 py-2 bg-rose-500/10 text-rose-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-rose-500/10">2 Critical Fixes</div>
+                            <div className="px-4 py-2 bg-amber-500/10 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-amber-500/10">3 Opportunities</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Audit Checklist */}
+                <div className="glass-card rounded-[2.5rem] p-10">
+                    <div className="flex items-center justify-between mb-8 border-b border-white/5 pb-6">
+                        <h3 className="text-lg font-black text-white tracking-widest uppercase italic flex items-center gap-3 leading-none">
+                            <Target className="text-rose-500" size={20} />
+                            Critical Protocols
+                        </h3>
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">System Live Audit</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {seoChecklist.map((item, index) => (
+                            <ChecklistItem key={index} {...item} />
+                        ))}
+                    </div>
+                </div>
+            </div>
+          )}
         </div>
 
-        {hasResults && (
-          <div className="results-grid">
-            <div className="main-column">
-              <div className="card score-card">
-                <div className="score-content">
-                  <SEOScore score={score} />
-                  <div className="score-info">
-                    <h3 className="score-title">
-                      {score > 80 ? 'Excellent SEO Score' : 'Good SEO Score'}
-                    </h3>
-                    <p className="score-desc">
-                      {score > 80 
-                        ? 'Great job! Your content is highly optimized for search engines.' 
-                        : 'Your content is well-optimized but has room for improvement.'}
-                    </p>
-                    <div className="score-badges">
-                      <span className="badge passed">
-                        {score > 85 ? '6' : '4'} Passed
-                      </span>
-                      <span className="badge warning">2 Warnings</span>
+        {/* Right Column: Keywords & AI */}
+        <div className="lg:col-span-4 space-y-10">
+            {hasResults && (
+                <>
+                    {/* Related Keywords */}
+                    <div className="glass-card rounded-[2.5rem] p-10">
+                        <div className="flex items-center justify-between mb-8">
+                            <h3 className="text-xs font-black text-white uppercase tracking-[0.2em] flex items-center gap-2">
+                                <Hash className="text-brand-400" size={16} /> Data Vectors
+                            </h3>
+                            <button className="text-[10px] font-black text-brand-400 hover:text-brand-300 transition-colors uppercase tracking-widest">View All</button>
+                        </div>
+                        <div className="flex flex-col gap-4">
+                            {sampleKeywords.map((keyword, index) => (
+                                <KeywordItem key={index} {...keyword} />
+                            ))}
+                        </div>
                     </div>
-                  </div>
-                </div>
-              </div>
 
-              <div className="card">
-                <h3 className="section-title">
-                  <Target className="icon-md text-teal" />
-                  SEO Checklist
-                </h3>
-                <div className="checklist">
-                  {seoChecklist.map((item, index) => (
-                    <ChecklistItem key={index} {...item} />
-                  ))}
-                </div>
-              </div>
+                    {/* Quick AI Actions */}
+                    <div className="glass-card rounded-[2.5rem] p-10 bg-gradient-to-br from-white/[0.07] to-transparent">
+                        <h3 className="text-xs font-black text-white uppercase tracking-[0.2em] mb-8 flex items-center gap-2">
+                            <Zap className="text-amber-500" size={16} fill="currentColor" /> Autonomous Actions
+                        </h3>
+                        <div className="flex flex-col gap-3">
+                            {[
+                                { name: 'Meta Tags', icon: FileText, color: 'text-brand-400', bg: 'bg-brand-500/10' },
+                                { name: 'Content Ideas', icon: Lightbulb, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+                                { name: 'Market Intel', icon: BarChart2, color: 'text-purple-400', bg: 'bg-purple-500/10' }
+                            ].map((action) => (
+                                <button 
+                                    key={action.name}
+                                    onClick={() => handleAction(action.name)}
+                                    disabled={activeAction}
+                                    className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all group"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className={\`w-10 h-10 \${action.bg} \${action.color} rounded-xl flex items-center justify-center group-hover:rotate-12 transition-transform\`}>
+                                            {activeAction === action.name ? <RefreshCw className="spinning" size={18} /> : <action.icon size={18} />}
+                                        </div>
+                                        <span className="text-xs font-black uppercase tracking-widest text-slate-300 group-hover:text-white">{action.name}</span>
+                                    </div>
+                                    <ChevronRight size={14} className="text-slate-600 group-hover:translate-x-1 transition-transform" />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
 
-              <div className="card">
-                <h3 className="section-title">
-                  <Hash className="icon-md text-teal" />
-                  Related Keywords
-                </h3>
-                <div className="keywords-list">
-                  {sampleKeywords.map((keyword, index) => (
-                    <KeywordItem key={index} {...keyword} />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="sidebar">
-              <div className="card">
-                <h3 className="section-title">Quick Actions</h3>
-                <div className="quick-actions">
-                  <button 
-                    onClick={() => handleAction('Meta Tags')} 
-                    className={\`action-btn \${activeAction === 'Meta Tags' ? 'active' : ''}\`}
-                    disabled={activeAction}
-                  >
-                    {activeAction === 'Meta Tags' ? <RefreshCw className="icon-md spinning" /> : <FileText className="icon-md text-teal" />}
-                    <span>{activeAction === 'Meta Tags' ? 'Generating...' : 'Generate Meta Tags'}</span>
-                  </button>
-                  <button 
-                    onClick={() => handleAction('Content Ideas')} 
-                    className={\`action-btn \${activeAction === 'Content Ideas' ? 'active' : ''}\`}
-                    disabled={activeAction}
-                  >
-                    {activeAction === 'Content Ideas' ? <RefreshCw className="icon-md spinning" /> : <Lightbulb className="icon-md text-amber" />}
-                    <span>{activeAction === 'Content Ideas' ? 'Thinking...' : 'Get Content Ideas'}</span>
-                  </button>
-                  <button 
-                    onClick={() => handleAction('Competitors')} 
-                    className={\`action-btn \${activeAction === 'Competitors' ? 'active' : ''}\`}
-                    disabled={activeAction}
-                  >
-                    {activeAction === 'Competitors' ? <RefreshCw className="icon-md spinning" /> : <BarChart2 className="icon-md text-purple" />}
-                    <span>{activeAction === 'Competitors' ? 'Analyzing...' : 'Competitor Analysis'}</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="ai-suggestions">
-                <div className="ai-header">
-                  <Zap className="icon-md" />
-                  <h3>AI Suggestions</h3>
-                </div>
-                <ul className="ai-list">
-                  <li className="ai-item">
-                    <ArrowRight className="icon-sm" />
-                    Add more long-tail keywords to improve relevance
-                  </li>
-                  <li className="ai-item">
-                    <ArrowRight className="icon-sm" />
-                    Include FAQ section for featured snippets
-                  </li>
-                  <li className="ai-item">
-                    <ArrowRight className="icon-sm" />
-                    Optimize images to improve page speed
-                  </li>
-                </ul>
-                <button 
-                  onClick={() => showNotification('Loading more suggestions...')}
-                  className="view-all-btn active:opacity-80 transition-opacity"
-                >
-                  View All Suggestions
-                </button>
-              </div>
-
-              <div className="card">
-                <h3 className="section-title">Content Ideas</h3>
-                <div className="suggestions">
-                  <SuggestionCard
-                    icon={FileText}
-                    title="Blog Post"
-                    description="10 SEO Tips for 2024"
-                  />
-                  <SuggestionCard
-                    icon={Target}
-                    title="Landing Page"
-                    description="SEO Services Comparison"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+                    {/* AI Insights */}
+                    <div className="relative group rounded-[2.5rem] p-10 bg-brand-500 shadow-2xl shadow-brand-500/40 overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 blur-3xl rounded-full translate-x-10 -translate-y-10 group-hover:scale-150 transition-transform duration-1000" />
+                        <div className="relative z-10">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="p-2 bg-white/20 rounded-lg"><Sparkles size={20} className="text-white" /></div>
+                                <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Neural Insights</h3>
+                            </div>
+                            <ul className="space-y-4">
+                                {[
+                                    'Inject cluster keywords for H2 nodes.',
+                                    'Link structural FAQs for snippets.',
+                                    'Compress vector payload for LCP optimization.'
+                                ].map((tip, i) => (
+                                    <li key={i} className="flex items-start gap-3 text-xs font-bold text-white/80 leading-snug">
+                                        <ArrowRight size={14} className="mt-0.5 shrink-0 opacity-50" />
+                                        {tip}
+                                    </li>
+                                ))}
+                            </ul>
+                            <button className="w-full mt-8 py-4 bg-white text-brand-600 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] active:scale-95 transition-all shadow-lg hover:bg-slate-50">
+                                Expand Intelligence
+                            </button>
+                        </div>
+                    </div>
+                </>
+            )}
+        </div>
       </main>
+
+      {/* Notifications */}
+      {notification && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-5 fade-in duration-300">
+            <div className="px-6 py-4 bg-slate-100 text-slate-900 rounded-2xl shadow-2xl flex items-center gap-4 border border-white/20">
+                <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center text-white"><Zap size={16} fill="currentColor" strokeWidth={0} /></div>
+                <span className="text-sm font-black uppercase tracking-tight">{notification}</span>
+            </div>
+        </div>
+      )}
+
+      <footer className="mt-20 text-center pb-20 opacity-20">
+          <p className="text-[10px] font-black text-white uppercase tracking-[0.6em]">Powered by B-Master Neural Audit Engine v2.0</p>
+      </footer>
     </div>
   )
 }`,
-
-    "src/App.css": `
-:root {
-  --teal: #14B8A6;
-  --teal-dark: #0D9488;
-  --cyan: #06B6D4;
-  --amber: #F59E0B;
-  --purple: #A855F7;
-  --green: #22C55E;
-  --red: #EF4444;
-
-  --bg: #F8FAFC;
-  --surface: #FFFFFF;
-  --text: #0F172A;
-  --text-muted: #64748B;
-  --text-light: #94A3B8;
-  --border: #E2E8F0;
-
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-}
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  -webkit-font-smoothing: antialiased;
-}
-
-/* Icons */
-.icon-xs { width: 12px; height: 12px; }
-.icon-sm { width: 16px; height: 16px; }
-.icon-md { width: 20px; height: 20px; }
-
-.text-teal { color: var(--teal); }
-.text-amber { color: var(--amber); }
-.text-purple { color: var(--purple); }
-
-.app {
-  min-height: 100vh;
-  background: var(--bg);
-  position: relative;
-}
-
-/* Notification */
-.notification {
-  position: fixed;
-  bottom: 2rem;
-  right: 2rem;
-  background: var(--text);
-  color: white;
-  padding: 0.75rem 1.25rem;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-  animation: slideUp 0.3s ease-out;
-  z-index: 100;
-}
-
-@keyframes slideUp {
-  from { transform: translateY(100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-/* Header */
-.header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-}
-
-.header-container {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0 1rem;
-}
-
-@media (min-width: 640px) {
-  .header-container { padding: 0 1.5rem; }
-}
-
-@media (min-width: 1024px) {
-  .header-container { padding: 0 2rem; }
-}
-
-.header-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 64px;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.brand-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--teal) 0%, var(--cyan) 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.brand-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.brand-subtitle {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.upgrade-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, var(--teal) 0%, var(--cyan) 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-family: inherit;
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.upgrade-btn:hover {
-  opacity: 0.9;
-}
-
-/* Main Content */
-.main-content {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem 1rem;
-}
-
-@media (min-width: 640px) {
-  .main-content { padding: 2rem 1.5rem; }
-}
-
-@media (min-width: 1024px) {
-  .main-content { padding: 2rem; }
-}
-
-/* Cards */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 1.5rem;
-  box-shadow: var(--shadow-sm);
-}
-
-.card-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 1rem;
-}
-
-.section-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Input Card */
-.input-card {
-  margin-bottom: 2rem;
-}
-
-.input-row {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-@media (min-width: 640px) {
-  .input-row { flex-direction: row; }
-}
-
-.input-wrapper {
-  flex: 1;
-  position: relative;
-}
-
-.input-icon {
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 20px;
-  height: 20px;
-  color: var(--text-light);
-}
-
-.url-input {
-  width: 100%;
-  padding: 12px 16px 12px 48px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  font-family: inherit;
-  font-size: 1rem;
-  outline: none;
-  transition: all 0.2s;
-}
-
-.url-input:focus {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.1);
-}
-
-.url-input::placeholder {
-  color: var(--text-light);
-}
-
-.analyze-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 24px;
-  background: linear-gradient(135deg, var(--teal) 0%, var(--cyan) 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-family: inherit;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.analyze-btn:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-.analyze-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* Results Grid */
-.results-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 2rem;
-}
-
-@media (min-width: 1024px) {
-  .results-grid { grid-template-columns: 2fr 1fr; }
-}
-
-.main-column {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-/* Score Card */
-.score-card .score-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-@media (min-width: 640px) {
-  .score-card .score-content {
-    flex-direction: row;
-  }
-}
-
-.seo-score {
-  position: relative;
-  width: 128px;
-  height: 128px;
-  flex-shrink: 0;
-}
-
-.score-ring {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.score-bg {
-  stroke: #F1F5F9;
-}
-
-.score-progress {
-  transition: stroke-dashoffset 1s ease;
-}
-
-.score-progress.score-good { stroke: var(--green); }
-.score-progress.score-warning { stroke: var(--amber); }
-.score-progress.score-bad { stroke: var(--red); }
-
-.score-value-wrapper {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.score-value {
-  font-size: 1.875rem;
-  font-weight: 700;
-}
-
-.score-value.score-good { color: var(--green); }
-.score-value.score-warning { color: var(--amber); }
-.score-value.score-bad { color: var(--red); }
-
-.score-info {
-  flex: 1;
-  text-align: center;
-}
-
-@media (min-width: 640px) {
-  .score-info { text-align: left; }
-}
-
-.score-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 8px;
-}
-
-.score-desc {
-  color: var(--text-muted);
-  margin-bottom: 1rem;
-  line-height: 1.5;
-}
-
-.score-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-
-@media (min-width: 640px) {
-  .score-badges { justify-content: flex-start; }
-}
-
-.badge {
-  padding: 4px 12px;
-  border-radius: 100px;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.badge.passed {
-  background: rgba(34, 197, 94, 0.1);
-  color: #16A34A;
-}
-
-.badge.warning {
-  background: rgba(245, 158, 11, 0.1);
-  color: #D97706;
-}
-
-/* Checklist */
-.checklist {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.checklist-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 1rem;
-  border-radius: 12px;
-}
-
-.checklist-item.passed {
-  background: rgba(34, 197, 94, 0.05);
-}
-
-.checklist-item.warning {
-  background: rgba(245, 158, 11, 0.05);
-}
-
-.checklist-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  margin-top: 2px;
-  color: white;
-}
-
-.checklist-icon.passed { background: var(--green); }
-.checklist-icon.warning { background: var(--amber); }
-
-.checklist-content {
-  flex: 1;
-}
-
-.checklist-text {
-  font-weight: 500;
-  margin-bottom: 4px;
-}
-
-.checklist-priority {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-}
-
-/* Keywords List */
-.keywords-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.keyword-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  transition: all 0.2s;
-}
-
-.keyword-item:hover {
-  border-color: var(--teal);
-  transform: translateX(4px);
-}
-
-.keyword-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--teal);
-}
-
-.keyword-text {
-  font-weight: 600;
-  color: var(--text);
-}
-
-.keyword-right {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.keyword-volume {
-  text-align: right;
-}
-
-.volume-value {
-  font-weight: 600;
-  color: var(--text);
-  line-height: 1;
-}
-
-.volume-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.difficulty-badge {
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.difficulty-easy { background: rgba(34, 197, 94, 0.1); color: #16A34A; }
-.difficulty-medium { background: rgba(245, 158, 11, 0.1); color: #D97706; }
-.difficulty-hard { background: rgba(239, 68, 68, 0.1); color: #DC2626; }
-
-.trend-icon {
-  width: 16px;
-  height: 16px;
-  color: var(--green);
-}
-
-/* Sidebar Actions */
-.quick-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn:hover {
-  border-color: var(--teal);
-  background: white;
-  box-shadow: var(--shadow-sm);
-}
-
-/* AI Suggestions */
-.ai-suggestions {
-  background: linear-gradient(135deg, #14B8A6 0%, #06B6D4 100%);
-  border-radius: 16px;
-  padding: 1.5rem;
-  color: white;
-}
-
-.ai-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 1rem;
-}
-
-.ai-header h3 {
-  font-size: 1.125rem;
-  font-weight: 600;
-}
-
-.ai-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 1.5rem;
-}
-
-.ai-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 0.9375rem;
-  line-height: 1.5;
-}
-
-.ai-item .icon-sm {
-  flex-shrink: 0;
-  margin-top: 2px;
-  opacity: 0.8;
-}
-
-.view-all-btn {
-  width: 100%;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.view-all-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-/* Suggestions */
-.suggestions {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.suggestion-card {
-  padding: 12px;
-  background: var(--bg);
-  border: 1px dashed var(--border);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.suggestion-card:hover {
-  border-color: var(--teal);
-  background: white;
-}
-
-.suggestion-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: rgba(20, 184, 166, 0.1);
-  color: var(--teal);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 8px;
-}
-
-.suggestion-title {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 4px;
-}
-
-.suggestion-desc {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-}
-`
   }
 };

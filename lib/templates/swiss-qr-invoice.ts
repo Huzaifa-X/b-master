@@ -1,529 +1,457 @@
-/**
- * Swiss QR Invoice Template
- *
- * Generates Swiss QR-bill compliant invoices following the Swiss Payment Standard (SPS).
- * The QR code contains structured payment data according to ISO 20022.
- *
- * Usage: Include this template reference in canvas mode for invoice generation.
- */
+import { TemplateDefinition } from './index';
 
-export const swissQRInvoiceTemplate = `
-<!DOCTYPE html>
+export const swissQrInvoiceTemplate: TemplateDefinition = {
+  id: "swiss-qr-invoice",
+  name: "Swiss QR Invoice",
+  description: "Swiss QR-bill compliant invoice generator with Tailwind CSS",
+  category: "Finance",
+  icon: "FileText",
+  files: {
+    "package.json": JSON.stringify(
+      {
+        name: "swiss-qr-invoice",
+        private: true,
+        version: "0.0.0",
+        type: "module",
+        scripts: {
+          dev: "vite",
+          build: "vite build",
+          preview: "vite preview",
+        },
+        dependencies: {
+          react: "^18.2.0",
+          "react-dom": "^18.2.0",
+          "lucide-react": "^0.344.0",
+          "qrcode": "^1.5.3",
+        },
+        devDependencies: {
+          "@vitejs/plugin-react": "^4.2.1",
+          vite: "^5.0.8",
+          tailwindcss: "^3.4.1",
+          postcss: "^8.4.35",
+          autoprefixer: "^10.4.17",
+        },
+      },
+      null,
+      2
+    ),
+
+    "index.html": `<!DOCTYPE html>
 <html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Facture QR Suisse</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <title>Facture QR Suisse</title>
+  </head>
+  <body class="bg-gray-50 text-slate-900 print:bg-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>`,
 
-    body {
-      font-family: 'Helvetica Neue', Arial, sans-serif;
-      font-size: 10pt;
-      line-height: 1.4;
-      color: #000;
-      background: #fff;
-    }
+    "tailwind.config.js": `/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['"Inter"', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+      },
+    },
+  },
+  plugins: [],
+}`,
 
-    .invoice-container {
-      max-width: 210mm;
-      margin: 0 auto;
-      padding: 20mm;
-      min-height: 297mm;
-      position: relative;
-    }
+    "postcss.config.js": `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}`,
 
-    /* Header */
-    .invoice-header {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 40px;
-    }
+    "vite.config.js": `import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
 
-    .company-info h1 {
-      font-size: 24pt;
-      font-weight: 700;
-      color: #1a365d;
-      margin-bottom: 8px;
-    }
+export default defineConfig({
+  plugins: [react()],
+})`,
 
-    .company-info p {
-      font-size: 9pt;
-      color: #4a5568;
-      line-height: 1.5;
-    }
+    "src/index.css": `@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-    .invoice-meta {
-      text-align: right;
-    }
+@layer base {
+  body {
+    @apply antialiased print:text-black;
+  }
+}
 
-    .invoice-meta h2 {
-      font-size: 14pt;
-      font-weight: 600;
-      color: #1a365d;
-      margin-bottom: 12px;
-    }
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  .no-print {
+    display: none !important;
+  }
+}`,
 
-    .invoice-meta table {
-      font-size: 9pt;
-      text-align: left;
-    }
+    "src/main.jsx": `import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.jsx'
+import './index.css'
 
-    .invoice-meta td {
-      padding: 2px 0;
-    }
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)`,
 
-    .invoice-meta td:first-child {
-      color: #718096;
-      padding-right: 16px;
-    }
+    // --- DATA ---
+    "src/data/mock.js": `export const INITIAL_DATA = {
+  company: {
+    name: "Calliopee Sàrl",
+    address: "Route de Meyrin 49",
+    postal: "1203",
+    city: "Genève",
+    country: "Suisse",
+    iban: "CH44 3199 9123 0008 8901 2"
+  },
+  client: {
+    name: "Marie Dupont",
+    address: "Rue du Lac 15",
+    postal: "1201",
+    city: "Genève",
+    country: "Suisse",
+    countryCode: "CH"
+  },
+  invoice: {
+    number: "INV-2024-001",
+    date: "25.03.2024",
+    dueDate: "24.04.2024",
+    items: [
+      { id: 1, desc: "Consultation UI/UX", qty: 4, unitPrice: 150 },
+      { id: 2, desc: "Développement React frontend", qty: 10, unitPrice: 180 },
+      { id: 3, desc: "Frais de maintenance mensuels", qty: 1, unitPrice: 50 }
+    ],
+    vatRate: 8.1
+  }
+};`,
 
-    /* Client Info */
-    .client-section {
-      margin-bottom: 30px;
-    }
+    // --- COMPONENTS ---
+    "src/components/InvoiceHeader.jsx": `import { FileText, Download, Printer } from 'lucide-react';
 
-    .client-section h3 {
-      font-size: 8pt;
-      font-weight: 600;
-      color: #718096;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 8px;
-    }
-
-    .client-info {
-      font-size: 10pt;
-      line-height: 1.6;
-    }
-
-    /* Invoice Table */
-    .invoice-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 30px;
-    }
-
-    .invoice-table th {
-      background: #f7fafc;
-      border-bottom: 2px solid #e2e8f0;
-      padding: 12px 8px;
-      text-align: left;
-      font-size: 8pt;
-      font-weight: 600;
-      color: #4a5568;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .invoice-table th:last-child,
-    .invoice-table td:last-child {
-      text-align: right;
-    }
-
-    .invoice-table td {
-      padding: 12px 8px;
-      border-bottom: 1px solid #e2e8f0;
-      font-size: 10pt;
-    }
-
-    /* Totals */
-    .totals-section {
-      display: flex;
-      justify-content: flex-end;
-      margin-bottom: 40px;
-    }
-
-    .totals-table {
-      width: 250px;
-    }
-
-    .totals-table tr td {
-      padding: 6px 0;
-      font-size: 10pt;
-    }
-
-    .totals-table tr td:last-child {
-      text-align: right;
-      font-weight: 500;
-    }
-
-    .totals-table .total-row td {
-      font-size: 12pt;
-      font-weight: 700;
-      color: #1a365d;
-      border-top: 2px solid #1a365d;
-      padding-top: 12px;
-    }
-
-    /* Payment Info */
-    .payment-info {
-      background: #f7fafc;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 40px;
-    }
-
-    .payment-info h3 {
-      font-size: 10pt;
-      font-weight: 600;
-      color: #1a365d;
-      margin-bottom: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .payment-info p {
-      font-size: 9pt;
-      color: #4a5568;
-      margin-bottom: 8px;
-    }
-
-    /* Swiss QR Payment Slip */
-    .qr-slip {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      border-top: 1px dashed #000;
-      display: flex;
-      height: 105mm;
-      background: #fff;
-    }
-
-    .qr-receipt {
-      width: 62mm;
-      padding: 5mm;
-      border-right: 1px dashed #000;
-    }
-
-    .qr-payment {
-      flex: 1;
-      padding: 5mm;
-      display: flex;
-    }
-
-    .qr-section-title {
-      font-size: 11pt;
-      font-weight: 700;
-      margin-bottom: 3mm;
-    }
-
-    .qr-label {
-      font-size: 6pt;
-      font-weight: 700;
-      margin-top: 2mm;
-      margin-bottom: 1mm;
-    }
-
-    .qr-value {
-      font-size: 8pt;
-      line-height: 1.3;
-    }
-
-    .qr-amount-section {
-      margin-top: auto;
-    }
-
-    .qr-amount-box {
-      display: flex;
-      gap: 5mm;
-    }
-
-    .qr-amount-label {
-      font-size: 6pt;
-      font-weight: 700;
-    }
-
-    .qr-amount-value {
-      font-size: 10pt;
-      font-weight: 700;
-    }
-
-    .qr-code-section {
-      width: 56mm;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding-top: 5mm;
-    }
-
-    .qr-code-container {
-      width: 46mm;
-      height: 46mm;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .qr-code-container canvas {
-      max-width: 100%;
-      max-height: 100%;
-    }
-
-    .qr-info-section {
-      flex: 1;
-      padding-left: 5mm;
-    }
-
-    .qr-additional {
-      margin-top: 3mm;
-    }
-
-    .swiss-cross {
-      position: absolute;
-      width: 7mm;
-      height: 7mm;
-      background: #fff;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .swiss-cross svg {
-      width: 100%;
-      height: 100%;
-    }
-
-    @media print {
-      body {
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-
-      .invoice-container {
-        padding: 15mm;
-      }
-
-      .qr-slip {
-        break-inside: avoid;
-      }
-    }
-  </style>
-  <!-- QR Code Library -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-</head>
-<body>
-  <div class="invoice-container">
-    <!-- Invoice Header -->
-    <div class="invoice-header">
-      <div class="company-info">
-        <h1>{{COMPANY_NAME}}</h1>
-        <p>
-          {{COMPANY_ADDRESS}}<br>
-          {{COMPANY_POSTAL}} {{COMPANY_CITY}}<br>
-          {{COMPANY_COUNTRY}}
-        </p>
+export default function InvoiceHeader({ company, invoice }) {
+  return (
+    <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-16 px-1 print:px-0">
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200 print:shadow-none">
+                <FileText size={28} />
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 uppercase italic">{company.name}</h1>
+        </div>
+        <div className="text-sm text-slate-500 font-medium leading-relaxed uppercase tracking-wider">
+          {company.address}<br />
+          {company.postal} {company.city}<br />
+          {company.country}
+        </div>
       </div>
-      <div class="invoice-meta">
-        <h2>FACTURE</h2>
-        <table>
-          <tr>
-            <td>N° Facture</td>
-            <td><strong>{{INVOICE_NUMBER}}</strong></td>
-          </tr>
-          <tr>
-            <td>Date</td>
-            <td>{{INVOICE_DATE}}</td>
-          </tr>
-          <tr>
-            <td>Échéance</td>
-            <td>{{DUE_DATE}}</td>
-          </tr>
+      
+      <div className="text-right space-y-6">
+        <h2 className="text-5xl font-black tracking-tighter text-slate-900 leading-none">FACTURE</h2>
+        <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+          <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">N° Facture</span>
+          <span className="font-bold text-slate-900">{invoice.number}</span>
+          <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Date</span>
+          <span className="font-bold text-slate-900">{invoice.date}</span>
+          <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Échéance</span>
+          <span className="font-bold text-slate-900">{invoice.dueDate}</span>
+        </div>
+      </div>
+    </div>
+  );
+}`,
+
+    "src/components/InvoiceTable.jsx": `export default function InvoiceTable({ items, vatRate }) {
+  const subtotal = items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+  const vatAmount = (subtotal * vatRate) / 100;
+  const total = subtotal + vatAmount;
+
+  return (
+    <div className="mb-16">
+      <div className="overflow-hidden bg-white rounded-3xl border border-slate-100 shadow-sm print:shadow-none print:border-none">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="bg-slate-50/50 print:bg-white border-b border-slate-100">
+              <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Description</th>
+              <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Qté</th>
+              <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Prix</th>
+              <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {items.map((item) => (
+              <tr key={item.id} className="hover:bg-slate-50/30 print:hover:bg-transparent transition-colors">
+                <td className="px-8 py-6">
+                  <span className="font-bold text-slate-900">{item.desc}</span>
+                </td>
+                <td className="px-8 py-6 text-center">
+                  <span className="font-bold text-slate-600">{item.qty}</span>
+                </td>
+                <td className="px-8 py-6 text-right font-medium text-slate-500">
+                  {item.unitPrice.toFixed(2)}
+                </td>
+                <td className="px-8 py-6 text-right">
+                  <span className="font-black text-slate-900">{(item.qty * item.unitPrice).toFixed(2)}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
-    </div>
 
-    <!-- Client Section -->
-    <div class="client-section">
-      <h3>Facturé à</h3>
-      <div class="client-info">
-        <strong>{{CLIENT_NAME}}</strong><br>
-        {{CLIENT_ADDRESS}}<br>
-        {{CLIENT_POSTAL}} {{CLIENT_CITY}}<br>
-        {{CLIENT_COUNTRY}}
+      <div className="mt-10 flex justify-end px-8">
+        <div className="w-full max-w-[300px] space-y-4">
+          <div className="flex justify-between items-center text-sm font-bold text-slate-500">
+            <span className="uppercase tracking-widest text-[10px]">Sous-total HT</span>
+            <span>{subtotal.toFixed(2)} CHF</span>
+          </div>
+          <div className="flex justify-between items-center text-sm font-bold text-slate-500">
+            <span className="uppercase tracking-widest text-[10px]">TVA {vatRate}%</span>
+            <span>{vatAmount.toFixed(2)} CHF</span>
+          </div>
+          <div className="pt-4 border-t-2 border-slate-900 flex justify-between items-end">
+            <span className="text-xl font-black uppercase tracking-tighter leading-none">Total TTC</span>
+            <span className="text-4xl font-black tracking-tighter text-blue-600 leading-none">{total.toFixed(2)} <span className="text-lg">CHF</span></span>
+          </div>
+        </div>
       </div>
     </div>
+  );
+}`,
 
-    <!-- Invoice Items -->
-    <table class="invoice-table">
-      <thead>
-        <tr>
-          <th style="width: 50%">Description</th>
-          <th style="width: 15%">Quantité</th>
-          <th style="width: 15%">Prix unitaire</th>
-          <th style="width: 20%">Montant</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{INVOICE_ITEMS}}
-      </tbody>
-    </table>
+    "src/components/QrSlip.jsx": `import { useEffect, useRef } from 'react';
+import QRCode from 'qrcode';
 
-    <!-- Totals -->
-    <div class="totals-section">
-      <table class="totals-table">
-        <tr>
-          <td>Sous-total HT</td>
-          <td>{{SUBTOTAL}} CHF</td>
-        </tr>
-        <tr>
-          <td>TVA {{VAT_RATE}}%</td>
-          <td>{{VAT_AMOUNT}} CHF</td>
-        </tr>
-        <tr class="total-row">
-          <td>Total TTC</td>
-          <td>{{TOTAL}} CHF</td>
-        </tr>
-      </table>
-    </div>
+export default function QrSlip({ data, total }) {
+  const canvasRef = useRef(null);
 
-    <!-- Payment Info -->
-    <div class="payment-info">
-      <h3>Modalité de paiement</h3>
-      <p>Paiement selon bulletin QR suisse ci-dessous.</p>
-      <p style="margin-top: 16px; font-style: italic;">Merci pour votre confiance.<br>{{COMPANY_NAME}}</p>
-    </div>
+  useEffect(() => {
+    const qrData = [
+      'SPC',                           // QR Type
+      '0200',                          // Version
+      '1',                             // Coding Type (UTF-8)
+      data.company.iban.replace(/ /g, ''), // IBAN
+      'S',                             // Address Type (Structured)
+      data.company.name,               // Creditor Name
+      data.company.address,            // Creditor Address
+      '',                              // Building number
+      data.company.postal,             // Postal code
+      data.company.city,               // City
+      'CH',                            // Country
+      '',                              // Ultimate creditor (empty)
+      '',                              // ''
+      '',                              // ''
+      '',                              // ''
+      '',                              // ''
+      '',                              // ''
+      '',                              // ''
+      total.toFixed(2),                // Amount
+      'CHF',                           // Currency
+      'S',                             // Debtor address type
+      data.client.name,                // Debtor name
+      data.client.address,             // Debtor address
+      '',                              // Building number
+      data.client.postal,              // Postal code
+      data.client.city,                // City
+      data.client.countryCode,          // Country code
+      'NON',                           // Reference type (NON = no reference)
+      '',                              // Reference
+      \`Facture \${data.invoice.number}\`, // Additional information
+      'EPD',                           // End of payment data
+      ''                               // Alternative procedure
+    ].join('\\n');
 
-    <!-- Swiss QR Payment Slip -->
-    <div class="qr-slip">
-      <!-- Receipt Section (Récépissé) -->
-      <div class="qr-receipt">
-        <div class="qr-section-title">Récépissé</div>
+    QRCode.toCanvas(canvasRef.current, qrData, {
+      width: 166,
+      margin: 0,
+      errorCorrectionLevel: 'M'
+    }, (error) => {
+      if (error) console.error(error);
+    });
+  }, [data, total]);
 
-        <div class="qr-label">Compte / Payable à</div>
-        <div class="qr-value">
-          {{IBAN}}<br>
-          {{COMPANY_NAME}}<br>
-          {{COMPANY_ADDRESS}}<br>
-          {{COMPANY_POSTAL}} {{COMPANY_CITY}}
+  return (
+    <div className="mt-auto border-t-[1px] border-dashed border-slate-400 bg-white flex print:h-[105mm] relative">
+      {/* Receipt Section */}
+      <div className="w-[62mm] min-w-[62mm] p-[5mm] border-r-[1px] border-dashed border-slate-400 space-y-4">
+        <h3 className="font-black text-xs uppercase tracking-widest">Récépissé</h3>
+        
+        <div className="space-y-1">
+          <p className="text-[6px] font-black uppercase text-slate-400 leading-none">Compte / Payable à</p>
+          <p className="text-[8px] font-bold leading-tight">
+            {data.company.iban}<br />
+            {data.company.name}<br />
+            {data.company.address}<br />
+            {data.company.postal} {data.company.city}
+          </p>
         </div>
 
-        <div class="qr-amount-section">
-          <div class="qr-amount-box">
+        <div className="pt-6">
+          <div className="flex gap-4">
+             <div>
+               <p className="text-[6px] font-black uppercase text-slate-400 leading-none mb-1">Monnaie</p>
+               <p className="text-[10px] font-black tracking-tighter">CHF</p>
+             </div>
+             <div>
+               <p className="text-[6px] font-black uppercase text-slate-400 leading-none mb-1">Montant</p>
+               <p className="text-[10px] font-black tracking-tighter">{total.toFixed(2)}</p>
+             </div>
+          </div>
+        </div>
+
+        <div className="mt-8 pt-8">
+            <p className="text-[6px] font-black uppercase text-slate-400">Point de dépôt</p>
+        </div>
+      </div>
+
+      {/* Payment Section */}
+      <div className="flex-1 flex p-[5mm]">
+        <div className="w-[56mm] min-w-[56mm] flex flex-col items-center">
+            <h3 className="font-black text-xs uppercase tracking-widest mb-4 self-start">Section paiement</h3>
+            <div className="relative w-[46mm] h-[46mm] group">
+                <canvas ref={canvasRef} className="w-full h-full" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[7mm] h-[7mm] bg-white flex items-center justify-center p-[1mm]">
+                    <div className="w-full h-full bg-black flex items-center justify-center relative">
+                        <div className="absolute bg-white w-[1.5mm] h-[4mm]" />
+                        <div className="absolute bg-white w-[4mm] h-[1.5mm]" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div className="flex-1 pl-6 space-y-4 pt-8">
+            <div className="space-y-1">
+                <p className="text-[6px] font-black uppercase text-slate-400 leading-none">Compte / Payable à</p>
+                <p className="text-[9px] font-bold leading-relaxed">
+                    {data.company.iban}<br />
+                    {data.company.name}<br />
+                    {data.company.address}<br />
+                    {data.company.postal} {data.company.city}
+                </p>
+            </div>
+
+            <div className="space-y-1">
+                <p className="text-[6px] font-black uppercase text-slate-400 leading-none">Informations additionnelles</p>
+                <p className="text-[9px] font-bold">Facture {data.invoice.number}</p>
+            </div>
+
+            <div className="pt-4 flex gap-10">
+                <div>
+                    <p className="text-[6px] font-black uppercase text-slate-400 leading-none mb-1">Monnaie</p>
+                    <p className="text-[11px] font-black tracking-tighter">CHF</p>
+                </div>
+                <div>
+                    <p className="text-[6px] font-black uppercase text-slate-400 leading-none mb-1">Montant</p>
+                    <p className="text-[11px] font-black tracking-tighter">{total.toFixed(2)}</p>
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+}`,
+
+    // --- MAIN APP ---
+    "src/App.jsx": `import { useState } from 'react';
+import { INITIAL_DATA } from './data/mock';
+import InvoiceHeader from './components/InvoiceHeader';
+import InvoiceTable from './components/InvoiceTable';
+import QrSlip from './components/QrSlip';
+import { Printer, Download, Plus, Trash2 } from 'lucide-react';
+
+export default function App() {
+  const [data, setData] = useState(INITIAL_DATA);
+
+  const subtotal = data.invoice.items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+  const vatAmount = (subtotal * data.invoice.vatRate) / 100;
+  const total = subtotal + vatAmount;
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="min-h-screen pb-0 lg:pb-20 print:pb-0">
+      {/* Control Panel (Hidden on Print) */}
+      <div className="no-print border-b border-slate-200 sticky top-0 z-50 px-6 py-4 flex items-center justify-between backdrop-blur-md bg-white/80">
+        <div className="flex items-center gap-4">
+            <div className="bg-slate-900 text-white p-2 rounded-lg">
+                <Printer size={18} />
+            </div>
             <div>
-              <div class="qr-amount-label">Monnaie</div>
-              <div class="qr-amount-value">CHF</div>
+                <h3 className="font-black text-sm uppercase tracking-tighter">Éditeur de Facture</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Format Suisse Standard (QR-Bill)</p>
             </div>
-            <div>
-              <div class="qr-amount-label">Montant</div>
-              <div class="qr-amount-value">{{TOTAL}}</div>
-            </div>
-          </div>
         </div>
-
-        <div class="qr-label" style="margin-top: 5mm;">Point de dépôt</div>
-      </div>
-
-      <!-- Payment Section (Section paiement) -->
-      <div class="qr-payment">
-        <div class="qr-code-section">
-          <div class="qr-section-title">Section paiement</div>
-          <div class="qr-code-container" style="position: relative;">
-            <canvas id="qrcode"></canvas>
-            <div class="swiss-cross">
-              <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                <rect width="100" height="100" fill="#000"/>
-                <rect x="20" y="40" width="60" height="20" fill="#fff"/>
-                <rect x="40" y="20" width="20" height="60" fill="#fff"/>
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        <div class="qr-info-section">
-          <div class="qr-label">Compte / Payable à</div>
-          <div class="qr-value">
-            {{IBAN}}<br>
-            {{COMPANY_NAME}}<br>
-            {{COMPANY_ADDRESS}}<br>
-            {{COMPANY_POSTAL}} {{COMPANY_CITY}}
-          </div>
-
-          <div class="qr-label" style="margin-top: 3mm;">Informations additionnelles</div>
-          <div class="qr-value">Facture {{INVOICE_NUMBER}}</div>
-
-          <div class="qr-amount-section">
-            <div class="qr-amount-box">
-              <div>
-                <div class="qr-amount-label">Monnaie</div>
-                <div class="qr-amount-value">CHF</div>
-              </div>
-              <div>
-                <div class="qr-amount-label">Montant</div>
-                <div class="qr-amount-value">{{TOTAL}}</div>
-              </div>
-            </div>
-          </div>
+        <div className="flex gap-2">
+            <button 
+                onClick={handlePrint}
+                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-100 hover:bg-blue-700 hover:-translate-y-0.5 transition-all"
+            >
+                <Printer size={16} /> Imprimer / PDF
+            </button>
         </div>
       </div>
+
+      {/* Invoice Container (A4 Size for Print) */}
+      <div className="max-w-[210mm] mx-auto my-12 bg-white shadow-2xl overflow-hidden flex flex-col min-h-[297mm] rounded-[2rem] print:rounded-none print:shadow-none print:my-0">
+        <div className="p-16 flex flex-col flex-1">
+            <InvoiceHeader company={data.company} invoice={data.invoice} />
+            
+            <div className="mb-12">
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 ml-1">Facturé à</h4>
+                <div className="text-lg font-black tracking-tight text-slate-900 uppercase italic">
+                    {data.client.name}
+                </div>
+                <div className="text-slate-500 font-medium leading-relaxed uppercase tracking-wider text-sm mt-1">
+                    {data.client.address}<br />
+                    {data.client.postal} {data.client.city}<br />
+                    {data.client.country}
+                </div>
+            </div>
+
+            <InvoiceTable items={data.invoice.items} vatRate={data.invoice.vatRate} />
+
+            <div className="mt-10 p-8 bg-slate-50 rounded-3xl border border-slate-100 print:bg-white print:border-none print:p-0">
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3">Modalité de paiement</h4>
+                <p className="text-sm font-medium text-slate-600 leading-relaxed italic">
+                    Paiement selon bulletin QR suisse ci-dessous.<br />
+                    Merci pour votre confiance.
+                </p>
+            </div>
+        </div>
+
+        <QrSlip data={data} total={total} />
+      </div>
+
+      {/* Floating Design Note */}
+      <p className="no-print text-center text-slate-300 text-[10px] font-black uppercase tracking-[0.5em] mt-12 mb-20 italic underline decoration-blue-500/30 underline-offset-8">Swiss_Project_Compliance_v2.0 // Generated by ShopFlow</p>
     </div>
-  </div>
+  );
+}`,
+  }
+};
 
-  <script>
-    // Swiss QR Code Data Format (Swiss Payment Standard)
-    function generateSwissQRCode() {
-      const qrData = [
-        'SPC',                           // QR Type
-        '0200',                          // Version
-        '1',                             // Coding Type (UTF-8)
-        '{{IBAN}}',                      // IBAN
-        'S',                             // Address Type (Structured)
-        '{{COMPANY_NAME}}',              // Creditor Name
-        '{{COMPANY_ADDRESS}}',           // Creditor Address
-        '',                              // Building number
-        '{{COMPANY_POSTAL}}',            // Postal code
-        '{{COMPANY_CITY}}',              // City
-        'CH',                            // Country
-        '',                              // Ultimate creditor (empty)
-        '',                              // ''
-        '',                              // ''
-        '',                              // ''
-        '',                              // ''
-        '',                              // ''
-        '{{TOTAL}}',                     // Amount
-        'CHF',                           // Currency
-        'S',                             // Debtor address type
-        '{{CLIENT_NAME}}',               // Debtor name
-        '{{CLIENT_ADDRESS}}',            // Debtor address
-        '',                              // Building number
-        '{{CLIENT_POSTAL}}',             // Postal code
-        '{{CLIENT_CITY}}',               // City
-        '{{CLIENT_COUNTRY_CODE}}',       // Country code
-        'NON',                           // Reference type (NON = no reference)
-        '',                              // Reference
-        'Facture {{INVOICE_NUMBER}}',    // Additional information
-        'EPD',                           // End of payment data
-        ''                               // Alternative procedure
-      ].join('\\n');
-
-      QRCode.toCanvas(document.getElementById('qrcode'), qrData, {
-        width: 166,
-        margin: 0,
-        errorCorrectionLevel: 'M'
-      }, function (error) {
-        if (error) console.error(error);
-      });
-    }
-
-    // Generate QR code when page loads
-    document.addEventListener('DOMContentLoaded', generateSwissQRCode);
-  </script>
-</body>
-</html>
-`;
-
-/**
- * Swiss QR Invoice instructions for AI
- * This is injected into the Canvas mode system prompt
- */
 export const swissQRInvoiceInstructions = `
 
 ## 🇨🇭 Swiss QR Invoice (QR-Facture) Generation
@@ -571,13 +499,9 @@ The QR code must follow the Swiss Payment Standard (SPS) with this data structur
 
 ### Important Notes:
 - Use CHF as currency
-- Include the QR code library: <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 - The QR code must include a Swiss cross overlay (black square with white cross)
 - Payment slip height should be 105mm as per Swiss standard
 - Use French or German labels depending on user preference
-
-### Example Request:
-"Create a Swiss QR invoice for CHF 150 to Marie Dupont, Rue du Lac 15, 1201 Genève, from Calliopee Sàrl, IBAN CH44 3199 9123 0008 8901 2"
 `;
 
-export default swissQRInvoiceTemplate;
+export default swissQrInvoiceTemplate;

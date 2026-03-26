@@ -1,7 +1,9 @@
-export const accountingDashboardTemplate = {
+import { TemplateDefinition } from './index';
+
+export const accountingDashboardTemplate: TemplateDefinition = {
   id: "accounting-dashboard",
   name: "Accounting Dashboard",
-  description: "Financial tracking with React Router pages",
+  description: "Financial tracking with Tailwind CSS",
   category: "accounting",
   files: {
     "package.json": JSON.stringify(
@@ -24,6 +26,9 @@ export const accountingDashboardTemplate = {
         devDependencies: {
           "@vitejs/plugin-react": "^4.2.1",
           vite: "^5.0.8",
+          tailwindcss: "^3.4.1",
+          postcss: "^8.4.35",
+          autoprefixer: "^10.4.17",
         },
       },
       null,
@@ -40,18 +45,6 @@ export const accountingDashboardTemplate = {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <title>FinanceOS</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Outfit', 'system-ui', 'sans-serif'],
-            },
-          }
-        }
-      }
-    </script>
   </head>
   <body>
     <div id="root"></div>
@@ -65,6 +58,42 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
 })`,
+
+    "tailwind.config.js": `/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Outfit', 'system-ui', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}`,
+
+    "postcss.config.js": `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}`,
+
+    "src/index.css": `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Outfit', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    @apply bg-slate-50 text-slate-900;
+  }
+}`,
 
     "src/main.jsx": `import React from 'react'
 import ReactDOM from 'react-dom/client'
@@ -85,16 +114,15 @@ import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
-import './App.css';
 
 function App() {
   return (
     <Router>
-      <div className="app-layout">
+      <div className="flex h-screen overflow-hidden">
         <Sidebar />
-        <div className="main-wrapper">
+        <div className="flex-1 flex flex-col overflow-hidden">
           <Header />
-          <main className="content-area">
+          <main className="flex-1 overflow-y-auto p-8">
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
@@ -118,31 +146,33 @@ import { LayoutDashboard, Receipt, FileBarChart, Settings, Wallet, LogOut } from
 
 export default function Sidebar() {
   return (
-    <aside className="sidebar">
-      <div className="brand">
-        <div className="brand-logo"><Wallet size={24} color="white" /></div>
-        <div className="brand-text">FinanceOS</div>
+    <aside className="w-[260px] bg-white border-r border-slate-200 flex flex-col flex-shrink-0">
+      <div className="h-[72px] flex items-center px-6 gap-3 border-b border-slate-200">
+        <div className="bg-slate-900 rounded-lg w-9 h-9 flex items-center justify-center">
+          <Wallet size={24} color="white" />
+        </div>
+        <div className="font-extrabold text-xl tracking-tight">FinanceOS</div>
       </div>
       
-      <nav className="nav-menu">
-        <div className="nav-group">
-          <h4 className="nav-title">Menu</h4>
-          <NavLink to="/dashboard" className="nav-item">
+      <nav className="p-6 flex flex-col flex-1">
+        <div className="flex flex-col gap-1">
+          <h4 className="text-[12px] uppercase tracking-wider text-slate-400 font-bold px-4 mb-2">Menu</h4>
+          <NavLink to="/dashboard" className={({ isActive }) => \`flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold text-[15px] transition-all \${isActive ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}\`}>
             <LayoutDashboard size={20} /> <span>Dashboard</span>
           </NavLink>
-          <NavLink to="/transactions" className="nav-item">
+          <NavLink to="/transactions" className={({ isActive }) => \`flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold text-[15px] transition-all \${isActive ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}\`}>
             <Receipt size={20} /> <span>Transactions</span>
           </NavLink>
-          <NavLink to="/reports" className="nav-item">
+          <NavLink to="/reports" className={({ isActive }) => \`flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold text-[15px] transition-all \${isActive ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}\`}>
             <FileBarChart size={20} /> <span>Reports</span>
           </NavLink>
         </div>
         
-        <div className="nav-group mt-auto">
-          <NavLink to="/settings" className="nav-item">
+        <div className="mt-auto flex flex-col gap-1">
+          <NavLink to="/settings" className={({ isActive }) => \`flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold text-[15px] transition-all \${isActive ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}\`}>
             <Settings size={20} /> <span>Settings</span>
           </NavLink>
-          <button className="nav-item logout-btn" onClick={() => alert('Logging out...')}>
+          <button className="flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold text-[15px] transition-all text-slate-500 hover:bg-rose-50 hover:text-rose-600 text-left w-full" onClick={() => alert('Logging out...')}>
             <LogOut size={20} /> <span>Logout</span>
           </button>
         </div>
@@ -155,26 +185,26 @@ export default function Sidebar() {
 
 export default function Header() {
   return (
-    <header className="top-header">
-      <div className="search-bar">
-        <Search size={18} className="search-icon" />
-        <input type="text" placeholder="Search transactions, invoices or reports..." />
+    <header className="h-[72px] bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0">
+      <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-lg w-full max-w-[400px]">
+        <Search size={18} className="text-slate-400" />
+        <input type="text" placeholder="Search transactions, invoices or reports..." className="bg-transparent border-none w-full text-[15px] text-slate-900 outline-none placeholder:text-slate-400" />
       </div>
       
-      <div className="header-actions">
-        <button className="btn btn-primary shadow-sm" onClick={() => alert('Add transaction modal coming soon!')}>
+      <div className="flex items-center gap-5">
+        <button className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm bg-blue-600 text-white shadow-sm hover:bg-blue-700 transition-all" onClick={() => alert('Add transaction modal coming soon!')}>
           <Plus size={16} /> New Transaction
         </button>
-        <div className="action-divider"></div>
-        <button className="icon-btn relative" onClick={() => alert('Showing recent activities')}>
+        <div className="h-6 w-px bg-slate-200"></div>
+        <button className="relative w-10 h-10 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-all" onClick={() => alert('Showing recent activities')}>
           <Bell size={20} />
-          <span className="badge">3</span>
+          <span className="absolute top-0 right-0 bg-rose-500 text-white text-[10px] rounded-full px-1 py-0.5 font-bold border-2 border-white translate-x-1/4 -translate-y-1/4">3</span>
         </button>
-        <div className="user-profile">
-          <img src="https://i.pravatar.cc/150?u=a042581f4e29026704d" alt="Profile" />
-          <div className="user-info">
-            <span className="user-name">Alex Morgan</span>
-            <span className="user-role">Admin</span>
+        <div className="flex items-center gap-3 cursor-pointer">
+          <img src="https://i.pravatar.cc/150?u=a042581f4e29026704d" alt="Profile" className="w-10 h-10 rounded-full object-cover" />
+          <div className="flex flex-col">
+            <span className="font-semibold text-sm text-slate-900">Alex Morgan</span>
+            <span className="text-[12px] text-slate-500">Admin</span>
           </div>
         </div>
       </div>
@@ -238,22 +268,29 @@ const iconMap = {
   trending: TrendingUp
 };
 
+const colorMaps = {
+  blue: { bg: 'bg-blue-50', text: 'text-blue-600' },
+  rose: { bg: 'bg-rose-50', text: 'text-rose-600' },
+  emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600' }
+};
+
 export default function KpiCard({ label, value, trend, trendType, iconType, colorScheme }) {
   const Icon = iconMap[iconType] || DollarSign;
+  const colors = colorMaps[colorScheme] || colorMaps.blue;
 
   return (
-    <div className="kpi-card card">
-      <div className="kpi-header">
-        <div className={\`kpi-icon-wrapper bg-\${colorScheme}-subtle text-\${colorScheme}\`}>
+    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <div className="flex justify-between items-start mb-4">
+        <div className={\`w-10 h-10 flex items-center justify-center rounded-lg \${colors.bg} \${colors.text}\`}>
           <Icon size={20} />
         </div>
-        <span className={\`badge-trend \${trendType}\`}>
+        <span className={\`inline-flex items-center gap-1 text-[12px] font-bold px-2 py-0.5 rounded-full \${trendType === 'positive' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}\`}>
           <ArrowUpRight size={14} /> {trend}
         </span>
       </div>
-      <div className="kpi-body">
-        <span className="kpi-label">{label}</span>
-        <h2 className="kpi-value">{value}</h2>
+      <div>
+        <span className="text-slate-500 text-sm font-medium">{label}</span>
+        <h2 className="text-2xl font-bold text-slate-900 mt-1">{value}</h2>
       </div>
     </div>
   );
@@ -264,7 +301,7 @@ import { kpiData } from '../../data/transactions';
 
 export default function KpiGrid() {
   return (
-    <div className="kpi-grid">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
       {kpiData.map((kpi) => (
         <KpiCard
           key={kpi.id}
@@ -284,24 +321,31 @@ export default function KpiGrid() {
 
 export default function CashFlowChart() {
   return (
-    <div className="chart-section card lg-col-span-2">
-      <div className="card-header">
-        <h3 className="card-title">Cash Flow</h3>
-        <select className="select-sm">
+    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm lg:col-span-2">
+      <div className="flex justify-between items-center mb-8">
+        <h3 className="text-lg font-bold text-slate-900">Cash Flow</h3>
+        <select className="bg-slate-50 border border-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg outline-none">
           <option>Last 6 Months</option>
           <option>This Year</option>
         </select>
       </div>
-      <div className="chart-container mock-bar-chart">
-        <div className="y-axis">
+      <div className="h-[250px] flex items-end gap-4">
+        <div className="flex flex-col justify-between h-full text-[10px] font-bold text-slate-400 pb-6 pr-2">
           <span>$50k</span><span>$40k</span><span>$30k</span><span>$20k</span><span>$10k</span><span>$0</span>
         </div>
-        <div className="bars-area">
+        <div className="flex-1 flex justify-around items-end h-full relative">
+          {/* Grid lines */}
+          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-6">
+            {[1,2,3,4,5,6].map(i => <div key={i} className="w-full h-px bg-slate-100"></div>)}
+          </div>
+          
           {cashFlowData.map((data, idx) => (
-            <div key={idx} className="bar-group">
-              <div className="bar income" style={{ height: \`\${data.income}%\` }}></div>
-              <div className="bar expense" style={{ height: \`\${data.expense}%\` }}></div>
-              <span className="bar-label">{data.month}</span>
+            <div key={idx} className="flex flex-col items-center gap-2 group relative z-10 h-full justify-end pb-6 w-full">
+              <div className="flex gap-1 items-end h-[180px]">
+                <div className="w-3 bg-blue-600 rounded-t-sm transition-all duration-300 hover:bg-blue-700" style={{ height: \`\${data.income}%\` }}></div>
+                <div className="w-3 bg-slate-200 rounded-t-sm transition-all duration-300 hover:bg-slate-300" style={{ height: \`\${data.expense}%\` }}></div>
+              </div>
+              <span className="text-[10px] font-bold text-slate-500 absolute bottom-0">{data.month}</span>
             </div>
           ))}
         </div>
@@ -317,19 +361,23 @@ export default function TransactionRow({ transaction }) {
   const isPositive = amount.startsWith('+');
 
   return (
-    <tr>
-      <td className="font-medium text-muted">{id}</td>
-      <td>{date}</td>
-      <td className="font-semibold">{name}</td>
-      <td><span className="category-pill">{category}</span></td>
-      <td className={\`text-right font-semibold \${isPositive ? 'text-emerald' : 'text-main'}\`}>
+    <tr className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
+      <td className="py-4 px-4 font-medium text-slate-500">{id}</td>
+      <td className="py-4 px-4 text-sm text-slate-600">{date}</td>
+      <td className="py-4 px-4 font-bold text-slate-900">{name}</td>
+      <td className="py-4 px-4">
+        <span className="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 uppercase tracking-tight">{category}</span>
+      </td>
+      <td className={\`py-4 px-4 text-right font-bold \${isPositive ? 'text-emerald-600' : 'text-slate-900'}\`}>
         {amount}
       </td>
-      <td className="text-center">
-        <span className={\`status-badge \${status.toLowerCase()}\`}>{status}</span>
+      <td className="py-4 px-4 text-center">
+        <span className={\`inline-flex px-3 py-1 rounded-full text-xs font-bold \${status.toLowerCase() === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}\`}>
+          {status}
+        </span>
       </td>
-      <td className="text-right">
-        <button className="icon-btn-sm"><Eye size={16} /></button>
+      <td className="py-4 px-4 text-right">
+        <button className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-all"><Eye size={16} /></button>
       </td>
     </tr>
   );
@@ -340,23 +388,23 @@ import { recentTransactions } from '../../data/transactions';
 
 export default function TransactionsTable() {
   return (
-    <div className="recent-section card lg-col-span-3">
-      <div className="card-header">
-        <h3 className="card-title">Recent Transactions</h3>
-        <button className="btn-link" onClick={() => alert('Redirecting to full history...')}>View All</button>
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden lg:col-span-3">
+      <div className="p-6 border-b border-slate-50 flex justify-between items-center">
+        <h3 className="text-lg font-bold text-slate-900">Recent Transactions</h3>
+        <button className="text-blue-600 font-bold text-sm hover:underline" onClick={() => alert('Redirecting to full history...')}>View All</button>
       </div>
 
-      <div className="table-responsive">
-        <table className="data-table">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
           <thead>
-            <tr>
-              <th>Transaction ID</th>
-              <th>Date</th>
-              <th>Description</th>
-              <th>Category</th>
-              <th className="text-right">Amount</th>
-              <th className="text-center">Status</th>
-              <th></th>
+            <tr className="bg-slate-50/50">
+              <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-slate-400">Transaction ID</th>
+              <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-slate-400">Date</th>
+              <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-slate-400">Description</th>
+              <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-slate-400">Category</th>
+              <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-slate-400 text-right">Amount</th>
+              <th className="py-3 px-4 text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">Status</th>
+              <th className="py-3 px-4"></th>
             </tr>
           </thead>
           <tbody>
@@ -378,20 +426,22 @@ import TransactionsTable from '../components/dashboard/TransactionsTable';
 
 export default function Dashboard() {
   return (
-    <div className="animate-fade-in">
-      <div className="page-header">
+    <div className="animate-in fade-in duration-500">
+      <div className="flex justify-between items-end mb-8">
         <div>
-          <h1 className="page-title">Financial Overview</h1>
-          <p className="page-subtitle">Track your revenue and expenses in real-time.</p>
+          <h1 className="text-[32px] font-extrabold tracking-tight text-slate-900">Financial Overview</h1>
+          <p className="text-slate-500 mt-1">Track your revenue and expenses in real-time.</p>
         </div>
-        <div className="header-buttons">
-          <button className="btn btn-outline" onClick={() => alert('CSV file prepared for download!')}><Download size={16} /> Export CSV</button>
+        <div>
+          <button className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm bg-white border border-slate-200 text-slate-900 shadow-sm hover:bg-slate-50 transition-all" onClick={() => alert('CSV file prepared for download!')}>
+            <Download size={16} /> Export CSV
+          </button>
         </div>
       </div>
 
       <KpiGrid />
 
-      <div className="dashboard-grid">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <CashFlowChart />
         <TransactionsTable />
       </div>
@@ -403,23 +453,25 @@ export default function Dashboard() {
 
 export default function Transactions() {
   return (
-    <div className="animate-fade-in card full-height-card">
-      <div className="card-header border-bottom pb-4 mb-4">
+    <div className="animate-in fade-in duration-500 bg-white rounded-2xl border border-slate-200 shadow-sm min-h-full">
+      <div className="p-8 border-b border-slate-100 mb-8 flex justify-between items-center">
         <div>
-           <h1 className="page-title">All Transactions</h1>
-           <p className="page-subtitle">View and manage your entire transaction history.</p>
+           <h1 className="text-[32px] font-extrabold tracking-tight text-slate-900">All Transactions</h1>
+           <p className="text-slate-500 mt-1">View and manage your entire transaction history.</p>
         </div>
-        <div className="header-actions">
-           <div className="search-bar border">
-             <Search size={16} className="search-icon" />
-             <input type="text" placeholder="Search..." />
+        <div className="flex items-center gap-4">
+           <div className="flex items-center gap-2 border border-slate-200 bg-white px-4 py-2 rounded-lg">
+             <Search size={16} className="text-slate-400" />
+             <input type="text" placeholder="Search..." className="bg-transparent border-none outline-none text-sm" />
            </div>
-           <button className="btn btn-outline"><Filter size={16} /> Filter</button>
+           <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm bg-white border border-slate-200 text-slate-900 shadow-sm hover:bg-slate-50 transition-all">
+             <Filter size={16} /> Filter
+           </button>
         </div>
       </div>
-      <div className="empty-state">
-         <p className="text-muted">This is a full page view simulating the Transactions route.</p>
-         <p className="text-muted text-sm mt-2">The table component from the Dashboard would normally be re-used here with pagination.</p>
+      <div className="flex flex-col items-center justify-center p-20 text-center">
+         <p className="text-slate-500">This is a full page view simulating the Transactions route.</p>
+         <p className="text-slate-400 text-xs mt-2">The table component from the Dashboard would normally be re-used here with pagination.</p>
       </div>
     </div>
   );
@@ -429,18 +481,18 @@ export default function Transactions() {
 
 export default function Reports() {
   return (
-    <div className="animate-fade-in card full-height-card">
-       <div className="card-header border-bottom pb-4 mb-4">
+    <div className="animate-in fade-in duration-500 bg-white rounded-2xl border border-slate-200 shadow-sm min-h-full">
+       <div className="p-8 border-b border-slate-100 mb-8">
         <div>
-           <h1 className="page-title">Financial Reports</h1>
-           <p className="page-subtitle">Generate P&L, Balance Sheets, and Cash Flow statements.</p>
+           <h1 className="text-[32px] font-extrabold tracking-tight text-slate-900">Financial Reports</h1>
+           <p className="text-slate-500 mt-1">Generate P&L, Balance Sheets, and Cash Flow statements.</p>
         </div>
       </div>
-      <div className="empty-state">
-         <FileBarChart size={48} className="text-muted mb-4 opacity-50" />
-         <h3>No reports generated yet</h3>
-         <p className="text-muted mt-2">Select a date range and report type to generate your first financial document.</p>
-         <button className="btn btn-primary mt-6">Generate Report</button>
+      <div className="flex flex-col items-center justify-center p-20 text-center">
+         <FileBarChart size={48} className="text-slate-300 mb-6" />
+         <h3 className="text-xl font-bold text-slate-900">No reports generated yet</h3>
+         <p className="text-slate-500 mt-2 max-w-[300px]">Select a date range and report type to generate your first financial document.</p>
+         <button className="mt-8 px-6 py-3 rounded-xl font-bold bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all">Generate Report</button>
       </div>
     </div>
   );
@@ -450,595 +502,37 @@ export default function Reports() {
 
 export default function Settings() {
   return (
-    <div className="animate-fade-in card full-height-card">
-      <div className="card-header border-bottom pb-4 mb-4">
+    <div className="animate-in fade-in duration-500 bg-white rounded-2xl border border-slate-200 shadow-sm min-h-full">
+      <div className="p-8 border-b border-slate-100 mb-8">
         <div>
-           <h1 className="page-title">Account Settings</h1>
-           <p className="page-subtitle">Manage company details, billing, and team members.</p>
+           <h1 className="text-[32px] font-extrabold tracking-tight text-slate-900">Account Settings</h1>
+           <p className="text-slate-500 mt-1">Manage company details, billing, and team members.</p>
         </div>
       </div>
-      <div className="settings-grid">
-         <div className="settings-nav">
-            <button className="settings-tab active">Company Profile</button>
-            <button className="settings-tab">Bank Accounts</button>
-            <button className="settings-tab">Team Members</button>
-            <button className="settings-tab">Notifications</button>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-8 p-8">
+         <div className="flex flex-col gap-1">
+            <button className="text-left px-4 py-2.5 rounded-lg font-bold text-[15px] bg-blue-50 text-blue-600 transition-all">Company Profile</button>
+            <button className="text-left px-4 py-2.5 rounded-lg font-semibold text-[15px] text-slate-500 hover:bg-slate-50 transition-all">Bank Accounts</button>
+            <button className="text-left px-4 py-2.5 rounded-lg font-semibold text-[15px] text-slate-500 hover:bg-slate-50 transition-all">Team Members</button>
+            <button className="text-left px-4 py-2.5 rounded-lg font-semibold text-[15px] text-slate-500 hover:bg-slate-50 transition-all">Notifications</button>
          </div>
-         <div className="settings-content">
-            <h3 className="mb-4">Company Profile</h3>
-            <div className="form-group">
-               <label>Company Name</label>
-               <input type="text" defaultValue="Acme Corp" className="input" />
+         <div className="md:col-span-3">
+            <h3 className="text-xl font-bold text-slate-900 mb-6">Company Profile</h3>
+            <div className="flex flex-col gap-4 max-w-[400px]">
+              <div className="flex flex-col gap-1.5">
+                 <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">Company Name</label>
+                 <input type="text" defaultValue="Acme Corp" className="px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 font-medium text-slate-900 outline-none focus:border-blue-500 focus:bg-white transition-all" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                 <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">Tax ID / EIN</label>
+                 <input type="text" defaultValue="XX-XXXXXXX" className="px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 font-medium text-slate-900 outline-none focus:border-blue-500 focus:bg-white transition-all" />
+              </div>
+              <button className="mt-4 px-6 py-3 rounded-xl font-bold bg-slate-900 text-white self-start hover:bg-black transition-all">Save Changes</button>
             </div>
-            <div className="form-group mt-4">
-               <label>Tax ID / EIN</label>
-               <input type="text" defaultValue="XX-XXXXXXX" className="input" />
-            </div>
-            <button className="btn btn-primary mt-6">Save Changes</button>
          </div>
       </div>
     </div>
   );
 }`,
-
-    // --- STYLES ---
-    "src/App.css": `
-:root {
-  --blue: #2563EB;
-  --blue-subtle: #EFF6FF;
-  --emerald: #10B981;
-  --emerald-subtle: #ECFDF5;
-  --rose: #F43F5E;
-  --rose-subtle: #FFF1F2;
-  --amber: #F59E0B;
-  --slate-900: #0F172A;
-  --slate-800: #1E293B;
-  --slate-700: #334155;
-  --slate-500: #64748B;
-  --slate-400: #94A3B8;
-  --slate-200: #E2E8F0;
-  --slate-100: #F1F5F9;
-  --slate-50: #F8FAFC;
-  
-  --bg-color: var(--slate-50);
-  --surface: #FFFFFF;
-  --text-main: var(--slate-900);
-  --text-muted: var(--slate-500);
-  --border: var(--slate-200);
-  
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-}
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { 
-  font-family: 'Outfit', sans-serif; 
-  background-color: var(--bg-color); 
-  color: var(--text-main); 
-  -webkit-font-smoothing: antialiased;
-}
-
-/* Utilities */
-.text-blue { color: var(--blue); }
-.text-emerald { color: var(--emerald); }
-.text-rose { color: var(--rose); }
-.bg-blue-subtle { background-color: var(--blue-subtle); }
-.bg-emerald-subtle { background-color: var(--emerald-subtle); }
-.bg-rose-subtle { background-color: var(--rose-subtle); }
-.text-muted { color: var(--text-muted); }
-.text-main { color: var(--text-main); }
-.font-semibold { font-weight: 600; }
-.font-medium { font-weight: 500; }
-.text-right { text-align: right; }
-.text-center { text-align: center; }
-.mb-4 { margin-bottom: 1rem; }
-.mt-2 { margin-top: 0.5rem; }
-.mt-4 { margin-top: 1rem; }
-.mt-6 { margin-top: 1.5rem; }
-.pb-4 { padding-bottom: 1rem; }
-.border-bottom { border-bottom: 1px solid var(--border); }
-.opacity-50 { opacity: 0.5; }
-
-/* Layout */
-.app-layout {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.sidebar {
-  width: 260px;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-}
-
-.main-wrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.content-area {
-  flex: 1;
-  overflow-y: auto;
-  padding: 2rem;
-}
-
-/* Sidebar */
-.brand {
-  height: 72px;
-  display: flex;
-  align-items: center;
-  padding: 0 1.5rem;
-  gap: 0.75rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.brand-logo {
-  background: var(--slate-900);
-  border-radius: 8px;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.brand-text {
-  font-weight: 800;
-  font-size: 1.25rem;
-  letter-spacing: -0.025em;
-}
-
-.nav-menu {
-  padding: 1.5rem 1rem;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-
-.nav-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.mt-auto { margin-top: auto; }
-
-.nav-title {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--slate-400);
-  font-weight: 700;
-  padding: 0 1rem;
-  margin-bottom: 0.5rem;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.625rem 1rem;
-  border-radius: 8px;
-  color: var(--slate-500);
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 0.9375rem;
-  transition: all 0.2s;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-family: inherit;
-  width: 100%;
-}
-
-.nav-item:hover {
-  background: var(--slate-50);
-  color: var(--slate-900);
-}
-
-.nav-item.active {
-  background: var(--blue-subtle);
-  color: var(--blue);
-}
-
-.logout-btn:hover {
-  color: var(--rose);
-  background: var(--rose-subtle);
-}
-
-/* Header */
-.top-header {
-  height: 72px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 2rem;
-  flex-shrink: 0;
-}
-
-.search-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: var(--slate-50);
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  width: 100%;
-  max-width: 400px;
-}
-.search-bar.border {
-  background: var(--surface);
-  border: 1px solid var(--border);
-}
-
-.search-icon { color: var(--slate-400); }
-
-.search-bar input {
-  border: none;
-  background: transparent;
-  width: 100%;
-  font-family: inherit;
-  font-size: 0.9375rem;
-  color: var(--text-main);
-  outline: none;
-}
-.search-bar input::placeholder { color: var(--slate-400); }
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-}
-
-.action-divider {
-  height: 24px;
-  width: 1px;
-  background: var(--border);
-}
-
-.badge {
-  position: absolute;
-  top: 0;
-  right: 0;
-  background: var(--rose);
-  color: white;
-  font-size: 0.625rem;
-  border-radius: 10px;
-  padding: 2px 5px;
-  font-weight: 700;
-  border: 2px solid var(--surface);
-  transform: translate(25%, -25%);
-}
-
-.icon-btn, .icon-btn-sm {
-  background: transparent;
-  border: none;
-  color: var(--slate-500);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  transition: all 0.2s;
-}
-.icon-btn { width: 40px; height: 40px; }
-.icon-btn-sm { width: 32px; height: 32px; }
-
-.icon-btn:hover, .icon-btn-sm:hover {
-  background: var(--slate-100);
-  color: var(--slate-900);
-}
-
-.user-profile {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  cursor: pointer;
-}
-
-.user-profile img {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.user-info { display: flex; flex-direction: column; }
-.user-name { font-weight: 600; font-size: 0.875rem; color: var(--text-main); }
-.user-role { font-size: 0.75rem; color: var(--slate-500); }
-
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1rem;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-  border: 1px solid transparent;
-}
-
-.btn-primary { background: var(--blue); color: white; }
-.btn-primary:hover { background: #1D4ED8; }
-.btn-outline { background: var(--surface); border-color: var(--border); color: var(--text-main); }
-.btn-outline:hover { background: var(--slate-50); }
-.btn-link { background: transparent; color: var(--blue); font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; }
-.btn-link:hover { text-decoration: underline; }
-
-/* Page Header */
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 2rem;
-}
-
-.page-title { font-size: 1.875rem; font-weight: 800; letter-spacing: -0.025em; line-height: 1.2; }
-.page-subtitle { color: var(--text-muted); margin-top: 0.25rem; font-size: 0.9375rem; }
-
-/* Cards */
-.card {
-  background: var(--surface);
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-  padding: 1.5rem;
-}
-
-.full-height-card { min-height: calc(100vh - 4rem - 72px); }
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-}
-
-.card-title { font-size: 1.125rem; font-weight: 700; letter-spacing: -0.025em; }
-
-/* KPIs */
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.kpi-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.kpi-icon-wrapper {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.badge-trend {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.875rem;
-  font-weight: 700;
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
-}
-.badge-trend.positive { background: var(--emerald-subtle); color: var(--emerald); }
-.badge-trend.negative { background: var(--rose-subtle); color: var(--rose); }
-
-.kpi-label { font-size: 0.875rem; color: var(--text-muted); font-weight: 500; display: block; margin-bottom: 0.25rem; }
-.kpi-value { font-size: 2rem; font-weight: 800; letter-spacing: -0.025em; }
-
-/* Dashboard Grid */
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(1, 1fr);
-  gap: 1.5rem;
-}
-
-@media (min-width: 1024px) {
-  .dashboard-grid { grid-template-columns: repeat(5, 1fr); }
-  .lg-col-span-2 { grid-column: span 2; }
-  .lg-col-span-3 { grid-column: span 3; }
-}
-
-/* Mock Bar Chart */
-.chart-container { height: 280px; position: relative; }
-.select-sm { padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid var(--border); font-family: inherit; font-size: 0.875rem; font-weight: 500; }
-
-.mock-bar-chart {
-  display: flex;
-}
-.y-axis {
-  display: flex;
-  flex-direction: column-reverse;
-  justify-content: space-between;
-  padding-bottom: 2rem;
-  padding-right: 1rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-.bars-area {
-  flex: 1;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  padding-bottom: 2rem;
-  position: relative;
-}
-.bars-area::before {
-  content: '';
-  position: absolute;
-  bottom: 2rem;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: var(--border);
-}
-.bar-group {
-  display: flex;
-  gap: 4px;
-  height: 100%;
-  align-items: flex-end;
-  width: 12%;
-  position: relative;
-}
-.bar {
-  flex: 1;
-  border-radius: 4px 4px 0 0;
-  transition: height 1s ease;
-}
-.bar.income { background: var(--emerald); }
-.bar.expense { background: var(--rose); }
-.bar-label {
-  position: absolute;
-  bottom: -2rem;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-/* Tables */
-.table-responsive { overflow-x: auto; margin: -1.5rem; padding: 1.5rem; padding-top: 0; }
-.data-table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 600px; }
-.data-table th {
-  text-align: left;
-  padding: 0.75rem 1rem;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--slate-400);
-  font-weight: 700;
-  border-bottom: 1px solid var(--border);
-}
-.data-table td {
-  padding: 1rem;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.875rem;
-  color: var(--text-main);
-  vertical-align: middle;
-}
-.data-table tr:last-child td { border-bottom: none; }
-
-.category-pill {
-  background: var(--slate-100);
-  color: var(--slate-700);
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-.status-badge.completed { background: var(--emerald-subtle); color: var(--emerald); }
-.status-badge.pending { background: var(--slate-100); color: var(--slate-600); }
-
-/* Settings Form */
-.settings-grid { display: flex; gap: 2rem; }
-.settings-nav { width: 200px; display: flex; flex-direction: column; gap: 0.5rem; }
-.settings-tab {
-  padding: 0.75rem 1rem;
-  text-align: left;
-  background: transparent;
-  border: none;
-  font-family: inherit;
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: var(--text-muted);
-  border-radius: 8px;
-  cursor: pointer;
-}
-.settings-tab:hover { background: var(--slate-50); color: var(--text-main); }
-.settings-tab.active { background: var(--blue-subtle); color: var(--blue); }
-.settings-content { flex: 1; max-width: 500px; }
-.form-group { display: flex; flex-direction: column; gap: 0.5rem; }
-.form-group label { font-size: 0.875rem; font-weight: 600; color: var(--slate-700); }
-.input {
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 0.875rem;
-  outline: none;
-  transition: border 0.2s;
-}
-.input:focus { border-color: var(--blue); }
-
-/* Empty States */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 300px;
-  text-align: center;
-}
-
-/* Animations */
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.animate-fade-in { animation: fadeIn 0.3s ease forwards; }
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .app-layout { flex-direction: column; }
-  .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
-  .nav-menu { flex-direction: row; overflow-x: auto; padding: 1rem; flex: unset; }
-  .nav-item { width: auto; padding: 0.5rem 0.75rem; }
-  .nav-item span { display: none; }
-  .nav-group.mt-auto { margin-top: 0; display: flex; flex-direction: row; margin-left: auto; }
-  .header-actions .user-name, .header-actions .user-role { display: none; }
-  .kpi-grid { grid-template-columns: 1fr; }
-  .settings-grid { flex-direction: column; }
-  .settings-nav { width: 100%; flex-direction: row; overflow-x: auto; }
-  .settings-tab { white-space: nowrap; }
-}
-`,
-
-    "src/index.css": `:root {
-  font-family: 'Outfit', system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light;
-  background-color: #F8FAFC;
-  text-rendering: optimizeLegibility;
-}
-
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-#root {
-  width: 100%;
-}`
   }
 };

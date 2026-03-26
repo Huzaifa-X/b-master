@@ -1,7 +1,9 @@
-export const officeBookingTemplate = {
+import { TemplateDefinition } from './index';
+
+export const officeBookingTemplate: TemplateDefinition = {
   id: "office-booking",
   name: "Office Space Booking",
-  description: "Reserve desks, rooms, and office resources",
+  description: "Reserve desks, rooms, and office resources using Tailwind CSS",
   category: "booking",
   files: {
     "package.json": JSON.stringify(
@@ -23,6 +25,9 @@ export const officeBookingTemplate = {
         devDependencies: {
           "@vitejs/plugin-react": "^4.2.1",
           vite: "^5.0.8",
+          tailwindcss: "^3.4.1",
+          postcss: "^8.4.35",
+          autoprefixer: "^10.4.17",
         },
       },
       null,
@@ -33,18 +38,59 @@ export const officeBookingTemplate = {
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <title>Office Space Booking</title>
   </head>
-  <body>
+  <body class="bg-[#F8FAFC] text-[#0F172A]">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>`,
 
+    "tailwind.config.js": `/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['"Sora"', 'system-ui', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}`,
+
+    "postcss.config.js": `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}`,
+
     "vite.config.js": `import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-export default defineConfig({ plugins: [react()] })`,
+
+export default defineConfig({
+  plugins: [react()],
+})`,
+
+    "src/index.css": `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased text-[#0F172A] bg-[#F8FAFC];
+    font-family: 'Sora', sans-serif;
+  }
+}`,
 
     "src/main.jsx": `import React from 'react'
 import ReactDOM from 'react-dom/client'
@@ -86,9 +132,9 @@ export const FILTER_OPTIONS = [
     // --- LAYOUT COMPONENTS ---
     "src/components/layout/PageHeader.jsx": `export default function PageHeader() {
   return (
-    <div className="page-header">
-      <h1>Office Space Booking</h1>
-      <p>Reserve desks, meeting rooms, and office resources</p>
+    <div className="mb-8">
+      <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-2">Space Planner</h1>
+      <p className="text-slate-500 font-medium text-sm">Reserve desks, meeting rooms, and high-performance hubs.</p>
     </div>
   );
 }`,
@@ -98,11 +144,15 @@ export const FILTER_OPTIONS = [
 
 export default function FilterBar({ activeFilter, onFilterChange }) {
   return (
-    <div className="filter-bar">
+    <div className="flex flex-wrap gap-2 mb-8">
       {FILTER_OPTIONS.map(f => (
         <button
           key={f.value}
-          className={\`filter-btn \${activeFilter === f.value ? 'active' : ''}\`}
+          className={\`px-5 py-2 rounded-2xl text-xs font-black uppercase tracking-widest transition-all \${
+            activeFilter === f.value 
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' 
+              : 'bg-white text-slate-500 hover:text-slate-900 border border-slate-100'
+          }\`}
           onClick={() => onFilterChange(f.value)}
         >
           {f.label}
@@ -122,13 +172,13 @@ export default function AmenityIcon({ name }) {
   if (!Icon) return null;
 
   return (
-    <span className="amenity">
-      <Icon size={11} />
+    <span className="w-5 h-5 flex items-center justify-center bg-slate-100 rounded-md text-slate-600 border border-slate-200/50">
+      <Icon size={10} strokeWidth={3} />
     </span>
   );
 }`,
 
-    "src/components/space/SpaceCard.jsx": `import { Users } from 'lucide-react';
+    "src/components/space/SpaceCard.jsx": `import { Users, Lock } from 'lucide-react';
 import AmenityIcon from './AmenityIcon';
 
 export default function SpaceCard({ space, isSelected, onSelect }) {
@@ -136,21 +186,41 @@ export default function SpaceCard({ space, isSelected, onSelect }) {
 
   return (
     <button
-      className={\`space-card \${space.status} \${isSelected ? 'chosen' : ''}\`}
+      className={\`flex flex-col gap-3 p-5 rounded-[1.5rem] border-2 text-left relative transition-all duration-300 group \${
+        isAvailable 
+          ? isSelected 
+            ? 'bg-indigo-50 border-indigo-500 shadow-xl' 
+            : 'bg-white border-white hover:border-indigo-200 hover:shadow-lg shadow-sm'
+          : 'bg-slate-50 border-slate-50 opacity-50 cursor-not-allowed'
+      }\`}
       onClick={() => isAvailable && onSelect(space)}
       disabled={!isAvailable}
     >
-      <div className="space-type-badge">{space.type}</div>
-      <div className="space-label">{space.label}</div>
-      <div className="space-cap">
-        <Users size={12} /> {space.capacity} person{space.capacity > 1 ? 's' : ''}
+      <div className="flex justify-between items-start mb-1">
+        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-indigo-400 transition-colors">
+          {space.type}
+        </span>
+        <div className={\`w-2 h-2 rounded-full \${isAvailable ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}\`} />
       </div>
-      <div className="space-amenities">
+      
+      <div className="flex-1">
+        <h4 className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{space.label}</h4>
+        <div className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-slate-500">
+            <Users size={12} className="text-slate-400" /> {space.capacity} pax
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1 mt-auto">
         {space.amenities.map(a => (
           <AmenityIcon key={a} name={a} />
         ))}
       </div>
-      <div className={\`space-status-dot \${space.status}\`} />
+
+      {!isAvailable && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/40 backdrop-blur-[1px] rounded-[1.5rem]">
+            <Lock size={16} className="text-slate-400" />
+        </div>
+      )}
     </button>
   );
 }`,
@@ -159,7 +229,7 @@ export default function SpaceCard({ space, isSelected, onSelect }) {
 
 export default function FloorGrid({ spaces, selectedSpace, onSelectSpace }) {
   return (
-    <div className="floor-grid">
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
       {spaces.map(space => (
         <SpaceCard
           key={space.id}
@@ -172,7 +242,7 @@ export default function FloorGrid({ spaces, selectedSpace, onSelectSpace }) {
   );
 }`,
 
-    "src/components/space/BookingPanel.jsx": `import { X, Calendar, Clock, User } from 'lucide-react';
+    "src/components/space/BookingPanel.jsx": `import { X, Calendar, Clock, User, CheckCircle2 } from 'lucide-react';
 import { DATES, TIMES } from '../../data/resources';
 
 export default function BookingPanel({
@@ -194,96 +264,133 @@ export default function BookingPanel({
   };
 
   return (
-    <div className="booking-panel">
-      <div className="booking-panel-header">
-        <h3>Book: {space.label}</h3>
-        <button className="close-btn" onClick={onClose}>
-          <X size={16} />
-        </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+      
+      <div className="bg-white rounded-[2.5rem] p-10 shadow-2xl w-full max-w-lg relative animate-in zoom-in-95 duration-300">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h3 className="text-xl font-black text-slate-900 leading-none mb-1 flex items-center gap-2">
+                Configure Reservation
+            </h3>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Resource: {space.label}</p>
+          </div>
+          <button className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-full text-slate-400 hover:text-rose-500 transition-colors" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <form className="space-y-6" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">
+                <Calendar size={12} className="text-indigo-500" /> Date
+              </label>
+              <select value={date} onChange={(e) => onDateChange(e.target.value)} className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 text-sm font-bold outline-none focus:border-indigo-500 focus:bg-white transition-all appearance-none">
+                {DATES.map(d => <option key={d}>{d}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">
+                <User size={12} className="text-indigo-500" /> Booker
+              </label>
+              <input
+                required
+                value={name}
+                onChange={(e) => onNameChange(e.target.value)}
+                placeholder="Full Name"
+                className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 text-sm font-bold outline-none focus:border-indigo-500 focus:bg-white transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2 text-left">
+              <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">
+                <Clock size={12} className="text-indigo-500" /> From
+              </label>
+              <select value={startTime} onChange={(e) => onStartTimeChange(e.target.value)} className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 text-sm font-bold outline-none focus:border-indigo-500 focus:bg-white transition-all appearance-none">
+                {TIMES.map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2 text-left">
+              <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">
+                <Clock size={12} className="text-indigo-500" /> Until
+              </label>
+              <select value={endTime} onChange={(e) => onEndTimeChange(e.target.value)} className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 text-sm font-bold outline-none focus:border-indigo-500 focus:bg-white transition-all appearance-none">
+                {TIMES.map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-indigo-600/30 hover:bg-indigo-700 hover:-translate-y-0.5 active:scale-95 transition-all">
+            <CheckCircle2 size={18} /> Confirm Access
+          </button>
+        </form>
       </div>
-
-      <form className="booking-form" onSubmit={handleSubmit}>
-        <div className="two-col">
-          <div className="field">
-            <label><Calendar size={12} /> Date</label>
-            <select value={date} onChange={(e) => onDateChange(e.target.value)}>
-              {DATES.map(d => <option key={d}>{d}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label><User size={12} /> Your Name</label>
-            <input
-              required
-              value={name}
-              onChange={(e) => onNameChange(e.target.value)}
-              placeholder="Jane Smith"
-            />
-          </div>
-        </div>
-
-        <div className="two-col">
-          <div className="field">
-            <label><Clock size={12} /> Start Time</label>
-            <select value={startTime} onChange={(e) => onStartTimeChange(e.target.value)}>
-              {TIMES.map(t => <option key={t}>{t}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label><Clock size={12} /> End Time</label>
-            <select value={endTime} onChange={(e) => onEndTimeChange(e.target.value)}>
-              {TIMES.map(t => <option key={t}>{t}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <button type="submit" className="primary-btn">Confirm Booking</button>
-      </form>
     </div>
   );
 }`,
 
     // --- BOOKING COMPONENTS ---
-    "src/components/booking/BookingCard.jsx": `import { X, User, Calendar, Clock } from 'lucide-react';
+    "src/components/booking/BookingCard.jsx": `import { X, User, Calendar, Clock, MapPin } from 'lucide-react';
 
 export default function BookingCard({ booking, onCancel }) {
   return (
-    <div className="booking-card">
-      <div className="bc-top">
-        <span className="bc-name">{booking.resource.label}</span>
-        <button className="cancel-btn" onClick={() => onCancel(booking.id)}>
-          <X size={12} />
+    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group animate-in slide-in-from-right-10">
+      <div className="flex justify-between items-start mb-4">
+        <div>
+            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest leading-none mb-1">{booking.resource.type}</p>
+            <h4 className="font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors leading-none">{booking.resource.label}</h4>
+        </div>
+        <button className="p-1.5 bg-slate-50 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" onClick={() => onCancel(booking.id)}>
+          <X size={14} strokeWidth={2.5} />
         </button>
       </div>
-      <div className="bc-meta">
-        <User size={11} /> {booking.name}
-      </div>
-      <div className="bc-meta">
-        <Calendar size={11} /> {booking.date}
-      </div>
-      <div className="bc-meta">
-        <Clock size={11} /> {booking.startTime} – {booking.endTime}
+      
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+            <User size={12} className="text-slate-300" /> {booking.name}
+        </div>
+        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+            <Calendar size={12} className="text-slate-300" /> {booking.date}
+        </div>
+        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+            <Clock size={12} className="text-slate-300" /> {booking.startTime} – {booking.endTime}
+        </div>
       </div>
     </div>
   );
 }`,
 
-    "src/components/booking/BookingsSidebar.jsx": `import BookingCard from './BookingCard';
+    "src/components/booking/BookingsSidebar.jsx": `import { Briefcase } from 'lucide-react';
+import BookingCard from './BookingCard';
 
 export default function BookingsSidebar({ bookings, onCancelBooking }) {
   return (
-    <div className="sidebar">
-      <h3 className="sidebar-title">My Bookings ({bookings.length})</h3>
-      {bookings.length === 0 ? (
-        <p className="empty-state">Select an available space to book it.</p>
-      ) : (
-        bookings.map(b => (
-          <BookingCard
-            key={b.id}
-            booking={b}
-            onCancel={onCancelBooking}
-          />
-        ))
-      )}
+    <div className="lg:w-[320px] h-fit">
+      <div className="flex items-center justify-between mb-6 px-1">
+        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-900 flex items-center gap-2 leading-none">
+            <Briefcase size={14} className="text-indigo-600" /> My Access
+        </h3>
+        <span className="bg-indigo-100 text-indigo-600 px-2.5 py-1 rounded-full text-[10px] font-black leading-none">{bookings.length}</span>
+      </div>
+      
+      <div className="space-y-4">
+        {bookings.length === 0 ? (
+          <div className="p-10 text-center border-2 border-dashed border-slate-200 rounded-[2rem] bg-white/50">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">No active <br />reservations</p>
+          </div>
+        ) : (
+          bookings.map(b => (
+            <BookingCard
+              key={b.id}
+              booking={b}
+              onCancel={onCancelBooking}
+            />
+          ))
+        )}
+      </div>
     </div>
   );
 }`,
@@ -296,7 +403,6 @@ import FilterBar from './components/ui/FilterBar';
 import FloorGrid from './components/space/FloorGrid';
 import BookingPanel from './components/space/BookingPanel';
 import BookingsSidebar from './components/booking/BookingsSidebar';
-import './App.css';
 
 function App() {
   const [filter, setFilter] = useState('all');
@@ -353,11 +459,11 @@ function App() {
   };
 
   return (
-    <div>
+    <div className="max-w-6xl mx-auto py-12 px-6">
       <PageHeader />
 
-      <div className="layout">
-        <div className="main-col">
+      <div className="flex flex-col lg:flex-row gap-8 items-start">
+        <div className="flex-1 w-full order-2 lg:order-1">
           <FilterBar activeFilter={filter} onFilterChange={setFilter} />
           <FloorGrid
             spaces={filtered}
@@ -382,353 +488,18 @@ function App() {
           )}
         </div>
 
-        <BookingsSidebar bookings={booked} onCancelBooking={cancelBooking} />
+        <aside className="w-full lg:w-auto order-1 lg:order-2">
+            <BookingsSidebar bookings={booked} onCancelBooking={cancelBooking} />
+        </aside>
       </div>
+      
+      <footer className="mt-20 pt-8 border-t border-slate-200 text-center">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">Corporate Resource Hub — Grid Alpha</p>
+      </footer>
     </div>
   );
 }
 
 export default App;`,
-
-    // --- STYLES ---
-    "src/App.css": `:root {
-  --blue: #3b82f6;
-  --green: #10b981;
-  --red: #ef4444;
-  --amber: #f59e0b;
-  --surface: #fff;
-  --border: #e2e8f0;
-  --muted: #64748b;
-  --bg: #f1f5f9;
-}
-
-.page-header {
-  margin-bottom: 1.5rem;
-}
-
-.page-header h1 {
-  font-size: 1.5rem;
-  font-weight: 800;
-}
-
-.page-header p {
-  color: var(--muted);
-  font-size: 0.875rem;
-  margin-top: 0.2rem;
-}
-
-.layout {
-  display: grid;
-  grid-template-columns: 1fr 260px;
-  gap: 1.25rem;
-}
-
-@media (max-width: 700px) {
-  .layout {
-    grid-template-columns: 1fr;
   }
-}
-
-.main-col {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-/* Filter Bar */
-.filter-bar {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.filter-btn {
-  padding: 0.45rem 0.9rem;
-  border: 1.5px solid var(--border);
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  background: var(--surface);
-  transition: all 0.2s;
-}
-
-.filter-btn.active {
-  border-color: var(--blue);
-  background: #eff6ff;
-  color: var(--blue);
-  font-weight: 700;
-}
-
-/* Floor Grid */
-.floor-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 0.75rem;
-}
-
-/* Space Card */
-.space-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  padding: 1rem;
-  border: 2px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  cursor: pointer;
-  text-align: left;
-  position: relative;
-  transition: all 0.2s;
-}
-
-.space-card.available:hover {
-  border-color: var(--blue);
-  box-shadow: 0 2px 10px rgba(59, 130, 246, 0.15);
-}
-
-.space-card.occupied {
-  opacity: 0.55;
-  cursor: not-allowed;
-  background: #fafafa;
-}
-
-.space-card.chosen {
-  border-color: var(--blue);
-  background: #eff6ff;
-}
-
-.space-type-badge {
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-}
-
-.space-label {
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-.space-cap {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-.space-amenities {
-  display: flex;
-  gap: 0.25rem;
-  margin-top: 0.2rem;
-}
-
-.amenity {
-  display: flex;
-  align-items: center;
-  background: #f1f5f9;
-  border-radius: 4px;
-  padding: 2px 5px;
-  color: var(--muted);
-}
-
-.space-status-dot {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.space-status-dot.available {
-  background: var(--green);
-}
-
-.space-status-dot.occupied {
-  background: var(--red);
-}
-
-/* Booking Panel */
-.booking-panel {
-  background: var(--surface);
-  border-radius: 12px;
-  border: 2px solid var(--blue);
-  padding: 1.25rem;
-}
-
-.booking-panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.booking-panel-header h3 {
-  font-size: 0.95rem;
-  font-weight: 700;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--muted);
-}
-
-.close-btn:hover {
-  color: var(--red);
-}
-
-.booking-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
-}
-
-@media (max-width: 500px) {
-  .two-col {
-    grid-template-columns: 1fr;
-  }
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.field label {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.field input,
-.field select {
-  padding: 0.6rem 0.8rem;
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-family: inherit;
-  outline: none;
-  background: var(--surface);
-}
-
-.field input:focus,
-.field select:focus {
-  border-color: var(--blue);
-}
-
-.primary-btn {
-  padding: 0.8rem;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.primary-btn:hover {
-  opacity: 0.9;
-}
-
-/* Sidebar */
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  align-self: start;
-  position: sticky;
-  top: 1rem;
-}
-
-.sidebar-title {
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.empty-state {
-  font-size: 0.8rem;
-  color: var(--muted);
-  background: var(--surface);
-  border-radius: 10px;
-  padding: 1rem;
-  text-align: center;
-}
-
-/* Booking Card */
-.booking-card {
-  background: var(--surface);
-  border-radius: 10px;
-  padding: 0.9rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.bc-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.bc-name {
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.cancel-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-}
-
-.cancel-btn:hover {
-  color: var(--red);
-}
-
-.bc-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.77rem;
-  color: var(--muted);
-}`,
-
-    "src/index.css": `* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #f1f5f9;
-  min-height: 100vh;
-  color: #1e293b;
-}
-
-#root {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 2rem 1rem;
-}`,
-  },
 };
