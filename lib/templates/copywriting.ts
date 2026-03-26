@@ -1,7 +1,9 @@
-export const copywritingTemplate = {
+import { TemplateDefinition } from './index';
+
+export const copywritingTemplate: TemplateDefinition = {
   id: "copywriting",
   name: "Copywriting",
-  description: "AI-powered social media copy generator for powerful marketing texts",
+  description: "AI-powered social media copy generator with Tailwind CSS",
   category: "Marketing",
   icon: "PenTool",
   files: {
@@ -24,6 +26,9 @@ export const copywritingTemplate = {
         devDependencies: {
           "@vitejs/plugin-react": "^4.2.1",
           vite: "^5.0.8",
+          tailwindcss: "^3.4.1",
+          postcss: "^8.4.35",
+          autoprefixer: "^10.4.17",
         },
       },
       null,
@@ -41,11 +46,42 @@ export const copywritingTemplate = {
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
     <title>CopyGenius - AI Copywriting</title>
   </head>
-  <body>
+  <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>`,
+
+    "tailwind.config.js": `/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Sora', 'system-ui', 'sans-serif'],
+      },
+      colors: {
+        primary: {
+          DEFAULT: '#8B5CF6',
+          dark: '#7C3AED',
+          light: '#A78BFA',
+          subtle: '#F5F3FF',
+        }
+      }
+    },
+  },
+  plugins: [],
+}`,
+
+    "postcss.config.js": `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}`,
 
     "vite.config.js": `import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -53,6 +89,19 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
 })`,
+
+    "src/index.css": `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Sora', system-ui, sans-serif;
+    @apply bg-slate-50 text-slate-900;
+    background: linear-gradient(135deg, #F8FAFC 0%, #EDE9FE 50%, #F8FAFC 100%);
+    min-height: 100vh;
+  }
+}`,
 
     "src/main.jsx": `import React from 'react'
 import ReactDOM from 'react-dom/client'
@@ -65,22 +114,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )`,
 
-    "src/index.css": `* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-`,
-
     // --- DATA ---
     "src/data/constants.js": `import { Twitter, Instagram, Linkedin, Facebook, Mail } from 'lucide-react'
 
 export const platforms = [
-  { id: 'twitter', name: 'Twitter/X', icon: Twitter, colorClass: 'platform-twitter', charLimit: 280 },
-  { id: 'instagram', name: 'Instagram', icon: Instagram, colorClass: 'platform-instagram', charLimit: 2200 },
-  { id: 'linkedin', name: 'LinkedIn', icon: Linkedin, colorClass: 'platform-linkedin', charLimit: 3000 },
-  { id: 'facebook', name: 'Facebook', icon: Facebook, colorClass: 'platform-facebook', charLimit: 500 },
-  { id: 'email', name: 'Email Subject', icon: Mail, colorClass: 'platform-email', charLimit: 60 },
+  { id: 'twitter', name: 'Twitter/X', icon: Twitter, colorClass: 'bg-sky-500', charLimit: 280 },
+  { id: 'instagram', name: 'Instagram', icon: Instagram, colorClass: 'bg-gradient-to-tr from-purple-500 to-pink-500', charLimit: 2200 },
+  { id: 'linkedin', name: 'LinkedIn', icon: Linkedin, colorClass: 'bg-blue-600', charLimit: 3000 },
+  { id: 'facebook', name: 'Facebook', icon: Facebook, colorClass: 'bg-blue-500', charLimit: 500 },
+  { id: 'email', name: 'Email Subject', icon: Mail, colorClass: 'bg-emerald-500', charLimit: 60 },
 ]
 
 export const tones = [
@@ -126,27 +168,27 @@ export default function CopyCard({ text, platform, onCopy, copied, isSaved, onTo
   }
 
   return (
-    <div className="copy-card">
-      <div className="copy-card-header">
-        <div className={\`platform-icon \${platformData?.colorClass}\`}>
-          {platformData && <platformData.icon className="icon-sm" />}
+    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all group">
+      <div className="flex justify-between items-center mb-4">
+        <div className={\`w-8 h-8 rounded-lg flex items-center justify-center text-white \${platformData?.colorClass}\`}>
+          {platformData && <platformData.icon size={16} />}
         </div>
-        <button onClick={() => onCopy(text)} className="copy-btn">
-          {copied ? <Check className="icon-sm text-success" /> : <Copy className="icon-sm" />}
+        <button onClick={() => onCopy(text)} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-slate-900 transition-all">
+          {copied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
         </button>
       </div>
-      <p className="copy-text">{text}</p>
-      <div className="copy-card-footer">
+      <p className="text-[15px] leading-relaxed text-slate-700 mb-6 whitespace-pre-wrap">{text}</p>
+      <div className="flex items-center gap-3 pt-4 border-t border-slate-50">
         <button 
           onClick={onToggleSave} 
-          className={\`action-btn \${isSaved ? 'active text-error' : ''}\`}
+          className={\`p-2 rounded-lg transition-all \${isSaved ? 'text-rose-500 bg-rose-50' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-900'}\`}
         >
-          <Heart className={\`icon-sm \${isSaved ? 'fill-error' : ''}\`} />
+          <Heart size={18} className={\`\${isSaved ? 'fill-current' : ''}\`} />
         </button>
-        <button onClick={handleShare} className="action-btn">
-          {sharing ? <Check className="icon-sm text-success" /> : <Share2 className="icon-sm" />}
+        <button onClick={handleShare} className="p-2 rounded-lg text-slate-400 hover:bg-slate-50 hover:text-slate-900 transition-all">
+          {sharing ? <Check size={18} className="text-emerald-500" /> : <Share2 size={18} />}
         </button>
-        <span className="char-count">{text.length} chars</span>
+        <span className="ml-auto text-[11px] font-bold text-slate-400 uppercase tracking-wider">{text.length} chars</span>
       </div>
     </div>
   )
@@ -154,12 +196,12 @@ export default function CopyCard({ text, platform, onCopy, copied, isSaved, onTo
 
     "src/components/TemplateCard.jsx": `export default function TemplateCard({ title, description, icon: Icon, onClick }) {
   return (
-    <button onClick={onClick} className="template-card">
-      <div className="template-icon">
-        <Icon className="icon-md" />
+    <button onClick={onClick} className="flex flex-col p-4 rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 text-left hover:border-purple-300 hover:shadow-md transition-all group active:scale-[0.98]">
+      <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600 mb-3 group-hover:scale-110 transition-transform">
+        <Icon size={20} />
       </div>
-      <h4 className="template-title">{title}</h4>
-      <p className="template-desc">{description}</p>
+      <h4 className="font-bold text-slate-900 text-sm mb-1">{title}</h4>
+      <p className="text-xs text-slate-500 line-clamp-1">{description}</p>
     </button>
   )
 }`,
@@ -173,7 +215,6 @@ import {
 import { platforms, tones, sampleCopies } from './data/constants'
 import CopyCard from './components/CopyCard'
 import TemplateCard from './components/TemplateCard'
-import './App.css'
 
 export default function App() {
   const [topic, setTopic] = useState('')
@@ -211,73 +252,73 @@ export default function App() {
   }
 
   return (
-    <div className="app-container">
-      <header className="header">
-        <div className="header-content">
-          <div className="brand">
-            <div className="brand-icon">
-              <PenTool className="icon-md" />
+    <div className="min-h-screen">
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50">
+        <div className="max-w-[1200px] mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center text-white shadow-lg shadow-purple-500/20">
+              <PenTool size={20} />
             </div>
             <div>
-              <h1 className="brand-title">CopyGenius</h1>
-              <p className="brand-subtitle">AI-Powered Copywriting</p>
+              <h1 className="text-lg font-extrabold text-slate-900 tracking-tight leading-none">CopyGenius</h1>
+              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mt-1">AI-Powered Copywriting</p>
             </div>
           </div>
           <button 
             onClick={() => alert('Pro Plan billing modal would open here!')}
-            className="pro-btn active:scale-95 transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-purple-500 to-purple-700 text-white rounded-lg text-sm font-bold shadow-lg shadow-purple-500/20 hover:scale-[1.02] active:scale-95 transition-all"
           >
-            <Sparkles className="icon-sm" />
+            <Sparkles size={16} />
             Pro Plan
           </button>
         </div>
       </header>
 
-      <main className="main-content">
-        <div className="content-grid">
-          <div className="input-section">
-            <div className="card">
-              <h2 className="card-title">
-                <Target className="icon-md text-primary" />
+      <main className="max-w-[1200px] mx-auto px-6 py-10">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-10">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-white rounded-[2rem] border border-slate-200 p-8 shadow-sm">
+              <h2 className="text-[15px] font-bold text-slate-900 mb-6 flex items-center gap-2 uppercase tracking-wide">
+                <Target size={20} className="text-purple-600" />
                 What's your topic?
               </h2>
               <textarea
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
                 placeholder="E.g., Launching a new productivity app that helps teams collaborate better..."
-                className="topic-input"
+                className="w-full h-32 px-4 py-4 rounded-2xl border border-slate-100 bg-slate-50/50 outline-none focus:border-purple-500 focus:bg-white transition-all text-[15px] resize-none placeholder:text-slate-300"
               />
             </div>
 
-            <div className="card">
-              <h2 className="card-title">Choose Platform</h2>
-              <div className="platform-grid">
+            <div className="bg-white rounded-[2rem] border border-slate-200 p-8 shadow-sm">
+              <h2 className="text-[15px] font-bold text-slate-900 mb-6 uppercase tracking-wide">Choose Platform</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {platforms.map((platform) => (
                   <button
                     key={platform.id}
                     onClick={() => setSelectedPlatform(platform.id)}
-                    className={\`platform-btn \${selectedPlatform === platform.id ? 'active' : ''}\`}
+                    className={\`flex items-center gap-3 p-3 rounded-xl border-2 transition-all \${selectedPlatform === platform.id ? 'border-purple-600 bg-purple-50' : 'border-slate-50 hover:border-slate-200 bg-slate-50/30'}\`}
                   >
-                    <div className={\`platform-icon-sm \${platform.colorClass}\`}>
-                      <platform.icon className="icon-xs" />
+                    <div className={\`w-6 h-6 rounded-lg flex items-center justify-center text-white \${platform.colorClass}\`}>
+                      <platform.icon size={12} />
                     </div>
-                    <span className="platform-name">{platform.name}</span>
+                    <span className="text-[13px] font-bold text-slate-700 line-clamp-1">{platform.name}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="card">
-              <h2 className="card-title">Select Tone</h2>
-              <div className="tone-grid">
+            <div className="bg-white rounded-[2rem] border border-slate-200 p-8 shadow-sm">
+              <h2 className="text-[15px] font-bold text-slate-900 mb-6 uppercase tracking-wide">Select Tone</h2>
+              <div className="flex flex-wrap gap-2">
                 {tones.map((tone) => (
                   <button
                     key={tone.id}
                     onClick={() => setSelectedTone(tone.id)}
-                    className={\`tone-btn \${selectedTone === tone.id ? 'active' : ''}\`}
+                    className={\`flex items-center gap-2 px-4 py-2 border-2 rounded-full transition-all text-sm font-bold \${selectedTone === tone.id ? 'border-purple-600 bg-purple-50 text-purple-700' : 'border-slate-50 hover:border-slate-200 text-slate-500'}\`}
                   >
                     <span>{tone.emoji}</span>
-                    <span className="tone-name">{tone.name}</span>
+                    <span>{tone.name}</span>
                   </button>
                 ))}
               </div>
@@ -286,24 +327,24 @@ export default function App() {
             <button
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="generate-btn"
+              className="w-full p-5 bg-gradient-to-br from-purple-500 to-purple-700 text-white rounded-[2rem] font-bold text-lg flex items-center justify-center gap-3 shadow-xl shadow-purple-500/30 hover:shadow-2xl hover:shadow-purple-500/40 hover:-translate-y-0.5 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGenerating ? (
                 <>
-                  <RefreshCw className="icon-md spinning" />
+                  <RefreshCw size={24} className="animate-spin" />
                   Generating Magic...
                 </>
               ) : (
                 <>
-                  <Sparkles className="icon-md" />
+                  <Sparkles size={24} />
                   Generate Copy
                 </>
               )}
             </button>
 
-            <div className="card">
-              <h2 className="card-title">Quick Templates</h2>
-              <div className="templates-grid">
+            <div className="bg-white rounded-[2rem] border border-slate-200 p-8 shadow-sm">
+              <h2 className="text-[15px] font-bold text-slate-900 mb-6 uppercase tracking-wide">Quick Templates</h2>
+              <div className="grid grid-cols-2 gap-3">
                 <TemplateCard
                   icon={Megaphone}
                   title="Product Launch"
@@ -332,110 +373,107 @@ export default function App() {
             </div>
           </div>
 
-          <div className="output-section">
-            <div className="output-tabs">
+          <div className="lg:col-span-3 space-y-8">
+            <div className="flex items-center gap-1 p-1 bg-slate-100/50 rounded-2xl w-fit self-start">
               <button 
                 onClick={() => setActiveTab('generate')} 
-                className={\`tab-btn \${activeTab === 'generate' ? 'active' : ''}\`}
+                className={\`px-6 py-2.5 rounded-xl text-sm font-bold transition-all \${activeTab === 'generate' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}\`}
               >
                 Generated
               </button>
               <button 
                 onClick={() => setActiveTab('saved')} 
-                className={\`tab-btn \${activeTab === 'saved' ? 'active' : ''}\`}
+                className={\`px-6 py-2.5 rounded-xl text-sm font-bold transition-all \${activeTab === 'saved' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}\`}
               >
                 Saved ({savedCopies.length})
               </button>
             </div>
 
-            <div className="output-header">
-              <h2 className="section-title">
+            <div className="flex justify-between items-center bg-white px-8 py-4 rounded-2xl border border-slate-100 shadow-sm">
+              <h2 className="text-xl font-extrabold text-slate-900">
                 {activeTab === 'generate' ? 'Results' : 'Saved Collection'}
               </h2>
               {activeTab === 'generate' && generatedCopies.length > 0 && (
-                <button onClick={handleGenerate} className="regenerate-btn">
-                  <RefreshCw className="icon-sm" />
+                <button onClick={handleGenerate} className="flex items-center gap-2 text-sm font-bold text-purple-600 hover:underline">
+                  <RefreshCw size={14} />
                   Regenerate
                 </button>
               )}
             </div>
 
-            {activeTab === 'generate' ? (
-              generatedCopies.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">
-                    <Sparkles className="icon-lg" />
+            <div className="space-y-4">
+              {activeTab === 'generate' ? (
+                generatedCopies.length === 0 ? (
+                  <div className="bg-white/50 border-2 border-dashed border-slate-200 rounded-[2rem] p-20 text-center animate-in fade-in duration-500">
+                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-slate-300 mx-auto mb-6 shadow-sm border border-slate-50">
+                      <Sparkles size={32} />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900 mb-2">Ready to Create</h3>
+                    <p className="text-slate-500 max-w-xs mx-auto text-sm">
+                      Enter your topic on the left, choose a platform and tone, then click generate.
+                    </p>
                   </div>
-                  <h3 className="empty-title">Ready to Create</h3>
-                  <p className="empty-desc">
-                    Enter your topic, choose a platform and tone, then click generate.
-                  </p>
-                </div>
-              ) : (
-                <div className="copies-list">
-                  {generatedCopies.map((copy, index) => (
-                    <CopyCard
-                      key={index}
-                      text={copy}
-                      platform={selectedPlatform}
-                      onCopy={() => handleCopy(copy, index)}
-                      copied={copiedIndex === index}
-                      isSaved={savedCopies.some(s => s.text === copy)}
-                      onToggleSave={() => toggleSave(copy, selectedPlatform)}
-                    />
-                  ))}
-                </div>
-              )
-            ) : (
-              savedCopies.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon text-muted">
-                    <Heart className="icon-lg" />
+                ) : (
+                  <div className="grid gap-4 animate-in fade-in slide-in-from-bottom-5 duration-500">
+                    {generatedCopies.map((copy, index) => (
+                      <CopyCard
+                        key={index}
+                        text={copy}
+                        platform={selectedPlatform}
+                        onCopy={() => handleCopy(copy, index)}
+                        copied={copiedIndex === index}
+                        isSaved={savedCopies.some(s => s.text === copy)}
+                        onToggleSave={() => toggleSave(copy, selectedPlatform)}
+                      />
+                    ))}
                   </div>
-                  <h3 className="empty-title">No Saved Copies</h3>
-                  <p className="empty-desc">
-                    Click the heart icon on any generated copy to save it for later.
-                  </p>
-                </div>
+                )
               ) : (
-                <div className="copies-list">
-                  {savedCopies.map((item, index) => (
-                    <CopyCard
-                      key={index}
-                      text={item.text}
-                      platform={item.platform}
-                      onCopy={() => handleCopy(item.text, index)}
-                      copied={copiedIndex === index}
-                      isSaved={true}
-                      onToggleSave={() => toggleSave(item.text, item.platform)}
-                    />
-                  ))}
-                </div>
-              )
-            )}
+                savedCopies.length === 0 ? (
+                  <div className="bg-white/50 border-2 border-dashed border-slate-200 rounded-[2rem] p-20 text-center animate-in fade-in duration-500">
+                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-slate-200 mx-auto mb-6 shadow-sm border border-slate-50">
+                      <Heart size={32} />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900 mb-2">No Saved Copies</h3>
+                    <p className="text-slate-500 max-w-xs mx-auto text-sm">
+                      Click the heart icon on any generated copy to save it for later review.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 animate-in fade-in slide-in-from-bottom-5 duration-500">
+                    {savedCopies.map((item, index) => (
+                      <CopyCard
+                        key={index}
+                        text={item.text}
+                        platform={item.platform}
+                        onCopy={() => handleCopy(item.text, index)}
+                        copied={copiedIndex === index}
+                        isSaved={true}
+                        onToggleSave={() => toggleSave(item.text, item.platform)}
+                      />
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
 
-            <div className="tips-card">
-              <h3 className="tips-title">
-                <Zap className="icon-md" />
+            <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2rem] p-8 text-white shadow-xl shadow-slate-200/50">
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-3">
+                <Zap size={24} className="text-yellow-400" />
                 Pro Tips for Better Copy
               </h3>
-              <ul className="tips-list">
-                <li className="tip-item">
-                  <ArrowRight className="icon-sm" />
-                  Start with a hook that grabs attention in the first line
-                </li>
-                <li className="tip-item">
-                  <ArrowRight className="icon-sm" />
-                  Use emojis strategically to break up text and add personality
-                </li>
-                <li className="tip-item">
-                  <ArrowRight className="icon-sm" />
-                  End with a clear call-to-action to drive engagement
-                </li>
-                <li className="tip-item">
-                  <ArrowRight className="icon-sm" />
-                  A/B test different versions to see what resonates
-                </li>
+              <ul className="space-y-4">
+                {[
+                  "Start with a hook that grabs attention in the first line",
+                  "Use emojis strategically to break up text and add personality",
+                  "End with a clear call-to-action to drive real engagement",
+                  "A/B test different versions to see what resonates most"
+                ].map((tip, i) => (
+                  <li key={i} className="flex items-start gap-4 text-slate-300 text-[15px]">
+                    <ArrowRight size={18} className="text-purple-400 mt-0.5 flex-shrink-0" />
+                    {tip}
+                  </li>
+                ))}
               </ul>
             </div>
           </div>
@@ -444,618 +482,5 @@ export default function App() {
     </div>
   )
 }`,
-
-    "src/App.css": `
-:root {
-  --primary: #8B5CF6;
-  --primary-dark: #7C3AED;
-  --primary-light: #A78BFA;
-  --primary-bg: #F5F3FF;
-
-  --twitter: #0EA5E9;
-  --instagram: linear-gradient(135deg, #A855F7 0%, #EC4899 100%);
-  --linkedin: #2563EB;
-  --facebook: #3B82F6;
-  --email: #10B981;
-
-  --success: #10B981;
-  --warning: #F59E0B;
-  --error: #EF4444;
-
-  --bg: #F8FAFC;
-  --surface: #FFFFFF;
-  --text: #0F172A;
-  --text-muted: #64748B;
-  --text-light: #94A3B8;
-  --border: #E2E8F0;
-  --border-light: #F1F5F9;
-
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
-
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-}
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  font-family: 'Sora', system-ui, sans-serif;
-  background: linear-gradient(135deg, var(--bg) 0%, #EDE9FE 50%, var(--bg) 100%);
-  color: var(--text);
-  -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
-}
-
-/* Icons */
-.icon-xs { width: 12px; height: 12px; }
-.icon-sm { width: 16px; height: 16px; }
-.icon-md { width: 20px; height: 20px; }
-.icon-lg { width: 32px; height: 32px; }
-
-.text-primary { color: var(--primary); }
-.text-success { color: var(--success); }
-
-/* Layout */
-.app-container {
-  min-height: 100vh;
-}
-
-.header {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 50;
-}
-
-.header-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.brand-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.brand-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.brand-subtitle {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.pro-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
-  font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.pro-btn:hover {
-  opacity: 0.9;
-}
-
-/* Main Content */
-.main-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem 1.5rem;
-}
-
-.content-grid {
-  display: grid;
-  grid-template-columns: 2fr 3fr;
-  gap: 2rem;
-}
-
-@media (max-width: 1024px) {
-  .content-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Cards */
-.card {
-  background: var(--surface);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--border);
-  padding: 1.5rem;
-  box-shadow: var(--shadow-sm);
-}
-
-.card-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Input Section */
-.input-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.topic-input {
-  width: 100%;
-  height: 128px;
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  font-family: inherit;
-  font-size: 0.9375rem;
-  resize: none;
-  outline: none;
-  transition: all 0.2s;
-}
-
-.topic-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-bg);
-}
-
-.topic-input::placeholder {
-  color: var(--text-light);
-}
-
-/* Platform Grid */
-.platform-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-
-@media (min-width: 640px) {
-  .platform-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-.platform-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  border: 2px solid var(--border);
-  border-radius: var(--radius-md);
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-
-.platform-btn:hover {
-  border-color: var(--text-light);
-}
-
-.platform-btn.active {
-  border-color: var(--primary);
-  background: var(--primary-bg);
-}
-
-.platform-icon-sm {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.platform-twitter { background: var(--twitter); }
-.platform-instagram { background: var(--instagram); }
-.platform-linkedin { background: var(--linkedin); }
-.platform-facebook { background: var(--facebook); }
-.platform-email { background: var(--email); }
-
-.platform-name {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text);
-}
-
-/* Tone Grid */
-.tone-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.tone-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border: 2px solid var(--border);
-  border-radius: 100px;
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-
-.tone-btn:hover {
-  border-color: var(--text-light);
-}
-
-.tone-btn.active {
-  border-color: var(--primary);
-  background: var(--primary-bg);
-  color: var(--primary-dark);
-}
-
-.tone-name {
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-/* Generate Button */
-.generate-btn {
-  width: 100%;
-  padding: 1rem;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
-  font-family: inherit;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all 0.2s;
-  box-shadow: 0 4px 14px 0 rgba(139, 92, 246, 0.3);
-}
-
-.generate-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px 0 rgba(139, 92, 246, 0.4);
-}
-
-.generate-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* Templates Grid */
-.templates-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
-.template-card {
-  padding: 1rem;
-  background: linear-gradient(135deg, var(--bg) 0%, var(--border-light) 100%);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-
-.template-card:hover {
-  border-color: var(--primary-light);
-  box-shadow: var(--shadow-md);
-}
-
-.template-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  margin-bottom: 12px;
-  transition: transform 0.2s;
-}
-
-.template-card:hover .template-icon {
-  transform: scale(1.1);
-}
-
-.template-title {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 4px;
-}
-
-.template-desc {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-}
-
-/* Output Section */
-.output-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.output-tabs {
-  display: flex;
-  gap: 8px;
-  background: var(--surface);
-  padding: 4px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-}
-
-.tab-btn {
-  flex: 1;
-  padding: 8px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  font-family: inherit;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.tab-btn:hover {
-  color: var(--text);
-  background: var(--border-light);
-}
-
-.tab-btn.active {
-  background: var(--bg);
-  color: var(--primary);
-  box-shadow: var(--shadow-sm);
-}
-
-.output-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.section-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.regenerate-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: transparent;
-  border: none;
-  color: var(--primary);
-  font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.regenerate-btn:hover {
-  color: var(--primary-dark);
-}
-
-/* Empty State */
-.empty-state {
-  background: var(--surface);
-  border: 2px dashed var(--border);
-  border-radius: var(--radius-xl);
-  padding: 3rem;
-  text-align: center;
-}
-
-.empty-icon {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 1rem;
-  border-radius: 50%;
-  background: var(--primary-bg);
-  color: var(--primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.empty-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 8px;
-}
-
-.empty-desc {
-  font-size: 0.875rem;
-  color: var(--text-muted);
-  max-width: 250px;
-  margin: 0 auto;
-  line-height: 1.5;
-}
-
-/* Copies List */
-.copies-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.copy-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 1.5rem;
-}
-
-.copy-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-}
-
-.platform-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.copy-btn {
-  padding: 8px;
-  background: var(--border-light);
-  border: none;
-  border-radius: 8px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.copy-btn:hover {
-  background: var(--border);
-  color: var(--text);
-}
-
-.copy-text {
-  font-size: 0.9375rem;
-  line-height: 1.6;
-  color: var(--text);
-  white-space: pre-wrap;
-  margin-bottom: 1.5rem;
-}
-
-.copy-card-footer {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
-}
-
-.action-btn {
-  padding: 8px;
-  background: transparent;
-  border: none;
-  border-radius: 8px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn:hover {
-  background: var(--border-light);
-  color: var(--text);
-}
-
-.char-count {
-  margin-left: auto;
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Tips */
-.tips-card {
-  background: linear-gradient(135deg, var(--bg) 0%, #EFF6FF 100%);
-  border: 1px solid #BFDBFE;
-  border-radius: var(--radius-xl);
-  padding: 1.5rem;
-  margin-top: 1rem;
-}
-
-.tips-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1E3A8A;
-  margin-bottom: 1rem;
-}
-
-.tips-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.tip-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 0.875rem;
-  color: #1E40AF;
-  line-height: 1.5;
-}
-
-.tip-item .icon-sm {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-`
   }
 };

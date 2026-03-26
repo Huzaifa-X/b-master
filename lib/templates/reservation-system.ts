@@ -1,7 +1,9 @@
-export const reservationSystemTemplate = {
+import { TemplateDefinition } from './index';
+
+export const reservationSystemTemplate: TemplateDefinition = {
   id: "reservation-system",
   name: "Reservation System",
-  description: "General-purpose reservations for any service or venue",
+  description: "General-purpose reservations for any service or venue using Tailwind CSS",
   category: "booking",
   files: {
     "package.json": JSON.stringify(
@@ -23,6 +25,9 @@ export const reservationSystemTemplate = {
         devDependencies: {
           "@vitejs/plugin-react": "^4.2.1",
           vite: "^5.0.8",
+          tailwindcss: "^3.4.1",
+          postcss: "^8.4.35",
+          autoprefixer: "^10.4.17",
         },
       },
       null,
@@ -33,18 +38,59 @@ export const reservationSystemTemplate = {
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <title>Reservation System</title>
   </head>
-  <body>
+  <body class="bg-stone-50 text-stone-900">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>`,
 
+    "tailwind.config.js": `/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['"Outfit"', 'system-ui', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}`,
+
+    "postcss.config.js": `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}`,
+
     "vite.config.js": `import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-export default defineConfig({ plugins: [react()] })`,
+
+export default defineConfig({
+  plugins: [react()],
+})`,
+
+    "src/index.css": `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased text-stone-900 bg-[#FAF9F6];
+    font-family: 'Outfit', sans-serif;
+  }
+}`,
 
     "src/main.jsx": `import React from 'react'
 import ReactDOM from 'react-dom/client'
@@ -86,58 +132,108 @@ export const SPECIALS = ['None', 'Birthday', 'Anniversary', 'Business Dinner', '
 export const generateConfirmId = () => 'RES-' + Math.floor(Math.random() * 900000 + 100000);`,
 
     // --- LAYOUT COMPONENTS ---
-    "src/components/layout/Hero.jsx": `import { Utensils } from 'lucide-react';
+    "src/components/layout/Hero.jsx": `import { UtensilsCrossed, Sparkles } from 'lucide-react';
 
 export default function Hero() {
   return (
-    <div className="hero">
-      <div className="hero-icon">
-        <Utensils size={26} color="#fff" />
-      </div>
-      <div>
-        <h1>Bella Vista Restaurant</h1>
-        <p>Reserve your table online — quick & easy</p>
+    <div className="relative overflow-hidden bg-stone-900 text-white rounded-[2.5rem] p-10 md:p-14 mb-10 shadow-2xl shadow-stone-900/20 group">
+      <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 blur-[100px] rounded-full transition-transform group-hover:scale-125 duration-1000" />
+      <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-stone-500/10 blur-[100px] rounded-full" />
+      
+      <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+        <div className="w-20 h-20 bg-amber-500 rounded-[2rem] flex items-center justify-center text-stone-900 rotate-6 group-hover:rotate-12 transition-transform shadow-xl shadow-amber-500/20">
+          <UtensilsCrossed size={36} strokeWidth={2.5} />
+        </div>
+        <div className="text-center md:text-left">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] font-black uppercase tracking-[0.2em] text-amber-500 mb-4">
+            <Sparkles size={12} />
+            Fine Dining Registry
+          </div>
+          <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-none mb-3 italic">Bella Vista</h1>
+          <p className="text-stone-400 font-medium text-lg leading-tight">Secure your presence at the valley's premier <br className="hidden md:block" />gastronomic destination.</p>
+        </div>
       </div>
     </div>
   );
 }`,
 
     // --- UI COMPONENTS ---
-    "src/components/ui/BackLink.jsx": `export default function BackLink({ onClick }) {
+    "src/components/ui/BackLink.jsx": `import { ArrowLeft } from 'lucide-react';
+
+export default function BackLink({ onClick }) {
   return (
-    <button className="back-link" onClick={onClick}>
-      ← Back
+    <button className="flex items-center gap-2 text-xs font-black text-stone-400 uppercase tracking-widest hover:text-amber-500 transition-colors mb-8" onClick={onClick}>
+      <ArrowLeft size={16} /> Return to Options
     </button>
   );
 }`,
 
-    "src/components/ui/GuestSelector.jsx": `export default function GuestSelector({ guests, maxCapacity, onChange }) {
+    "src/components/ui/GuestSelector.jsx": `import { UserPlus, UserMinus } from 'lucide-react';
+
+export default function GuestSelector({ guests, maxCapacity, onChange }) {
   return (
-    <div className="qty-row">
-      <button onClick={() => onChange(Math.max(1, guests - 1))}>−</button>
-      <span>{guests} guest{guests > 1 ? 's' : ''}</span>
-      <button onClick={() => onChange(Math.min(maxCapacity, guests + 1))}>+</button>
-      <span className="cap-note">max {maxCapacity}</span>
+    <div className="bg-stone-100/50 p-6 rounded-3xl border border-stone-200/50 flex flex-col sm:flex-row items-center justify-between gap-6">
+      <div className="flex items-center gap-3">
+          <span className="text-sm font-black text-stone-500 uppercase tracking-widest">Party Size</span>
+          <span className="text-[10px] bg-stone-200 px-2 py-0.5 rounded-full font-bold text-stone-600">Max {maxCapacity}</span>
+      </div>
+      
+      <div className="flex items-center bg-white border border-stone-200 rounded-2xl p-1.5 shadow-sm">
+        <button 
+            className="w-12 h-12 flex items-center justify-center text-stone-400 hover:text-stone-900 hover:bg-stone-50 rounded-xl transition-all" 
+            onClick={() => onChange(Math.max(1, guests - 1))}
+        >
+            <UserMinus size={20} />
+        </button>
+        <span className="w-16 text-center text-3xl font-black text-stone-900 tracking-tighter">{guests}</span>
+        <button 
+            className="w-12 h-12 flex items-center justify-center text-stone-400 hover:text-stone-900 hover:bg-stone-50 rounded-xl transition-all" 
+            onClick={() => onChange(Math.min(maxCapacity, guests + 1))}
+        >
+            <UserPlus size={20} />
+        </button>
+      </div>
     </div>
   );
 }`,
 
     // --- RESERVATION COMPONENTS ---
-    "src/components/reservation/ServiceCard.jsx": `import { CheckCircle2 } from 'lucide-react';
+    "src/components/reservation/ServiceCard.jsx": `import { CheckCircle2, Crown } from 'lucide-react';
 
 export default function ServiceCard({ service, isSelected, onSelect }) {
   return (
     <button
-      className={\`svc-card \${isSelected ? 'chosen' : ''}\`}
+      className={\`flex flex-col p-6 border-2 rounded-[2.5rem] text-left transition-all duration-300 relative group min-h-[160px] \${
+        isSelected 
+            ? 'bg-stone-900 border-stone-900 text-white shadow-2xl shadow-stone-900/30' 
+            : 'bg-white border-stone-100 hover:border-amber-500/30 hover:shadow-xl shadow-sm'
+      }\`}
       onClick={onSelect}
     >
-      <span className="svc-icon">{service.icon}</span>
-      <span className="svc-name">{service.name}</span>
-      <span className="svc-desc">{service.desc}</span>
+      <div className={\`text-4xl mb-4 p-3 rounded-2xl w-fit transition-all duration-300 \${
+        isSelected ? 'bg-white/10 scale-110' : 'bg-stone-50 group-hover:bg-amber-50'
+      }\`}>
+        {service.icon}
+      </div>
+      
+      <div className="flex-1">
+        <h4 className={\`text-lg font-black tracking-tight leading-none mb-2 \${isSelected ? 'text-white' : 'text-stone-900 group-hover:text-amber-600 transition-colors'}\`}>
+            {service.name}
+        </h4>
+        <p className={\`text-xs font-semibold leading-relaxed \${isSelected ? 'text-stone-400' : 'text-stone-500 text-pretty'}\`}>
+            {service.desc}
+        </p>
+      </div>
+
       {service.price > 0 && (
-        <span className="svc-price">\${service.price} deposit</span>
+        <div className={\`mt-4 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest \${isSelected ? 'text-amber-400' : 'text-amber-600'}\`}>
+          <Crown size={12} /> \${service.price} Premium
+        </div>
       )}
-      {isSelected && <CheckCircle2 size={16} className="svc-check" />}
+
+      {isSelected && (
+          <CheckCircle2 size={24} className="absolute top-6 right-6 text-amber-500 animate-in zoom-in duration-300" />
+      )}
     </button>
   );
 }`,
@@ -147,7 +243,7 @@ import ServiceCard from './ServiceCard';
 
 export default function ServiceGrid({ selectedServiceId, onSelectService }) {
   return (
-    <div className="service-grid">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
       {SERVICES.map(s => (
         <ServiceCard
           key={s.id}
@@ -160,7 +256,7 @@ export default function ServiceGrid({ selectedServiceId, onSelectService }) {
   );
 }`,
 
-    "src/components/reservation/DateTimePicker.jsx": `import { CalendarDays, Clock } from 'lucide-react';
+    "src/components/reservation/DateTimePicker.jsx": `import { CalendarDays, Clock, ChevronDown } from 'lucide-react';
 import { TIMES, generateDates } from '../../data/services';
 
 const DATES = generateDates();
@@ -172,26 +268,37 @@ export default function DateTimePicker({
   onTimeChange
 }) {
   return (
-    <div className="two-col">
-      <div className="field">
-        <label><CalendarDays size={13} /> Date</label>
-        <select value={date} onChange={(e) => onDateChange(e.target.value)}>
-          <option value="">Pick a date…</option>
-          {DATES.map(d => <option key={d}>{d}</option>)}
-        </select>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 text-[10px] font-black text-stone-400 uppercase tracking-widest pl-1">
+            <CalendarDays size={14} className="text-amber-500" /> Requested Date
+        </label>
+        <div className="relative group">
+            <select value={date} onChange={(e) => onDateChange(e.target.value)} className="w-full h-14 bg-white border border-stone-200 rounded-2xl px-6 text-sm font-black text-stone-900 outline-none focus:border-amber-500 decoration-none appearance-none cursor-pointer transition-all shadow-sm group-hover:border-stone-300">
+                <option value="">Choose arrival date…</option>
+                {DATES.map(d => <option key={d}>{d}</option>)}
+            </select>
+            <ChevronDown size={18} className="absolute right-5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none group-focus-within:rotate-180 transition-transform" />
+        </div>
       </div>
-      <div className="field">
-        <label><Clock size={13} /> Time</label>
-        <select value={time} onChange={(e) => onTimeChange(e.target.value)}>
-          <option value="">Pick a time…</option>
-          {TIMES.map(t => <option key={t}>{t}</option>)}
-        </select>
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 text-[10px] font-black text-stone-400 uppercase tracking-widest pl-1">
+            <Clock size={14} className="text-amber-500" /> Arrival Time
+        </label>
+        <div className="relative group">
+            <select value={time} onChange={(e) => onTimeChange(e.target.value)} className="w-full h-14 bg-white border border-stone-200 rounded-2xl px-6 text-sm font-black text-stone-900 outline-none focus:border-amber-500 appearance-none cursor-pointer transition-all shadow-sm group-hover:border-stone-300">
+                <option value="">Preferred time…</option>
+                {TIMES.map(t => <option key={t}>{t}</option>)}
+            </select>
+            <ChevronDown size={18} className="absolute right-5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none group-focus-within:rotate-180 transition-transform" />
+        </div>
       </div>
     </div>
   );
 }`,
 
-    "src/components/reservation/ReservationForm.jsx": `import { SPECIALS } from '../../data/services';
+    "src/components/reservation/ReservationForm.jsx": `import { Sparkles, Phone, Mail, User, Star } from 'lucide-react';
+import { SPECIALS } from '../../data/services';
 
 export default function ReservationForm({ formData, onChange, onSubmit }) {
   const handleChange = (field) => (e) => {
@@ -199,57 +306,73 @@ export default function ReservationForm({ formData, onChange, onSubmit }) {
   };
 
   return (
-    <form className="res-form" onSubmit={onSubmit}>
-      <div className="two-col">
-        <div className="field">
-          <label>Full Name *</label>
+    <form className="space-y-8 animate-in slide-in-from-bottom-5 duration-700" onSubmit={onSubmit}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-[10px] font-black text-stone-400 uppercase tracking-widest pl-1">
+            <User size={14} className="text-amber-500" /> Guest Name *
+          </label>
           <input
             required
             value={formData.name}
             onChange={handleChange('name')}
-            placeholder="Jane Smith"
+            placeholder="E.g. Alexander Pierce"
+            className="w-full h-14 bg-white border border-stone-200 rounded-2xl px-6 text-sm font-bold text-stone-900 placeholder:text-stone-300 outline-none focus:border-amber-500 transition-all shadow-sm"
           />
         </div>
-        <div className="field">
-          <label>Email *</label>
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-[10px] font-black text-stone-400 uppercase tracking-widest pl-1">
+            <Mail size={14} className="text-amber-500" /> Notification Email *
+          </label>
           <input
             type="email"
             required
             value={formData.email}
             onChange={handleChange('email')}
-            placeholder="jane@email.com"
+            placeholder="guest@example.com"
+            className="w-full h-14 bg-white border border-stone-200 rounded-2xl px-6 text-sm font-bold text-stone-900 placeholder:text-stone-300 outline-none focus:border-amber-500 transition-all shadow-sm"
           />
         </div>
       </div>
 
-      <div className="two-col">
-        <div className="field">
-          <label>Phone</label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-[10px] font-black text-stone-400 uppercase tracking-widest pl-1">
+            <Phone size={14} className="text-amber-500" /> Phone Contact
+          </label>
           <input
             value={formData.phone}
             onChange={handleChange('phone')}
             placeholder="+1 (555) 000-0000"
+            className="w-full h-14 bg-white border border-stone-200 rounded-2xl px-6 text-sm font-bold text-stone-900 placeholder:text-stone-300 outline-none focus:border-amber-500 transition-all shadow-sm"
           />
         </div>
-        <div className="field">
-          <label>Special Occasion</label>
-          <select value={formData.special} onChange={handleChange('special')}>
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-[10px] font-black text-stone-400 uppercase tracking-widest pl-1">
+            <Star size={14} className="text-amber-500" /> Special Occasion
+          </label>
+          <select value={formData.special} onChange={handleChange('special')} className="w-full h-14 bg-white border border-stone-200 rounded-2xl px-6 text-sm font-bold text-stone-900 outline-none focus:border-amber-500 transition-all shadow-sm appearance-none cursor-pointer">
             {SPECIALS.map(s => <option key={s}>{s}</option>)}
           </select>
         </div>
       </div>
 
-      <div className="field">
-        <label>Additional Requests</label>
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 text-[10px] font-black text-stone-400 uppercase tracking-widest pl-1">
+            Additional Requests
+        </label>
         <textarea
-          rows={2}
+          rows={3}
           value={formData.notes}
           onChange={handleChange('notes')}
-          placeholder="Allergies, seating preferences, accessibility needs…"
+          placeholder="Dietary requirements, seating preference, or special notes for the host…"
+          className="w-full p-6 bg-white border border-stone-200 rounded-3xl text-sm font-medium text-stone-900 placeholder:text-stone-300 outline-none focus:border-amber-500 transition-all shadow-sm resize-none"
         />
       </div>
 
-      <button type="submit" className="primary-btn">Confirm Reservation</button>
+      <button type="submit" className="w-full py-6 bg-stone-900 text-white rounded-[2rem] font-black text-lg tracking-tight uppercase shadow-2xl shadow-stone-900/40 flex items-center justify-center gap-3 group/btn hover:bg-black hover:scale-[1.01] active:scale-95 transition-all">
+        Confirm Reservation <Sparkles size={20} className="text-amber-500 group-hover/btn:rotate-12 transition-transform" />
+      </button>
     </form>
   );
 }`,
@@ -258,47 +381,83 @@ export default function ReservationForm({ formData, onChange, onSubmit }) {
 
 export default function ReservationSummary({ service, date, time, guests }) {
   return (
-    <div className="res-summary">
-      <span>{service?.icon} {service?.name}</span>
-      <span><CalendarDays size={12} /> {date}</span>
-      <span><Clock size={12} /> {time}</span>
-      <span><Users size={12} /> {guests} guests</span>
+    <div className="bg-amber-50/50 border border-amber-500/10 rounded-3xl p-6 mb-10 flex flex-wrap items-center gap-x-8 gap-y-4 shadow-inner">
+      <div className="flex items-center gap-3">
+        <span className="text-3xl bg-white w-12 h-12 rounded-xl flex items-center justify-center shadow-sm border border-stone-100">{service?.icon}</span>
+        <span className="font-black text-stone-900 uppercase tracking-tight">{service?.name}</span>
+      </div>
+      <div className="h-8 w-px bg-amber-500/10 hidden md:block" />
+      <div className="space-y-1">
+        <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest pl-0.5">Reservation Time</p>
+        <div className="flex items-center gap-4 text-xs font-black text-stone-900 uppercase">
+            <span className="flex items-center gap-1.5"><CalendarDays size={14} className="text-amber-600" /> {date}</span>
+            <span className="flex items-center gap-1.5"><Clock size={14} className="text-amber-600" /> {time}</span>
+        </div>
+      </div>
+      <div className="h-8 w-px bg-amber-500/10 hidden md:block" />
+      <div className="space-y-1">
+        <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest pl-0.5">Attendee Count</p>
+        <div className="flex items-center gap-1.5 text-xs font-black text-stone-900 uppercase">
+            <Users size={14} className="text-amber-600" /> {guests} Guest{guests > 1 ? 's' : ''}
+        </div>
+      </div>
     </div>
   );
 }`,
 
-    "src/components/reservation/ReservationTicket.jsx": `import { CalendarDays, Clock, Users } from 'lucide-react';
+    "src/components/reservation/ReservationTicket.jsx": `import { CalendarDays, Clock, Users, QrCode } from 'lucide-react';
 
 export default function ReservationTicket({ service, date, time, guests, special, confirmId }) {
   return (
-    <div className="res-ticket">
-      <div className="rt-head">
-        <span className="rt-icon">{service?.icon}</span>
-        <div>
-          <div className="rt-name">{service?.name}</div>
-          <div className="rt-id">{confirmId}</div>
+    <div className="w-full max-w-sm mx-auto overflow-hidden shadow-2xl rounded-[3rem] animate-in slide-in-from-bottom duration-1000">
+      <div className="bg-stone-900 p-10 text-white relative">
+        <div className="absolute top-0 right-0 p-8 flex flex-col items-end opacity-20 group">
+           <UtensilsCrossed size={120} className="rotate-12" />
+        </div>
+        
+        <div className="relative z-10 text-left">
+            <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-3xl flex items-center justify-center text-4xl mb-6 border border-white/5">
+                {service?.icon}
+            </div>
+            <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] mb-2">Authenticated Pass</p>
+            <h4 className="text-3xl font-black italic tracking-tighter leading-none mb-4">{service?.name}</h4>
+            <code className="text-[10px] font-black text-stone-500 tracking-[0.4em] uppercase">{confirmId}</code>
         </div>
       </div>
-      <div className="rt-rows">
-        <div className="rt-row">
-          <CalendarDays size={13} /> {date}
+      
+      <div className="bg-white p-10 border-t-4 border-dashed border-stone-100 relative">
+        <div className="absolute -left-5 -top-5 w-10 h-10 bg-[#FAF9F6] rounded-full" />
+        <div className="absolute -right-5 -top-5 w-10 h-10 bg-[#FAF9F6] rounded-full" />
+        
+        <div className="flex justify-between items-end">
+          <div className="space-y-4 text-left">
+            <div>
+                <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1">Time</p>
+                <div className="font-black text-stone-900 text-sm">{date}<br />{time}</div>
+            </div>
+            <div>
+                <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1">Party</p>
+                <div className="font-black text-stone-900 text-sm">{guests} Guest{guests > 1 ? 's' : ''}</div>
+            </div>
+            {special !== 'None' && (
+              <div className="flex items-center gap-2 py-2 px-3 bg-amber-50 text-amber-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-amber-100">
+                🎉 {special}
+              </div>
+            )}
+          </div>
+          <div className="w-24 h-24 bg-stone-50 border border-stone-100 rounded-3xl flex items-center justify-center p-3">
+              <QrCode size={100} strokeWidth={1.5} className="text-stone-900" />
+          </div>
         </div>
-        <div className="rt-row">
-          <Clock size={13} /> {time}
-        </div>
-        <div className="rt-row">
-          <Users size={13} /> {guests} guest{guests > 1 ? 's' : ''}
-        </div>
-        {special !== 'None' && (
-          <div className="rt-row">🎉 {special}</div>
-        )}
       </div>
     </div>
   );
 }`,
 
-    "src/components/reservation/SuccessView.jsx": `import { CheckCircle2 } from 'lucide-react';
+    "src/components/reservation/SuccessView.jsx": `import { CheckCircle2, Share2, Download, ArrowRight } from 'lucide-react';
 import ReservationTicket from './ReservationTicket';
+
+import { UtensilsCrossed } from 'lucide-react';
 
 export default function SuccessView({
   service,
@@ -311,69 +470,127 @@ export default function SuccessView({
   onReset
 }) {
   return (
-    <div className="card success-wrap">
-      <CheckCircle2 size={56} color="#10b981" />
-      <h2>Reservation Confirmed!</h2>
-      <p>We'll send a confirmation to <strong>{email}</strong></p>
-      <ReservationTicket
-        service={service}
-        date={date}
-        time={time}
-        guests={guests}
-        special={special}
-        confirmId={confirmId}
-      />
-      <button className="primary-btn" onClick={onReset}>
-        Make Another Reservation
+    <div className="text-center py-6">
+      <div className="flex justify-center mb-10">
+        <div className="relative">
+            <div className="absolute inset-0 bg-emerald-500/20 blur-3xl scale-150 animate-pulse rounded-full" />
+            <div className="relative w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center border border-emerald-500/20 shadow-xl shadow-emerald-500/10">
+                <CheckCircle2 size={56} strokeWidth={2.5} />
+            </div>
+        </div>
+      </div>
+      
+      <h2 className="text-4xl md:text-5xl font-black text-stone-900 tracking-tighter leading-none mb-4">Confirmed.</h2>
+      <p className="text-stone-500 font-medium text-lg leading-tight mb-12">An encrypted reservation voucher <br className="hidden md:block" />has been sent to <span className="text-stone-900 underline underline-offset-4 decoration-amber-500 decoration-2 font-bold italic">{email}</span></p>
+      
+      <div className="mb-14 px-4">
+        <ReservationTicket
+          service={service}
+          date={date}
+          time={time}
+          guests={guests}
+          special={special}
+          confirmId={confirmId}
+        />
+      </div>
+
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
+        <button className="flex items-center gap-2 px-8 py-4 bg-stone-900 text-white rounded-[2rem] font-bold text-sm tracking-widest hover:bg-black transition-all shadow-xl shadow-stone-900/20">
+            <Download size={18} /> Download Pass
+        </button>
+        <button className="flex items-center gap-2 px-8 py-4 bg-white border border-stone-200 text-stone-600 rounded-[2rem] font-bold text-sm tracking-widest hover:border-stone-900 hover:text-stone-900 transition-all">
+            <Share2 size={18} /> Share Booking
+        </button>
+      </div>
+
+      <button className="inline-flex items-center gap-2 text-[10px] font-black text-stone-400 uppercase tracking-[0.3em] hover:text-amber-600 transition-all group" onClick={onReset}>
+        Initiate New Schedule <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
       </button>
     </div>
   );
 }`,
 
-    "src/components/reservation/ReservationCard.jsx": `import { X } from 'lucide-react';
+    "src/components/reservation/ReservationCard.jsx": `import { X, Calendar, User, Clock, QrCode } from 'lucide-react';
 
 export default function ReservationCard({ reservation, onCancel }) {
   return (
-    <div className="res-card">
-      <div className="rc-top">
-        <span className="rc-title">
-          {reservation.service?.icon} {reservation.service?.name}
-        </span>
-        <button className="cancel-btn" onClick={() => onCancel(reservation.id)}>
-          <X size={12} />
+    <div className="bg-white p-6 rounded-[2rem] border border-stone-100 shadow-sm relative group overflow-hidden animate-in slide-in-from-right duration-500">
+      <div className="absolute top-0 right-0 w-2 h-full bg-amber-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+      
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex items-center gap-3">
+            <div className="text-2xl bg-stone-50 w-10 h-10 rounded-xl flex items-center justify-center border border-stone-100 group-hover:bg-amber-50 transition-colors">
+                {reservation.service?.icon}
+            </div>
+            <div>
+                <h4 className="text-sm font-black text-stone-900 uppercase tracking-tight leading-none group-hover:text-amber-600 transition-colors">{reservation.service?.name}</h4>
+                <code className="text-[9px] font-bold text-stone-400 tracking-wider uppercase">{reservation.confirmId}</code>
+            </div>
+        </div>
+        <button className="p-2 text-stone-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all" onClick={() => onCancel(reservation.id)}>
+          <X size={16} strokeWidth={2.5} />
         </button>
       </div>
-      <div className="rc-meta">{reservation.name}</div>
-      <div className="rc-meta">{reservation.date} · {reservation.time}</div>
-      <div className="rc-meta">{reservation.guests} guest{reservation.guests > 1 ? 's' : ''}</div>
-      <code className="rc-id">{reservation.confirmId}</code>
+      
+      <div className="space-y-2 mt-4">
+        <div className="flex items-center gap-3 text-[10px] font-black text-stone-500 uppercase tracking-widest">
+            <Calendar size={14} className="text-amber-500 opacity-70" /> {reservation.date}
+        </div>
+        <div className="flex items-center gap-3 text-[10px] font-black text-stone-500 uppercase tracking-widest leading-none">
+            <Clock size={14} className="text-amber-500 opacity-70" /> {reservation.time}
+        </div>
+        <div className="flex items-center justify-between pt-2 border-t border-stone-50 mt-4">
+            <div className="flex items-center gap-2 text-[10px] font-black text-stone-400 uppercase tracking-widest">
+                <User size={14} className="text-amber-500 opacity-70" /> {reservation.guests} Guests
+            </div>
+            <QrCode size={18} className="text-stone-300 group-hover:text-stone-900 transition-colors" />
+        </div>
+      </div>
     </div>
   );
 }`,
 
-    "src/components/reservation/ReservationsSidebar.jsx": `import ReservationCard from './ReservationCard';
+    "src/components/reservation/ReservationsSidebar.jsx": `import { History, CalendarClock } from 'lucide-react';
+import ReservationCard from './ReservationCard';
 
 export default function ReservationsSidebar({ reservations, onCancelReservation }) {
   return (
-    <div className="sidebar">
-      <h3 className="sidebar-title">Upcoming Reservations</h3>
-      {reservations.length === 0 ? (
-        <p className="empty-state">No reservations yet.</p>
-      ) : (
-        reservations.map(r => (
-          <ReservationCard
-            key={r.id}
-            reservation={r}
-            onCancel={onCancelReservation}
-          />
-        ))
-      )}
+    <div className="lg:sticky lg:top-10 space-y-8">
+      <div className="flex items-center justify-between px-2">
+        <h3 className="text-[10px] font-black text-stone-900 uppercase tracking-[0.3em] flex items-center gap-3 leading-none">
+            <CalendarClock size={18} className="text-amber-500 rotate-12" /> Active Slips
+        </h3>
+        <span className="bg-stone-900 text-white px-2.5 py-1 rounded-full text-[10px] font-black leading-none">{reservations.length}</span>
+      </div>
+      
+      <div className="flex flex-col gap-6">
+        {reservations.length === 0 ? (
+          <div className="p-12 text-center bg-white/50 border-2 border-dashed border-stone-200 rounded-[3rem] animate-pulse">
+            <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] leading-relaxed">System awaiting <br />registry data</p>
+          </div>
+        ) : (
+          reservations.map(r => (
+            <ReservationCard
+              key={r.id}
+              reservation={r}
+              onCancel={onCancelReservation}
+            />
+          ))
+        )}
+      </div>
+
+      <div className="p-8 bg-amber-50/50 rounded-[2.5rem] border border-amber-500/10 hidden lg:block">
+          <h4 className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+            <History size={14} /> Global Protocol
+          </h4>
+          <p className="text-[10px] font-bold text-stone-500 leading-relaxed uppercase tracking-tighter opacity-80">All reservations are held for 15 minutes past the scheduled arrival time before release.</p>
+      </div>
     </div>
   );
 }`,
 
     // --- VIEWS ---
-    "src/views/SelectView.jsx": `import { Users } from 'lucide-react';
+    "src/views/SelectView.jsx": `import { Users, LayoutGrid, CheckCircle2 } from 'lucide-react';
 import ServiceGrid from '../components/reservation/ServiceGrid';
 import DateTimePicker from '../components/reservation/DateTimePicker';
 import GuestSelector from '../components/ui/GuestSelector';
@@ -392,44 +609,57 @@ export default function SelectView({
   const canContinue = selectedService && date && time;
 
   return (
-    <div className="card">
-      <h2 className="card-title">Select Seating Option</h2>
+    <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-2xl shadow-stone-200/50 border border-stone-100 animate-in fade-in slide-in-from-bottom duration-700">
+      <div className="flex items-center justify-between mb-10 pb-6 border-b border-stone-100">
+        <div>
+          <h2 className="text-2xl font-black text-stone-900 tracking-tight flex items-center gap-3 leading-none mb-1 uppercase italic">
+            Placement
+          </h2>
+          <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.3em]">Module One: Configuration</p>
+        </div>
+        <div className="w-12 h-12 bg-stone-50 rounded-2xl flex items-center justify-center text-stone-900 border border-stone-100 shadow-sm">
+          <LayoutGrid size={24} />
+        </div>
+      </div>
+
       <ServiceGrid
         selectedServiceId={selectedService?.id}
         onSelectService={onSelectService}
       />
 
-      {selectedService && (
-        <>
+      {selectedService ? (
+        <div className="space-y-8 animate-in slide-in-from-top-4 duration-500">
           <DateTimePicker
             date={date}
             time={time}
             onDateChange={onDateChange}
             onTimeChange={onTimeChange}
           />
-          <div className="field">
-            <label><Users size={13} /> Party Size</label>
-            <GuestSelector
-              guests={guests}
-              maxCapacity={selectedService.capacity}
-              onChange={onGuestsChange}
-            />
+          <GuestSelector
+            guests={guests}
+            maxCapacity={selectedService.capacity}
+            onChange={onGuestsChange}
+          />
+        </div>
+      ) : (
+          <div className="py-20 text-center bg-stone-50/50 rounded-[3rem] border-2 border-dashed border-stone-100 my-8">
+              <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.3em]">Awaiting Selection</p>
           </div>
-        </>
       )}
 
       <button
-        className="primary-btn"
+        className="w-full mt-12 py-6 bg-stone-900 text-white rounded-[2rem] font-black text-lg tracking-tight uppercase shadow-2xl shadow-stone-900/40 flex items-center justify-center gap-3 hover:bg-black hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-20 disabled:grayscale disabled:hover:scale-100 group"
         disabled={!canContinue}
         onClick={onContinue}
       >
-        Continue to Details →
+        Forward to Details <CheckCircle2 size={24} className="text-amber-500 group-hover:scale-110 transition-transform" />
       </button>
     </div>
   );
 }`,
 
-    "src/views/DetailsView.jsx": `import BackLink from '../components/ui/BackLink';
+    "src/views/DetailsView.jsx": `import { ClipboardCheck, ShieldCheck } from 'lucide-react';
+import BackLink from '../components/ui/BackLink';
 import ReservationSummary from '../components/reservation/ReservationSummary';
 import ReservationForm from '../components/reservation/ReservationForm';
 
@@ -444,20 +674,40 @@ export default function DetailsView({
   onSubmit
 }) {
   return (
-    <div className="card">
+    <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-2xl shadow-stone-200/50 border border-stone-100 animate-in fade-in slide-in-from-right duration-700">
       <BackLink onClick={onBack} />
-      <h2 className="card-title">Your Information</h2>
+      
+      <div className="flex items-center justify-between mb-10 pb-6 border-b border-stone-100">
+        <div>
+          <h2 className="text-2xl font-black text-stone-900 tracking-tight flex items-center gap-3 leading-none mb-1 uppercase italic">
+            Identity
+          </h2>
+          <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.3em]">Module Two: Verification</p>
+        </div>
+        <div className="w-12 h-12 bg-stone-50 rounded-2xl flex items-center justify-center text-stone-900 border border-stone-100 shadow-sm">
+          <ClipboardCheck size={24} />
+        </div>
+      </div>
+
       <ReservationSummary
         service={service}
         date={date}
         time={time}
         guests={guests}
       />
-      <ReservationForm
-        formData={formData}
-        onChange={onFormChange}
-        onSubmit={onSubmit}
-      />
+      
+      <div className="space-y-10">
+          <ReservationForm
+            formData={formData}
+            onChange={onFormChange}
+            onSubmit={onSubmit}
+          />
+          
+          <div className="flex items-center justify-center gap-2 px-6 py-3 bg-stone-50 rounded-2xl border border-stone-100">
+              <ShieldCheck size={16} className="text-emerald-500" />
+              <p className="text-[9px] font-black text-stone-400 uppercase tracking-widest">TLS 256-BIT ENCRYPTED CONNECTION SECURED</p>
+          </div>
+      </div>
     </div>
   );
 }`,
@@ -470,7 +720,6 @@ import SelectView from './views/SelectView';
 import DetailsView from './views/DetailsView';
 import SuccessView from './components/reservation/SuccessView';
 import ReservationsSidebar from './components/reservation/ReservationsSidebar';
-import './App.css';
 
 function App() {
   const [step, setStep] = useState('select');
@@ -480,7 +729,7 @@ function App() {
   const [guests, setGuests] = useState(2);
   const [form, setForm] = useState({ name: '', email: '', phone: '', special: 'None', notes: '' });
   const [reservations, setReservations] = useState([]);
-  const confirmId = useMemo(() => generateConfirmId(), []);
+  const confirmId = useMemo(() => generateConfirmId(), [reservations.length]);
 
   const handleBook = (e) => {
     e.preventDefault();
@@ -513,11 +762,14 @@ function App() {
   };
 
   return (
-    <div className="app-wrap">
-      <Hero />
+    <div className="max-w-6xl mx-auto py-10 md:py-20 px-6">
+      <header className="mb-14 text-center md:text-left">
+          <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.6em] mb-4">Bella Vista Reservation Protocol v2.4</p>
+          <Hero />
+      </header>
 
-      <div className="layout">
-        <div className="main-col">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-start">
+        <main className="lg:col-span-8 order-2 lg:order-1">
           {step === 'select' && (
             <SelectView
               selectedService={service}
@@ -557,461 +809,24 @@ function App() {
               onReset={handleReset}
             />
           )}
-        </div>
+        </main>
 
-        <ReservationsSidebar
-          reservations={reservations}
-          onCancelReservation={cancelReservation}
-        />
+        <aside className="lg:col-span-4 order-1 lg:order-2">
+          <ReservationsSidebar
+            reservations={reservations}
+            onCancelReservation={cancelReservation}
+          />
+        </aside>
       </div>
+      
+      <footer className="mt-40 text-center pb-12 opacity-30 group">
+          <div className="h-px bg-stone-200 w-24 mx-auto mb-10 transition-all group-hover:w-full" />
+          <p className="text-[10px] font-black text-stone-900 uppercase tracking-[0.4em]">Proprietary Registry — B-Master Engine</p>
+      </footer>
     </div>
   );
 }
 
 export default App;`,
-
-    // --- STYLES ---
-    "src/App.css": `:root {
-  --blue: #4f46e5;
-  --blue-dark: #4338ca;
-  --green: #10b981;
-  --surface: #fff;
-  --border: #e2e8f0;
-  --muted: #64748b;
-  --bg: #fafafa;
-}
-
-.app-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-/* Hero */
-.hero {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  background: linear-gradient(135deg, #4f46e5, #7c3aed);
-  color: #fff;
-  border-radius: 14px;
-  padding: 1.5rem 1.75rem;
-}
-
-.hero-icon {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 50%;
-  width: 52px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.hero h1 {
-  font-size: 1.4rem;
-  font-weight: 800;
-}
-
-.hero p {
-  font-size: 0.82rem;
-  opacity: 0.85;
-  margin-top: 0.2rem;
-}
-
-/* Layout */
-.layout {
-  display: grid;
-  grid-template-columns: 1fr 260px;
-  gap: 1.25rem;
-}
-
-@media (max-width: 700px) {
-  .layout {
-    grid-template-columns: 1fr;
   }
-}
-
-.main-col {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-/* Card */
-.card {
-  background: var(--surface);
-  border-radius: 14px;
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
-  padding: 1.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.card-title {
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-/* Service Grid */
-.service-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 0.75rem;
-}
-
-.svc-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.3rem;
-  padding: 1rem;
-  border: 2px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.2s;
-  position: relative;
-}
-
-.svc-card:hover {
-  border-color: var(--blue);
-}
-
-.svc-card.chosen {
-  border-color: var(--blue);
-  background: #eef2ff;
-}
-
-.svc-icon {
-  font-size: 1.5rem;
-}
-
-.svc-name {
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.svc-desc {
-  font-size: 0.76rem;
-  color: var(--muted);
-  line-height: 1.4;
-}
-
-.svc-price {
-  font-size: 0.76rem;
-  font-weight: 700;
-  color: var(--blue);
-}
-
-.svc-check {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  color: var(--green);
-}
-
-/* Form Elements */
-.two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
-}
-
-@media (max-width: 500px) {
-  .two-col {
-    grid-template-columns: 1fr;
-  }
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.field label {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.field input,
-.field select,
-.field textarea {
-  padding: 0.6rem 0.8rem;
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-family: inherit;
-  outline: none;
-  background: var(--surface);
-}
-
-.field input:focus,
-.field select:focus,
-.field textarea:focus {
-  border-color: var(--blue);
-}
-
-/* Guest Selector */
-.qty-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.qty-row button {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 1.5px solid var(--border);
-  background: var(--surface);
-  font-size: 1rem;
-  cursor: pointer;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.qty-row button:hover {
-  border-color: var(--blue);
-}
-
-.qty-row span {
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.cap-note {
-  font-size: 0.75rem;
-  color: var(--muted);
-  margin-left: 0.25rem;
-}
-
-/* Back Link */
-.back-link {
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-size: 0.82rem;
-  cursor: pointer;
-  padding: 0;
-  align-self: flex-start;
-}
-
-.back-link:hover {
-  color: var(--blue);
-}
-
-/* Reservation Summary */
-.res-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  background: #f8f9ff;
-  border-radius: 8px;
-  padding: 0.75rem;
-}
-
-.res-summary span {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.8rem;
-  background: #eef2ff;
-  border-radius: 20px;
-  padding: 0.25rem 0.65rem;
-  font-weight: 600;
-  color: var(--blue);
-}
-
-/* Reservation Form */
-.res-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-/* Primary Button */
-.primary-btn {
-  padding: 0.875rem;
-  background: linear-gradient(135deg, var(--blue), var(--blue-dark));
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.primary-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.primary-btn:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-/* Success View */
-.success-wrap {
-  align-items: center;
-  text-align: center;
-  gap: 0.85rem;
-}
-
-.success-wrap h2 {
-  font-size: 1.4rem;
-  font-weight: 800;
-}
-
-.success-wrap p {
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-
-/* Reservation Ticket */
-.res-ticket {
-  width: 100%;
-  max-width: 380px;
-  border: 2px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.rt-head {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  background: #eef2ff;
-  border-bottom: 1px solid var(--border);
-}
-
-.rt-icon {
-  font-size: 1.75rem;
-}
-
-.rt-name {
-  font-weight: 700;
-  font-size: 0.95rem;
-}
-
-.rt-id {
-  font-size: 0.75rem;
-  color: var(--muted);
-  font-family: monospace;
-}
-
-.rt-rows {
-  padding: 0.85rem 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.rt-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.82rem;
-  color: var(--muted);
-}
-
-/* Sidebar */
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  align-self: start;
-  position: sticky;
-  top: 1rem;
-}
-
-.sidebar-title {
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.empty-state {
-  font-size: 0.8rem;
-  color: var(--muted);
-  background: var(--surface);
-  border-radius: 10px;
-  padding: 1rem;
-  text-align: center;
-}
-
-/* Reservation Card */
-.res-card {
-  background: var(--surface);
-  border-radius: 10px;
-  padding: 0.9rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.rc-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.rc-title {
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.cancel-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--muted);
-}
-
-.cancel-btn:hover {
-  color: #ef4444;
-}
-
-.rc-meta {
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-.rc-id {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--blue);
-  margin-top: 0.1rem;
-}`,
-
-    "src/index.css": `* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #fafafa;
-  min-height: 100vh;
-  color: #1e293b;
-}
-
-#root {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 2rem 1rem;
-}`,
-  },
 };

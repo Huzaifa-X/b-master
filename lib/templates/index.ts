@@ -19,6 +19,7 @@ import { seoContentTemplate } from "./seo-content"
 import { copywritingTemplate } from "./copywriting"
 import { visualAdsTemplate } from "./visual-ads"
 import { tradingTemplate } from "./trading"
+import { swissQrInvoiceTemplate } from "./swiss-qr-invoice"
 
 
 export interface TemplateDefinition {
@@ -104,6 +105,10 @@ const templates: Record<string, Template> = {
     } as Template,
     "visual-ads": {
         ...visualAdsTemplate,
+        isEnabled: true,
+    } as Template,
+    "swiss-qr-invoice": {
+        ...swissQrInvoiceTemplate,
         isEnabled: true,
     } as Template,
 }

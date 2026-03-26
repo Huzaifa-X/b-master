@@ -3,7 +3,7 @@ import { TemplateDefinition } from './index';
 export const fromScratchTemplate: TemplateDefinition = {
   id: "from-scratch",
   name: "From Scratch",
-  description: "A minimal blank starter - build anything you want from zero",
+  description: "A minimal blank starter with Tailwind CSS - build anything you want from zero",
   category: "Starter",
   icon: "Layers",
   files: {
@@ -26,6 +26,9 @@ export const fromScratchTemplate: TemplateDefinition = {
         devDependencies: {
           "@vitejs/plugin-react": "^4.2.1",
           vite: "^5.0.8",
+          tailwindcss: "^3.4.1",
+          postcss: "^8.4.35",
+          autoprefixer: "^10.4.17",
         },
       },
       null,
@@ -56,6 +59,29 @@ export default defineConfig({
   plugins: [react()],
 })`,
 
+    "tailwind.config.js": `/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}`,
+
+    "postcss.config.js": `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}`,
+
     "src/main.jsx": `import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
@@ -68,29 +94,31 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 )`,
 
     "src/App.jsx": `import { Sparkles } from 'lucide-react'
-import './App.css'
 
 export default function App() {
   return (
-    <div className="app-container">
-      <div className="content-box">
+    <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="text-center max-w-md">
         {/* Icon */}
-        <div className="icon-wrapper">
-          <Sparkles className="icon" />
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-violet-600 shadow-lg shadow-violet-500/40 mb-6">
+          <Sparkles className="w-8 h-8 text-white" />
         </div>
 
         {/* Heading */}
-        <div className="text-content">
-          <h1 className="title">Start Building</h1>
-          <p className="subtitle">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">Start Building</h1>
+          <p className="text-base text-slate-500 leading-relaxed">
             Your blank canvas is ready. Tell me what you want to create!
           </p>
         </div>
 
         {/* Suggestions */}
-        <div className="suggestions">
+        <div className="flex flex-wrap justify-center gap-2 pt-2">
           {['Landing Page', 'Dashboard', 'Form', 'Gallery'].map((suggestion) => (
-            <span key={suggestion} className="suggestion-tag">
+            <span
+              key={suggestion}
+              className="px-3 py-1.5 text-sm font-medium text-violet-700 bg-violet-50 border border-violet-200 rounded-full"
+            >
               {suggestion}
             </span>
           ))}
@@ -100,128 +128,16 @@ export default function App() {
   )
 }`,
 
-    "src/App.css": `
-:root {
-  --primary: #8B5CF6;
-  --primary-dark: #7C3AED;
-  --primary-light: #A78BFA;
-  --primary-bg: #F5F3FF;
+    "src/index.css": `@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-  --bg-start: #F8FAFC;
-  --bg-end: #F1F5F9;
-  --surface: #FFFFFF;
-  --text: #0F172A;
-  --text-muted: #64748B;
-  --border: #E2E8F0;
-
-  --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-}
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  font-family: 'Inter', system-ui, sans-serif;
-  background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-end) 100%);
-  color: var(--text);
-  -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
-}
-
-.app-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-}
-
-.content-box {
-  text-align: center;
-  max-width: 400px;
-}
-
-.icon-wrapper {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-  box-shadow: 0 10px 25px -5px rgba(139, 92, 246, 0.4);
-  margin-bottom: 1.5rem;
-}
-
-.icon {
-  width: 32px;
-  height: 32px;
-  color: white;
-}
-
-.text-content {
-  margin-bottom: 1.5rem;
-}
-
-.title {
-  font-size: 1.875rem;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 0.5rem;
-}
-
-.subtitle {
-  font-size: 1rem;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5rem;
-  padding-top: 0.5rem;
-}
-
-.suggestion-tag {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--primary-dark);
-  background: var(--primary-bg);
-  border: 1px solid var(--primary-light);
-  border-radius: 100px;
-}
-
-@media (max-width: 480px) {
-  .title {
-    font-size: 1.5rem;
+@layer base {
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-
-  .subtitle {
-    font-size: 0.9375rem;
-  }
-}
-`,
-
-    "src/index.css": `* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Inter', system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-#root {
-  min-height: 100vh;
 }`
   }
 };

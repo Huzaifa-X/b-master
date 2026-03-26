@@ -1144,6 +1144,9 @@ export const en = {
     inputHintShift: "Shift",
     inputHintEnter: "Enter",
     inputHintNewLine: "for new line",
+    resetDialogTitle: "Reset Workspace",
+    resetDialogDescription: "Are you sure you want to reset the workspace? Any unstored changes will be lost forever.",
+    resetWorkspace: "Reset Workspace",
 
     explorer: "Explorer",
     newFile: "New File",

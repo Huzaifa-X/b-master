@@ -3,26 +3,79 @@ import { stripIndents } from "./stripindents";
 
 export const BASE_PROMPT = `For all designs I ask you to make, have them be beautiful, not cookie cutter. Make webpages that are fully featured and worthy for production.
 
-By default, this template supports JSX syntax with custom CSS (in App.css), React hooks, and Lucide React for icons. Do not install other packages for UI themes, icons, etc unless absolutely necessary or I request them.
+By default, this template supports JSX syntax with Tailwind CSS, React hooks, and Lucide React for icons. Do not install other packages for UI themes, icons, etc unless absolutely necessary or I request them.
 
-CRITICAL STYLING RULES - ALWAYS USE CUSTOM CSS:
-- NEVER use Tailwind CSS or inline Tailwind utility classes
-- NEVER add the Tailwind CDN script to index.html
-- NEVER install tailwindcss as a dependency
-- ALWAYS write styles in a dedicated App.css file using custom CSS classes
-- Use CSS custom properties (CSS variables) for colors, spacing, and theming
-- Use descriptive class names (e.g., .header, .card, .btn-primary) instead of utility classes
-- Keep styles organized with clear sections (Layout, Components, Utilities, etc.)
-- Use media queries for responsive design instead of Tailwind breakpoint classes
+CRITICAL STYLING RULES - TAILWIND CSS BEST PRACTICES:
 
-Example of CORRECT styling approach:
-- In App.jsx: <div className="header">...</div>
-- In App.css: .header { display: flex; align-items: center; padding: 1rem; }
+SETUP (Required for every Tailwind project):
+1. Install dependencies in package.json devDependencies:
+   - "tailwindcss": "^3.4.1"
+   - "postcss": "^8.4.35"
+   - "autoprefixer": "^10.4.17"
 
-Example of WRONG styling approach (NEVER DO THIS):
-- <div className="flex items-center p-4 bg-slate-900">
-- <script src="https://cdn.tailwindcss.com"></script>
-- Adding tailwindcss to package.json
+2. Create tailwind.config.js in project root:
+   \`\`\`js
+   /** @type {import('tailwindcss').Config} */
+   export default {
+     content: [
+       "./index.html",
+       "./src/**/*.{js,ts,jsx,tsx}",
+     ],
+     theme: {
+       extend: {
+         // Custom theme extensions go here
+         colors: {
+           primary: { /* custom color palette */ },
+         },
+         fontFamily: {
+           sans: ['"Your Font"', 'system-ui', 'sans-serif'],
+         },
+       },
+     },
+     plugins: [],
+   }
+   \`\`\`
+
+3. Create postcss.config.js in project root:
+   \`\`\`js
+   export default {
+     plugins: {
+       tailwindcss: {},
+       autoprefixer: {},
+     },
+   }
+   \`\`\`
+
+4. Add Tailwind directives to src/index.css:
+   \`\`\`css
+   @tailwind base;
+   @tailwind components;
+   @tailwind utilities;
+
+   @layer base {
+     body {
+       @apply antialiased;
+     }
+   }
+   \`\`\`
+
+USAGE RULES:
+✅ DO:
+- Use Tailwind utility classes directly in JSX: <div className="flex items-center gap-4 p-6 bg-slate-900 rounded-xl">
+- Use arbitrary values for custom spacing: <div className="w-[347px] mt-[23px]">
+- Extend theme in tailwind.config.js for repeated custom values (colors, fonts, spacing)
+- Use @layer components in CSS for reusable component classes if needed
+- Use responsive prefixes: <div className="text-sm md:text-lg lg:text-xl">
+- Use hover/focus states: <button className="bg-blue-500 hover:bg-blue-600 focus:ring-2">
+
+❌ DON'T:
+- NEVER use the Tailwind CDN: <script src="https://cdn.tailwindcss.com"></script>
+- NEVER load Tailwind from external CDN links
+- Don't create custom CSS classes for everything - use Tailwind utilities directly
+- Don't use inline styles when Tailwind utilities exist
+- Don't forget to add file paths to tailwind.config.js content array
+
+CRITICAL: Missing any of the setup files (tailwind.config.js, postcss.config.js, or @tailwind directives) will cause Tailwind to not work!
 
 Use icons from lucide-react for logos.
 

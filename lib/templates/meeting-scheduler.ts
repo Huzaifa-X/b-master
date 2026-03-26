@@ -1,7 +1,9 @@
-export const meetingSchedulerTemplate = {
+import { TemplateDefinition } from './index';
+
+export const meetingSchedulerTemplate: TemplateDefinition = {
   id: "meeting-scheduler",
   name: "Meeting Scheduler",
-  description: "Team meeting planner with time slots, agenda & timezone",
+  description: "Team meeting planner with time slots, agenda & timezone using Tailwind CSS",
   category: "booking",
   files: {
     "package.json": JSON.stringify(
@@ -23,6 +25,9 @@ export const meetingSchedulerTemplate = {
         devDependencies: {
           "@vitejs/plugin-react": "^4.2.1",
           vite: "^5.0.8",
+          tailwindcss: "^3.4.1",
+          postcss: "^8.4.35",
+          autoprefixer: "^10.4.17",
         },
       },
       null,
@@ -33,18 +38,58 @@ export const meetingSchedulerTemplate = {
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <title>Meeting Scheduler</title>
   </head>
-  <body>
+  <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>`,
 
+    "tailwind.config.js": `/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}`,
+
+    "postcss.config.js": `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}`,
+
     "vite.config.js": `import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-export default defineConfig({ plugins: [react()] })`,
+
+export default defineConfig({
+  plugins: [react()],
+})`,
+
+    "src/index.css": `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900;
+  }
+}`,
 
     "src/main.jsx": `import React from 'react'
 import ReactDOM from 'react-dom/client'
@@ -80,29 +125,31 @@ export const PLATFORMS = ['Google Meet', 'Zoom', 'Teams', 'In-Person'];`,
     // --- LAYOUT COMPONENTS ---
     "src/components/layout/PageHeader.jsx": `export default function PageHeader() {
   return (
-    <div className="page-header">
-      <h1>Meeting Scheduler</h1>
-      <p>Set up a meeting and invite your team in seconds.</p>
+    <div className="mb-8">
+      <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Meeting Scheduler</h1>
+      <p className="text-slate-500 font-medium mt-1">Set up a meeting and invite your team in seconds.</p>
     </div>
   );
 }`,
 
     // --- UI COMPONENTS ---
-    "src/components/ui/BackLink.jsx": `export default function BackLink({ onClick }) {
+    "src/components/ui/BackLink.jsx": `import { ChevronLeft } from 'lucide-react';
+
+export default function BackLink({ onClick }) {
   return (
-    <button className="back-link" onClick={onClick}>
-      ← Back
+    <button className="flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-blue-600 transition-colors mb-4" onClick={onClick}>
+      <ChevronLeft size={16} /> Back
     </button>
   );
 }`,
 
     "src/components/ui/PlatformSelector.jsx": `export default function PlatformSelector({ platforms, selected, onSelect }) {
   return (
-    <div className="platform-row">
+    <div className="flex flex-wrap gap-2">
       {platforms.map(p => (
         <button
           key={p}
-          className={\`platform-btn \${selected === p ? 'active' : ''}\`}
+          className={\`px-4 py-2 rounded-full text-sm font-bold border-2 transition-all \${selected === p ? 'bg-blue-50 border-blue-500 text-blue-600' : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200 hover:text-slate-700'}\`}
           onClick={() => onSelect(p)}
         >
           {p}
@@ -112,7 +159,7 @@ export const PLATFORMS = ['Google Meet', 'Zoom', 'Teams', 'In-Person'];`,
   );
 }`,
 
-    "src/components/ui/AttendeeInput.jsx": `import { Plus, X } from 'lucide-react';
+    "src/components/ui/AttendeeInput.jsx": `import { Plus, X, Mail } from 'lucide-react';
 
 export default function AttendeeInput({
   inputValue,
@@ -129,24 +176,28 @@ export default function AttendeeInput({
   };
 
   return (
-    <div>
-      <div className="attendee-input-row">
-        <input
-          value={inputValue}
-          onChange={(e) => onInputChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="name@company.com"
-        />
-        <button className="add-btn" onClick={onAdd}>
-          <Plus size={16} />
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <div className="relative flex-1 group">
+          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
+          <input
+            value={inputValue}
+            onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="colleague@company.com"
+            className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-blue-500 focus:bg-white transition-all font-medium text-slate-900"
+          />
+        </div>
+        <button className="bg-blue-600 text-white p-3 rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex items-center justify-center" onClick={onAdd}>
+          <Plus size={24} />
         </button>
       </div>
-      <div className="chip-list">
+      <div className="flex flex-wrap gap-2">
         {attendees.map(a => (
-          <span key={a} className="chip">
+          <span key={a} className="flex items-center gap-2 bg-blue-50 text-blue-700 rounded-xl px-4 py-2 text-sm font-bold border border-blue-100 animate-in zoom-in duration-300">
             {a}
-            <button onClick={() => onRemove(a)}>
-              <X size={12} />
+            <button onClick={() => onRemove(a)} className="hover:bg-blue-200 p-0.5 rounded-full transition-colors">
+              <X size={14} strokeWidth={3} />
             </button>
           </span>
         ))}
@@ -156,7 +207,7 @@ export default function AttendeeInput({
 }`,
 
     // --- MEETING COMPONENTS ---
-    "src/components/meeting/MeetingForm.jsx": `import { Clock, Globe, Video, Users, AlignLeft, Calendar } from 'lucide-react';
+    "src/components/meeting/MeetingForm.jsx": `import { Clock, Globe, Video, Users, AlignLeft, Calendar, Sparkles } from 'lucide-react';
 import { DURATIONS, TIMEZONES, PLATFORMS } from '../../data/constants';
 import PlatformSelector from '../ui/PlatformSelector';
 import AttendeeInput from '../ui/AttendeeInput';
@@ -180,37 +231,50 @@ export default function MeetingForm({
   onSubmit
 }) {
   return (
-    <div className="card">
-      <h2 className="card-title">
-        <Calendar size={18} /> Meeting Details
-      </h2>
+    <div className="bg-white rounded-[2.5rem] p-10 shadow-xl shadow-slate-200/50 border border-slate-100 space-y-8 animate-in fade-in duration-700">
+      <div className="flex items-center gap-4 border-b border-slate-50 pb-6 mb-2">
+        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+            <Calendar size={24} />
+        </div>
+        <div>
+            <h2 className="text-xl font-black text-slate-900 leading-none mb-1">Meeting Parameters</h2>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">General details & participants</p>
+        </div>
+      </div>
 
-      <div className="field">
-        <label>Meeting Title *</label>
+      <div className="space-y-2">
+        <label className="text-xs font-black text-slate-500 uppercase tracking-widest pl-1">Meeting Title *</label>
         <input
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
-          placeholder="Q1 Planning Session"
+          placeholder="E.g., Quarterly Performance Review"
+          className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-blue-500 focus:bg-white transition-all font-bold text-slate-900 text-lg placeholder:text-slate-300"
         />
       </div>
 
-      <div className="two-col">
-        <div className="field">
-          <label><Clock size={13} /> Duration</label>
-          <select value={duration} onChange={(e) => onDurationChange(e.target.value)}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div className="space-y-2 text-left">
+          <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest pl-1">
+            <Clock size={14} className="text-blue-500" /> Duration
+          </label>
+          <select value={duration} onChange={(e) => onDurationChange(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-blue-500 focus:bg-white transition-all font-bold text-slate-900 appearance-none">
             {DURATIONS.map(d => <option key={d}>{d}</option>)}
           </select>
         </div>
-        <div className="field">
-          <label><Globe size={13} /> Timezone</label>
-          <select value={timezone} onChange={(e) => onTimezoneChange(e.target.value)}>
+        <div className="space-y-2 text-left">
+          <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest pl-1">
+            <Globe size={14} className="text-blue-500" /> Timezone
+          </label>
+          <select value={timezone} onChange={(e) => onTimezoneChange(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-blue-500 focus:bg-white transition-all font-bold text-slate-900 appearance-none">
             {TIMEZONES.map(tz => <option key={tz.label}>{tz.label}</option>)}
           </select>
         </div>
       </div>
 
-      <div className="field">
-        <label><Video size={13} /> Platform</label>
+      <div className="space-y-4">
+        <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest pl-1">
+            <Video size={14} className="text-blue-500" /> Meeting Platform
+        </label>
         <PlatformSelector
           platforms={PLATFORMS}
           selected={platform}
@@ -218,8 +282,10 @@ export default function MeetingForm({
         />
       </div>
 
-      <div className="field">
-        <label><Users size={13} /> Invite Attendees</label>
+      <div className="space-y-4">
+        <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest pl-1">
+            <Users size={14} className="text-blue-500" /> Invite Participants
+        </label>
         <AttendeeInput
           inputValue={attendeeInput}
           onInputChange={onAttendeeInputChange}
@@ -229,28 +295,31 @@ export default function MeetingForm({
         />
       </div>
 
-      <div className="field">
-        <label><AlignLeft size={13} /> Agenda (optional)</label>
+      <div className="space-y-2 text-left">
+        <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest pl-1">
+            <AlignLeft size={14} className="text-blue-500" /> Agenda (optional)
+        </label>
         <textarea
           rows={3}
           value={agenda}
           onChange={(e) => onAgendaChange(e.target.value)}
-          placeholder="1. Introductions&#10;2. Q1 goals review&#10;3. Action items"
+          placeholder="What will be discussed?"
+          className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-blue-500 focus:bg-white transition-all font-medium text-slate-900 resize-none placeholder:text-slate-300"
         />
       </div>
 
       <button
-        className="primary-btn"
+        className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black text-lg flex items-center justify-center gap-3 shadow-xl shadow-blue-500/20 hover:scale-[1.01] hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-30"
         onClick={onSubmit}
         disabled={!title || attendees.length === 0}
       >
-        Choose Time Slots →
+        Choose Time Slots <Sparkles size={20} />
       </button>
     </div>
   );
 }`,
 
-    "src/components/meeting/SlotPicker.jsx": `import { Clock, Check } from 'lucide-react';
+    "src/components/meeting/SlotPicker.jsx": `import { Clock, Check, Sparkles } from 'lucide-react';
 import { TIME_SLOTS } from '../../data/constants';
 import BackLink from '../ui/BackLink';
 
@@ -263,39 +332,48 @@ export default function SlotPicker({
   onBack
 }) {
   return (
-    <div className="card">
+    <div className="bg-white rounded-[2.5rem] p-10 shadow-xl shadow-slate-200/50 border border-slate-100 space-y-8 animate-in slide-in-from-right-10 duration-700">
       <BackLink onClick={onBack} />
-      <h2 className="card-title">
-        <Clock size={18} /> Select Available Time Slots
-      </h2>
-      <p className="helper-text">Select all time slots that could work, then confirm one.</p>
+      <div className="flex items-center gap-4 border-b border-slate-50 pb-6 mb-2">
+        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+            <Clock size={24} />
+        </div>
+        <div>
+            <h2 className="text-xl font-black text-slate-900 leading-none mb-1">Temporal Selection</h2>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Choose availability window</p>
+        </div>
+      </div>
+      
+      <p className="text-sm font-medium text-slate-500">Select all time slots that could work for this meeting. Your team will vote on these later.</p>
 
-      <div className="slots-grid">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {TIME_SLOTS.map(slot => (
           <button
             key={slot}
-            className={\`slot \${selectedSlots.includes(slot) ? 'active' : ''}\`}
+            className={\`px-4 py-3 rounded-2xl text-sm font-bold border-2 transition-all flex items-center justify-between \${selectedSlots.includes(slot) ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white border-slate-50 text-slate-500 hover:border-slate-200'}\`}
             onClick={() => onToggleSlot(slot)}
           >
             {slot}
-            {selectedSlots.includes(slot) && <Check size={12} />}
+            {selectedSlots.includes(slot) && <Check size={16} strokeWidth={4} />}
           </button>
         ))}
       </div>
 
       {selectedSlots.length > 0 && (
-        <div className="confirm-section">
-          <h3>Confirm Final Time</h3>
-          <select value={finalSlot} onChange={(e) => onFinalSlotChange(e.target.value)}>
-            <option value="">Choose a slot…</option>
-            {selectedSlots.map(s => <option key={s}>{s}</option>)}
-          </select>
+        <div className="pt-8 border-t border-slate-100 space-y-6 animate-in slide-in-from-bottom-5">
+          <div>
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Confirm Preferred Time</h3>
+            <select value={finalSlot} onChange={(e) => onFinalSlotChange(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-blue-500 focus:bg-white transition-all font-black text-slate-900 text-lg appearance-none">
+                <option value="">Select a specific slot…</option>
+                {selectedSlots.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
           <button
-            className="primary-btn"
+            className="w-full py-5 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-[2rem] font-black text-lg flex items-center justify-center gap-3 shadow-xl hover:-translate-y-0.5 active:scale-95 transition-all disabled:opacity-30"
             onClick={onSchedule}
             disabled={!finalSlot}
           >
-            Schedule Meeting
+            <Sparkles size={20} /> Schedule Meeting
           </button>
         </div>
       )}
@@ -303,20 +381,25 @@ export default function SlotPicker({
   );
 }`,
 
-    "src/components/meeting/MeetingCard.jsx": `import { Clock, Globe, Video, Users } from 'lucide-react';
+    "src/components/meeting/MeetingCard.jsx": `import { Clock, Video, Users, ChevronRight } from 'lucide-react';
 
 export default function MeetingCard({ meeting }) {
   return (
-    <div className="meeting-card">
-      <div className="mc-title">{meeting.title}</div>
-      <div className="mc-meta">
-        <Clock size={12} /> {meeting.slot} · {meeting.duration}
+    <div className="bg-white p-5 rounded-2xl border border-slate-100 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-500/5 transition-all group cursor-pointer">
+      <div className="font-extrabold text-slate-900 mb-3 group-hover:text-blue-600 transition-colors flex items-center justify-between">
+        {meeting.title}
+        <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-500 transition-all group-hover:translate-x-1" />
       </div>
-      <div className="mc-meta">
-        <Users size={12} /> {meeting.attendees.length} attendee{meeting.attendees.length > 1 ? 's' : ''}
-      </div>
-      <div className="mc-meta">
-        <Video size={12} /> {meeting.platform}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-500">
+          <Clock size={12} className="text-blue-500" /> {meeting.slot} · {meeting.duration}
+        </div>
+        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-500">
+          <Users size={12} className="text-blue-500" /> {meeting.attendees.length} participant{meeting.attendees.length > 1 ? 's' : ''}
+        </div>
+        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-500">
+          <Video size={12} className="text-blue-500" /> {meeting.platform}
+        </div>
       </div>
     </div>
   );
@@ -326,61 +409,104 @@ export default function MeetingCard({ meeting }) {
 
 export default function MeetingSummary({ meeting }) {
   return (
-    <div className="meeting-summary">
-      <div className="ms-title">{meeting.title}</div>
-      <div className="ms-row">
-        <Clock size={13} /> {meeting.slot} · {meeting.duration}
+    <div className="bg-slate-50 border border-slate-100 rounded-[2rem] p-8 space-y-6 text-left shadow-inner">
+      <div className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-8 border-b border-slate-200 pb-4">
+        {meeting.title}
       </div>
-      <div className="ms-row">
-        <Globe size={13} /> {meeting.timezone}
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
+                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-blue-500 shadow-sm border border-slate-100"><Clock size={16} /></div>
+                {meeting.slot} · {meeting.duration}
+            </div>
+            <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
+                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-blue-500 shadow-sm border border-slate-100"><Globe size={16} /></div>
+                {meeting.timezone}
+            </div>
+            <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
+                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-blue-500 shadow-sm border border-slate-100"><Video size={16} /></div>
+                {meeting.platform}
+            </div>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 text-sm font-bold text-slate-600">
+                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-blue-500 shadow-sm border border-slate-100 shrink-0"><Users size={16} /></div>
+                <div className="flex flex-wrap gap-1">
+                    {meeting.attendees.map(a => <span key={a} className="bg-white px-2 py-0.5 rounded-md border border-slate-100">{a}</span>)}
+                </div>
+            </div>
+            {meeting.agenda && (
+                <div className="flex items-start gap-3 text-sm font-bold text-slate-600">
+                    <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-blue-500 shadow-sm border border-slate-100 shrink-0"><AlignLeft size={16} /></div>
+                    <span className="leading-relaxed opacity-80">{meeting.agenda}</span>
+                </div>
+            )}
+          </div>
       </div>
-      <div className="ms-row">
-        <Video size={13} /> {meeting.platform}
-      </div>
-      <div className="ms-row">
-        <Users size={13} /> {meeting.attendees.join(', ')}
-      </div>
-      {meeting.agenda && (
-        <div className="ms-agenda">
-          <AlignLeft size={13} />
-          <span>{meeting.agenda}</span>
-        </div>
-      )}
     </div>
   );
 }`,
 
-    "src/components/meeting/SuccessView.jsx": `import { Check } from 'lucide-react';
+    "src/components/meeting/SuccessView.jsx": `import { CheckCircle2, Sparkles, Send, Calendar } from 'lucide-react';
 import MeetingSummary from './MeetingSummary';
 
 export default function SuccessView({ meeting, onReset }) {
   return (
-    <div className="card success-wrap">
-      <Check size={52} color="#10b981" strokeWidth={2.5} />
-      <h2>Meeting Scheduled!</h2>
-      <p>Invites sent to {meeting.attendees.length} attendee{meeting.attendees.length > 1 ? 's' : ''}</p>
+    <div className="bg-white rounded-[3rem] p-12 shadow-2xl shadow-slate-200 border border-slate-100 text-center animate-in zoom-in-95 duration-700 relative overflow-hidden">
+      <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500" />
+      
+      <div className="flex justify-center mb-8 relative">
+        <div className="absolute inset-0 bg-emerald-500/20 blur-3xl rounded-full scale-150 animate-pulse" />
+        <div className="relative w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center transform hover:scale-110 transition-transform">
+            <CheckCircle2 size={56} strokeWidth={2.5} />
+        </div>
+      </div>
+      
+      <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-4">Meeting Official!</h2>
+      <p className="text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px] mb-12 flex items-center justify-center gap-2">
+        <Send size={12} /> Invites dispatched to {meeting.attendees.length} participant{meeting.attendees.length > 1 ? 's' : ''}
+      </p>
+
       <MeetingSummary meeting={meeting} />
-      <button className="primary-btn" onClick={onReset}>
-        Schedule Another
-      </button>
+
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-12">
+        <button className="w-full sm:w-auto px-10 py-5 bg-slate-900 text-white rounded-[2rem] font-black text-lg shadow-xl hover:bg-black hover:-translate-y-0.5 active:scale-95 transition-all flex items-center justify-center gap-3" onClick={onReset}>
+            <Calendar size={20} /> Plan New Meeting
+        </button>
+        <button className="text-sm font-black text-slate-400 uppercase tracking-widest hover:text-blue-600 transition-all flex items-center gap-2">
+            View Calendar <Sparkles size={14} />
+        </button>
+      </div>
     </div>
   );
 }`,
 
-    "src/components/meeting/MeetingsSidebar.jsx": `import { Calendar } from 'lucide-react';
+    "src/components/meeting/MeetingsSidebar.jsx": `import { Calendar, Inbox } from 'lucide-react';
 import MeetingCard from './MeetingCard';
 
 export default function MeetingsSidebar({ meetings }) {
   return (
-    <div className="sidebar">
-      <h3 className="sidebar-title">
-        <Calendar size={15} /> Scheduled Meetings
-      </h3>
-      {meetings.length === 0 ? (
-        <p className="empty-state">No meetings yet. Schedule your first one!</p>
-      ) : (
-        meetings.map(m => <MeetingCard key={m.id} meeting={m} />)
-      )}
+    <div className="bg-white/50 backdrop-blur-sm border border-slate-100 rounded-[2rem] p-8 h-fit shrink-0">
+      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100/50">
+        <h3 className="flex items-center gap-3 text-sm font-black text-slate-900 uppercase tracking-widest">
+            <Calendar size={18} className="text-blue-500" /> 
+            Active Log
+        </h3>
+        <span className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-lg text-[10px] font-black tracking-tighter">{meetings.length}</span>
+      </div>
+      
+      <div className="flex flex-col gap-4">
+        {meetings.length === 0 ? (
+            <div className="py-12 px-6 text-center border-2 border-dashed border-slate-200 rounded-3xl opacity-50">
+                <Inbox size={40} className="mx-auto mb-4 text-slate-300" strokeWidth={1.5} />
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed">System awaiting data input.</p>
+            </div>
+        ) : (
+            meetings.map(m => <MeetingCard key={m.id} meeting={m} />)
+        )}
+      </div>
     </div>
   );
 }`,
@@ -388,66 +514,14 @@ export default function MeetingsSidebar({ meetings }) {
     // --- VIEWS ---
     "src/views/SetupView.jsx": `import MeetingForm from '../components/meeting/MeetingForm';
 
-export default function SetupView({
-  title,
-  duration,
-  timezone,
-  platform,
-  attendeeInput,
-  attendees,
-  agenda,
-  onTitleChange,
-  onDurationChange,
-  onTimezoneChange,
-  onPlatformChange,
-  onAttendeeInputChange,
-  onAddAttendee,
-  onRemoveAttendee,
-  onAgendaChange,
-  onSubmit
-}) {
-  return (
-    <MeetingForm
-      title={title}
-      duration={duration}
-      timezone={timezone}
-      platform={platform}
-      attendeeInput={attendeeInput}
-      attendees={attendees}
-      agenda={agenda}
-      onTitleChange={onTitleChange}
-      onDurationChange={onDurationChange}
-      onTimezoneChange={onTimezoneChange}
-      onPlatformChange={onPlatformChange}
-      onAttendeeInputChange={onAttendeeInputChange}
-      onAddAttendee={onAddAttendee}
-      onRemoveAttendee={onRemoveAttendee}
-      onAgendaChange={onAgendaChange}
-      onSubmit={onSubmit}
-    />
-  );
+export default function SetupView(props) {
+  return <MeetingForm {...props} />;
 }`,
 
     "src/views/SlotsView.jsx": `import SlotPicker from '../components/meeting/SlotPicker';
 
-export default function SlotsView({
-  selectedSlots,
-  finalSlot,
-  onToggleSlot,
-  onFinalSlotChange,
-  onSchedule,
-  onBack
-}) {
-  return (
-    <SlotPicker
-      selectedSlots={selectedSlots}
-      finalSlot={finalSlot}
-      onToggleSlot={onToggleSlot}
-      onFinalSlotChange={onFinalSlotChange}
-      onSchedule={onSchedule}
-      onBack={onBack}
-    />
-  );
+export default function SlotsView(props) {
+  return <SlotPicker {...props} />;
 }`,
 
     // --- MAIN APP ---
@@ -458,7 +532,6 @@ import SetupView from './views/SetupView';
 import SlotsView from './views/SlotsView';
 import SuccessView from './components/meeting/SuccessView';
 import MeetingsSidebar from './components/meeting/MeetingsSidebar';
-import './App.css';
 
 function App() {
   const [step, setStep] = useState('setup');
@@ -533,11 +606,11 @@ function App() {
   };
 
   return (
-    <div>
+    <div className="max-w-6xl mx-auto py-10 px-6">
       <PageHeader />
 
-      <div className="layout">
-        <div className="main-col">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-12 pt-6">
+        <div className="lg:col-span-3">
           {step === 'setup' && !scheduled && (
             <SetupView
               title={title}
@@ -575,423 +648,14 @@ function App() {
           )}
         </div>
 
-        <MeetingsSidebar meetings={meetings} />
+        <div className="lg:col-span-1">
+          <MeetingsSidebar meetings={meetings} />
+        </div>
       </div>
     </div>
   );
 }
 
 export default App;`,
-
-    // --- STYLES ---
-    "src/App.css": `:root {
-  --blue: #3b82f6;
-  --blue-dark: #2563eb;
-  --green: #10b981;
-  --surface: #fff;
-  --border: #e2e8f0;
-  --muted: #64748b;
-  --bg: #f1f5f9;
-}
-
-.page-header {
-  margin-bottom: 1.5rem;
-}
-
-.page-header h1 {
-  font-size: 1.6rem;
-  font-weight: 800;
-}
-
-.page-header p {
-  color: var(--muted);
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
-}
-
-.layout {
-  display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 1.25rem;
-}
-
-@media (max-width: 700px) {
-  .layout {
-    grid-template-columns: 1fr;
   }
-}
-
-.main-col {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.card {
-  background: var(--surface);
-  border-radius: 14px;
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
-  padding: 1.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.card-title {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.field label {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.field input,
-.field select,
-.field textarea {
-  padding: 0.65rem 0.85rem;
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-family: inherit;
-  outline: none;
-  background: var(--surface);
-}
-
-.field input:focus,
-.field select:focus,
-.field textarea:focus {
-  border-color: var(--blue);
-}
-
-.two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-}
-
-@media (max-width: 480px) {
-  .two-col {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Platform Selector */
-.platform-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.platform-btn {
-  padding: 0.45rem 0.85rem;
-  border: 1.5px solid var(--border);
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  background: var(--surface);
-  transition: all 0.2s;
-}
-
-.platform-btn.active {
-  border-color: var(--blue);
-  background: #eff6ff;
-  color: var(--blue);
-  font-weight: 700;
-}
-
-/* Attendee Input */
-.attendee-input-row {
-  display: flex;
-  gap: 0.4rem;
-}
-
-.attendee-input-row input {
-  flex: 1;
-}
-
-.add-btn {
-  padding: 0.65rem 0.85rem;
-  background: var(--blue);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-}
-
-.chip-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-top: 0.35rem;
-}
-
-.chip {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  background: #eff6ff;
-  color: var(--blue);
-  border-radius: 20px;
-  padding: 0.25rem 0.65rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.chip button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--blue);
-  display: flex;
-  align-items: center;
-  padding: 0;
-}
-
-/* Back Link */
-.back-link {
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-size: 0.82rem;
-  cursor: pointer;
-  padding: 0;
-  align-self: flex-start;
-}
-
-.back-link:hover {
-  color: var(--blue);
-}
-
-/* Helper Text */
-.helper-text {
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-/* Slots Grid */
-.slots-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem;
-}
-
-@media (max-width: 480px) {
-  .slots-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.slot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.55rem 0.75rem;
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.82rem;
-  font-weight: 500;
-  cursor: pointer;
-  background: var(--surface);
-  transition: all 0.2s;
-}
-
-.slot:hover {
-  border-color: var(--blue);
-}
-
-.slot.active {
-  border-color: var(--blue);
-  background: #eff6ff;
-  color: var(--blue);
-}
-
-/* Confirm Section */
-.confirm-section {
-  border-top: 1px solid var(--border);
-  padding-top: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.confirm-section h3 {
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-
-.confirm-section select {
-  padding: 0.65rem 0.85rem;
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-family: inherit;
-  outline: none;
-}
-
-/* Primary Button */
-.primary-btn {
-  padding: 0.85rem;
-  background: linear-gradient(135deg, var(--blue), var(--blue-dark));
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.primary-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.primary-btn:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-/* Success View */
-.success-wrap {
-  align-items: center;
-  text-align: center;
-  gap: 0.85rem;
-}
-
-.success-wrap h2 {
-  font-size: 1.4rem;
-  font-weight: 800;
-}
-
-.success-wrap p {
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-
-/* Meeting Summary */
-.meeting-summary {
-  width: 100%;
-  max-width: 400px;
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  padding: 1.1rem;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.ms-title {
-  font-size: 1rem;
-  font-weight: 700;
-  margin-bottom: 0.25rem;
-}
-
-.ms-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.ms-agenda {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.4rem;
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-.ms-agenda span {
-  white-space: pre-line;
-  line-height: 1.5;
-}
-
-/* Sidebar */
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  align-self: start;
-  position: sticky;
-  top: 1rem;
-}
-
-.sidebar-title {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.empty-state {
-  font-size: 0.8rem;
-  color: var(--muted);
-  background: var(--surface);
-  border-radius: 10px;
-  padding: 1rem;
-  text-align: center;
-}
-
-/* Meeting Card */
-.meeting-card {
-  background: var(--surface);
-  border-radius: 10px;
-  padding: 1rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.mc-title {
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.mc-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.78rem;
-  color: var(--muted);
-}`,
-
-    "src/index.css": `* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #f1f5f9;
-  min-height: 100vh;
-  color: #1e293b;
-}
-
-#root {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 2rem 1rem;
-}`,
-  },
 };
