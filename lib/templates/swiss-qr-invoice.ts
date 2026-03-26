@@ -454,54 +454,130 @@ export default function App() {
 
 export const swissQRInvoiceInstructions = `
 
-## 🇨🇭 Swiss QR Invoice (QR-Facture) Generation
+## 🇨🇭 Swiss QR Invoice (QR-Facture) - MANDATORY FORMAT
 
-When the user asks for a Swiss invoice, QR invoice, QR-facture, or bulletin de versement with QR code, you MUST generate a Swiss QR-bill compliant invoice.
+**CRITICAL: When user requests a Swiss invoice, Swiss QR invoice, QR-Facture, or facture with QR code, you MUST follow this exact structure.**
 
 ### Required Information:
-1. **Company/Creditor Info:**
-   - Company name
-   - Address, postal code, city
-   - IBAN (Swiss format: CHxx xxxx xxxx xxxx xxxx x)
+1. **Company/Creditor** — Name, address, postal code, city, **IBAN (CH format: CHxx xxxx xxxx xxxx xxxx x)**
+2. **Client/Debtor** — Name, address, postal code, city, country code
+3. **Invoice** — Number, date, due date, line items, VAT 8.1%, total amount CHF
 
-2. **Client/Debtor Info:**
-   - Client name
-   - Address, postal code, city, country
+### QR Code Generation (RECOMMENDED):
 
-3. **Invoice Details:**
-   - Invoice number
-   - Date and due date
-   - Line items with quantities and prices
-   - VAT rate (typically 8.1% in Switzerland)
-   - Total amount
+**🎯 USE THE TOOL:** You have access to the \`generate_swiss_qr_code\` tool which automatically:
+- Generates Swiss Payment Standard compliant QR codes
+- Uploads the QR image to S3
+- Returns a URL for embedding in the invoice
 
-### Swiss QR Code Format:
-The QR code must follow the Swiss Payment Standard (SPS) with this data structure:
-- SPC (header)
-- Version 0200
-- IBAN
-- Creditor info (structured)
-- Amount in CHF
-- Debtor info
-- Reference info
-- EPD (end marker)
+**Example tool call:**
+\`\`\`javascript
+// Call the generate_swiss_qr_code tool with invoice data
+const result = await generate_swiss_qr_code({
+  iban: "CH4431999123000889012",
+  creditorName: "Calliopee Sàrl",
+  creditorAddress: "Route de Meyrin 49",
+  creditorPostalCode: "1203",
+  creditorCity: "Genève",
+  creditorCountry: "CH",
+  amount: 2648.45,
+  currency: "CHF",
+  debtorName: "Marie Dupont",
+  debtorAddress: "Rue du Lac 15",
+  debtorPostalCode: "1201",
+  debtorCity: "Genève",
+  debtorCountry: "CH",
+  additionalInfo: "Facture INV-2024-001"
+});
 
-### Template Structure:
-- Professional invoice header with company logo area
-- Client billing address
-- Invoice items table
-- Subtotal, TVA, Total TTC
-- Payment slip at bottom with:
-  - **Récépissé** (receipt) on left (62mm wide)
-  - **Section paiement** (payment section) with QR code on right
-  - Swiss cross overlay on QR code
-  - IBAN, creditor/debtor info, amount
+// Then embed in HTML:
+<img src="{result.qrCodeUrl}" alt="Swiss QR Code" class="w-[46mm] h-[46mm]" />
+\`\`\`
 
-### Important Notes:
-- Use CHF as currency
-- The QR code must include a Swiss cross overlay (black square with white cross)
-- Payment slip height should be 105mm as per Swiss standard
-- Use French or German labels depending on user preference
+### Swiss QR Code Data Structure (MANDATORY):
+If generating QR code manually, use this EXACT format (newline-separated):
+\`\`\`
+SPC                                    // QR Type
+0200                                   // Version
+1                                      // Coding (UTF-8)
+CH4431999123000889012                  // IBAN (no spaces)
+S                                      // Address Type (Structured)
+Calliopee Sàrl                         // Creditor Name
+Route de Meyrin 49                     // Address
+                                       // Building number (empty)
+1203                                   // Postal
+Genève                                 // City
+CH                                     // Country
+                                       // Ultimate creditor (6 empty lines)
+
+
+
+
+
+
+2648.45                                // Amount
+CHF                                    // Currency
+S                                      // Debtor address type
+Marie Dupont                           // Debtor name
+Rue du Lac 15                          // Address
+                                       // Building (empty)
+1201                                   // Postal
+Genève                                 // City
+CH                                     // Country
+NON                                   // Reference type
+                                       // Reference (empty)
+Facture INV-2024-001                   // Additional info
+EPD                                    // End marker
+                                       // Alt procedures (empty)
+\`\`\`
+
+### Payment Slip Layout (MANDATORY 105mm height):
+
+**Structure:**
+\`\`\`
+┌─────────────────────────────────────────────────────┐
+│  Récépissé (62mm)  │  Section paiement              │
+│  - Account/IBAN    │  ┌──────────┐  Payment details │
+│  - Amount CHF      │  │ QR Code  │  - Account       │
+│  - Currency        │  │ + Swiss  │  - Debtor        │
+│  - Acceptance pt   │  │   Cross  │  - Amount        │
+└────────────────────┴──────────────────────────────── ┘
+         (dashed border on top and between sections)
+\`\`\`
+
+### Implementation Rules:
+1. **QR Code Library:** Use \`qrcode\` npm package
+2. **Swiss Cross:** 7mm × 7mm white square with black cross overlay in QR center
+3. **Dimensions:** Payment slip = 105mm height, Récépissé = 62mm width, QR = 46mm × 46mm
+4. **Fonts:** Use system-ui, sans-serif; sizes: 6px-11px for slip text
+5. **Borders:** Dashed (border-dashed) on top and vertical separator
+6. **Language:** Use French labels (Récépissé, Section paiement, Compte, Payable à)
+7. **Print:** Add @media print CSS with A4 page size and no margins
+
+### Example QR Generation (JavaScript):
+\`\`\`javascript
+import QRCode from 'qrcode';
+
+const qrData = [
+  'SPC', '0200', '1',
+  iban.replace(/ /g, ''),
+  'S', creditorName, address, '', postal, city, 'CH',
+  '', '', '', '', '', '', '',
+  amount.toFixed(2), 'CHF',
+  'S', debtorName, address, '', postal, city, 'CH',
+  'NON', '',
+  \`Facture \${invoiceNumber}\`,
+  'EPD', ''
+].join('\\n');
+
+QRCode.toCanvas(canvas, qrData, {
+  width: 166, // 46mm at 72dpi
+  margin: 0,
+  errorCorrectionLevel: 'M'
+});
+\`\`\`
+
+**REMEMBER:** Swiss QR invoices are LEGALLY BINDING payment instruments. Follow the Swiss Payment Standards exactly.
 `;
 
 export default swissQrInvoiceTemplate;

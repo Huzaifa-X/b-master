@@ -98,10 +98,12 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
   });
   const inlineEditInputRef = useRef<HTMLInputElement>(null);
 
-  // Check if the code is HTML
+  // Check if the code is HTML or SVG (both render in preview mode)
   const isHtmlCode = artifactContent?.language?.toLowerCase() === 'html' ||
+    artifactContent?.language?.toLowerCase() === 'svg' ||
     displayContent?.trim().startsWith('<!DOCTYPE') ||
-    displayContent?.trim().startsWith('<html');
+    displayContent?.trim().startsWith('<html') ||
+    displayContent?.trim().startsWith('<svg');
 
   const handleCopy = () => {
 
@@ -337,6 +339,38 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     return languageMap[lang] || lang;
   };
 
+  // Constrain popover position within viewport bounds
+  const constrainPosition = useCallback((x: number, y: number) => {
+    const POPOVER_WIDTH = 380; // Account for min-width 320px + padding
+    const POPOVER_HEIGHT = 140; // Approximate height of popover
+    const MARGIN = 16; // Margin from viewport edges
+
+    // Get viewport dimensions
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    // Since popover uses translateX(-50%), it's centered on X
+    // So we need to ensure x - (POPOVER_WIDTH/2) >= MARGIN and x + (POPOVER_WIDTH/2) <= viewportWidth - MARGIN
+    let constrainedX = x;
+    const halfWidth = POPOVER_WIDTH / 2;
+    
+    if (x - halfWidth < MARGIN) {
+      constrainedX = MARGIN + halfWidth;
+    } else if (x + halfWidth > viewportWidth - MARGIN) {
+      constrainedX = viewportWidth - MARGIN - halfWidth;
+    }
+
+    // Constrain Y position
+    let constrainedY = y;
+    if (y < MARGIN) {
+      constrainedY = MARGIN;
+    } else if (y + POPOVER_HEIGHT > viewportHeight - MARGIN) {
+      constrainedY = viewportHeight - MARGIN - POPOVER_HEIGHT;
+    }
+
+    return { x: constrainedX, y: constrainedY };
+  }, []);
+
   // Handle text selection in code view
   const handleTextSelection = useCallback(() => {
     const selection = window.getSelection();
@@ -346,14 +380,14 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
       const range = selection?.getRangeAt(0);
       if (range) {
         const rect = range.getBoundingClientRect();
+        const rawX = rect.left + rect.width / 2;
+        const rawY = rect.top - 10;
+        const constrainedPos = constrainPosition(rawX, rawY);
 
         // Directly show the edit popover
         setInlineEditState({
           visible: true,
-          position: {
-            x: rect.left + rect.width / 2,
-            y: rect.top - 10
-          },
+          position: constrainedPos,
           description: "Selection",
           outerHtml: "",
           originalText: text,
@@ -368,7 +402,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
         }, 50);
       }
     }
-  }, []);
+  }, [constrainPosition]);
 
   // Handle keyboard shortcut to exit visual edit mode (Escape) or close inline edit
   useEffect(() => {
@@ -507,13 +541,13 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
           const iframe = iframeRef.current;
           if (iframe) {
             const iframeRect = iframe.getBoundingClientRect();
+            const rawX = iframeRect.left + x;
+            const rawY = iframeRect.top + y - 10;
+            const constrainedPos = constrainPosition(rawX, rawY);
 
             setInlineEditState({
               visible: true,
-              position: {
-                x: iframeRect.left + x,
-                y: iframeRect.top + y - 10
-              },
+              position: constrainedPos,
               description: "Selection",
               outerHtml: "",
               originalText: text.trim(),
@@ -537,13 +571,14 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
           if (iframe) {
             const iframeRect = iframe.getBoundingClientRect();
             // Position the input below the clicked element
-            const inputX = iframeRect.left + position.x;
-            const inputY = iframeRect.top + position.y;
+            const rawX = iframeRect.left + position.x;
+            const rawY = iframeRect.top + position.y;
+            const constrainedPos = constrainPosition(rawX, rawY);
 
             // Show inline edit input instead of immediately setting prompt
             setInlineEditState({
               visible: true,
-              position: { x: inputX, y: inputY },
+              position: constrainedPos,
               description: description,
               outerHtml: outerHtml || "",
               originalText: "",
@@ -562,7 +597,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
     window.addEventListener("message", handleIframeMessage);
     return () => window.removeEventListener("message", handleIframeMessage);
-  }, [setPrefilledPrompt]);
+  }, [setPrefilledPrompt, constrainPosition]);
 
   // Send toggle message to iframe whenever visual edit mode changes
   useEffect(() => {
@@ -600,6 +635,37 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
     let processedContent = displayContent;
     if (artifactId) {
       processedContent = displayContent.replace(/\{\{ARTIFACT_ID\}\}/g, artifactId);
+    }
+
+    // Wrap SVG in HTML for proper iframe rendering
+    const isSvgContent = artifactContent?.language?.toLowerCase() === 'svg' || 
+                         displayContent?.trim().startsWith('<svg');
+    if (isSvgContent && !processedContent.includes('<!DOCTYPE') && !processedContent.includes('<html')) {
+      processedContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #ffffff;
+    }
+    svg {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  ${processedContent}
+</body>
+</html>`;
     }
 
     // Inject text selection script for {t("artifactPanel.askB")} feature + visual edit mode
@@ -1088,7 +1154,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
                     'python','py','css','json','sql','bash','sh',
                     'yaml','yml','toml','java','c','cpp','go','rust',
                     'ruby','php','swift','kotlin','scala','csharp','cs',
-                    'xml','dockerfile','html','htm',
+                    'xml','dockerfile','html','htm','svg',
                   ])
                   const lang = artifactContent?.language?.toLowerCase() || ''
                   const isMonoCode = MONO_LANGS.has(lang) || isHtmlCode

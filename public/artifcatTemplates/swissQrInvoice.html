@@ -1,0 +1,195 @@
+﻿<!DOCTYPE html>
+<html lang='fr'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Facture QR Suisse</title>
+    <script src='https://cdn.tailwindcss.com'></script>
+    <style>
+        @media print {
+            @page { size: A4; margin: 0; }
+            .no-print { display: none !important; }
+        }
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .qr-cross { 
+            background: black;
+            position: relative;
+        }
+        .qr-cross::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 3mm;
+            height: 7mm;
+            background: white;
+        }
+        .qr-cross::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 7mm;
+            height: 3mm;
+            background: white;
+        }
+    </style>
+</head>
+<body class='bg-gray-50 print:bg-white'>
+    <!-- Invoice Container -->
+    <div class='max-w-[210mm] mx-auto my-8 bg-white shadow-2xl print:shadow-none print:my-0 flex flex-col min-h-[297mm]'>
+        <!-- Main Invoice Content -->
+        <div class='p-16 flex-1'>
+            <!-- Header -->
+            <div class='flex justify-between items-start mb-16'>
+                <div>
+                    <h1 class='text-2xl font-bold text-slate-900 mb-2'>Calliopee Sàrl</h1>
+                    <p class='text-sm text-slate-600'>Route de Meyrin 49<br>1203 Genève<br>Suisse</p>
+                </div>
+                <div class='text-right'>
+                    <h2 class='text-4xl font-bold mb-4'>FACTURE</h2>
+                    <div class='text-sm space-y-1'>
+                        <p><span class='font-semibold'>N° :</span> INV-2024-001</p>
+                        <p><span class='font-semibold'>Date :</span> 25.03.2024</p>
+                        <p><span class='font-semibold'>Échéance :</span> 24.04.2024</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Client -->
+            <div class='mb-12 bg-slate-50 p-6 rounded-lg'>
+                <p class='text-xs text-slate-400 uppercase font-semibold mb-2'>Facturé à</p>
+                <p class='font-bold text-lg'>Marie Dupont</p>
+                <p class='text-sm text-slate-600'>Rue du Lac 15<br>1201 Genève<br>Suisse</p>
+            </div>
+
+            <!-- Items Table -->
+            <div class='mb-12'>
+                <table class='w-full border-collapse'>
+                    <thead>
+                        <tr class='bg-slate-100 border-b-2 border-slate-300'>
+                            <th class='text-left p-3 text-sm font-semibold'>Description</th>
+                            <th class='text-center p-3 text-sm font-semibold'>Qté</th>
+                            <th class='text-right p-3 text-sm font-semibold'>Prix</th>
+                            <th class='text-right p-3 text-sm font-semibold'>Total</th>
+                       </tr>
+                    </thead>
+                    <tbody>
+                        <tr class='border-b'>
+                            <td class='p-3'>Consultation UI/UX</td>
+                            <td class='text-center p-3'>4</td>
+                            <td class='text-right p-3'>150.00</td>
+                            <td class='text-right p-3 font-semibold'>600.00</td>
+                        </tr>
+                        <tr class='border-b'>
+                            <td class='p-3'>Développement React</td>
+                            <td class='text-center p-3'>10</td>
+                            <td class='text-right p-3'>180.00</td>
+                            <td class='text-right p-3 font-semibold'>1,800.00</td>
+                        </tr>
+                        <tr class='border-b'>
+                            <td class='p-3'>Maintenance mensuelle</td>
+                            <td class='text-center p-3'>1</td>
+                            <td class='text-right p-3'>50.00</td>
+                            <td class='text-right p-3 font-semibold'>50.00</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Totals -->
+            <div class='flex justify-end'>
+                <div class='w-80 space-y-2'>
+                    <div class='flex justify-between text-sm'>
+                        <span>Sous-total HT</span>
+                        <span>2,450.00 CHF</span>
+                    </div>
+                    <div class='flex justify-between text-sm'>
+                        <span>TVA 8.1%</span>
+                        <span>198.45 CHF</span>
+                    </div>
+                    <div class='flex justify-between text-xl font-bold border-t-2 border-slate-900 pt-2'>
+                        <span>Total TTC</span>
+                        <span class='text-blue-600'>2,648.45 CHF</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class='mt-8 p-6 bg-blue-50 rounded-lg'>
+                <p class='text-sm text-slate-700'><span class='font-semibold'>Modalité de paiement :</span> Paiement selon bulletin QR suisse ci-dessous.</p>
+            </div>
+        </div>
+
+        <!-- Swiss QR Payment Slip (105mm height) -->
+        <div class='border-t-2 border-dashed border-slate-400 flex print:h-[105mm]'>
+            <!-- Récépissé (Receipt) - 62mm -->
+            <div class='w-[62mm] min-w-[62mm] p-5 border-r-2 border-dashed border-slate-400'>
+                <h3 class='font-bold text-xs uppercase mb-4'>Récépissé</h3>
+                <div class='space-y-3 text-[8px]'>
+                    <div>
+                        <p class='text-[6px] text-slate-400 uppercase font-semibold mb-1'>Compte / Payable à</p>
+                        <p class='font-semibold leading-tight'>CH44 3199 9123 0008 8901 2<br>Calliopee Sàrl<br>Route de Meyrin 49<br>1203 Genève</p>
+                    </div>
+                    <div class='pt-6 flex gap-4'>
+                        <div>
+                            <p class='text-[6px] text-slate-400 uppercase font-semibold mb-1'>Monnaie</p>
+                            <p class='font-bold'>CHF</p>
+                        </div>
+                        <div>
+                            <p class='text-[6px] text-slate-400 uppercase font-semibold mb-1'>Montant</p>
+                            <p class='font-bold'>2,648.45</p>
+                        </div>
+                    </div>
+                    <div class='pt-12'>
+                        <p class='text-[6px] text-slate-400 uppercase'>Point de dépôt</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section Paiement (Payment Section) -->
+            <div class='flex-1 p-5 flex'>
+                <!-- QR Code Area (56mm) -->
+                <div class='w-[56mm] min-w-[56mm] flex flex-col items-center'>
+                    <h3 class='font-bold text-xs uppercase mb-4 self-start'>Section paiement</h3>
+                    <!-- QR Code Placeholder with Swiss Cross -->
+                    <div class='relative w-[46mm] h-[46mm] bg-slate-200 flex items-center justify-center border border-slate-300'>
+                        <p class='text-xs text-slate-400'>QR Code</p>
+                        <!-- Swiss Cross Overlay -->
+                        <div class='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[7mm] h-[7mm] bg-white flex items-center justify-center p-[1mm]'>
+                            <div class='qr-cross w-full h-full'></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Details -->
+                <div class='flex-1 pl-6 space-y-3 text-[9px] pt-8'>
+                    <div>
+                        <p class='text-[6px] text-slate-400 uppercase font-semibold mb-1'>Compte / Payable à</p>
+                        <p class='font-semibold leading-relaxed'>CH44 3199 9123 0008 8901 2<br>Calliopee Sàrl<br>Route de Meyrin 49<br>1203 Genève</p>
+                    </div>
+                    <div>
+                        <p class='text-[6px] text-slate-400 uppercase font-semibold mb-1'>Payable par</p>
+                        <p class='leading-relaxed'>Marie Dupont<br>Rue du Lac 15<br>1201 Genève</p>
+                    </div>
+                    <div>
+                        <p class='text-[6px] text-slate-400 uppercase font-semibold mb-1'>Informations additionnelles</p>
+                        <p class='font-semibold'>Facture INV-2024-001</p>
+                    </div>
+                    <div class='pt-4 flex gap-8'>
+                        <div>
+                            <p class='text-[6px] text-slate-400 uppercase font-semibold mb-1'>Monnaie</p>
+                            <p class='font-bold text-[11px]'>CHF</p>
+                        </div>
+                        <div>
+                            <p class='text-[6px] text-slate-400 uppercase font-semibold mb-1'>Montant</p>
+                            <p class='font-bold text-[11px]'>2,648.45</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

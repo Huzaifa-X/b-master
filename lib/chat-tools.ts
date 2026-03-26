@@ -5,6 +5,7 @@ import { openai as openaiClient } from "@/lib/openai"
 import { safeUploadToS3 } from "@/lib/aws-s3"
 import { executeAPITool } from "@/lib/api-tools-loader"
 import { OpenAPITool } from "@/lib/openapi-tool-converter"
+import QRCode from "qrcode"
 
 /**
  * Save base64 image to S3 and return public URL
@@ -133,7 +134,130 @@ export function getChatTools(context: ChatToolsContext): ToolSet {
         }
     })
 
-    // 3. Artifact Update Tool
+    // 3. Swiss QR Code Generator Tool
+    tools.generate_swiss_qr_code = tool({
+        description: "Generate a Swiss QR-bill compliant QR code for invoices. The QR code follows Swiss Payment Standards (SPC) and includes creditor/debtor information, IBAN, amount, and reference number. Returns a URL to the generated QR code image stored in S3.",
+        inputSchema: z.object({
+            iban: z.string().describe("Creditor's IBAN (Swiss or Liechtenstein)"),
+            creditorName: z.string().describe("Creditor's name"),
+            creditorAddress: z.string().describe("Creditor's street address"),
+            creditorPostalCode: z.string().describe("Creditor's postal code"),
+            creditorCity: z.string().describe("Creditor's city"),
+            creditorCountry: z.string().default("CH").describe("Creditor's country code (default: CH)"),
+            amount: z.number().optional().describe("Payment amount (optional - can be left blank)"),
+            currency: z.string().default("CHF").describe("Payment currency (default: CHF)"),
+            debtorName: z.string().optional().describe("Debtor's name (optional)"),
+            debtorAddress: z.string().optional().describe("Debtor's street address (optional)"),
+            debtorPostalCode: z.string().optional().describe("Debtor's postal code (optional)"),
+            debtorCity: z.string().optional().describe("Debtor's city (optional)"),
+            debtorCountry: z.string().optional().describe("Debtor's country code (optional)"),
+            referenceNumber: z.string().optional().describe("QR reference number (optional)"),
+            additionalInfo: z.string().optional().describe("Additional unstructured message (optional)"),
+        }),
+        execute: async ({ 
+            iban, 
+            creditorName, 
+            creditorAddress, 
+            creditorPostalCode, 
+            creditorCity, 
+            creditorCountry = "CH",
+            amount, 
+            currency = "CHF", 
+            debtorName, 
+            debtorAddress, 
+            debtorPostalCode, 
+            debtorCity, 
+            debtorCountry,
+            referenceNumber,
+            additionalInfo
+        }) => {
+            console.log(`[ChatTools] 🇨🇭 Generating Swiss QR code for ${creditorName}`)
+            try {
+                // Build Swiss Payment Standard (SPC) data structure
+                // Spec: https://www.paymentstandards.ch/dam/downloads/ig-qr-bill-en.pdf
+                const qrLines = [
+                    "SPC",                                    // QR Type
+                    "0200",                                   // Version
+                    "1",                                      // Coding Type (1 = UTF-8)
+                    iban,                                     // IBAN
+                    "K",                                      // Creditor Address Type (K = structured)
+                    creditorName,                             // Creditor Name
+                    creditorAddress,                          // Creditor Street
+                    creditorPostalCode,                       // Creditor Postal Code
+                    creditorCity,                             // Creditor City
+                    creditorCountry,                          // Creditor Country
+                    "",                                       // Ultimate Creditor (empty)
+                    "",                                       // Ultimate Creditor Address Type
+                    "",                                       // Ultimate Creditor Name
+                    "",                                       // Ultimate Creditor Street
+                    "",                                       // Ultimate Creditor Postal Code
+                    "",                                       // Ultimate Creditor City
+                    "",                                       // Ultimate Creditor Country
+                    amount ? amount.toFixed(2) : "",          // Amount (optional)
+                    currency,                                 // Currency
+                    debtorName ? "K" : "",                    // Debtor Address Type
+                    debtorName || "",                         // Debtor Name
+                    debtorAddress || "",                      // Debtor Street
+                    debtorPostalCode || "",                   // Debtor Postal Code
+                    debtorCity || "",                         // Debtor City
+                    debtorCountry || "",                      // Debtor Country
+                    referenceNumber ? "QRR" : "NON",          // Reference Type (QRR or NON)
+                    referenceNumber || "",                    // Reference Number
+                    additionalInfo || "",                     // Unstructured Message
+                    "EPD",                                    // Trailer (EPD = End Payment Data)
+                    "",                                       // Billing Information
+                    "",                                       // Alternative Procedures
+                ];
+
+                const qrData = qrLines.join("\n");
+
+                // Generate QR code as PNG buffer
+                const qrBuffer = await QRCode.toBuffer(qrData, {
+                    errorCorrectionLevel: "M",
+                    type: "png",
+                    width: 512,
+                    margin: 1,
+                    color: {
+                        dark: "#000000",
+                        light: "#FFFFFF"
+                    }
+                });
+
+                // Upload to S3
+                const timestamp = Date.now();
+                const fileName = `swiss-qr-${timestamp}.png`;
+
+                const uploadResult = await safeUploadToS3(
+                    qrBuffer,
+                    fileName,
+                    "image/png",
+                    `qr-codes/chat-${chatIdInt}`
+                );
+
+                if (!uploadResult.success || !uploadResult.url) {
+                    throw new Error("Failed to upload QR code to S3");
+                }
+
+                console.log(`[ChatTools] ✅ Swiss QR code generated and uploaded: ${uploadResult.url}`);
+
+                return {
+                    success: true,
+                    qrCodeUrl: uploadResult.url,
+                    qrData: qrData,
+                    message: `✅ **Swiss QR Code Generated**\n\n**Creditor:** ${creditorName}\n**Amount:** ${amount ? `${amount.toFixed(2)} ${currency}` : "Not specified"}\n**IBAN:** ${iban}\n\n**QR Code URL:** ${uploadResult.url}\n\nEmbed this QR code in your Swiss invoice using: \`<img src="${uploadResult.url}" alt="Swiss QR Code" />\``
+                };
+            } catch (error: any) {
+                console.error(`[ChatTools] ❌ Swiss QR code generation error:`, error);
+                return {
+                    success: false,
+                    error: error.message,
+                    message: `⚠️ **Failed to Generate Swiss QR Code**\n\nError: ${error.message}\n\nPlease verify the IBAN and other required fields.`
+                };
+            }
+        }
+    })
+
+    // 4. Artifact Update Tool
     if (artifact) {
         tools.update_artifact = tool({
             description: `Update the current artifact "${artifact.name}" with new HTML code.`,
@@ -169,7 +293,7 @@ export function getChatTools(context: ChatToolsContext): ToolSet {
         })
     }
 
-    // 4. Load Dynamic API Tools (from OpenAPI schemas)
+    // 5. Load Dynamic API Tools (from OpenAPI schemas)
     if (apiTools.length > 0) {
         for (const apiTool of apiTools) {
             const toolName = apiTool.openaiTool.name

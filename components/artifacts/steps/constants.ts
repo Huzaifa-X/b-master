@@ -110,6 +110,15 @@ export const TEMPLATES: Template[] = [
       "Generate tax-compliant invoices with itemized tax calculations, tax registration numbers, and regional tax requirements. Support multiple tax rates and categories.",
   },
   {
+    id: "inv-swiss-qr",
+    name: "Swiss QR Invoice",
+    description: "🇨🇭 Swiss QR-bill compliant invoice with payment slip",
+    category: "invoice",
+    icon: "Receipt",
+    prefilledInstructions:
+      "Create a Swiss QR-bill compliant invoice (QR-Facture) with payment slip. Include: company IBAN (CH format), complete creditor/debtor addresses, invoice items with CHF amounts and 8.1% TVA, and a Swiss QR code at the bottom with Récépissé (receipt) and Section Paiement. The QR code must contain Swiss Payment Standard data: SPC header, IBAN, structured addresses, amount in CHF, and EPD end marker. Add Swiss cross overlay on QR code. Payment slip must be 105mm height with dashed borders.",
+  },
+  {
     id: "inv-custom",
     name: "Start from Scratch",
     description: "Create a custom invoice artifact from scratch",
@@ -289,6 +298,7 @@ export const TEMPLATE_FILES: Record<string, string> = {
   "inv-1": "/artifcatTemplates/professionalInvoice.html",
   "inv-3": "/artifcatTemplates/productInvoice.html",
   "inv-6": "/artifcatTemplates/taxInvoice.html",
+  "inv-swiss-qr": "/artifcatTemplates/swissQrInvoice.html",
 
   // CRM & Business
   "crm-1": "/artifcatTemplates/performanceAnalysis.html",

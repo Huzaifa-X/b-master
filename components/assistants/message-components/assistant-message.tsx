@@ -101,6 +101,12 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
     // Track if canvas Markdown block has been auto-opened
     const [markdownCanvasAutoOpened, setMarkdownCanvasAutoOpened] = useState(false)
     const markdownCanvasOpenedRef = useRef(false)
+    // Track if SVG has been auto-opened
+    const svgOpenedRef = useRef(false)
+    // Track if React/JSX has been auto-opened
+    const reactOpenedRef = useRef(false)
+    // Track if CSS has been auto-opened
+    const cssOpenedRef = useRef(false)
     // Share artifact state (for Canvas Output Card)
     const [shareArtifactDialogOpen, setShareArtifactDialogOpen] = useState(false)
     const [savedCanvasArtifactId, setSavedCanvasArtifactId] = useState<string | null>(null)
@@ -385,26 +391,31 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
     const canvasHtmlData = useMemo(() => {
         if (!contentWithoutSources) return null
 
-        // Strategy 1: Match ```html ... ``` code blocks
+        // Strategy 1: Match ```html ... ``` code blocks (LOWERED threshold for better UX)
         const htmlCodeBlockRegex = /```html\s*\n([\s\S]*?)```/gi
         const codeBlockMatches = [...contentWithoutSources.matchAll(htmlCodeBlockRegex)]
 
         for (const match of codeBlockMatches) {
             const htmlContent = match[1]?.trim() || ''
-            if (htmlContent.length > 2000) {
+            // Lower threshold from 2000 to 500 chars for better auto-open
+            if (htmlContent.length > 500) {
                 const isCanvasOutput = (
                     htmlContent.includes('<!DOCTYPE') ||
                     htmlContent.includes('<!doctype') ||
                     htmlContent.includes('<html') ||
                     htmlContent.includes('<head') ||
-                    htmlContent.includes('<style')
+                    htmlContent.includes('<body') ||
+                    htmlContent.includes('<style') ||
+                    htmlContent.includes('<div') ||
+                    htmlContent.includes('<section')
                 )
                 if (isCanvasOutput) {
                     return {
                         fullMatch: match[0],
                         htmlContent,
                         isCanvasOutput: true,
-                        type: 'codeblock'
+                        type: 'codeblock',
+                        language: 'html'
                     }
                 }
             }
@@ -417,12 +428,14 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
 
         for (const match of rawMatches) {
             const htmlContent = match[1]?.trim() || ''
-            if (htmlContent.length > 1500) {
+            // Lower threshold from 1500 to 500 chars
+            if (htmlContent.length > 500) {
                 return {
                     fullMatch: match[0],
                     htmlContent,
                     isCanvasOutput: true,
-                    type: 'raw'
+                    type: 'raw',
+                    language: 'html'
                 }
             }
         }
@@ -433,12 +446,14 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
 
         for (const match of htmlTagMatches) {
             const htmlContent = match[1]?.trim() || ''
-            if (htmlContent.length > 1500) {
+            // Lower threshold from 1500 to 500 chars
+            if (htmlContent.length > 500) {
                 return {
                     fullMatch: match[0],
                     htmlContent,
                     isCanvasOutput: true,
-                    type: 'raw'
+                    type: 'raw',
+                    language: 'html'
                 }
             }
         }
@@ -454,16 +469,106 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
         for (const match of matches) {
             const mdContent = match[1]?.trim() || ''
             if (mdContent.length > 0) {
-                return { fullMatch: match[0], mdContent, isCanvasOutput: true }
+                return { fullMatch: match[0], mdContent, isCanvasOutput: true, language: 'markdown' }
             }
         }
+        return null
+    }, [contentWithoutSources])
+
+    // 🎨 Detect SVG output (```svg or inline svg)
+    const canvasSvgData = useMemo(() => {
+        if (!contentWithoutSources) return null
+
+        // Match ```svg code blocks
+        const svgCodeBlockRegex = /```svg\s*\n([\s\S]*?)```/gi
+        const svgCodeMatches = [...contentWithoutSources.matchAll(svgCodeBlockRegex)]
+
+        for (const match of svgCodeMatches) {
+            const svgContent = match[1]?.trim() || ''
+            if (svgContent.length > 100 && svgContent.includes('<svg')) {
+                return {
+                    fullMatch: match[0],
+                    svgContent,
+                    isCanvasOutput: true,
+                    type: 'codeblock',
+                    language: 'svg'
+                }
+            }
+        }
+
+        // Match inline SVG tags
+        const inlineSvgRegex = /(<svg[\s\S]*?<\/svg>)/gi
+        const inlineSvgMatches = [...contentWithoutSources.matchAll(inlineSvgRegex)]
+
+        for (const match of inlineSvgMatches) {
+            const svgContent = match[1]?.trim() || ''
+            if (svgContent.length > 200) {
+                return {
+                    fullMatch: match[0],
+                    svgContent,
+                    isCanvasOutput: true,
+                    type: 'raw',
+                    language: 'svg'
+                }
+            }
+        }
+
+        return null
+    }, [contentWithoutSources])
+
+    // ⚛️ Detect React/JSX output
+    const canvasReactData = useMemo(() => {
+        if (!contentWithoutSources) return null
+
+        // Match ```jsx, ```tsx, ```react code blocks
+        const reactCodeBlockRegex = /```(?:jsx|tsx|react)\s*\n([\s\S]*?)```/gi
+        const reactCodeMatches = [...contentWithoutSources.matchAll(reactCodeBlockRegex)]
+
+        for (const match of reactCodeMatches) {
+            const reactContent = match[1]?.trim() || ''
+            if (reactContent.length > 300) {
+                return {
+                    fullMatch: match[0],
+                    reactContent,
+                    isCanvasOutput: true,
+                    type: 'codeblock',
+                    language: 'jsx'
+                }
+            }
+        }
+
+        return null
+    }, [contentWithoutSources])
+
+    // 🎨 Detect CSS output
+    const canvasCssData = useMemo(() => {
+        if (!contentWithoutSources) return null
+
+        // Match ```css code blocks with substantial content
+        const cssCodeBlockRegex = /```css\s*\n([\s\S]*?)```/gi
+        const cssCodeMatches = [...contentWithoutSources.matchAll(cssCodeBlockRegex)]
+
+        for (const match of cssCodeMatches) {
+            const cssContent = match[1]?.trim() || ''
+            // Only auto-open if it's a complete stylesheet (has multiple rules)
+            if (cssContent.length > 400 && (cssContent.match(/\{[\s\S]*?\}/g) || []).length > 3) {
+                return {
+                    fullMatch: match[0],
+                    cssContent,
+                    isCanvasOutput: true,
+                    type: 'codeblock',
+                    language: 'css'
+                }
+            }
+        }
+
         return null
     }, [contentWithoutSources])
 
     // Get detected intent for auto-open decision
     const detectedIntent = useArtifactStore((state) => state.detectedIntent)
 
-    // Auto-open canvas panel when HTML is detected and intent is creation
+    // Auto-open canvas panel when HTML is detected (ALWAYS auto-open for substantial HTML)
     useEffect(() => {
         if (
             canvasHtmlData?.isCanvasOutput &&
@@ -473,23 +578,22 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
             canvasOpenedRef.current = true
             setCanvasAutoOpened(true)
 
-            // Auto-open panel for creation intents
+            // ENHANCEMENT: Auto-open for ANY substantial HTML, regardless of intent
+            // This ensures code examples in responses also open in canvas
             const shouldAutoCollapse = detectedIntent === 'CREATE_CANVAS'
 
-            if (detectedIntent && ['CREATE_CANVAS', 'CREATE_IMAGE'].includes(detectedIntent)) {
-                // Auto-dispatch the open-code-preview event
-                window.dispatchEvent(
-                    new CustomEvent("open-code-preview", {
-                        detail: {
-                            content: canvasHtmlData.htmlContent,
-                            language: "html",
-                            type: "code",
-                            autoCollapse: shouldAutoCollapse
-                        },
-                    })
-                )
-            }
-            // If no intent detected (manual canvas toggle), user must click "View Preview" button
+            // Auto-dispatch the open-code-preview event
+            window.dispatchEvent(
+                new CustomEvent("open-code-preview", {
+                    detail: {
+                        content: canvasHtmlData.htmlContent,
+                        language: "html",
+                        type: "code",
+                        autoCollapse: shouldAutoCollapse,
+                        title: "HTML Preview"
+                    },
+                })
+            )
         }
     }, [canvasHtmlData, isLoading, detectedIntent])
 
@@ -515,6 +619,69 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
         }
     }, [canvasMarkdownData, isLoading])
 
+    // Auto-open canvas panel when SVG is detected
+    useEffect(() => {
+        if (
+            canvasSvgData?.isCanvasOutput &&
+            !svgOpenedRef.current &&
+            !isLoading
+        ) {
+            svgOpenedRef.current = true
+            window.dispatchEvent(
+                new CustomEvent("open-code-preview", {
+                    detail: {
+                        content: canvasSvgData.svgContent,
+                        language: "svg",
+                        type: "code",
+                        title: "SVG Preview",
+                    },
+                })
+            )
+        }
+    }, [canvasSvgData, isLoading])
+
+    // Auto-open canvas panel when React/JSX is detected
+    useEffect(() => {
+        if (
+            canvasReactData?.isCanvasOutput &&
+            !reactOpenedRef.current &&
+            !isLoading
+        ) {
+            reactOpenedRef.current = true
+            window.dispatchEvent(
+                new CustomEvent("open-code-preview", {
+                    detail: {
+                        content: canvasReactData.reactContent,
+                        language: "jsx",
+                        type: "code",
+                        title: "React Component",
+                    },
+                })
+            )
+        }
+    }, [canvasReactData, isLoading])
+
+    // Auto-open canvas panel when CSS is detected
+    useEffect(() => {
+        if (
+            canvasCssData?.isCanvasOutput &&
+            !cssOpenedRef.current &&
+            !isLoading
+        ) {
+            cssOpenedRef.current = true
+            window.dispatchEvent(
+                new CustomEvent("open-code-preview", {
+                    detail: {
+                        content: canvasCssData.cssContent,
+                        language: "css",
+                        type: "code",
+                        title: "CSS Stylesheet",
+                    },
+                })
+            )
+        }
+    }, [canvasCssData, isLoading])
+
     // Content without canvas blocks (to show cards instead)
     const contentForDisplay = useMemo(() => {
         let display = contentWithoutSources || ''
@@ -524,8 +691,17 @@ export const AssistantMessage: FC<AssistantMessageProps> = ({
         if (canvasMarkdownData?.isCanvasOutput) {
             display = display.replace(canvasMarkdownData.fullMatch, '').trim()
         }
+        if (canvasSvgData?.isCanvasOutput) {
+            display = display.replace(canvasSvgData.fullMatch, '').trim()
+        }
+        if (canvasReactData?.isCanvasOutput) {
+            display = display.replace(canvasReactData.fullMatch, '').trim()
+        }
+        if (canvasCssData?.isCanvasOutput) {
+            display = display.replace(canvasCssData.fullMatch, '').trim()
+        }
         return display
-    }, [contentWithoutSources, canvasHtmlData, canvasMarkdownData])
+    }, [contentWithoutSources, canvasHtmlData, canvasMarkdownData, canvasSvgData, canvasReactData, canvasCssData])
 
     // Helper to get favicon URL
     const getFaviconUrl = (url: string) => {

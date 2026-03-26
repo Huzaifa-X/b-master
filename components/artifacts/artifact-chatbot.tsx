@@ -404,6 +404,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
             elementOuterHtml: surgicalHtml,
             userPrompt,
             currentHtmlCode,
+            uploadedFiles, // pass images / docs so the AI can use them
           }),
         })
 
@@ -532,6 +533,18 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                     )
                   }
 
+                } else if (data.type === 'agent_step') {
+                  // Agentic pipeline progress — show current step in the message bubble
+                  if (data.status === 'running' && data.message) {
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === streamingMessage.id
+                          ? { ...msg, content: `⚙️ ${data.message}` }
+                          : msg
+                      )
+                    )
+                  }
+
                 } else if (data.type === 'artifact_updating') {
                   // Server is about to write the new version to the database
                   isQAMode = false
@@ -569,7 +582,7 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
                   // qa_done has an implicit break — we stop processing
                   break
 
-                } else if (data.type === 'code' && data.content) {
+                } else if ((data.type === 'code' || data.type === 'chunk') && data.content) {
                   try {
                     // Decode base64 content (browser-compatible)
                     const decodedContent = atob(data.content)

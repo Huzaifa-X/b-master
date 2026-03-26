@@ -272,36 +272,36 @@ export async function POST(req: NextRequest) {
         systemPrompt = getGeoSystemContext(userContext) + "\n\n" + systemPrompt
 
         // Force image generation tool usage
-        systemPrompt += `\n\n## IMAGE GENERATION CAPABILITIES\n**YOU HAVE THE CAPABILITY TO GENERATE IMAGES.**\n- If the user asks for an image, visual, or photo, you **MUST** use the \`image_generation\` tool.\n- **NEVER** say "I can't generate images" or "I can't render bitmap images". YOU CAN.\n- **NEVER** offer to generate an SVG or text description instead. JUST USE THE TOOL.\n- The tool will return a public S3 URL of the generated image.\n- **CRITICAL**: You MUST display the generated image using markdown syntax: \`![Generated Image](url)\` in your response so the user can see it.\n- Trust the tool.`
+        systemPrompt += `\n\n## IMAGE GENERATION\n**YOU CAN GENERATE IMAGES** using the \`image_generation\` tool.\n- User asks for image/visual/photo → Use the tool immediately\n- Display result: \`![Image](url)\`\n- Never say "I can't" - you have this capability`
 
         // Add mentioned users context
         if (mentionedUsers?.length > 0) {
-            systemPrompt += `\n\n## Mentioned Users\nWhen you see "[This message mentions: Name <email>]" at the start of a user message, those are people the user has specifically mentioned using @ mentions. You have their full contact information (name and email). Use this information when relevant.\n\n## Mentioned Users\n${mentionedUsers.map((user: { name: string; email: string }) => `- ${user.name} <${user.email}>`).join("\n")}`
+            systemPrompt += `\n\n## @Mentioned: ${mentionedUsers.map((u: { name: string; email: string }) => `${u.name} <${u.email}>`).join(", ")}\nYou have their contact info - use when relevant.`
         }
 
         if (research) {
-            systemPrompt += `\n\nIMPORTANT: The user has requested research mode. Please conduct thorough research using both web search and file search.`
+            systemPrompt += `\n\nResearch mode: Use web + file search.`
         } else if (webSearch) {
-            systemPrompt += `\n\nIMPORTANT: The user has requested web search.`
+            systemPrompt += `\n\nWeb search enabled.`
         } else if (chatWithAPI) {
-            systemPrompt += `\n\nIMPORTANT: The user has requested chat with API.`
+            systemPrompt += `\n\nAPI integration active.`
         }
 
         if (dropbox) {
-            systemPrompt += `\n\nIMPORTANT: The user has enabled Dropbox integration.`
+            systemPrompt += ` Dropbox connected.`
         }
 
         // Canvas mode system prompt is injected after intent detection (see below)
 
-        // STRIPE CONNECT INSTRUCTIONS
-        systemPrompt += `\n\n## 💳 IMPORTANT: Stripe Connect Invoice Creation\n\n**CRITICAL: Use the create_stripe_connect_invoice FUNCTION to create invoices (NOT Stripe MCP).**\n\nWhen creating invoices, call the create_stripe_connect_invoice function with:\n- customerName (required)\n- customerEmail (required)\n- amount (required - in dollars, e.g., 100.50)\n- description (required)\n- currency (optional - defaults to "chf")\n- daysUntilDue (optional - defaults to 7)\n\n**What happens:**\n1. Checks if user has connected Stripe account\n2. Creates invoice on THEIR connected account\n3. Returns both Stripe payment link AND PDF\n\n**Key Points:**\n- Invoices created on USER's Stripe Connect account\n- If no Stripe Connect, prompts user to connect\n- Always gather ALL required info before calling`
+        // STRIPE CONNECT INSTRUCTIONS (concise)
+        systemPrompt += `\n\n## Stripe Invoices\nUse \`create_stripe_connect_invoice\` with: customerName, customerEmail, amount, description. Returns payment link + PDF.`
 
         if (chatType === "ASSISTANT" && chat.assistant?.instructions) {
             systemPrompt += `\n\n## Assistant-Specific Instructions\n${chat.assistant.instructions}`
         }
 
         if (attachments?.length > 0) {
-            systemPrompt += `\n\n## User Attachments Handling Rules\n\nThe user may attach files. Follow these rules:\n- **Images**: If user asks to use, use the URL directly. Otherwise ignore.\n- **PDFs/Docs**: Extract text content if user requests. Use URL if referencing file.\n- **Other files**: Follow explicit instructions or use URL.\n\nOnly use attachments when user explicitly indicates. Never hallucinate contents.`
+            systemPrompt += `\n\n## Attachments\nImages/PDFs attached. Use when user references them.`
 
             const extractedTexts: string[] = []
             for (const attachment of attachments) {
@@ -309,7 +309,11 @@ export async function POST(req: NextRequest) {
                     try {
                         const extracted = await upstageService.extractFromUrl(attachment.url)
                         if (extracted.text) {
-                            extractedTexts.push(`\n\n--- Content from ${attachment.name}\nurl: ${attachment.url}\ntype: ${attachment.type} ---\n${extracted.text}\n--- End ---\n`)
+                            // Truncate long texts for speed
+                            const truncatedText = extracted.text.length > 30000 
+                                ? extracted.text.substring(0, 30000) + "\n...(truncated)"
+                                : extracted.text
+                            extractedTexts.push(`\n--- ${attachment.name} ---\n${truncatedText}\n--- End ---`)
                         }
                     } catch (error) {
                         console.error(`[Chat] Failed to extract from ${attachment.name}:`, error)
@@ -346,12 +350,7 @@ export async function POST(req: NextRequest) {
         function detectIntentFast(message: string): UserIntent {
             const msg = message.toLowerCase().trim()
 
-            // Obvious questions - has question mark or starts with question words
-            if (msg.endsWith('?') || /^(what|how|why|when|where|who|is |are |can you explain|tell me about)/i.test(msg)) {
-                return 'QUESTION'
-            }
-
-            // Obvious image creation
+            // Obvious image creation (check first to avoid false positives)
             if (/\b(draw|sketch|image of|picture of|photo of|generate.*image|create.*image|make.*image|design.*logo|illustrat)/i.test(msg)) {
                 return 'CREATE_IMAGE'
             }
@@ -359,17 +358,45 @@ export async function POST(req: NextRequest) {
             // STRIPE INVOICE DETECTION - Don't auto-canvas for payment invoices
             // If message mentions payment-related terms with invoice, let AI handle with Stripe tool
             if (/invoice/i.test(msg) && /(\$|€|£|\d+\s*(dollars?|euros?|chf|usd|eur)|payment|charge|bill|send.*to|email.*to|customer)/i.test(msg)) {
+                // Exception: Swiss QR invoices should use canvas (visual artifact)
+                if (/\b(swiss|suisse|qr.*invoice|qr.*facture|qr.*bill|bulletin.*versement|récépissé)\b/i.test(msg)) {
+                    return 'CREATE_CANVAS'
+                }
                 return 'QUESTION' // Let AI decide - it will use Stripe tool
             }
 
+            // Swiss QR Invoice detection - Always canvas mode
+            if (/\b(swiss|suisse|qr.*invoice|qr.*facture|qr.*bill|bulletin.*versement|récépissé|qr code invoice)\b/i.test(msg)) {
+                return 'CREATE_CANVAS'
+            }
+
             // Obvious canvas/visual creation (excluding payment invoices handled above)
-            if (/^(create|make|build|design|draft|generate|write me)\s+(a |an |me )?(quote|invoice|contract|proposal|dashboard|landing page|webpage|website|page|document|letter|report|presentation|form|calculator|app|tool)/i.test(msg)) {
+            if (/^(create|make|build|design|draft|generate|write me|code|show me|give me|develop)\s+(a |an |me )?(quote|invoice|contract|proposal|dashboard|landing page|webpage|website|page|document|letter|report|presentation|form|calculator|app|tool|component|widget|example|demo|prototype|mockup|template)/i.test(msg)) {
+                return 'CREATE_CANVAS'
+            }
+
+            // Code/HTML/Web-related creation requests
+            if (/\b(html|css|javascript|react|vue|svelte|component|ui|frontend|webpage)\b/i.test(msg) && /\b(create|make|build|show|example|demo|code|write|generate|design)/i.test(msg)) {
+                return 'CREATE_CANVAS'
+            }
+
+            // Questions asking for code examples or demonstrations
+            if (/(show me|give me|can you (show|create|make)|example of|demo of|code for|how to (create|make|build)).*\b(html|css|form|page|component|button|navbar|footer|card|modal|website)/i.test(msg)) {
                 return 'CREATE_CANVAS'
             }
 
             // Strong creation signals without specific type
-            if (/^(create|make|build|design|draft|generate)\s+(a |an |me )/i.test(msg)) {
+            if (/^(create|make|build|design|draft|generate|code|develop)\s+(a |an |me )/i.test(msg)) {
                 return 'CREATE_CANVAS' // Default creation to canvas
+            }
+
+            // Obvious questions - has question mark or starts with question words (check last to allow canvas patterns to match first)
+            if (msg.endsWith('?') || /^(what|how|why|when|where|who|is |are |can you explain|tell me about)/i.test(msg)) {
+                // But if it's asking for code/HTML examples, treat as canvas
+                if (/(html|code|example|component|create|build)/i.test(msg)) {
+                    return 'CREATE_CANVAS'
+                }
+                return 'QUESTION'
             }
 
             return 'UNCLEAR'
@@ -412,24 +439,9 @@ export async function POST(req: NextRequest) {
         const effectiveCanvasMode = canvas || isCanvasIntent
 
         // ============================================
-        // IMAGE INTENT (existing classifier for iterative editing)
+        // IMAGE INTENT (use existing pattern detection, no redundant API call)
         // ============================================
-        // Classify image edit intent
-        const classifierResponse = await openaiClient.responses.create({
-            model: "gpt-5-nano",
-            input: [
-                {
-                    role: "system",
-                    content: "You are a classifier. Respond ONLY with 'true' if the user wants to edit or modify an image or create a new image. Otherwise respond ONLY with 'false'."
-                },
-                {
-                    role: "user",
-                    content: lastUserMessage
-                }
-            ],
-        })
-
-        const hasImageIntent = classifierResponse.output_text?.trim().toLowerCase() === "true" || isImageIntentFromPattern
+        const hasImageIntent = isImageIntentFromPattern
         const hasImageAttachments = attachments?.some((att: { type: string }) => att.type.startsWith('image/'))
         const shouldUseIterativeEditing = hasImageIntent && previousResponseId && lastAssistantMessage?.hasImages && !hasImageAttachments
 
@@ -442,74 +454,40 @@ export async function POST(req: NextRequest) {
         if (effectiveCanvasMode) {
             if (isCanvasIntent) {
                 // ── VISUAL CREATION: force full HTML output ──────────────────
-                systemPrompt += `\n\n## 🎨 CANVAS MODE IS ACTIVE - HTML VISUAL OUTPUT
+                systemPrompt += `\n\n## Canvas Mode - HTML Output Required
 
-**⚠️ THIS IS A HARD REQUIREMENT - YOU MUST FOLLOW THESE RULES:**
+${!canvas ? 'Note: Auto-enabled for visual creation.\n\n' : ''}**RULES:**
+1. Output complete HTML page in \`\`\`html code block
+2. All CSS inline in <style>, all JS inline in <script>
+3. No external CDN - write custom styles
+4. Make it visually appealing
 
-${!canvas ? '**Note: Canvas mode was auto-enabled based on your creation request.**\n\n' : ''}The user wants a VISUAL HTML output, NOT a text explanation.
-
-**ABSOLUTE RULES (NO EXCEPTIONS):**
-1. You MUST ALWAYS output a complete, self-contained HTML page - NO MATTER WHAT the user asks
-2. Even if the request seems simple (like "make a small contract"), you MUST create it as a beautifully designed HTML page
-3. NEVER respond with just text when Canvas mode is active
-4. NEVER say "here's a template" and provide plain text - create the HTML version instead
-5. Wrap the HTML in a markdown code block: \`\`\`html ... \`\`\`
-
-**TECHNICAL REQUIREMENTS:**
-- Start with <!DOCTYPE html>
-- Include ALL CSS inline within <style> tags in the <head>
-- Include ALL JavaScript inline within <script> tags before </body>
-- Do NOT use external CDN links - write custom CSS
-- Make it visually appealing with proper styling, colors, spacing, and typography
-
-**OUTPUT FORMAT (follow exactly):**
+**Format:**
 \`\`\`html
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your Title</title>
-  <style>
-    /* Beautiful, modern CSS styling here */
-    body { font-family: system-ui, sans-serif; }
-  </style>
-</head>
-<body>
-  <!-- Your beautifully designed content here -->
-</body>
-</html>
+<html><head><style>/* styles */</style></head>
+<body><!-- content --></body></html>
 \`\`\`
-
-**REMEMBER: Canvas mode = HTML output for visual creation. No exceptions. Even for documents, contracts, letters, etc. - create them as styled HTML pages.**
 
 ${swissQRInvoiceInstructions}`
             } else {
                 // ── TEXT / QUESTION CANVAS: output rich markdown in a canvas block ──
-                systemPrompt += `\n\n## 🖊️ CANVAS MODE IS ACTIVE - MARKDOWN CANVAS OUTPUT
+                systemPrompt += `\n\n## Canvas Mode - Markdown Output
 
-The user has enabled the Canvas panel. Your response will be displayed there as rendered markdown.
+Write response in \`\`\`canvas block with rich markdown formatting.
 
-**RULES:**
-1. Write your ENTIRE response inside a single \`\`\`canvas ... \`\`\` fenced block
-2. Use rich markdown formatting: # headings, **bold**, *italic*, bullet lists, numbered lists, tables, code blocks etc.
-3. Do NOT output anything outside the \`\`\`canvas\`\`\` block
-4. Provide the full, well-structured answer — the canvas panel has plenty of space
-
-**OUTPUT FORMAT (follow exactly):**
+**Format:**
 \`\`\`canvas
-# Title of Your Response
-
-Your full, well-formatted response here…
-\`\`\``
+# Your Response
+Content here...
+\`\`\`
+`
             }
         }
 
         // Add artifact context
         if (artifact) {
-            systemPrompt += `\n\n## 🎨 Artifact Context & Update Capability\n\n**The user has shared an artifact named "${artifact.name}".**\n\n### Artifact Content:\n\`\`\`html\n${artifact.htmlContent}\n\`\`\`\n${artifact.instructions ? `\n### Original Instructions:\n${artifact.instructions}\n` : ''}\n\n### Your Role:\n\n**CRITICAL: Understand User Intent First**\n\n1. **Information Questions**: DO NOT modify - just explain\n2. **Modification Requests**: Use update_artifact function\n3. **Debugging**: Analyze first, ask before updating\n4. **General Conversation**: Respond naturally\n\n### Updating:\nCall \`update_artifact\` with:\n- \`updatedCode\`: Complete HTML\n- \`changeDescription\`: Detailed explanation\n- \`changeSummary\`: One-line summary\n\n${await getArtifactUpdateCodingPrompt()}`
-        } else {
-            systemPrompt += `\n\n## 🎨 Artifact Context & Update Capability\n\n**The user has not shared an artifact.**`
+            systemPrompt += `\n\n## Artifact: "${artifact.name}"\n\n\`\`\`html\n${artifact.htmlContent}\n\`\`\`\n${artifact.instructions ? `\nInstructions: ${artifact.instructions}\n` : ''}\n\n**Actions:**\n- Questions → Answer without modifying\n- Changes → Use \`update_artifact(updatedCode, changeDescription, changeSummary)\`\n\n${await getArtifactUpdateCodingPrompt()}`
         }
 
         // Load API tools if needed
@@ -625,7 +603,74 @@ Your full, well-formatted response here…
             tools.web_search = ai_sdk_openai.tools.webSearch() as any
         }
 
-        let model = "gpt-5"
+        // ============================================
+        // SMART MODEL ROUTING (based on complexity)
+        // ============================================
+        function classifyComplexity(message: string, hasAttachments: boolean, isCanvas: boolean, isResearch: boolean): 'fast' | 'medium' | 'complex' | 'heavy' {
+            const msg = message.toLowerCase()
+            
+            // Fast model for simple queries (100-300ms)
+            if (!hasAttachments && !isCanvas && !isResearch) {
+                // Simple greetings
+                if (/^(hi|hello|hey|thanks|thank you|okay|ok|yes|no|sure)$/i.test(msg.trim())) {
+                    return 'fast'
+                }
+                // Short questions without code keywords
+                if (msg.length < 100 && msg.includes('?') && 
+                    !/\b(code|function|component|implement|refactor|build|create|generate)\b/i.test(msg)) {
+                    return 'fast'
+                }
+                // Simple requests
+                if (/^(what is|who is|when is|where is|define|explain simply)\b/i.test(msg)) {
+                    return 'fast'
+                }
+            }
+            
+            // Heavy model for complex artifacts (2-5s)
+            if (isCanvas || artifact) {
+                return 'heavy'
+            }
+            
+            // Complex model for coding/refactoring (1-3s)
+            if (/\b(refactor|optimize|architect|design pattern|algorithm|performance|debug|fix bug|implement feature)\b/i.test(msg)) {
+                return 'complex'
+            }
+            
+            // Complex model for research
+            if (isResearch) {
+                return 'complex'
+            }
+            
+            // Medium model for general coding (500-1000ms)
+            if (/\b(code|function|component|api|endpoint|database|query)\b/i.test(msg)) {
+                return 'medium'
+            }
+            
+            // Default: medium for conversational responses
+            return 'medium'
+        }
+        
+        const complexity = classifyComplexity(lastUserMessage, attachments?.length > 0, effectiveCanvasMode, research)
+        
+        let model: string
+        switch (complexity) {
+            case 'fast':
+                model = 'gpt-5-nano'  // 100-300ms
+                break
+            case 'medium':
+                model = 'gpt-4.1-mini'  // 500-1000ms
+                break
+            case 'complex':
+                model = 'gpt-4.1'  // 1-3s
+                break
+            case 'heavy':
+                model = 'gpt-5'  // 2-5s
+                break
+            default:
+                model = 'gpt-4.1-mini'
+        }
+        
+        console.log(`[Chat] Model selected: ${model} (complexity: ${complexity})`)
 
         // ============================================
         // CONFIGURE OPENAI PROVIDER OPTIONS
@@ -703,6 +748,7 @@ Your full, well-formatted response here…
 
         // Store option and conditional reasoning
         // Only enable extended thinking for complex tasks (canvas, research, artifacts)
+        // Use 'low' effort for faster responses (medium/high adds significant latency)
         const needsReasoning = canvas || research || artifact
 
         providerOptions.openai = {
@@ -712,10 +758,10 @@ Your full, well-formatted response here…
                 chatId: chatIdInt.toString(),
                 userId: session.user.id
             },
-            // Only add reasoning options for complex tasks
-            ...(needsReasoning && {
+            // Only add reasoning for heavy tasks, use low effort for speed
+            ...(needsReasoning && complexity === 'heavy' && {
                 reasoningSummary: 'auto',
-                reasoningEffort: 'medium', // Use 'low' even for complex tasks for faster responses
+                reasoningEffort: 'low', // Low effort for faster responses
             })
         }
 
@@ -728,18 +774,24 @@ Your full, well-formatted response here…
         let partialReasoning = ""
         let streamAborted = false
 
+        // Adjust temperature based on complexity
+        const temperature = complexity === 'fast' ? 0.9 : (complexity === 'medium' ? 0.8 : 0.7)
+
         const result = streamText({
             model: ai_sdk_openai(model),
             system: systemPrompt,
             messages: await convertToModelMessages(conversationMessages),
             tools,
             providerOptions,
-            stopWhen: stepCountIs(5),
+            temperature, // Dynamic temperature based on complexity
             abortSignal: req.signal, // Pass abort signal from request
-            experimental_telemetry: {
-                isEnabled: true,
-                functionId: 'stream-text',
-            },
+            // Disable telemetry for fast queries to reduce overhead
+            ...(complexity !== 'fast' && {
+                experimental_telemetry: {
+                    isEnabled: true,
+                    functionId: 'stream-text',
+                }
+            }),
             // Track content as it streams for abort recovery
             onChunk: async ({ chunk }) => {
                 if (chunk.type === 'text-delta') {
