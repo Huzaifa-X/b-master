@@ -31,6 +31,9 @@ interface UseWebContainerReturn {
     resetWorkspace: () => Promise<void>
     retrySetup: () => Promise<void>
     hasStoredChanges: boolean
+    // Bug detection
+    detectedError: string | null
+    clearDetectedError: () => void
 }
 
 // Extend Window interface for TypeScript
@@ -71,10 +74,10 @@ function getGlobalWebContainerInstance(): WebContainer | null {
     return null
 }
 
-export function useWebContainer(assistantId: string, templateId: string): UseWebContainerReturn {
-    // Create a unique storage key combining assistantId and templateId
-    // This allows each assistant to have its own saved workspace per template
-    const storageKey = `${assistantId}-${templateId}`
+export function useWebContainer(assistantId: string, templateId: string, projectId?: string): UseWebContainerReturn {
+    // Create a unique storage key. When projectId (artifact ID) is present, use it so
+    // each saved project has its own isolated workspace regardless of template type.
+    const storageKey = projectId ? `${assistantId}-proj-${projectId}` : `${assistantId}-${templateId}`
 
     const [isBooting, setIsBooting] = useState(true)
     const [isInstalling, setIsInstalling] = useState(false)
@@ -91,9 +94,51 @@ export function useWebContainer(assistantId: string, templateId: string): UseWeb
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
     const storageKeyRef = useRef(storageKey)
     const templateIdRef = useRef(templateId)
+    // Ref to startDevServer — populated after it's defined so runCommand can call it
+    const startDevServerRef = useRef<((wc: WebContainer) => Promise<void>) | null>(null)
+
+    // Bug detection
+    const [detectedError, setDetectedError] = useState<string | null>(null)
+    const errorBufferRef = useRef<string[]>([])
+    const errorDebounceRef = useRef<NodeJS.Timeout | null>(null)
+    const hasReportedCurrentErrorRef = useRef(false)
 
     const addTerminalOutput = useCallback((message: string) => {
         setTerminalOutput((prev) => [...prev, message])
+
+        // Skip our own emoji-prefixed status lines
+        const isOurStatus = /^[\u{1F300}-\u{1FFFF}\u2600-\u26FF✅⚠️❌]/u.test(message.trimStart())
+        if (isOurStatus || hasReportedCurrentErrorRef.current) return
+
+        // Strip ANSI escape codes before pattern matching
+        const stripped = message.replace(/\x1b\[[0-9;]*m/g, '').trim()
+        if (!stripped) return
+
+        const isError = /\b(error|failed to compile|cannot find module|is not defined|SyntaxError|TypeError|ReferenceError|Module not found|ENOENT|vite.*error)/i.test(stripped)
+            && !/error handling|error boundary|\berr\s*=/i.test(stripped)
+
+        if (isError) {
+            errorBufferRef.current.push(stripped)
+            if (errorBufferRef.current.length > 30) errorBufferRef.current.shift()
+
+            if (errorDebounceRef.current) clearTimeout(errorDebounceRef.current)
+            errorDebounceRef.current = setTimeout(() => {
+                if (errorBufferRef.current.length > 0 && !hasReportedCurrentErrorRef.current) {
+                    setDetectedError(errorBufferRef.current.join('\n'))
+                    hasReportedCurrentErrorRef.current = true
+                }
+            }, 2500)
+        }
+    }, [])
+
+    const clearDetectedError = useCallback(() => {
+        setDetectedError(null)
+        errorBufferRef.current = []
+        hasReportedCurrentErrorRef.current = false
+        if (errorDebounceRef.current) {
+            clearTimeout(errorDebounceRef.current)
+            errorDebounceRef.current = null
+        }
     }, [])
 
     // Debounced auto-save function
@@ -250,6 +295,8 @@ export function useWebContainer(assistantId: string, templateId: string): UseWeb
         }
 
         addTerminalOutput("🚀 Starting Vite dev server...")
+        setIsServerReady(false)
+        setServerUrl(null)
         try {
             const serverProcess = await webcontainer.spawn("npm", ["run", "dev"])
             devServerProcessRef.current = serverProcess
@@ -268,6 +315,11 @@ export function useWebContainer(assistantId: string, templateId: string): UseWeb
             throw err
         }
     }, [addTerminalOutput])
+
+    // Keep startDevServerRef current after each render so runCommand can call it
+    useEffect(() => {
+        startDevServerRef.current = startDevServer
+    })
 
     const cleanupFileSystem = useCallback(async (webcontainer: WebContainer) => {
         // Only delete the specific files/folders that we mount, so we don't accidentally
@@ -427,14 +479,29 @@ export function useWebContainer(assistantId: string, templateId: string): UseWeb
         const cmd = parts[0]
         const args = parts.slice(1)
 
+        const isNpmInstall = cmd === 'npm' && (args.includes('install') || args.includes('i') || args.includes('uninstall'))
+
         try {
+            // If this is npm install, signal that the server is temporarily not ready
+            // so the preview shows the loading state instead of a stale/broken iframe
+            if (isNpmInstall) {
+                setIsServerReady(false)
+                setServerUrl(null)
+            }
+
             const process = await webcontainerInstanceRef.current.spawn(cmd, args)
             process.output.pipeTo(new WritableStream({ write(data) { addTerminalOutput(data) } }))
-            await process.exit
+            const exitCode = await process.exit
 
-            // Auto-save after npm commands that might modify package.json
-            if (cmd === 'npm' && (args.includes('install') || args.includes('i') || args.includes('uninstall'))) {
+            if (isNpmInstall) {
                 scheduleSave()
+                // After npm install, restart the dev server so the preview comes back
+                if (exitCode === 0 && webcontainerInstanceRef.current && startDevServerRef.current) {
+                    addTerminalOutput('🔄 Restarting dev server after package changes...')
+                    await startDevServerRef.current(webcontainerInstanceRef.current)
+                } else if (exitCode !== 0) {
+                    addTerminalOutput(`⚠️ npm install exited with code ${exitCode} — preview may not update`)
+                }
             }
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err)
@@ -560,5 +627,7 @@ export function useWebContainer(assistantId: string, templateId: string): UseWeb
         resetWorkspace,
         retrySetup,
         hasStoredChanges,
+        detectedError,
+        clearDetectedError,
     }
 }

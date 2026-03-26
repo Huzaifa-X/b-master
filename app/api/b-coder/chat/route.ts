@@ -486,12 +486,44 @@ function buildResponsesInput(messages: any[]): any[] {
     return result
 }
 
+// ─── Plan Context ─────────────────────────────────────────────────────────────
+
+/**
+ * When the user has approved a plan, inject it as a high-priority directive
+ * so the implementation agent executes ALL steps in a single boltArtifact.
+ */
+function buildPlanContext(plan: any): string {
+    if (!plan || !Array.isArray(plan.steps) || plan.steps.length === 0) return ''
+
+    const stepsText = plan.steps
+        .map((s: any, i: number) =>
+            `${i + 1}. [${s.type?.toUpperCase() ?? 'CODE'}] ${s.title}: ${s.description}${s.files?.length ? ` (files: ${s.files.join(', ')})` : ''}`
+        )
+        .join('\n')
+
+    return `
+<approved_plan>
+The user has reviewed and APPROVED the following implementation plan.
+You MUST execute ALL steps below in a SINGLE <boltArtifact> block.
+Do NOT skip any step. Do NOT ask for confirmation.
+
+Title : ${plan.title}
+Goal  : ${plan.summary}
+
+Steps to implement:
+${stepsText}
+
+CRITICAL: Emit one complete <boltArtifact> that covers every step above.
+Emit full file contents for every file you touch — never partial diffs.
+</approved_plan>`
+}
+
 // ─── Route ───────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
     try {
         const body = await req.json()
-        const { messages, fileStructure, currentFile, templateId, currentFiles } = body
+        const { messages, fileStructure, currentFile, templateId, currentFiles, plan } = body
 
         // Debug logging to verify context is being received
         console.log('[b-coder/chat] Request received:', {
@@ -656,11 +688,13 @@ ${templateContext}
 ${conversationSummary}
 ${supabaseContext}
 ${assetContext}
+${plan ? buildPlanContext(plan) : ''}
 `
 
         // ── Smart Model Selection ─────────────────────────────────────────────
-        // Use faster nano model for simple questions/greetings, GPT-5 for complex coding tasks
-        const complexity = classifyMessageComplexity(messages)
+        // If a pre-approved plan is present, always use the full model.
+        // Otherwise use fast model for simple questions/greetings.
+        const complexity = plan ? 'full' : classifyMessageComplexity(messages)
         const selectedModel = complexity === 'fast' ? 'gpt-5-nano' : 'gpt-5'
 
         console.log('[b-coder/chat] Smart routing:', { complexity, selectedModel })

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, memo } from "react"
 import Link from "next/link"
-import { Loader2, FileCode, Terminal, CheckCircle2, Sparkles, Paperclip, X, FileText, Image, Upload } from "lucide-react"
+import { Loader2, FileCode, Terminal, CheckCircle2, Sparkles, Paperclip, X, FileText, Image, Upload, ChevronDown, ChevronUp, Package, Trash2, BookOpen } from "lucide-react"
 import {
     Message,
     MessageContent,
@@ -21,8 +21,11 @@ import {
     usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input"
 import { DictateButton } from "@/components/assistants/dictate-button"
-import { useResponsesChat } from "@/hooks/useResponsesChat"
+import { useBCoderMultiAgent } from "@/hooks/useBCoderMultiAgent"
 import { useBCoderContext } from "./b-coder-context"
+import { PlanCard } from "./plan-card"
+import { ExplanationCard } from "./explanation-card"
+import { BugAlertCard } from "./bug-alert-card"
 import { BoltMessageParser, BoltActionData } from "@/lib/runtime/message-parser"
 import { toast } from "sonner"
 import { fetchGithubRepo } from "@/app/actions/github.action"
@@ -34,12 +37,6 @@ interface BCoderChatProps {
     assistantId: string
     templateId: string
     artifactId?: string | null
-}
-
-interface FileUpdate {
-    path: string
-    type: 'file' | 'shell'
-    status: 'pending' | 'done'
 }
 
 interface AttachedFile {
@@ -83,6 +80,170 @@ function extractArtifactTitle(content: string): string | null {
     return match ? match[1] : null
 }
 
+// ─── ActivityCard ─────────────────────────────────────────────────────────────
+// The rich change-summary card shown below each assistant message that writes files.
+
+interface FileUpdate { path: string; type: 'file' | 'shell'; status: 'pending' | 'done' }
+
+function ActivityCard({
+    artifactTitle,
+    updates,
+    filePaths,
+    allDone,
+    isStreaming,
+    t,
+}: {
+    artifactTitle?: string
+    updates: FileUpdate[]
+    filePaths: string[]
+    allDone: boolean
+    isStreaming: boolean
+    t: (key: string) => string
+}) {
+    const [expanded, setExpanded] = useState(true)
+
+    // Auto-collapse when done and there are many items
+    useEffect(() => {
+        if (allDone && updates.length >= 5) setExpanded(false)
+    }, [allDone, updates.length])
+
+    const fileUpdates = updates.filter(u => u.type === 'file')
+    const shellUpdates = updates.filter(u => u.type === 'shell')
+    const pendingCount = updates.filter(u => u.status === 'pending').length
+
+    // Pending file paths detected in the stream but not yet actioned
+    const streamingPaths = filePaths.filter(fp => !updates.some(u => u.path === fp))
+    const totalItems = updates.length + streamingPaths.length
+
+    const headerText = artifactTitle
+        ?? (allDone ? t("bCoder.changesApplied") : t("bCoder.applyingChanges"))
+
+    const summaryBadges: React.ReactNode[] = []
+    if (fileUpdates.length > 0 || streamingPaths.length > 0) {
+        const fCount = fileUpdates.length + streamingPaths.length
+        summaryBadges.push(
+            <span key="files" className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+                <FileCode className="h-2.5 w-2.5" />
+                {fCount} {fCount === 1 ? 'file' : 'files'}
+            </span>
+        )
+    }
+    if (shellUpdates.length > 0) {
+        summaryBadges.push(
+            <span key="cmds" className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                <Package className="h-2.5 w-2.5" />
+                {shellUpdates.length} {shellUpdates.length === 1 ? 'command' : 'commands'}
+            </span>
+        )
+    }
+
+    return (
+        <div className="mt-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/40 dark:bg-emerald-950/20 overflow-hidden">
+            {/* Header row */}
+            <button
+                onClick={() => setExpanded(e => !e)}
+                className="w-full flex items-center gap-2 px-3 py-2 border-b border-emerald-200/70 dark:border-emerald-800/40 hover:bg-emerald-100/40 dark:hover:bg-emerald-900/20 transition-colors text-left"
+            >
+                {/* Status icon */}
+                {allDone ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                ) : pendingCount > 0 ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-500 shrink-0" />
+                ) : (
+                    <Sparkles className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                )}
+
+                {/* Title */}
+                <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 truncate flex-1 min-w-0">
+                    {headerText}
+                </span>
+
+                {/* Summary badges (file/command counts) — only show when collapsed or done */}
+                {(allDone || !expanded) && summaryBadges.length > 0 && (
+                    <div className="flex items-center gap-1 shrink-0">
+                        {summaryBadges}
+                    </div>
+                )}
+
+                {/* Expand/collapse toggle */}
+                {totalItems > 0 && (
+                    expanded
+                        ? <ChevronUp className="h-3 w-3 text-emerald-500 shrink-0" />
+                        : <ChevronDown className="h-3 w-3 text-emerald-500 shrink-0" />
+                )}
+            </button>
+
+            {/* Body — collapsible */}
+            {expanded && totalItems > 0 && (
+                <div className="divide-y divide-emerald-100 dark:divide-emerald-900/40">
+                    {/* Shell commands section */}
+                    {shellUpdates.length > 0 && (
+                        <div className="px-2 py-1.5 space-y-0.5">
+                            {shellUpdates.map((update, idx) => (
+                                <div key={`shell-${idx}`} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-md hover:bg-emerald-100/40 dark:hover:bg-emerald-900/20 transition-colors">
+                                    <Terminal className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                    <span className="font-mono text-[11px] text-amber-700 dark:text-amber-300 truncate flex-1">
+                                        $ {update.path}
+                                    </span>
+                                    {update.status === 'pending' ? (
+                                        <Loader2 className="h-3 w-3 animate-spin text-amber-400 ml-auto shrink-0" />
+                                    ) : (
+                                        <CheckCircle2 className="h-3 w-3 text-amber-500 ml-auto shrink-0" />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Committed file updates */}
+                    {fileUpdates.length > 0 && (
+                        <div className="px-2 py-1.5 space-y-0.5">
+                            {fileUpdates.map((update, idx) => (
+                                <div key={`file-${idx}`} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-md hover:bg-emerald-100/40 dark:hover:bg-emerald-900/20 transition-colors">
+                                    <FileCode className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                    <span className="font-mono text-[11px] text-emerald-700 dark:text-emerald-300 truncate flex-1">
+                                        {update.path}
+                                    </span>
+                                    {update.status === 'pending' ? (
+                                        <Loader2 className="h-3 w-3 animate-spin text-emerald-400 ml-auto shrink-0" />
+                                    ) : (
+                                        <CheckCircle2 className="h-3 w-3 text-emerald-500 ml-auto shrink-0" />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Streaming paths — detected in XML but not yet written */}
+                    {streamingPaths.length > 0 && (
+                        <div className="px-2 py-1.5 space-y-0.5">
+                            {streamingPaths.map((filePath) => (
+                                <div key={filePath} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-md">
+                                    <FileCode className="h-3.5 w-3.5 text-emerald-300 dark:text-emerald-600 shrink-0" />
+                                    <span className="font-mono text-[11px] text-emerald-500 dark:text-emerald-500 truncate flex-1">
+                                        {filePath}
+                                    </span>
+                                    <Loader2 className="h-3 w-3 animate-spin text-emerald-300 ml-auto shrink-0" />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Footer — only when done */}
+            {allDone && (
+                <div className="px-3 py-1.5 bg-emerald-100/30 dark:bg-emerald-900/10 flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                        Preview updated — check the right panel
+                    </span>
+                </div>
+            )}
+        </div>
+    )
+}
+
 export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }: BCoderChatProps) {
     const viewportRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -103,7 +264,9 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
         setActiveArtifact,
         exportFilesAsJson,
         readFile,
-        pushFileVersion
+        pushFileVersion,
+        detectedError,
+        clearDetectedError,
     } = useBCoderContext()
 
     const [input, setInput] = useState("")
@@ -265,12 +428,25 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
     }, [selectedFilePath, getCurrentFileContent, isServerReady])
 
     const {
-        messages,
-        sendMessage,
+        displayMessages,
+        phase,
         status,
         error,
-    } = useResponsesChat({
-        api: '/api/b-coder/chat',
+        submitUserMessage,
+        approvePlan,
+        rejectPlan,
+        reEditPlan,
+        reportBug,
+        dismissBugFix,
+        approveBugFix,
+        clearHistory,
+    } = useBCoderMultiAgent({
+        planApi: '/api/b-coder/plan',
+        implementApi: '/api/b-coder/chat',
+        explainApi: '/api/b-coder/explain',
+        bugfixApi: '/api/b-coder/bugfix',
+        askApi: '/api/b-coder/ask',
+        storageKey: artifactId ? `${_assistantId}-proj-${artifactId}` : `${_assistantId}-${templateId}`,
         getExtraBody: () => {
             const extraBody = {
                 templateId,
@@ -281,7 +457,6 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                 } : null,
                 currentFiles: currentFilesRef.current,
             }
-            // Debug log to verify files are being sent
             console.log('[BCoderChat] Sending message with context:', {
                 templateId,
                 hasFileStructure: !!fileStructureRef.current?.length,
@@ -292,6 +467,14 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
             return extraBody
         },
     })
+
+    // ── Bug detection: watch WebContainer errors and report to multi-agent hook
+    useEffect(() => {
+        if (detectedError && phase === 'idle') {
+            clearDetectedError()
+            reportBug(detectedError)
+        }
+    }, [detectedError, phase, clearDetectedError, reportBug])
 
     const handleAction = useCallback(async (action: BoltActionData, messageId: string) => {
         try {
@@ -364,23 +547,22 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
     const processedRef = useRef<{ id: string, length: number } | null>(null)
 
     useEffect(() => {
-        const lastMessage = messages[messages.length - 1]
-        if (!lastMessage || lastMessage.role !== 'assistant') return
+        // Find the last assistant message in displayMessages
+        const lastAssistant = [...displayMessages].reverse().find(m => m.kind === 'assistant')
+        if (!lastAssistant || lastAssistant.kind !== 'assistant') return
 
-        if (processedRef.current?.id !== lastMessage.id) {
-            const messageId = lastMessage.id
+        if (processedRef.current?.id !== lastAssistant.id) {
+            const messageId = lastAssistant.id
             parserRef.current = new BoltMessageParser(
                 undefined,
                 undefined,
                 undefined,
                 (action) => handleActionRef.current(action, messageId)
             )
-            processedRef.current = { id: lastMessage.id, length: 0 }
+            processedRef.current = { id: lastAssistant.id, length: 0 }
         }
 
-        // Assistant messages from useResponsesChat have a flat string `content`
-        const content = typeof lastMessage.content === 'string' ? lastMessage.content : ''
-
+        const content = lastAssistant.content
         const newContent = content.slice(processedRef.current?.length || 0)
 
         if (newContent.length > 0) {
@@ -388,19 +570,20 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
             processedRef.current!.length = content.length
         }
 
-        // Extract and store the artifact title for this message
         const title = extractArtifactTitle(content)
         if (title) {
             setArtifactTitles(prev => {
-                if (prev.get(lastMessage.id) === title) return prev
+                if (prev.get(lastAssistant.id) === title) return prev
                 const next = new Map(prev)
-                next.set(lastMessage.id, title)
+                next.set(lastAssistant.id, title)
                 return next
             })
         }
-    }, [messages])
+    }, [displayMessages])
 
-    const isLoading = status === 'streaming' || status === 'submitted'
+    const isLoading = phase === 'planning' || status === 'streaming' || status === 'submitted'
+    // Block new input while a plan is awaiting approval or while actively running
+    const isInputBlocked = phase !== 'idle'
 
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setInput(e.target.value)
@@ -454,13 +637,15 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
         e.preventDefault()
         const readyFiles = attachedFiles.filter(f => f.status === 'ready')
         if (!input.trim() && readyFiles.length === 0) return
-        if (isLoading) return
-        if (!filesReady) return // Block sending until files are loaded
+        if (isInputBlocked) return
+        if (!filesReady) return
+
+        let textContent = input.trim()
+        let parts: any[] | undefined
 
         if (readyFiles.length > 0) {
-            // Build multi-part content: text + image/PDF parts
-            const parts: any[] = []
-            if (input.trim()) parts.push({ type: 'text', text: input.trim() })
+            parts = []
+            if (textContent) parts.push({ type: 'text', text: textContent })
             for (const f of readyFiles) {
                 if (f.mediaType === 'application/pdf') {
                     parts.push({ type: 'file', url: f.url, mediaType: 'application/pdf', filename: f.name })
@@ -468,11 +653,9 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                     parts.push({ type: 'image', image: f.url })
                 }
             }
-            sendMessage({ parts })
-        } else {
-            sendMessage({ text: input.trim() })
         }
 
+        submitUserMessage(textContent, parts)
         setInput('')
         setAttachedFiles([])
         scrollToBottom()
@@ -483,7 +666,7 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
     return (
         <div className="h-full flex flex-col mx-auto w-full max-w-[44rem]">
             <div ref={viewportRef} className="flex-1 overflow-y-auto px-4 py-6">
-                {messages.length === 0 ? (
+                {displayMessages.length === 0 ? (
                     <div className="flex items-center justify-center h-full">
                         <div className="text-center space-y-4 max-w-md">
                             <div className="relative mx-auto w-16 h-16">
@@ -505,35 +688,110 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                     </div>
                 ) : (
                     <div className="space-y-6">
-                        {messages.map((msg: any) => {
-                            // useResponsesChat: assistant messages have flat string content,
-                            // user messages have flat content + optional parts array.
-                            const rawContent = typeof msg.content === 'string' ? msg.content : ''
+                        {/* Clear history button — sticky top-right of the message list */}
+                        <div className="flex justify-end">
+                            <button
+                                onClick={clearHistory}
+                                disabled={phase !== 'idle'}
+                                className="flex items-center gap-1.5 text-[10px] text-muted-foreground/50 hover:text-red-400 dark:hover:text-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                title="Clear chat history"
+                            >
+                                <Trash2 className="h-3 w-3" />
+                                Clear history
+                            </button>
+                        </div>
+                        {displayMessages.map((msg) => {
+                            // ── Plan card ────────────────────────────────────────────────
+                            if (msg.kind === 'plan') {
+                                return (
+                                    <PlanCard
+                                        key={msg.id}
+                                        plan={msg.plan}
+                                        status={msg.status}
+                                        isImplementing={phase === 'implementing'}
+                                        onApprove={() => approvePlan(msg.id)}
+                                        onReject={() => rejectPlan(msg.id)}
+                                        onEdit={(newText) => reEditPlan(msg.id, newText)}
+                                    />
+                                )
+                            }
 
-                            const isAssistant = msg.role === 'assistant'
+                            // ── Explanation card ──────────────────────────────────────────
+                            if (msg.kind === 'explanation') {
+                                return <ExplanationCard key={msg.id} content={msg.content} />
+                            }
+
+                            // ── Bug alert card ────────────────────────────────────────────
+                            if (msg.kind === 'bug_alert') {
+                                return (
+                                    <BugAlertCard
+                                        key={msg.id}
+                                        errorSummary={msg.errorSummary}
+                                        errorOutput={msg.errorOutput}
+                                        status={msg.status}
+                                        onFix={() => approveBugFix(msg.id)}
+                                        onDismiss={() => dismissBugFix(msg.id)}
+                                    />
+                                )
+                            }
+
+                            // ── Site Q&A answer ───────────────────────────────────────────
+                            if (msg.kind === 'site_answer') {
+                                const isCurrentlySiteStreaming =
+                                    (status === 'streaming' || status === 'submitted') &&
+                                    msg === displayMessages[displayMessages.length - 1]
+                                return (
+                                    <Message key={msg.id} from="assistant">
+                                        <MessageContent>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <div className="h-5 w-5 rounded-md bg-blue-100 dark:bg-blue-950/40 flex items-center justify-center shrink-0">
+                                                    <BookOpen className="h-3 w-3 text-blue-500" />
+                                                </div>
+                                                <span className="text-[10px] font-bold text-blue-500 dark:text-blue-400 uppercase tracking-widest">
+                                                    Project Analysis
+                                                </span>
+                                                {isCurrentlySiteStreaming && <Loader2 className="h-3 w-3 animate-spin text-blue-400 ml-auto" />}
+                                            </div>
+                                            {msg.content ? (
+                                                <MessageResponse>{msg.content}</MessageResponse>
+                                            ) : isCurrentlySiteStreaming ? (
+                                                <div className="flex items-center gap-2 text-muted-foreground">
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                    <span className="text-sm">Analyzing your project...</span>
+                                                </div>
+                                            ) : null}
+                                        </MessageContent>
+                                    </Message>
+                                )
+                            }
+
+                            // ── User / assistant messages ─────────────────────────────────
+                            const isAssistant = msg.kind === 'assistant'
+                            const rawContent = isAssistant ? msg.content : msg.text
                             const displayContent = isAssistant ? filterDisplayContent(rawContent) : rawContent
                             const filePaths = isAssistant ? extractFilePaths(rawContent) : []
                             const updates = fileUpdates.get(msg.id) || []
                             const artifactTitle = isAssistant ? artifactTitles.get(msg.id) : undefined
-                            const isCurrentlyStreaming = isLoading && msg === messages[messages.length - 1]
+                            const isCurrentlyStreaming =
+                                isAssistant &&
+                                (status === 'streaming' || status === 'submitted') &&
+                                msg === displayMessages[displayMessages.length - 1]
                             const allDone = updates.length > 0 && updates.every(u => u.status === 'done')
 
-                            // Extract attachment parts from user messages
-                            const attachmentParts = (!isAssistant && msg.parts && Array.isArray(msg.parts))
+                            // Attachment parts for user messages
+                            const attachmentParts = (!isAssistant && Array.isArray(msg.parts))
                                 ? msg.parts.filter((p: any) => p.type === 'image' || p.type === 'file')
                                 : []
 
                             return (
-                                <Message key={msg.id} from={msg.role}>
-                                    {/* Attachments sit OUTSIDE the bubble, above the text */}
+                                <Message key={msg.id} from={isAssistant ? 'assistant' : 'user'}>
+                                    {/* Attachments above the bubble */}
                                     {attachmentParts.length > 0 && (
                                         <div className="ml-auto flex flex-col gap-2 max-w-[85%]">
-                                            {/* Images row */}
                                             {attachmentParts.filter((p: any) => p.type === 'image').length > 0 && (
                                                 <div className="flex flex-wrap gap-2 justify-end">
                                                     {attachmentParts.filter((p: any) => p.type === 'image').map((part: any, idx: number) => {
                                                         const s3Url = typeof part.image === 'string' ? part.image : ''
-                                                        // Proxy through our server to avoid S3 CORS / private-bucket issues
                                                         const proxySrc = s3Url
                                                             ? `/api/b-coder/image-proxy?url=${encodeURIComponent(s3Url)}`
                                                             : ''
@@ -556,7 +814,6 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                                                     })}
                                                 </div>
                                             )}
-                                            {/* PDF chips row */}
                                             {attachmentParts.filter((p: any) => p.type === 'file').length > 0 && (
                                                 <div className="flex flex-wrap gap-2 justify-end">
                                                     {attachmentParts.filter((p: any) => p.type === 'file').map((part: any, idx: number) => (
@@ -579,7 +836,6 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                                     )}
 
                                     <MessageContent>
-                                        {/* Message text */}
                                         {displayContent ? (
                                             <MessageResponse>{displayContent}</MessageResponse>
                                         ) : isCurrentlyStreaming ? (
@@ -589,77 +845,42 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                                             </div>
                                         ) : null}
 
-
                                         {/* Agent activity summary card */}
                                         {(artifactTitle || filePaths.length > 0 || updates.length > 0) && (
-                                            <div className="mt-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/60 dark:bg-emerald-950/20 overflow-hidden">
-                                                {/* Header: what the agent did */}
-                                                <div className="flex items-center gap-2 px-3 py-2 border-b border-emerald-200/70 dark:border-emerald-800/40">
-                                                    {allDone ? (
-                                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                                                    ) : (
-                                                        <Sparkles className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                                                    )}
-                                                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 truncate">
-                                                        {artifactTitle ?? (allDone ? t("bCoder.changesApplied") : t("bCoder.applyingChanges"))}
-                                                    </span>
-                                                    {!allDone && updates.length > 0 && (
-
-                                                        <Loader2 className="h-3 w-3 animate-spin text-emerald-500 ml-auto shrink-0" />
-                                                    )}
-                                                </div>
-
-                                                {/* File / shell action rows */}
-                                                <div className="px-2 py-1.5 space-y-1">
-                                                    {updates.map((update, idx) => (
-                                                        <div
-                                                            key={`${update.path}-${idx}`}
-                                                            className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-md"
-                                                        >
-                                                            {update.type === 'file' ? (
-                                                                <FileCode className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                                            ) : (
-                                                                <Terminal className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                                            )}
-                                                            <span className="font-mono text-[11px] text-emerald-700 dark:text-emerald-300 truncate">
-                                                                {update.type === 'file' ? update.path : `$ ${update.path}`}
-                                                            </span>
-                                                            {update.status === 'pending' ? (
-                                                                <Loader2 className="h-3 w-3 animate-spin text-emerald-400 ml-auto shrink-0" />
-                                                            ) : (
-                                                                <CheckCircle2 className="h-3 w-3 text-emerald-500 ml-auto shrink-0" />
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                    {/* Files detected in stream but not yet actioned */}
-                                                    {filePaths.filter(fp => !updates.some(u => u.path === fp)).map((filePath) => (
-                                                        <div
-                                                            key={filePath}
-                                                            className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-md"
-                                                        >
-                                                            <FileCode className="h-3.5 w-3.5 text-emerald-400 dark:text-emerald-500 shrink-0" />
-                                                            <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 truncate">
-                                                                {filePath}
-                                                            </span>
-                                                            <Loader2 className="h-3 w-3 animate-spin text-emerald-400 ml-auto shrink-0" />
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
+                                            <ActivityCard
+                                                artifactTitle={artifactTitle}
+                                                updates={updates}
+                                                filePaths={filePaths}
+                                                allDone={allDone}
+                                                isStreaming={isCurrentlyStreaming}
+                                                t={t}
+                                            />
                                         )}
                                     </MessageContent>
                                 </Message>
                             )
                         })}
 
-                        {isLoading && messages[messages.length - 1]?.role === "user" && (
+                        {/* Planning spinner — shown while planner agent is running */}
+                        {phase === 'planning' && (
+                            <Message from="assistant">
+                                <MessageContent>
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        <span className="text-sm">Planning your request…</span>
+                                    </div>
+                                </MessageContent>
+                            </Message>
+                        )}
+
+                        {/* Generic thinking spinner for implementing phase before first delta */}
+                        {phase === 'implementing' && status === 'submitted' && (
                             <Message from="assistant">
                                 <MessageContent>
                                     <div className="flex items-center gap-2 text-muted-foreground">
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                         <span className="text-sm">{t("bCoder.thinking")}</span>
                                     </div>
-
                                 </MessageContent>
                             </Message>
                         )}
@@ -670,7 +891,6 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                                     <div className="text-red-500 text-sm p-2 bg-red-50 dark:bg-red-950 rounded">
                                         {t("bCoder.errorTitle")}: {error.message || t("bCoder.somethingWentWrong")}
                                     </div>
-
                                 </MessageContent>
                             </Message>
                         )}
@@ -683,7 +903,7 @@ export function BCoderChat({ assistantId: _assistantId, templateId, artifactId }
                     input={input}
                     handleInputChange={handleInputChange}
                     handleSubmit={handleSubmit}
-                    isLoading={isLoading}
+                    isLoading={isInputBlocked}
                     attachedFiles={attachedFiles}
                     fileInputRef={fileInputRef}
                     onFilesSelected={uploadFiles}

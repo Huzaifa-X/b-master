@@ -47,6 +47,9 @@ interface BCoderContextValue {
     resetWorkspace: () => Promise<void>
     retrySetup: () => Promise<void>
     hasStoredChanges: boolean
+    // Bug detection
+    detectedError: string | null
+    clearDetectedError: () => void
     // Smart Rollback
     fileHistory: FileHistory
     pushFileVersion: (path: string, content: string) => void
@@ -70,10 +73,11 @@ interface BCoderProviderProps {
     children: ReactNode
     assistantId: string
     templateId: string
+    projectId?: string
 }
 
-export function BCoderProvider({ children, assistantId, templateId }: BCoderProviderProps) {
-    const webContainer = useWebContainer(assistantId, templateId)
+export function BCoderProvider({ children, assistantId, templateId, projectId }: BCoderProviderProps) {
+    const webContainer = useWebContainer(assistantId, templateId, projectId)
     const [fileStructure, setFileStructure] = useState<FileNode[]>([])
     const [selectedFilePath, setSelectedFilePath] = useState<string | null>("src/App.jsx")
     const [activeArtifact, setActiveArtifact] = useState<{ id: string, name: string, instructions: string, category: string } | null>(null)

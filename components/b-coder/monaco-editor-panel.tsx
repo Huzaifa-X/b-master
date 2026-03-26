@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import Editor from "@monaco-editor/react"
 import {
   FileCode,
@@ -22,7 +22,9 @@ import {
   RotateCcw,
   HardDrive,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Wand2,
+  MousePointer2,
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
@@ -57,6 +59,8 @@ import { useBCoderSupabase } from "@/hooks/useBCoderSupabase"
 import { GithubDeployDialog } from "./github-deploy-dialog"
 import { deployToGithubAndVercel } from "@/app/actions/deploy.action"
 import { useLocale } from "@/lib/i18n"
+import { VisualEditPanel, type SelectedElement } from "./visual-edit-panel"
+import { VISUAL_INSPECTOR_SCRIPT } from "@/lib/runtime/visual-inspector-script"
 
 
 interface FileNode {
@@ -226,6 +230,12 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
   const [deployDialogOpen, setDeployDialogOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // Mobile sidebar toggle state
   const [isFullscreen, setIsFullscreen] = useState(false) // Preview fullscreen mode
+  // Visual Edit mode
+  const [visualEditMode, setVisualEditMode] = useState(false)
+  const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null)
+  const [visualEditLoading, setVisualEditLoading] = useState(false)
+  const [lastExplanation, setLastExplanation] = useState<string | null>(null)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
   const { resolvedTheme } = useTheme()
   const { connection: supabaseConn } = useBCoderSupabase()
   const { t } = useLocale()
@@ -393,6 +403,83 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isFullscreen])
+
+  // ── Visual Edit: listen to postMessage from the preview iframe ────────────
+  useEffect(() => {
+    if (!visualEditMode) return
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === '__BCODER_VISUAL_SELECT' && e.data.element) {
+        setSelectedElement(e.data.element as SelectedElement)
+        setLastExplanation(null)
+      }
+    }
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
+  }, [visualEditMode])
+
+  // Inject / remove the inspector script from index.html
+  const enableVisualEdit = useCallback(async () => {
+    if (!webcontainerInstance || !isServerReady) return
+    setIsPreview(true)
+    setVisualEditMode(true)
+    setSelectedElement(null)
+    setLastExplanation(null)
+    try {
+      await writeFile('public/bcoder-inspector.js', VISUAL_INSPECTOR_SCRIPT)
+      const raw = await webcontainerInstance.fs.readFile('index.html', 'utf-8')
+      if (!raw.includes('bcoder-inspector')) {
+        const patched = raw.replace('</body>', '  <script src="/bcoder-inspector.js"></script>\n</body>')
+        await writeFile('index.html', patched)
+      }
+    } catch (err) {
+      console.error('[VisualEdit] inject failed', err)
+    }
+  }, [webcontainerInstance, isServerReady, writeFile])
+
+  const disableVisualEdit = useCallback(async () => {
+    setVisualEditMode(false)
+    setSelectedElement(null)
+    // Tell the iframe inspector to tear itself down
+    iframeRef.current?.contentWindow?.postMessage({ type: '__BCODER_VISUAL_DISABLE' }, '*')
+    // Remove script tag from index.html so next reload is clean
+    try {
+      if (!webcontainerInstance) return
+      const raw = await webcontainerInstance.fs.readFile('index.html', 'utf-8')
+      const cleaned = raw.replace(/\s*<script src="\/bcoder-inspector\.js"><\/script>/g, '')
+      await writeFile('index.html', cleaned)
+    } catch {
+      // silently ignore
+    }
+  }, [webcontainerInstance, writeFile])
+
+  const handleVisualApply = useCallback(async (changeRequest: string) => {
+    if (!selectedElement) return
+    setVisualEditLoading(true)
+    setLastExplanation(null)
+    try {
+      const files = await exportFilesAsJson()
+      const res = await fetch('/api/b-coder/visual-edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          elementInfo: selectedElement,
+          changeRequest,
+          currentFiles: files,
+          templateId,
+        }),
+      })
+      if (!res.ok) throw new Error('Visual edit API failed')
+      const { file, newContent, explanation } = await res.json() as { file: string; newContent: string; explanation: string }
+      await writeFile(file, newContent)
+      await contextBuildFileTree()
+      setLastExplanation(explanation || 'Change applied.')
+    } catch (err) {
+      console.error('[VisualEdit] apply failed', err)
+      setLastExplanation('Something went wrong. Please try again.')
+    } finally {
+      setVisualEditLoading(false)
+    }
+  }, [selectedElement, exportFilesAsJson, writeFile, contextBuildFileTree, templateId])
 
   const handleEditorChange = useCallback((value: string | undefined) => {
     setEditorContent(value || "")
@@ -566,7 +653,34 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
             {/* Divider */}
             <div className="hidden sm:block h-5 w-px bg-border/60" />
 
-            {/* Status Indicator - Modern Pill */}
+            {/* Visual Edit toggle — only useful once server is ready */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={visualEditMode ? disableVisualEdit : enableVisualEdit}
+              disabled={!isServerReady}
+              className={cn(
+                "h-8 px-2.5 gap-1.5 text-xs font-medium transition-all",
+                visualEditMode
+                  ? "text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 hover:bg-violet-100 dark:hover:bg-violet-900/20 ring-1 ring-violet-300 dark:ring-violet-700"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                !isServerReady && "opacity-40 cursor-not-allowed"
+              )}
+              title="Visual Edit — hover to highlight, click any element to edit its code"
+            >
+              {visualEditMode ? (
+                <MousePointer2 className="h-3.5 w-3.5" />
+              ) : (
+                <Wand2 className="h-3.5 w-3.5" />
+              )}
+              <span className="hidden sm:inline">{visualEditMode ? "Exit Visual" : "Visual Edit"}</span>
+              {visualEditMode && (
+                <span className="h-1.5 w-1.5 bg-violet-500 rounded-full animate-pulse" />
+              )}
+            </Button>
+
+            {/* Divider */}
+            <div className="hidden sm:block h-5 w-px bg-border/60" />
             <div className={cn(
               "hidden sm:flex items-center gap-1.5 h-6 px-2.5 rounded-full text-xs font-medium transition-all",
               isBooting && "bg-muted text-muted-foreground",
@@ -844,7 +958,7 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
             {/* Preview Content */}
             <div className="flex-1 bg-white dark:bg-zinc-950 overflow-hidden relative w-full h-full">
               {serverUrl ? (
-                <iframe src={serverUrl} className="w-full h-full absolute inset-0 border-0" title={t("bCoder.preview")} />
+                <iframe ref={iframeRef} src={serverUrl} className="w-full h-full absolute inset-0 border-0" title={t("bCoder.preview")} />
               ) : (
                 <div className="flex items-center justify-center h-full bg-muted/10">
                   <div className="text-center">
@@ -855,6 +969,16 @@ export function MonacoEditorPanel({ templateId, assistantId }: MonacoEditorPanel
                     <p className="text-sm text-muted-foreground mt-3">{t("bCoder.startingDevServer")}</p>
                   </div>
                 </div>
+              )}
+              {/* Visual Edit Panel — overlaid at bottom of preview */}
+              {visualEditMode && (
+                <VisualEditPanel
+                  element={selectedElement}
+                  isLoading={visualEditLoading}
+                  lastExplanation={lastExplanation}
+                  onApply={handleVisualApply}
+                  onClose={disableVisualEdit}
+                />
               )}
             </div>
           </div>

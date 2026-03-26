@@ -128,6 +128,86 @@ export function getWorkspaceMetadata(templateId: string): { savedAt: Date, fileC
   }
 }
 
+// ─── Chat History Persistence ───────────────────────────────────────────────
+
+const CHAT_STORAGE_PREFIX = 'bcoder-chat-'
+const CHAT_VERSION = 1
+
+/** Strip boltArtifact/boltAction XML from assistant message content before saving */
+function stripBoltXml(content: string): string {
+  return content
+    .replace(/<boltArtifact[^>]*>[\s\S]*?<\/boltArtifact>/g, '')
+    .replace(/<boltArtifact[^>]*>[\s\S]*/g, '')
+    .replace(/<boltAction[^>]*>[\s\S]*?<\/boltAction>/g, '')
+    .replace(/<boltAction[^>]*>[\s\S]*/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/**
+ * Save chat history (DisplayMessage[]) to localStorage.
+ * - Strips boltArtifact XML from assistant messages to stay within size limits
+ * - Converts pending plans to approved (they already ran)
+ * - Converts pending/fixing bug alerts to dismissed (stale after reload)
+ */
+export function saveChatHistory(storageKey: string, messages: any[]): boolean {
+  try {
+    const normalized = messages
+      .map((m: any) => {
+        if (m.kind === 'assistant') {
+          const stripped = stripBoltXml(m.content || '')
+          return stripped ? { ...m, content: stripped } : null
+        }
+        if (m.kind === 'plan' && m.status === 'pending') {
+          return { ...m, status: 'approved' }
+        }
+        if (m.kind === 'bug_alert' && (m.status === 'pending' || m.status === 'fixing')) {
+          return { ...m, status: 'dismissed' }
+        }
+        return m
+      })
+      .filter(Boolean)
+
+    const payload = JSON.stringify({ version: CHAT_VERSION, messages: normalized, savedAt: Date.now() })
+
+    // If over 900KB keep only the last 50 messages
+    const final = payload.length > 900 * 1024
+      ? JSON.stringify({ version: CHAT_VERSION, messages: normalized.slice(-50), savedAt: Date.now() })
+      : payload
+
+    localStorage.setItem(`${CHAT_STORAGE_PREFIX}${storageKey}`, final)
+    return true
+  } catch (err) {
+    console.error('[BCoder Chat Storage] Failed to save:', err)
+    return false
+  }
+}
+
+/**
+ * Load persisted chat history from localStorage.
+ * Returns null if nothing is stored or the data is invalid/stale.
+ */
+export function loadChatHistory(storageKey: string): any[] | null {
+  try {
+    const stored = localStorage.getItem(`${CHAT_STORAGE_PREFIX}${storageKey}`)
+    if (!stored) return null
+    const data = JSON.parse(stored)
+    if (data.version !== CHAT_VERSION || !Array.isArray(data.messages)) return null
+    return data.messages as any[]
+  } catch {
+    return null
+  }
+}
+
+/** Remove chat history for a given storage key */
+export function clearChatHistory(storageKey: string): void {
+  try {
+    localStorage.removeItem(`${CHAT_STORAGE_PREFIX}${storageKey}`)
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * List all stored workspace template IDs
  */

@@ -9,7 +9,7 @@ import { ArtifactCard, type Artifact } from "@/components/artifacts/artifact-car
 import { useArtifacts, useInvalidateArtifacts, useArtifactById } from "@/hooks/useArtifact"
 import { useSetAssistantMode } from "@/hooks/useAssistant"
 import { useAssistantPermissions } from "@/hooks/usePermissions"
-import { TemplateSelectionModal } from "@/components/b-coder/template-selection-modal"
+import { BCoderNewProjectDialog } from "@/components/b-coder/bcoder-new-project-dialog"
 
 import { useLocale } from "@/lib/i18n"
 
@@ -42,7 +42,7 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
     const [searchQuery, setSearchQuery] = useState("")
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
     const [viewArtifactId, setViewArtifactId] = useState<string | null>(null)
-    const [showTemplateModal, setShowTemplateModal] = useState(false)
+    const [showNewProjectDialog, setShowNewProjectDialog] = useState(false)
 
     // Use React Query hook to fetch artifacts
     const { artifacts, isLoading, isError } = useArtifacts(assistantId)
@@ -106,7 +106,7 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                         {canCreateArtifacts && (
                             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                                 <Button
-                                    onClick={() => setShowTemplateModal(true)}
+                                    onClick={() => setShowNewProjectDialog(true)}
                                     variant="outline"
                                     className="w-full sm:w-auto bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/50"
                                 >
@@ -154,15 +154,18 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                     </div>
                 ) : filteredArtifacts.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredArtifacts.map((artifact) => (
-                            artifact.htmlContent.trim() !== '' && (
+                        {filteredArtifacts.map((artifact) => {
+                            const isDeployedProject = artifact.category === "Deployed Project"
+                            const hasContent = artifact.htmlContent.trim() !== ''
+                            if (!isDeployedProject && !hasContent) return null
+                            return (
                                 <ArtifactCard
                                     key={artifact.id}
                                     artifact={artifact}
                                     onClick={() => handleCardClick(artifact)}
                                 />
                             )
-                        ))}
+                        })}
                     </div>
                 ) : (
                     <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -223,13 +226,11 @@ export default function ArtifactsPage({ params }: { params: Promise<{ id: string
                 </Suspense>
             )}
 
-            {/* Template Selection Modal for B-Coder */}
-            <TemplateSelectionModal
-                open={showTemplateModal}
-                onOpenChange={setShowTemplateModal}
-                onSelectTemplate={(templateId) => {
-                    router.push(`/assistants/${assistantId}/b-coder?template=${templateId}`)
-                }}
+            {/* New B-Coder Project Dialog */}
+            <BCoderNewProjectDialog
+                open={showNewProjectDialog}
+                onOpenChange={setShowNewProjectDialog}
+                assistantId={assistantId}
             />
         </div>
     )
