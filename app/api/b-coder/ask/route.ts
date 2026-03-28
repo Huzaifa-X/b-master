@@ -1,4 +1,8 @@
 ﻿import { openai } from '@/lib/openai'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { canUseTokens, trackTokenUsage } from '@/lib/utils/token-limits'
+import prisma from '@/lib/prisma'
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -24,6 +28,38 @@ function scoreRelevance(path: string, content: string, question: string): number
 
 export async function POST(req: Request) {
     try {
+        // 1. CHECK AUTHENTICATION
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return new Response(
+                JSON.stringify({ error: 'Authentication required' }),
+                { status: 401, headers: { 'Content-Type': 'application/json' } }
+            )
+        }
+
+        // 2. CHECK TOKEN QUOTA BEFORE AI CALL
+        const estimatedTokens = 3000 // B-Coder ask is a smaller operation
+        const tokenCheck = await canUseTokens(estimatedTokens, session.user.id)
+
+        if (!tokenCheck.allowed) {
+            const percentUsed = tokenCheck.limit > BigInt(0)
+                ? Number((tokenCheck.currentUsage * BigInt(100)) / tokenCheck.limit)
+                : 0
+
+            return new Response(
+                JSON.stringify({
+                    error: 'Token limit exceeded',
+                    message: tokenCheck.error,
+                    currentUsage: tokenCheck.currentUsage.toString(),
+                    limit: tokenCheck.limit.toString(),
+                    percentUsed,
+                    resetDate: tokenCheck.resetDate.toISOString(),
+                    upgradeUrl: '/pricing'
+                }),
+                { status: 429, headers: { 'Content-Type': 'application/json' } }
+            )
+        }
+
         const body = await req.json()
         const { messages, currentFiles, templateId } = body as {
             messages: { role: string; content: string | any[] }[]
@@ -72,6 +108,8 @@ SOURCE FILES:
 ${fileContext}`
 
         const encoder = new TextEncoder()
+        let totalTokens = 0
+
         const stream = new ReadableStream({
             async start(controller) {
                 try {
@@ -82,6 +120,7 @@ ${fileContext}`
                             ...history,
                         ],
                         stream: true,
+                        stream_options: { include_usage: true },
                         max_tokens: 1400,
                         temperature: 0.25,
                     })
@@ -91,8 +130,33 @@ ${fileContext}`
                         if (delta) {
                             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text_delta', delta })}\n\n`))
                         }
+
+                        // Extract usage from the final chunk
+                        if (chunk.usage) {
+                            totalTokens = chunk.usage.total_tokens || 0
+                        }
                     }
                     controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
+
+                    // Track token usage after completion
+                    if (totalTokens > 0) {
+                        await trackTokenUsage(session.user.id, totalTokens)
+
+                        // Also create detailed usage metric
+                        await prisma.usageMetric.create({
+                            data: {
+                                userId: BigInt(session.user.id),
+                                assistantId: null,
+                                inputToken: 0, // Could be extracted from chunk.usage
+                                outputToken: 0,
+                                totalToken: totalTokens,
+                                totalCost: (totalTokens / 1_000_000) * 0.375,
+                                costType: "b-coder",
+                                toolUsing: "ask"
+                            }
+                        })
+                        console.log('[b-coder/ask] ✅ Token usage tracked:', totalTokens)
+                    }
                 } catch (err: any) {
                     controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`))
                 } finally {

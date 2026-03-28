@@ -18,6 +18,7 @@ import {
 import { triggerWebScraping } from '@/lib/web-scraper'
 import { randomUUID } from "crypto"
 import { canCreateAssistant } from '@/lib/utils/subscription-limits'
+import { canUseTokens, trackTokenUsage } from '@/lib/utils/token-limits'
 import { stripe } from '@/lib/stripe'
 import { getAssistantGptPromptGeneratorPrompt } from "@/utils/prompts"
 import { encrypt, decrypt } from "@/lib/encryption"
@@ -43,6 +44,22 @@ export async function generateAssistantInstructions({
             return {
                 success: false,
                 error: 'Prompt cannot be empty'
+            }
+        }
+
+        // Check token quota before AI call
+        const estimatedTokens = 2000 // Instruction generation estimate
+        const tokenCheck = await canUseTokens(estimatedTokens, session.user.id)
+
+        if (!tokenCheck.allowed) {
+            return {
+                success: false,
+                error: tokenCheck.error || 'Token limit exceeded',
+                tokenLimitError: {
+                    currentUsage: tokenCheck.currentUsage.toString(),
+                    limit: tokenCheck.limit.toString(),
+                    resetDate: tokenCheck.resetDate.toISOString(),
+                }
             }
         }
 
@@ -86,6 +103,10 @@ export async function generateAssistantInstructions({
                     costType: 'instruction_generation'
                 }
             })
+
+            // Track token usage for quota enforcement
+            await trackTokenUsage(session.user.id, totalToken)
+            console.log('[AssistantAction] ✅ Token usage tracked:', totalToken)
         } catch (metricError) {
             console.error('Error tracking usage metrics:', metricError)
         }
@@ -332,6 +353,9 @@ export async function createCompleteAssistant(
 
                 console.log(`✅ Vector store created: ${vectorStoreId}`)
 
+                // Type guard for non-null vectorStoreId
+                const safeVectorStoreId = vectorStoreId
+
                 // Process notes
                 for (const note of params.notes) {
                     if (note.trim()) {
@@ -341,7 +365,7 @@ export async function createCompleteAssistant(
 
                             // Add note to OpenAI vector store
                             const vectorFileId = await addNoteToVectorStore(
-                                vectorStoreId,
+                                safeVectorStoreId,
                                 note.trim(),
                                 noteName
                             )
@@ -380,7 +404,7 @@ export async function createCompleteAssistant(
                             // Trigger async web scraping
                             triggerWebScraping({
                                 url: url.trim(),
-                                vectorStoreId: vectorStoreId,
+                                vectorStoreId: safeVectorStoreId,
                                 maxPages: 20,
                             }).catch((err) => {
                                 console.error(`Error triggering scraping for ${url}:`, err)
@@ -410,7 +434,7 @@ export async function createCompleteAssistant(
 
                         // Upload to OpenAI vector store
                         const vectorFileId = await uploadAndAddToVectorStore(
-                            vectorStoreId,
+                            safeVectorStoreId,
                             buffer,
                             fileData.fileName
                         )
@@ -1743,13 +1767,14 @@ export async function updateCompleteAssistant(
         // Add new notes
         const notesToAdd = Array.from(newNoteSet).filter(n => !existingNoteSet.has(n))
         if (vectorStoreId) {
+            const safeVectorStoreId = vectorStoreId // Type guard for non-null
             for (const note of notesToAdd) {
                 try {
                     const noteIndex = params.notes.indexOf(note)
                     const noteName = `note_${noteIndex + 1}_${Date.now()}`
 
                     const vectorFileId = await addNoteToVectorStore(
-                        vectorStoreId,
+                        safeVectorStoreId,
                         note,
                         noteName
                     )
@@ -1791,6 +1816,7 @@ export async function updateCompleteAssistant(
         // Add new URLs and trigger scraping
         const urlsToAdd = Array.from(newUrlSet).filter(u => !existingUrlSet.has(u))
         if (vectorStoreId) {
+            const safeVectorStoreIdForUrls = vectorStoreId // Type guard for non-null
             for (const url of urlsToAdd) {
                 try {
                     // First create the knowledgebase entry with isCrawled: false
@@ -1807,7 +1833,7 @@ export async function updateCompleteAssistant(
                     // The scraper will update vectorFileId and isCrawled when done
                     triggerWebScraping({
                         url: url,
-                        vectorStoreId: vectorStoreId,
+                        vectorStoreId: safeVectorStoreIdForUrls,
                         maxPages: 20,
                     })
                         .then(async (result) => {
@@ -1859,6 +1885,7 @@ export async function updateCompleteAssistant(
 
         // Add new files
         if (params.fileURLs.length > 0 && vectorStoreId) {
+            const safeVectorStoreIdForFiles = vectorStoreId // Type guard for non-null
             for (const fileData of params.fileURLs) {
                 try {
                     // Check if file with same URL already exists
@@ -1878,7 +1905,7 @@ export async function updateCompleteAssistant(
 
                     // Upload to OpenAI vector store
                     const vectorFileId = await uploadAndAddToVectorStore(
-                        vectorStoreId,
+                        safeVectorStoreIdForFiles,
                         buffer,
                         fileData.fileName
                     )
@@ -2467,13 +2494,15 @@ export async function hardDeleteAssistant(
                 }
             }
 
-            try {
-                await deleteVectorStore(assistant.vectorStoreId)
-            } catch (err) {
-                console.error(
-                    `Failed to delete vector store ${assistant.vectorStoreId}`,
-                    err
-                )
+            if (assistant.vectorStoreId) {
+                try {
+                    await deleteVectorStore(assistant.vectorStoreId)
+                } catch (err) {
+                    console.error(
+                        `Failed to delete vector store ${assistant.vectorStoreId}`,
+                        err
+                    )
+                }
             }
         }
 

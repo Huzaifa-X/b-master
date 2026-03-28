@@ -22,6 +22,7 @@ import {
 import { sendNotification } from "@/lib/pusher"
 import { orchestrateGeneration } from "@/lib/services/artifact-orchestrator.service"
 import type { ArtifactAgentContext } from "@/lib/agents/types"
+import { canUseTokens, trackTokenUsage } from "@/lib/utils/token-limits"
 
 // ─── Core processor ──────────────────────────────────────────────────────────
 
@@ -70,7 +71,31 @@ export async function processArtifactGeneration(
     const userId = meta.userId as string | undefined
     if (!userId) throw new Error("User ID not found in job metadata")
 
-    // ── 2. Build ArtifactAgentContext ────────────────────────────────────
+    // ── 2. Token quota check ─────────────────────────────────────────────
+    const tokenCheck = await canUseTokens(15000, userId)
+
+    if (!tokenCheck.allowed) {
+      const error = tokenCheck.error || "Token limit exceeded"
+      await markJobAsFailed(jobId, error)
+
+      // Send notification about limit
+      try {
+        await sendNotification(userId, "artifact-job-update", {
+          jobId,
+          artifactId,
+          artifactName: artifact.name,
+          status: "failed",
+          error,
+        })
+      } catch { /* ignore notification errors */ }
+
+      console.error(`[ArtifactGenService] ❌ Token limit exceeded for user ${userId}`)
+      return { success: false }
+    }
+
+    console.log(`[ArtifactGenService] ✅ Token quota check passed (${tokenCheck.remaining} remaining)`)
+
+    // ── 3. Build ArtifactAgentContext ────────────────────────────────────
     const files: ArtifactAgentContext["files"] = []
     if (artifact.files && Array.isArray(artifact.files)) {
       for (const f of artifact.files as any[]) {
@@ -141,7 +166,35 @@ export async function processArtifactGeneration(
 
     await updateJobProgress(jobId, 90)
 
-    // ── 4. Persist version ────────────────────────────────────────────────
+    // ── 4. Track token usage ─────────────────────────────────────────────
+    // Estimate tokens (rough: 4 chars ≈ 1 token)
+    const totalInputTokens = Math.ceil((ctx.instructions.length + JSON.stringify(ctx.files).length) / 4)
+    const totalOutputTokens = Math.ceil(generatedCode.length / 4)
+    const totalTokens = totalInputTokens + totalOutputTokens
+
+    if (totalTokens > 0) {
+      await trackTokenUsage(userId, totalTokens)
+
+      try {
+        await prisma.usageMetric.create({
+          data: {
+            userId: BigInt(userId),
+            assistantId: artifact.assistant?.id ? BigInt(artifact.assistant.id) : null,
+            inputToken: totalInputTokens,
+            outputToken: totalOutputTokens,
+            totalToken: totalTokens,
+            totalCost: (totalTokens / 1_000_000) * 0.375,
+            costType: "artifact_generation",
+            toolUsing: "orchestrator",
+          },
+        })
+        console.log(`[ArtifactGenService] ✅ Token usage tracked: ${totalTokens} tokens`)
+      } catch (metricsErr) {
+        console.warn("[ArtifactGenService] Failed to create usage metric (non-fatal):", metricsErr)
+      }
+    }
+
+    // ── 5. Persist version ────────────────────────────────────────────────
     const versionResult = await createArtifactVersion({
       artifactId,
       userId: BigInt(userId),

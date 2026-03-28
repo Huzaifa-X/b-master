@@ -6,7 +6,7 @@ import { z } from "zod"
 const deploySchema = z.object({
     repoName: z.string().min(1, "Repository name is required"),
     description: z.string().optional(),
-    isPrivate: z.boolean().default(true),
+    isPrivate: z.boolean().default(false), // Default to public for deployment access
     files: z.record(z.string(), z.string()).refine((val) => Object.keys(val).length > 0, { message: "No files to deploy" }),
     isUpdate: z.boolean().optional(),
     activeArtifactId: z.number().optional(),
@@ -165,10 +165,42 @@ export async function deployToGithubAndVercel(input: any) {
         })
 
         // ============================================
+        // 8.5. Verify repository accessibility
+        // ============================================
+        if (!isUpdate) {
+            // Give GitHub a moment to propagate the new repository
+            await new Promise(resolve => setTimeout(resolve, 2000))
+
+            // Verify the repository is public and accessible
+            try {
+                const { data: repoData } = await octokit.rest.repos.get({
+                    owner,
+                    repo: repoName,
+                })
+
+                console.log(`Repository ${owner}/${repoName} - Private: ${repoData.private}`)
+
+                // If repository is private, make it public for deployment
+                if (repoData.private) {
+                    console.log(`Making repository ${owner}/${repoName} public for deployment...`)
+                    await octokit.rest.repos.update({
+                        owner,
+                        repo: repoName,
+                        private: false,
+                    })
+                    console.log(`Repository ${owner}/${repoName} is now public`)
+                }
+            } catch (verifyErr: any) {
+                console.error(`Failed to verify repository: ${verifyErr.message}`)
+            }
+        }
+
+        // ============================================
         // 9. Deploy to Vercel via internal API endpoint
         // ============================================
         const fullRepoPath = `${owner}/${repoName}`
-        const deployEndpoint = "https://pdf-converter.dev.bmaster.ch/deploy"
+        const DEPLOY_API_BASE = process.env.DEPLOY_API_URL || "https://deploy.prod.bmaster.ch/"
+        const deployEndpoint = `${DEPLOY_API_BASE}deploy`
 
         let vercelUrl = ""
 

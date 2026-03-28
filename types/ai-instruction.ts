@@ -28,5 +28,10 @@ export interface GenerateInstructionsResponse {
   success: boolean
   instructions?: string
   error?: string
+  tokenLimitError?: {
+    currentUsage: string
+    limit: string
+    resetDate: string
+  }
 }
 

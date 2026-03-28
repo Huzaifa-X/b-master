@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Globe, Github, AlertCircle, CheckCircle2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useLocale } from "@/lib/i18n"
+import { CustomDomainDialog } from "./custom-domain-dialog"
 
 
 interface ActionResponse<T> {
@@ -41,9 +42,10 @@ export function GithubDeployDialog({
     const [repoName, setRepoName] = useState(initialRepoName || "")
     const [description, setDescription] = useState("")
     const [isDeploying, setIsDeploying] = useState(false)
-    const [successData, setSuccessData] = useState<{ githubUrl?: string; vercelUrl?: string } | null>(null)
+    const [successData, setSuccessData] = useState<{ githubUrl?: string; vercelUrl?: string; artifactId?: number } | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [step, setStep] = useState<"idle" | "packaging" | "github" | "vercel">("idle")
+    const [domainDialogOpen, setDomainDialogOpen] = useState(false)
 
 
     // Update repo name if props change
@@ -106,6 +108,7 @@ export function GithubDeployDialog({
     }
 
     return (
+        <>
         <Dialog open={open} onOpenChange={isDeploying ? undefined : handleClose}>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
@@ -152,6 +155,18 @@ export function GithubDeployDialog({
                                         {successData.githubUrl.replace('https://github.com/', '')}
                                     </a>
                                 </div>
+                            )}
+
+                            {/* Custom Domain Button */}
+                            {successData.githubUrl && successData.artifactId && (
+                                <Button
+                                    variant="outline"
+                                    className="w-full mt-2"
+                                    onClick={() => setDomainDialogOpen(true)}
+                                >
+                                    <Globe className="mr-2 h-4 w-4" />
+                                    {t("bCoder.deploy.addCustomDomain")}
+                                </Button>
                             )}
                         </div>
                     </div>
@@ -226,5 +241,16 @@ export function GithubDeployDialog({
                 )}
             </DialogContent>
         </Dialog>
+
+        {/* Custom Domain Dialog */}
+        {successData?.artifactId && successData?.githubUrl && (
+            <CustomDomainDialog
+                open={domainDialogOpen}
+                onOpenChange={setDomainDialogOpen}
+                artifactId={successData.artifactId}
+                githubUrl={successData.githubUrl}
+            />
+        )}
+        </>
     )
 }

@@ -2,6 +2,7 @@ import { openai } from '@/lib/openai'
 import { getSystemPrompt } from '@/lib/runtime/prompts'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { canUseTokens, trackTokenUsage } from '@/lib/utils/token-limits'
 import prisma from '@/lib/prisma'
 import upstageService from '@/lib/services/upstageService'
 import { getTemplateById } from '@/lib/templates'
@@ -522,6 +523,38 @@ Emit full file contents for every file you touch — never partial diffs.
 
 export async function POST(req: Request) {
     try {
+        // 1. CHECK AUTHENTICATION
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return new Response(
+                JSON.stringify({ error: 'Authentication required' }),
+                { status: 401, headers: { 'Content-Type': 'application/json' } }
+            )
+        }
+
+        // 2. CHECK TOKEN QUOTA BEFORE AI CALL
+        const estimatedTokens = 10000 // Chat is the most complex operation
+        const tokenCheck = await canUseTokens(estimatedTokens, session.user.id)
+
+        if (!tokenCheck.allowed) {
+            const percentUsed = tokenCheck.limit > BigInt(0)
+                ? Number((tokenCheck.currentUsage * BigInt(100)) / tokenCheck.limit)
+                : 0
+
+            return new Response(
+                JSON.stringify({
+                    error: 'Token limit exceeded',
+                    message: tokenCheck.error,
+                    currentUsage: tokenCheck.currentUsage.toString(),
+                    limit: tokenCheck.limit.toString(),
+                    percentUsed,
+                    resetDate: tokenCheck.resetDate.toISOString(),
+                    upgradeUrl: '/pricing'
+                }),
+                { status: 429, headers: { 'Content-Type': 'application/json' } }
+            )
+        }
+
         const body = await req.json()
         const { messages, fileStructure, currentFile, templateId, currentFiles, plan } = body
 
@@ -713,6 +746,8 @@ ${plan ? buildPlanContext(plan) : ''}
         // Pipe the Responses API SSE stream to the client as a simple
         // newline-delimited JSON stream that our custom hook reads.
         const encoder = new TextEncoder()
+        let totalTokens = 0
+
         const readable = new ReadableStream({
             async start(controller) {
                 try {
@@ -727,6 +762,11 @@ ${plan ? buildPlanContext(plan) : ''}
                             console.log('[b-coder/chat] Sending to client:', chunk);
                             controller.enqueue(encoder.encode(`data: ${chunk}\n\n`))
                         } else if (event.type === 'response.completed') {
+                            // Extract usage if available from the completion event
+                            if ((event as any).usage) {
+                                totalTokens = (event as any).usage.total_tokens || 0
+                            }
+
                             const chunk = JSON.stringify({ type: 'done' });
                             console.log('[b-coder/chat] Sending to client:', chunk);
                             controller.enqueue(encoder.encode(`data: ${chunk}\n\n`))
@@ -735,6 +775,26 @@ ${plan ? buildPlanContext(plan) : ''}
                             console.log('[b-coder/chat] Sending to client:', err);
                             controller.enqueue(encoder.encode(`data: ${err}\n\n`))
                         }
+                    }
+
+                    // Track token usage after completion
+                    if (totalTokens > 0) {
+                        await trackTokenUsage(session.user.id, totalTokens)
+
+                        // Also create detailed usage metric
+                        await prisma.usageMetric.create({
+                            data: {
+                                userId: BigInt(session.user.id),
+                                assistantId: null,
+                                inputToken: 0,
+                                outputToken: 0,
+                                totalToken: totalTokens,
+                                totalCost: (totalTokens / 1_000_000) * 0.375,
+                                costType: "b-coder",
+                                toolUsing: "chat"
+                            }
+                        })
+                        console.log('[b-coder/chat] ✅ Token usage tracked:', totalTokens)
                     }
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : 'Stream error'
