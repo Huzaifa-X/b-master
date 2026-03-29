@@ -1,4 +1,8 @@
 ﻿import { openai } from '@/lib/openai'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { canUseTokens, trackTokenUsage } from '@/lib/utils/token-limits'
+import prisma from '@/lib/prisma'
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -15,6 +19,38 @@ interface SelectedElement {
 
 export async function POST(req: Request) {
     try {
+        // 1. CHECK AUTHENTICATION
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return new Response(
+                JSON.stringify({ error: 'Authentication required' }),
+                { status: 401, headers: { 'Content-Type': 'application/json' } }
+            )
+        }
+
+        // 2. CHECK TOKEN QUOTA BEFORE AI CALL
+        const estimatedTokens = 5000 // Visual edit operations
+        const tokenCheck = await canUseTokens(estimatedTokens, session.user.id)
+
+        if (!tokenCheck.allowed) {
+            const percentUsed = tokenCheck.limit > BigInt(0)
+                ? Number((tokenCheck.currentUsage * BigInt(100)) / tokenCheck.limit)
+                : 0
+
+            return new Response(
+                JSON.stringify({
+                    error: 'Token limit exceeded',
+                    message: tokenCheck.error,
+                    currentUsage: tokenCheck.currentUsage.toString(),
+                    limit: tokenCheck.limit.toString(),
+                    percentUsed,
+                    resetDate: tokenCheck.resetDate.toISOString(),
+                    upgradeUrl: '/pricing'
+                }),
+                { status: 429, headers: { 'Content-Type': 'application/json' } }
+            )
+        }
+
         const body = await req.json()
         const { elementInfo, changeRequest, currentFiles, templateId } = body as {
             elementInfo: SelectedElement
@@ -93,6 +129,27 @@ Find the file, apply the change, return JSON.`
             max_tokens: 6000,
             temperature: 0.05,
         })
+
+        // Track token usage
+        const totalTokens = response.usage?.total_tokens || 0
+        if (totalTokens > 0) {
+            await trackTokenUsage(session.user.id, totalTokens)
+
+            // Also create detailed usage metric
+            await prisma.usageMetric.create({
+                data: {
+                    userId: BigInt(session.user.id),
+                    assistantId: null,
+                    inputToken: response.usage?.prompt_tokens || 0,
+                    outputToken: response.usage?.completion_tokens || 0,
+                    totalToken: totalTokens,
+                    totalCost: (totalTokens / 1_000_000) * 0.375,
+                    costType: "b-coder",
+                    toolUsing: "visual-edit"
+                }
+            })
+            console.log('[b-coder/visual-edit] ✅ Token usage tracked:', totalTokens)
+        }
 
         const raw = response.choices[0]?.message?.content || '{}'
         let result: { file: string; newContent: string; explanation: string }

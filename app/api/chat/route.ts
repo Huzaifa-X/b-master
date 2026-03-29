@@ -14,6 +14,7 @@ import { decrypt } from "@/lib/encryption"
 import { swissQRInvoiceInstructions } from "@/lib/templates/swiss-qr-invoice"
 import { getChatTools } from "@/lib/chat-tools"
 import { buildUserContext, getGeoSystemContext } from "@/lib/services/geo-service"
+import { canUseTokens, trackTokenUsage } from "@/lib/utils/token-limits"
 import {
     streamText,
     convertToModelMessages,
@@ -62,6 +63,32 @@ export async function POST(req: NextRequest) {
         const session = await getServerSession(authOptions)
         if (!session?.user?.id) {
             return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
+        }
+
+        // Check token quota BEFORE processing
+        const estimatedTokens = 5000 // Estimate for complex chat with context
+        const tokenCheck = await canUseTokens(estimatedTokens, session.user.id)
+
+        if (!tokenCheck.allowed) {
+            const percentUsed = tokenCheck.limit > BigInt(0)
+                ? Number((tokenCheck.currentUsage * BigInt(100)) / tokenCheck.limit)
+                : 0
+
+            return new Response(
+                JSON.stringify({
+                    error: "Token limit exceeded",
+                    message: tokenCheck.error,
+                    currentUsage: tokenCheck.currentUsage.toString(),
+                    limit: tokenCheck.limit.toString(),
+                    percentUsed,
+                    resetDate: tokenCheck.resetDate.toISOString(),
+                    upgradeUrl: "/pricing"
+                }),
+                {
+                    status: 429,
+                    headers: { 'Content-Type': 'application/json' }
+                }
+            )
         }
 
         const body = await req.json()
@@ -1004,19 +1031,28 @@ Content here...
                     const finalUsage = await getUsage()
 
                     if (finalUsage && assistantId) {
+                        const totalTokens = finalUsage.totalTokens || 0
+
+                        // Create detailed usage metric for analytics
                         await prisma.usageMetric.create({
                             data: {
                                 userId: chat.userId,
                                 assistantId: BigInt(assistantId),
                                 inputToken: finalUsage.inputTokens || 0,
                                 outputToken: finalUsage.outputTokens || 0,
-                                totalToken: finalUsage.totalTokens || 0,
-                                totalCost: ((finalUsage.totalTokens || 0) / 1_000_000) * 0.375,
+                                totalToken: totalTokens,
+                                totalCost: (totalTokens / 1_000_000) * 0.375,
                                 costType: "chat",
                                 toolUsing: usedTools.length > 0 ? usedTools.join(",") : undefined
                             }
                         })
                         console.log("[Chat] ✅ Usage metrics saved")
+
+                        // Track token usage for quota enforcement
+                        if (totalTokens > 0) {
+                            await trackTokenUsage(session.user.id, totalTokens)
+                            console.log("[Chat] ✅ Token usage tracked:", totalTokens)
+                        }
                     }
                 } catch (error) {
                     console.error("[Chat] Failed to save usage metrics:", error)

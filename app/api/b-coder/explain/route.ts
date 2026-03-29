@@ -1,5 +1,9 @@
 import { openai } from '@/lib/openai'
 import type { BCoderPlan } from '@/app/api/b-coder/plan/route'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { canUseTokens, trackTokenUsage } from '@/lib/utils/token-limits'
+import prisma from '@/lib/prisma'
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -7,6 +11,38 @@ export const maxDuration = 30
 
 export async function POST(req: Request) {
     try {
+        // 1. CHECK AUTHENTICATION
+        const session = await getServerSession(authOptions)
+        if (!session?.user?.id) {
+            return new Response(
+                JSON.stringify({ error: 'Authentication required' }),
+                { status: 401, headers: { 'Content-Type': 'application/json' } }
+            )
+        }
+
+        // 2. CHECK TOKEN QUOTA BEFORE AI CALL
+        const estimatedTokens = 5000 // Explain generation
+        const tokenCheck = await canUseTokens(estimatedTokens, session.user.id)
+
+        if (!tokenCheck.allowed) {
+            const percentUsed = tokenCheck.limit > BigInt(0)
+                ? Number((tokenCheck.currentUsage * BigInt(100)) / tokenCheck.limit)
+                : 0
+
+            return new Response(
+                JSON.stringify({
+                    error: 'Token limit exceeded',
+                    message: tokenCheck.error,
+                    currentUsage: tokenCheck.currentUsage.toString(),
+                    limit: tokenCheck.limit.toString(),
+                    percentUsed,
+                    resetDate: tokenCheck.resetDate.toISOString(),
+                    upgradeUrl: '/pricing'
+                }),
+                { status: 429, headers: { 'Content-Type': 'application/json' } }
+            )
+        }
+
         const body = await req.json()
         const { plan, fileChanges = [] }: { plan: BCoderPlan; fileChanges: string[] } = body
 

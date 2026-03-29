@@ -39,6 +39,9 @@ model User {
   subscriptionStatus            String?                         @db.VarChar(50)
   cancelAtPeriodEnd             Boolean?                        @default(false) @map("cancel_at_period_end")
   scheduledPlanChangeId         Int?                            @map("scheduled_plan_change_id")
+  // TOKEN USAGE TRACKING
+  tokenUsage                    BigInt                          @default(0)
+  tokenUsageResetAt             DateTime                        @default(now())
   // PRIVACY SETTINGS
   emailVisible                  Boolean                         @default(false) @map("email_visible")
   accounts                      Account[]
@@ -80,6 +83,7 @@ model User {
   @@index([stripeCustomerId])
   @@index([stripeConnectAccountId])
   @@index([currentPlanId])
+  @@index([tokenUsageResetAt])
   @@map("users")
 }
 
@@ -133,6 +137,7 @@ model Plan {
   stripeProductId      String?   @db.VarChar(255)
   stripePriceId        String?   @db.VarChar(255)
   assistantLimit       Int       @default(1)
+  monthlyTokenLimit    BigInt    @default(100000)
   isActive             Boolean   @default(true)
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
@@ -526,6 +531,7 @@ model AssistantArtifact {
   thumbnailUrl    String?
   videoMetadata   Json?                   @db.Json
   videoUrl        String?
+  metadata        Json?                   @db.Json
   activeVersionId Int?
   deletedAt       DateTime?
   shareableId     String?                 @unique @db.VarChar(255)
