@@ -1364,8 +1364,9 @@ export async function shareArtifact(data: {
             }
         }
 
-        // Create shareable link (strip any trailing slash from NEXTAUTH_URL)
-        const baseUrl = (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/$/, '')
+        // Create shareable link (strip non-ASCII chars and trailing slash from NEXTAUTH_URL)
+        const rawBaseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+        const baseUrl = rawBaseUrl.replace(/[^\x20-\x7E]/g, '').replace(/\s+/g, '').trim().replace(/\/$/, '') || 'http://localhost:3000'
         const shareableLink = `${baseUrl}/share/${shareableId}`
 
         // Send message with artifact link — use 'url' type so it renders as a clickable card

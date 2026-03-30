@@ -443,7 +443,8 @@ export function useAIChat(options: UseAIChatOptions) {
         }
     ) => {
         const isStreaming = status === 'streaming' || status === 'submitted'
-        if (!context || !content.trim() || isStreaming) {
+        // Allow sending if there's text OR attachments
+        if (!context || (!content.trim() && (!attachments || attachments.length === 0)) || isStreaming) {
             console.warn("[useAIChat] Cannot send message - not ready or already streaming")
             return
         }
@@ -456,11 +457,14 @@ export function useAIChat(options: UseAIChatOptions) {
             ...options
         }
 
+        // Prepare message text - use placeholder if empty but has attachments
+        const messageText = content.trim() || (attachments && attachments.length > 0 ? "[File attachment]" : "")
+
         // Store pending attachments with message content for immediate UI display
         // We match by content to correctly associate attachments with the right message
         if (attachments && attachments.length > 0) {
             pendingAttachmentsRef.current = {
-                messageContent: content.trim(),
+                messageContent: messageText,
                 attachments
             }
             console.log("[useAIChat] Stored pending attachments for UI:", attachments.length)
@@ -471,7 +475,7 @@ export function useAIChat(options: UseAIChatOptions) {
 
         // Use AI SDK's sendMessage - server handles DB save
         aiSendMessage({
-            text: content.trim(),
+            text: messageText,
         })
     }, [context, status, aiSendMessage])
 

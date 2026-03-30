@@ -23,7 +23,10 @@ Intent classification:
 - "update": targeted modification, fix, addition, or edit to an existing artifact
 - "qa": user is asking a question about the artifact content (totals, dates, names, values, etc.) WITHOUT wanting any code/HTML change
 
-CRITICAL for qa intent: read the CURRENT ARTIFACT CONTENT section carefully and answer from it directly.`
+CRITICAL RULES:
+1. For qa intent: read the CURRENT ARTIFACT CONTENT section carefully and answer from it directly
+2. For attached images/PDFs: Extract the TEXT CONTENT and data from them - DO NOT extract or reference URLs
+3. When processing files: Focus on what information they contain, not where they are stored`
 
 export async function runRequirementAgent(
   userPrompt: string,
@@ -59,8 +62,8 @@ export async function runRequirementAgent(
   }
 
   if (ctx.images.length > 0) {
-    parts.push(`\n## Attached Images`)
-    ctx.images.forEach(img => parts.push(`- ${img.name}: ${img.url}`))
+    parts.push(`\n## Attached Images (for content analysis only - DO NOT use URLs in artifact)`)
+    ctx.images.forEach(img => parts.push(`- ${img.name}: [Image attached for analysis - describe content, don't reference URL]`))
   }
 
   // When answering questions about an existing artifact, provide the readable

@@ -13,7 +13,7 @@ interface Contact {
   description: string
   avatar: string
   gender: string
-  role: "user" | "client" | "investor"
+  role: string
   address: string
   telephone?: string // Contact telephone number
   information?: string // Additional contact information

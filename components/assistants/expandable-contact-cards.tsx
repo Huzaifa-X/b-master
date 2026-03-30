@@ -32,7 +32,7 @@ interface Contact {
     description: string
     avatar: string
     gender: string
-    role: "user" | "client" | "investor"
+    role: string
     address: string
     telephone?: string
     information?: string
@@ -41,20 +41,29 @@ interface Contact {
 }
 
 const getRoleBadgeColor = (role: string) => {
-    switch (role) {
+    const r = role.toLowerCase()
+    switch (r) {
         case "client":
             return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+        case "prospect":
+            return "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
         case "investor":
             return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+        case "colleague":
+            return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+        case "coworker":
+        case "associate":
+            return "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400"
         case "user":
             return "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400"
         default:
-            return "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400"
+            return "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
     }
 }
 
 interface ExpandableContactCardsProps {
     searchQuery: string
+    roleFilter?: string
     assistantId?: string
     contacts?: Contact[]
     isLoading?: boolean
@@ -65,6 +74,7 @@ interface ExpandableContactCardsProps {
 
 export function ExpandableContactCards({ 
     searchQuery, 
+    roleFilter = "all",
     assistantId, 
     contacts = [],
     isLoading = false,
@@ -98,11 +108,15 @@ export function ExpandableContactCards({
         },
     })
 
-    const filteredContacts = contacts.filter(
-        (contact) =>
+    const filteredContacts = contacts.filter((contact) => {
+        const matchesSearch =
             contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             contact.email.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+        
+        const matchesRole = roleFilter === "all" || contact.role === roleFilter
+        
+        return matchesSearch && matchesRole
+    })
 
     useEffect(() => {
         function onKeyDown(event: KeyboardEvent) {
@@ -215,7 +229,9 @@ export function ExpandableContactCards({
 
                                         {!viewOnly && (
                                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(active.role)}`}>
-                                                {active.role.charAt(0).toUpperCase() + active.role.slice(1)}
+                                                {t(`contacts.roles.${active.role.toLowerCase()}`) !== `contacts.roles.${active.role.toLowerCase()}` 
+                                                    ? t(`contacts.roles.${active.role.toLowerCase()}`) 
+                                                    : active.role}
                                             </span>
                                         )}
                                         {!viewOnly && active.assistantName && (
@@ -260,7 +276,11 @@ export function ExpandableContactCards({
                                                     <Briefcase className="h-5 w-5 text-muted-foreground mt-0.5" />
                                                     <div>
                                                         <p className="text-xs text-muted-foreground">{t("contacts.role")}</p>
-                                                        <p className="text-sm font-medium capitalize">{active.role}</p>
+                                                        <p className="text-sm font-medium">
+                                                            {t(`contacts.roles.${active.role.toLowerCase()}`) !== `contacts.roles.${active.role.toLowerCase()}` 
+                                                                ? t(`contacts.roles.${active.role.toLowerCase()}`) 
+                                                                : active.role}
+                                                        </p>
                                                     </div>
                                                 </div>
 
@@ -448,13 +468,17 @@ export function ExpandableContactCards({
                                                         </div>
                                                     )}
 
-                                                    <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                                                        <Briefcase className="h-5 w-5 text-muted-foreground mt-0.5" />
-                                                        <div>
-                                                            <p className="text-xs text-muted-foreground">Role</p>
-                                                            <p className="text-sm font-medium capitalize">{active.role}</p>
-                                                        </div>
-                                                    </div>
+                                                     <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                                                         <Briefcase className="h-5 w-5 text-muted-foreground mt-0.5" />
+                                                         <div>
+                                                             <p className="text-xs text-muted-foreground">Role</p>
+                                                             <p className="text-sm font-medium">
+                                                                {t(`contacts.roles.${active.role.toLowerCase()}`) !== `contacts.roles.${active.role.toLowerCase()}` 
+                                                                    ? t(`contacts.roles.${active.role.toLowerCase()}`) 
+                                                                    : active.role}
+                                                             </p>
+                                                         </div>
+                                                     </div>
 
                                                     <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
                                                         <Mail className="h-5 w-5 text-muted-foreground mt-0.5" />

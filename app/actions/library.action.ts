@@ -12,6 +12,7 @@ import {
 import { uploadToS3, deleteFromS3 } from "@/lib/aws-s3"
 import { openai } from "@/lib/openai"
 import { getPresignedImageUrl } from "@/app/actions/image.actions"
+import { triggerWebScraping } from "@/lib/web-scraper"
 
 // ============================================================
 // TYPES
@@ -23,6 +24,8 @@ export interface LibraryFile {
   name: string
   /** S3 URL (for type=file) or original URL (for type=url) */
   url: string | null
+  /** Full content if it's a note/text */
+  content?: string | null
   /** OpenAI file ID in the vector store */
   vectorFileId: string | null
   /** OpenAI vector store status if known */
@@ -126,6 +129,7 @@ export async function getAssistantLibrary(assistantId: string): Promise<{
           ? entry.note.substring(0, 60) + (entry.note.length > 60 ? "…" : "")
           : "Note",
         url: null,
+        content: entry.note,
         vectorFileId: entry.vectorFileId,
         vectorStatus,
         createdAt: entry.createdAt,
@@ -375,14 +379,55 @@ export async function addLibraryUrl(
       },
     })
 
+    // Trigger web scraping immediately if vector store exists
+    let vectorFileId: string | null = null
+    let isCrawled = false
+
+    if (assistant.vectorStoreId) {
+      console.log(`🌐 Triggering web scraping for URL: ${trimmedUrl}`)
+
+      try {
+        const scrapeResult = await triggerWebScraping({
+          url: trimmedUrl,
+          vectorStoreId: assistant.vectorStoreId,
+          maxPages: 20,
+        })
+
+        if (scrapeResult.success && scrapeResult.vectorFileId) {
+          vectorFileId = scrapeResult.vectorFileId
+          isCrawled = true
+
+          // Update KB entry with vector file ID
+          await prisma.assistantKnowledgebase.update({
+            where: { id: kbEntry.id },
+            data: {
+              vectorFileId: scrapeResult.vectorFileId,
+              isCrawled: true,
+              updatedAt: new Date(),
+            },
+          })
+
+          console.log(`✅ Successfully scraped and added to vector store: ${trimmedUrl}`)
+        } else {
+          console.error(`⚠️ Web scraping failed for ${trimmedUrl}: ${scrapeResult.error}`)
+          // Don't fail the entire operation - cron job will retry later
+        }
+      } catch (scrapeError) {
+        console.error(`⚠️ Error during web scraping for ${trimmedUrl}:`, scrapeError)
+        // Don't fail the entire operation - cron job will retry later
+      }
+    } else {
+      console.warn(`⚠️ No vector store found for assistant ${assistantId}, URL will be crawled by cron job`)
+    }
+
     const libraryFile: LibraryFile = {
       id: kbEntry.id,
       type: "url",
       name: trimmedUrl,
       url: trimmedUrl,
-      vectorFileId: null,
-      vectorStatus: null,
-      isCrawled: false,
+      vectorFileId,
+      vectorStatus: isCrawled ? "completed" : "pending",
+      isCrawled,
       createdAt: kbEntry.createdAt,
     }
 
@@ -478,6 +523,7 @@ export async function addLibraryNote(
       type: "text",
       name: noteName,
       url: null,
+      content: noteText,
       vectorFileId,
       vectorStatus: null,
       createdAt: kbEntry.createdAt,

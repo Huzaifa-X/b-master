@@ -388,7 +388,8 @@ export async function createPortalSession(): Promise<CreatePortalSessionResult> 
     // ============================================
     // 3. PORTAL SESSION CREATION
     // ============================================
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000"
+    const rawBaseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000"
+    const baseUrl = rawBaseUrl.replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, "").trim() || "http://localhost:3000"
 
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: user.stripeCustomerId,

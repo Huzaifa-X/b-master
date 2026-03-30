@@ -50,7 +50,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
   onVersionSelect
 }) => {
 
-  const { artifactContent, isPreviewMode, togglePreview, setPrefilledPrompt, setSurgicalEditOuterHtml, isEditMode, toggleEditMode, updateArtifactContent, closePanel, isFullscreen, toggleFullscreen, wasAutoOpened } = useArtifactStore();
+  const { artifactContent, isPreviewMode, togglePreview, setPrefilledPrompt, setSurgicalEditOuterHtml, isEditMode, toggleEditMode, updateArtifactContent, closePanel, isFullscreen, toggleFullscreen, setFullscreen, wasAutoOpened } = useArtifactStore();
 
   // Determine if we're in artifact mode (with version control) or chat mode (preview only)
   const isArtifactMode = !!artifactId;
@@ -412,6 +412,8 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
           setInlineEditState(prev => ({ ...prev, visible: false }));
         } else if (isVisualEditMode) {
           setIsVisualEditMode(false);
+        } else if (isFullscreen) {
+          setFullscreen(false);
         }
       }
     };
@@ -836,7 +838,7 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
   return (
 
-    <div className="h-full flex flex-col bg-background border-l">
+    <div className={`h-full flex flex-col bg-background border-l ${isFullscreen ? "fixed inset-0 z-50" : ""}`}>
 
       {/* Header */}
 
@@ -926,17 +928,16 @@ export const ArtifactPanel: FC<ArtifactPanelProps> = ({
 
           {/* Fullscreen Toggle Button - Desktop only */}
           <Button
-            variant={isFullscreen ? "default" : "ghost"}
-            size="icon"
-            className={`h-7 w-7 md:h-8 md:w-8 hidden md:flex ${isFullscreen ? "bg-blue-500 hover:bg-blue-600 text-white" : ""
-              }`}
-            title={isFullscreen ? t("artifactPanel.exitFullscreen") : t("artifactPanel.expandToFullscreen")}
+            variant="ghost"
+            size="sm"
             onClick={toggleFullscreen}
+            className="h-7 w-7 md:h-8 md:w-8 p-0 hover:bg-muted text-muted-foreground hover:text-foreground hidden md:flex items-center justify-center"
+            title={isFullscreen ? t("artifactPanel.exitFullscreen") : t("artifactPanel.expandToFullscreen")}
           >
             {isFullscreen ? (
-              <Minimize2 className="h-3 w-3 md:h-4 md:w-4" />
+              <Minimize2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
             ) : (
-              <Maximize2 className="h-3 w-3 md:h-4 md:w-4" />
+              <Maximize2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
             )}
           </Button>
 
