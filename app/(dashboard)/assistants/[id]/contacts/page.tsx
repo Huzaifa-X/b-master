@@ -11,6 +11,15 @@ import { toast } from "sonner"
 import { useSetAssistantMode } from "@/hooks/useAssistant"
 import { useAssistantContacts, useAddContact, useUpdateContact } from "@/hooks/useContacts"
 import { useAssistantPermissions } from "@/hooks/usePermissions"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+
+import { useLocale } from "@/lib/i18n"
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -18,6 +27,7 @@ interface PageProps {
 
 export default function ContactsPage({ params }: PageProps) {
   const { id: assistantId } = use(params)
+  const { t } = useLocale()
 
   // Set assistant mode in header (automatically handles fetching and cleanup)
   useSetAssistantMode(assistantId)
@@ -39,7 +49,19 @@ export default function ContactsPage({ params }: PageProps) {
   })
 
   const [searchQuery, setSearchQuery] = useState("")
+  const [roleFilter, setRoleFilter] = useState("all")
   const [dialogOpen, setDialogOpen] = useState(false)
+
+  const PREDEFINED_ROLES = [
+    "user",
+    "client",
+    "prospect",
+    "investor",
+    "colleague",
+    "associate",
+    "coworker",
+    "other",
+  ]
 
   // Check if user can add/edit contacts (only owners/admins can add/edit)
   // Buyers and shared users should check their permissions, but for contacts management, only owners are allowed
@@ -84,9 +106,9 @@ export default function ContactsPage({ params }: PageProps) {
         <div className="mb-6 md:mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 md:mb-6">
             <div>
-              <h1 className="text-xl sm:text-2xl font-medium mb-1 sm:mb-2">All Contacts</h1>
+              <h1 className="text-xl sm:text-2xl font-medium mb-1 sm:mb-2">{t("contacts.allContacts")}</h1>
               <p className="text-sm text-muted-foreground">
-                Manage your contacts for your assistant
+                {t("contacts.noContactsDescription")}
               </p>
             </div>
             {canAddContacts && (
@@ -95,28 +117,44 @@ export default function ContactsPage({ params }: PageProps) {
                 className="flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 <Plus className="h-4 w-4" />
-                <span>Add Contact</span>
+                <span>{t("contacts.addContact")}</span>
               </Button>
             )}
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="mb-8">
-          <div className="relative">
+        {/* Search & Filter Bar */}
+        <div className="mb-8 flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search contacts..."
+              placeholder={t("contacts.searchContacts")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 h-10"
             />
+          </div>
+          <div className="w-full sm:w-[180px]">
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder={t("contacts.role")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("common.all")}</SelectItem>
+                {PREDEFINED_ROLES.map((role) => (
+                  <SelectItem key={role} value={role}>
+                    {t(`contacts.roles.${role}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
         {/* Expandable Contact Cards */}
         <ExpandableContactCards
           searchQuery={searchQuery}
+          roleFilter={roleFilter}
           assistantId={assistantId}
           contacts={contacts}
           isLoading={isLoadingContacts}

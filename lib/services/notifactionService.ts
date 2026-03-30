@@ -569,11 +569,15 @@ class NotificationService {
         return;
       }
 
+      const isDeployedProject = artifact.category === 'Deployed Project';
+
       // Notify the creator
       await this.createNotification({
         userId: creatorId,
-        title: "✨ Artifact Created Successfully!",
-        message: `Your artifact "${artifact.name}" has been created for the assistant "${assistant.name}".`,
+        title: isDeployedProject ? "🚀 Application Created Successfully!" : "✨ Artifact Created Successfully!",
+        message: isDeployedProject 
+          ? `Your application "${artifact.name}" has been successfully created and recorded. You can view it along with your artifacts.`
+          : `Your artifact "${artifact.name}" has been created for the assistant "${assistant.name}".`,
         type: 'artifact_created',
         relatedId: artifactId,
         relatedType: 'artifact',
@@ -592,8 +596,10 @@ class NotificationService {
       for (const userId of uniqueUserIds) {
         await this.createNotification({
           userId,
-          title: "🆕 New Artifact Available!",
-          message: `${creator.name} has created a new artifact "${artifact.name}" for the assistant "${assistant.name}".`,
+          title: isDeployedProject ? "🆕 New Application Available!" : "🆕 New Artifact Available!",
+          message: isDeployedProject
+            ? `${creator.name} has launched a new application "${artifact.name}" for the assistant "${assistant.name}".`
+            : `${creator.name} has created a new artifact "${artifact.name}" for the assistant "${assistant.name}".`,
           type: 'artifact_created',
           relatedId: artifactId,
           relatedType: 'artifact',

@@ -29,7 +29,7 @@ export interface ContactFormData {
   description: string
   avatar: File | string | null
   gender: string
-  role: "user" | "client" | "investor"
+  role: string
   address: string
   telephone?: string // Contact telephone number
   information?: string // Additional contact information
@@ -57,11 +57,32 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
     information: "",
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isOtherRole, setIsOtherRole] = useState(false)
+  const [customRole, setCustomRole] = useState("")
+
+  const PREDEFINED_ROLES = [
+    "user",
+    "client",
+    "prospect",
+    "investor",
+    "colleague",
+    "associate",
+    "coworker",
+    "other",
+  ]
 
   // Populate form when editing
   useEffect(() => {
     if (contact) {
       setFormData(contact)
+      const isPredefined = PREDEFINED_ROLES.includes(contact.role) || contact.role === "other"
+      if (!isPredefined) {
+        setIsOtherRole(true)
+        setCustomRole(contact.role)
+      } else {
+        setIsOtherRole(contact.role === "other")
+        setCustomRole("")
+      }
     } else {
       // Reset form when adding new
       setFormData({
@@ -75,6 +96,8 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
         telephone: "",
         information: "",
       })
+      setIsOtherRole(false)
+      setCustomRole("")
     }
   }, [contact, open])
 
@@ -83,13 +106,13 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
 
     // Validation for adding new contact
     if (!contact) {
-    if (!formData.email.trim()) {
-      toast.error(t("auth.invalidEmail"))
-      return
-    }
+      if (!formData.email.trim()) {
+        toast.error(t("auth.invalidEmail"))
+        return
+      }
       if (!formData.role) {
         toast.error(t("contacts.roles.user")) // Generic role error
-      return
+        return
       }
       // Description is optional but we'll allow empty
     }
@@ -105,15 +128,19 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
     setIsSubmitting(true)
     try {
       if (onSave) {
-        await onSave(formData)
+        // If "other" is selected, use the custom role value
+        const dataToSave = {
+          ...formData,
+          role: isOtherRole ? customRole.trim() || t("contacts.roles.other") : formData.role,
+        }
+        await onSave(dataToSave)
       }
       // Don't close dialog or show success here - let the parent handle it
-      // The parent will handle success/error messages and closing
     } catch (error) {
       // Error handling is done in the parent component
     } finally {
       setIsSubmitting(false)
-  }
+    }
   }
 
 
@@ -125,8 +152,8 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
             {contact ? t("contacts.editContact") : t("contacts.addContact")}
           </DialogTitle>
           <DialogDescription>
-            {contact 
-              ? t("contacts.editDescriptionPrompt") 
+            {contact
+              ? t("contacts.editDescriptionPrompt")
               : t("contacts.addDescriptionPrompt")}
           </DialogDescription>
         </DialogHeader>
@@ -136,87 +163,111 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
           {!contact ? (
             <>
               {/* Email - Required */}
-            <div className="space-y-2">
-              <Label htmlFor="email">
-                Email <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="john@example.com"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                required
+              <div className="space-y-2">
+                <Label htmlFor="email">
+                  Email <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="john@example.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  required
                   disabled={isSubmitting}
-              />
+                />
                 <p className="text-xs text-muted-foreground">
                   {t("contacts.emailInputHint")}
                 </p>
-          </div>
+              </div>
 
               {/* Description - Optional */}
-          <div className="space-y-2">
-            <Label htmlFor="description">{t("contacts.description")}</Label>
-            <Textarea
-              id="description"
-              placeholder={t("contacts.descriptionPlaceholder")}
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={3}
-              className="resize-none"
+              <div className="space-y-2">
+                <Label htmlFor="description">{t("contacts.description")}</Label>
+                <Textarea
+                  id="description"
+                  placeholder={t("contacts.descriptionPlaceholder")}
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows={3}
+                  className="resize-none"
                   disabled={isSubmitting}
-            />
-          </div>
+                />
+              </div>
 
               {/* Telephone - Optional */}
-          <div className="space-y-2">
-            <Label htmlFor="telephone">{t("contacts.telephone")}</Label>
-            <Input
-              id="telephone"
-              type="tel"
-              placeholder="+1 (555) 123-4567"
-              value={formData.telephone || ""}
-              onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
-              disabled={isSubmitting}
-            />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="telephone">{t("contacts.telephone")}</Label>
+                <Input
+                  id="telephone"
+                  type="tel"
+                  placeholder="+1 (555) 123-4567"
+                  value={formData.telephone || ""}
+                  onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
+                  disabled={isSubmitting}
+                />
+              </div>
 
               {/* Information - Optional */}
-          <div className="space-y-2">
-            <Label htmlFor="information">{t("contacts.additionalInfo")}</Label>
-            <Textarea
-              id="information"
-              placeholder={t("contacts.additionalInfoPlaceholder")}
-              value={formData.information || ""}
-              onChange={(e) => setFormData({ ...formData, information: e.target.value })}
-              rows={3}
-              className="resize-none"
-              disabled={isSubmitting}
-            />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="information">{t("contacts.additionalInfo")}</Label>
+                <Textarea
+                  id="information"
+                  placeholder={t("contacts.additionalInfoPlaceholder")}
+                  value={formData.information || ""}
+                  onChange={(e) => setFormData({ ...formData, information: e.target.value })}
+                  rows={3}
+                  className="resize-none"
+                  disabled={isSubmitting}
+                />
+              </div>
 
               {/* Role - Required */}
-            <div className="space-y-2">
-                <Label htmlFor="role">
-                  {t("contacts.role")} <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                  value={formData.role}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, role: value as "user" | "client" | "investor" })
-                  }
-                  disabled={isSubmitting}
-              >
-                <SelectTrigger className="w-full">
-                    <SelectValue placeholder={t("contacts.role")} />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="user" className="focus:bg-muted focus:text-foreground">{t("contacts.roles.user")}</SelectItem>
-                    <SelectItem value="client" className="focus:bg-muted focus:text-foreground">{t("contacts.roles.client")}</SelectItem>
-                    <SelectItem value="investor" className="focus:bg-muted focus:text-foreground">{t("contacts.roles.investor")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="role">
+                    {t("contacts.role")} <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={isOtherRole ? "other" : formData.role}
+                    onValueChange={(value) => {
+                      if (value === "other") {
+                        setIsOtherRole(true)
+                      } else {
+                        setIsOtherRole(false)
+                        setFormData({ ...formData, role: value })
+                      }
+                    }}
+                    disabled={isSubmitting}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={t("contacts.role")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PREDEFINED_ROLES.map((role) => (
+                        <SelectItem
+                          key={role}
+                          value={role}
+                          className="focus:bg-muted focus:text-foreground"
+                        >
+                          {t(`contacts.roles.${role}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {isOtherRole && (
+                    <div className="pt-2">
+                      <Input
+                        placeholder={t("contacts.roles.custom")}
+                        value={customRole}
+                        onChange={(e) => setCustomRole(e.target.value)}
+                        disabled={isSubmitting}
+                        className="h-9 px-3"
+                        autoFocus
+                      />
+                    </div>
+                  )}
+                </div>
             </>
           ) : (
             <>
@@ -297,39 +348,63 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
               </div>
 
               {/* Role - Editable */}
-            <div className="space-y-2">
-                <Label htmlFor="role">
-                  {t("contacts.role")} <span className="text-destructive">*</span>
-                </Label>
-              <Select
-                value={formData.role}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, role: value as "user" | "client" | "investor" })
-                }
-                  disabled={isSubmitting}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t("contacts.role")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user" className="focus:bg-muted focus:text-foreground">{t("contacts.roles.user")}</SelectItem>
-                  <SelectItem value="client" className="focus:bg-muted focus:text-foreground">{t("contacts.roles.client")}</SelectItem>
-                  <SelectItem value="investor" className="focus:bg-muted focus:text-foreground">{t("contacts.roles.investor")}</SelectItem>
-                </SelectContent>
-              </Select>
-          </div>
+                <div className="space-y-2">
+                  <Label htmlFor="role">
+                    {t("contacts.role")} <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={isOtherRole ? "other" : formData.role}
+                    onValueChange={(value) => {
+                      if (value === "other") {
+                        setIsOtherRole(true)
+                      } else {
+                        setIsOtherRole(false)
+                        setFormData({ ...formData, role: value })
+                      }
+                    }}
+                    disabled={isSubmitting}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={t("contacts.role")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PREDEFINED_ROLES.map((role) => (
+                        <SelectItem
+                          key={role}
+                          value={role}
+                          className="focus:bg-muted focus:text-foreground"
+                        >
+                          {t(`contacts.roles.${role}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {isOtherRole && (
+                    <div className="pt-2">
+                      <Input
+                        placeholder={t("contacts.roles.custom")}
+                        value={customRole}
+                        onChange={(e) => setCustomRole(e.target.value)}
+                        disabled={isSubmitting}
+                        className="h-9 px-3"
+                        autoFocus
+                      />
+                    </div>
+                  )}
+                </div>
 
               {/* Address - Read-only */}
-          <div className="space-y-2">
-            <Label htmlFor="address">{t("contacts.address")}</Label>
-            <Textarea
-              id="address"
-              value={formData.address}
+              <div className="space-y-2">
+                <Label htmlFor="address">{t("contacts.address")}</Label>
+                <Textarea
+                  id="address"
+                  value={formData.address}
                   disabled
-              rows={2}
+                  rows={2}
                   className="resize-none bg-muted"
-            />
-          </div>
+                />
+              </div>
             </>
           )}
 
@@ -347,8 +422,8 @@ export function ContactDialog({ open, onOpenChange, contact, assistantId, onSave
               {isSubmitting
                 ? t("contacts.processing")
                 : contact
-                ? t("contacts.editContact")
-                : t("contacts.addContact")}
+                  ? t("contacts.editContact")
+                  : t("contacts.addContact")}
             </Button>
           </div>
         </form>

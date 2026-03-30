@@ -505,7 +505,13 @@ export const fr: TranslationKeys = {
     roles: {
       user: "Utilisateur",
       client: "Client",
+      prospect: "Prospect",
       investor: "Investisseur",
+      colleague: "Collègue",
+      associate: "Associé",
+      coworker: "Collaborateur",
+      other: "Autre",
+      custom: "Rôle personnalisé",
     },
     permissions: {
       chat: "Discussion",
@@ -1303,6 +1309,9 @@ export const fr: TranslationKeys = {
     addNote: "Ajouter une note",
     noItems: "Aucun élément pour l'instant",
     addItemsDescription: "Ajoutez des fichiers, des URL ou des notes à l'aide du bouton Ajouter",
+    searchPlaceholder: "Rechercher des fichiers, URL, notes...",
+    noResults: "Aucun résultat trouvé",
+    noResultsDescription: 'Aucun élément ne correspond à "{query}". Essayez un autre terme.',
     noFilesInLibrary: "Aucun fichier dans la bibliothèque",
     dropToUpload: "Déposer pour télécharger",
     filesCount: "Fichiers ({n})",

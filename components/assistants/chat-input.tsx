@@ -188,8 +188,8 @@ export function ChatInput({
   }, [selectedArtifacts, connectedApiIds])
 
   useEffect(() => {
-    const handler = (e: CustomEvent<{ message: string }>) => {
-      const message = e.detail?.message
+    const handler = (e: Event) => {
+      const message = (e as CustomEvent<{ message: string }>).detail?.message
       if (message) {
         const { selectedArtifacts: artifacts, connectedApiIds: apiIds } = currentStateRef.current
         // Set the value in the input (for visual feedback)
@@ -210,8 +210,8 @@ export function ChatInput({
         }, 50)
       }
     }
-    window.addEventListener('trigger-chat-send', handler as EventListener)
-    return () => window.removeEventListener('trigger-chat-send', handler as EventListener)
+    window.addEventListener('trigger-chat-send', handler)
+    return () => window.removeEventListener('trigger-chat-send', handler)
   }, [onSubmit, onValueChange])
 
   // Focus textarea when clicking on the container
@@ -378,9 +378,58 @@ export function ChatInput({
           }
         }
       }
+
+      // Restore connected API IDs from sessionStorage
+      const savedConnectedApiIds = getStorageItem("connected_api_ids")
+      if (savedConnectedApiIds) {
+        try {
+          const parsed = JSON.parse(savedConnectedApiIds)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            console.log("[ChatInput] Restoring connected API IDs:", parsed)
+            setConnectedApiIds(parsed)
+          }
+        } catch (error) {
+          console.error("[ChatInput] Error loading connected API IDs from sessionStorage:", error)
+        }
+      }
+
+      // Restore canvas mode from sessionStorage
+      const savedCanvasMode = getStorageItem("canvas_mode")
+      if (savedCanvasMode === "true") {
+        console.log("[ChatInput] Restoring canvas mode")
+        setCanvasModeEnabled(true)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assistantId, mode])
+
+  // Save connected API IDs to sessionStorage whenever they change
+  useEffect(() => {
+    if (!assistantId || mode !== "assistant") return
+
+    if (connectedApiIds.length > 0) {
+      setStorageItem("connected_api_ids", JSON.stringify(connectedApiIds))
+      console.log("[ChatInput] Saved connected API IDs to sessionStorage:", connectedApiIds)
+    } else {
+      removeStorageItem("connected_api_ids")
+      console.log("[ChatInput] Cleared connected API IDs from sessionStorage")
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectedApiIds])
+
+  // Save canvas mode to sessionStorage whenever it changes
+  useEffect(() => {
+    if (!assistantId || mode !== "assistant") return
+
+    if (canvasModeEnabled) {
+      setStorageItem("canvas_mode", "true")
+      console.log("[ChatInput] Saved canvas mode to sessionStorage")
+    } else {
+      removeStorageItem("canvas_mode")
+      console.log("[ChatInput] Cleared canvas mode from sessionStorage")
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvasModeEnabled])
 
   const handleSend = async () => {
     if ((!value.trim() && attachedFiles.length === 0) || isLoading || disabled) return
@@ -923,11 +972,10 @@ export function ChatInput({
                         type="button"
                         variant={canvasModeEnabled ? "default" : "ghost"}
                         size="icon"
-                        className={`size-[34px] rounded-full p-1 ${
-                          canvasModeEnabled
+                        className={`size-[34px] rounded-full p-1 ${canvasModeEnabled
                             ? "bg-violet-600 text-white hover:bg-violet-700"
                             : ""
-                        }`}
+                          }`}
                         onClick={handleCanvasModeToggle}
                         disabled={disabled || isLoading}
                         aria-label={canvasModeEnabled ? t("chat.input.disableCanvas") : t("chat.input.enableCanvas")}
@@ -948,10 +996,10 @@ export function ChatInput({
                     </span>
                   )}
                   <Tooltip>
-                    <TooltipTrigger asChild disabled={disabled || isLoading || isUploading}>
+                    <TooltipTrigger asChild disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled || isUploading}>
                       <Button
                         onClick={handleSend}
-                        disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled}
+                        disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled || isUploading}
                         size="icon"
                         className="size-[34px] rounded-full p-1"
                       >
@@ -1071,11 +1119,10 @@ export function ChatInput({
                         type="button"
                         variant={canvasModeEnabled ? "default" : "ghost"}
                         size="icon"
-                        className={`size-[34px] rounded-full p-1 ${
-                          canvasModeEnabled
+                        className={`size-[34px] rounded-full p-1 ${canvasModeEnabled
                             ? "bg-violet-600 text-white hover:bg-violet-700"
                             : ""
-                        }`}
+                          }`}
                         onClick={handleCanvasModeToggle}
                         disabled={disabled || isLoading}
                         aria-label={canvasModeEnabled ? t("chat.input.disableCanvas") : t("chat.input.enableCanvas")}
@@ -1096,10 +1143,10 @@ export function ChatInput({
                     </span>
                   )}
                   <Tooltip>
-                    <TooltipTrigger asChild disabled={disabled || isLoading || isUploading}>
+                    <TooltipTrigger asChild disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled || isUploading}>
                       <Button
                         onClick={handleSend}
-                        disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled}
+                        disabled={(!value.trim() && attachedFiles.length === 0) || isLoading || disabled || isUploading}
                         size="icon"
                         className="size-[34px] rounded-full p-1"
                       >

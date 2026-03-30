@@ -18,6 +18,7 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
   const [newUrl, setNewUrl] = useState("")
   const [isUploading, setIsUploading] = useState(false)
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set())
+  const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const addNote = () => {
@@ -51,8 +52,7 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
     })
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || [])
+  const uploadFiles = async (files: File[]) => {
     if (files.length === 0) return
 
     // Allowed file types
@@ -186,6 +186,36 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    await uploadFiles(files)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!isUploading) {
+      setIsDragging(true)
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    if (isUploading) return
+
+    const files = Array.from(e.dataTransfer.files || [])
+    await uploadFiles(files)
   }
 
   const removeFile = async (index: number) => {
@@ -360,11 +390,15 @@ export function KnowledgeBaseStep({ formData, updateFormData }: KnowledgeBaseSte
 
           <div
             onClick={isUploading ? undefined : handleCardClick}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
             className={cn(
               "border-2 border-dashed rounded-lg p-8 text-center transition-all",
               isUploading
                 ? "cursor-not-allowed opacity-60"
-                : "cursor-pointer hover:border-primary hover:bg-muted/50 active:scale-[0.99]"
+                : "cursor-pointer hover:border-primary hover:bg-muted/50 active:scale-[0.99]",
+              isDragging && "border-primary bg-primary/5 scale-[1.01] shadow-md"
             )}
           >
             {isUploading ? (

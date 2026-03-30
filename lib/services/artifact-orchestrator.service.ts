@@ -213,6 +213,25 @@ async function runHtmlGenerator(
     .map(s => `- ${s.name}: ${s.description} [data: ${s.dataToInclude.join(', ')}]`)
     .join('\n')
 
+  // Build file context sections
+  const fileContextParts: string[] = []
+  if (ctx.files.length > 0) {
+    fileContextParts.push(`## Attached Documents (use CONTENT only, NOT URLs)`)
+    ctx.files.forEach(f => {
+      fileContextParts.push(`### ${f.name}`)
+      if (f.extractedText) {
+        fileContextParts.push(f.extractedText.slice(0, 4000))
+      }
+    })
+  }
+
+  if (ctx.images.length > 0) {
+    fileContextParts.push(`## Attached Images (describe content, DO NOT embed image URLs)`)
+    ctx.images.forEach(img => {
+      fileContextParts.push(`- ${img.name}: [Image for reference - analyze content but don't use URLs in HTML]`)
+    })
+  }
+
   const input = [
     `Create a complete, production-quality HTML artifact.`,
     ``,
@@ -238,10 +257,16 @@ async function runHtmlGenerator(
     `## Data to Embed`,
     spec.dataPoints.join('\n'),
     ``,
+    ...fileContextParts,
+    ``,
     `## Original User Instructions`,
     ctx.instructions,
     ``,
-    `CRITICAL: Output ONLY the complete HTML starting with <!DOCTYPE html> and ending with </html>. No explanations.`,
+    `CRITICAL RULES:`,
+    `1. Output ONLY the complete HTML starting with <!DOCTYPE html> and ending with </html>. No explanations.`,
+    `2. DO NOT embed external URLs (S3, AWS, or any file storage URLs) in the HTML`,
+    `3. For images: Use data URIs, placeholders, or generate with Canvas/SVG - NEVER use uploaded file URLs`,
+    `4. Extract and USE the TEXT CONTENT from documents, not their storage locations`,
   ].join('\n')
 
   const systemInstructions =
@@ -300,6 +325,25 @@ async function* runStreamingFullRegen(
 ): AsyncGenerator<StreamEvent> {
   const systemPrompt = await getArtifactUpdateCodingPrompt()
 
+  // Build file context sections
+  const fileContextParts: string[] = []
+  if (ctx.files.length > 0) {
+    fileContextParts.push(`## Attached Documents (use CONTENT only, NOT URLs)`)
+    ctx.files.forEach(f => {
+      fileContextParts.push(`### ${f.name}`)
+      if (f.extractedText) {
+        fileContextParts.push(f.extractedText.slice(0, 4000))
+      }
+    })
+  }
+
+  if (ctx.images.length > 0) {
+    fileContextParts.push(`## Attached Images (analyze content, DO NOT embed URLs)`)
+    ctx.images.forEach(img => {
+      fileContextParts.push(`- ${img.name}: [Image for reference - use content description, not URLs]`)
+    })
+  }
+
   const input = [
     `## User Request`,
     userPrompt,
@@ -309,10 +353,16 @@ async function* runStreamingFullRegen(
     spec.styleRequirements.length > 0 ? `\nStyle: ${spec.styleRequirements.join('; ')}` : '',
     spec.dataPoints.length > 0 ? `\nNew data: ${spec.dataPoints.join('; ')}` : '',
     ``,
+    ...fileContextParts,
+    ``,
     `## Current Artifact (update this — do not start from scratch)`,
     currentHtml,
     ``,
-    `[UPDATE] Output the complete updated HTML starting with <!DOCTYPE html>.`,
+    `CRITICAL RULES:`,
+    `1. Output the complete updated HTML starting with <!DOCTYPE html>`,
+    `2. DO NOT embed external URLs (S3, AWS, or any file storage URLs) in the HTML`,
+    `3. For images: Use data URIs, placeholders, or Canvas/SVG - NEVER use uploaded file URLs`,
+    `4. Use the TEXT CONTENT from uploaded documents, not their storage locations`,
   ].filter(Boolean).join('\n')
 
   const streamResponse = await openai.responses.create({

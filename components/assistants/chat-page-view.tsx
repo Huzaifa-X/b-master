@@ -58,8 +58,8 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
 
   // Listen for intent detection events (from transport fetch)
   useEffect(() => {
-    const handler = (e: CustomEvent) => {
-      const { intent, autoCanvas } = e.detail
+    const handler = (e: Event) => {
+      const { intent, autoCanvas } = (e as CustomEvent).detail
       setDetectedIntent(intent)
 
       if (autoCanvas && panelGroupRef.current) {
@@ -68,8 +68,8 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
         setAutoOpened(true, currentLayout)
       }
     }
-    window.addEventListener('intent-detected', handler as EventListener)
-    return () => window.removeEventListener('intent-detected', handler as EventListener)
+    window.addEventListener('intent-detected', handler)
+    return () => window.removeEventListener('intent-detected', handler)
   }, [setDetectedIntent, setAutoOpened])
 
   // Listen for restore-chat-layout events (from back button)
@@ -281,8 +281,8 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
 
   // Listen for code preview events
   useEffect(() => {
-    const handler = (e: CustomEvent) => {
-      const { content, language, type, autoCollapse, title } = e.detail
+    const handler = (e: Event) => {
+      const { content, language, type, autoCollapse, title } = (e as CustomEvent).detail
       setArtifact({
         type: type || "code",
         language: language || "text",
@@ -298,16 +298,16 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
       }
     }
 
-    window.addEventListener("open-code-preview", handler as EventListener)
+    window.addEventListener("open-code-preview", handler)
     return () => {
-      window.removeEventListener("open-code-preview", handler as EventListener)
+      window.removeEventListener("open-code-preview", handler)
     }
   }, [setArtifact, isMobile])
 
   // Listen for canvas-edit-send events from ArtifactPanel (canvas edit mode)
   useEffect(() => {
-    const handler = async (e: CustomEvent) => {
-      const { message } = e.detail
+    const handler = async (e: Event) => {
+      const { message } = (e as CustomEvent).detail
       if (message && !isStreaming) {
         // Send the edit request as a chat message with canvas option
         setIsCreating(true)
@@ -319,9 +319,9 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
       }
     }
 
-    window.addEventListener("canvas-edit-send", handler as EventListener)
+    window.addEventListener("canvas-edit-send", handler)
     return () => {
-      window.removeEventListener("canvas-edit-send", handler as EventListener)
+      window.removeEventListener("canvas-edit-send", handler)
     }
   }, [sendMessage, isStreaming])
 
@@ -337,7 +337,8 @@ export function ChatPageView({ chatId, mode, assistantId }: ChatPageViewProps) {
   }
 
   const handleSend = async (message: string, attachments?: { name: string; url: string; type: string; size: number }[], options?: { webSearch?: boolean; research?: boolean; chatWithAPI?: boolean; dropbox?: boolean; canvas?: boolean; artifacts?: { id: string; name: string; instructions: string; htmlContent: string }[]; mentionedUsers?: { id: string; name: string; email: string }[]; connectedApiIds?: string[] }) => {
-    if (!message.trim() || isStreaming || isCreating) return
+    // Allow sending if there's text OR attachments
+    if ((!message.trim() && (!attachments || attachments.length === 0)) || isStreaming || isCreating) return
 
     setIsCreating(true)
     try {

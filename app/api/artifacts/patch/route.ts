@@ -158,12 +158,28 @@ export async function POST(req: NextRequest) {
     // Build file context for the AI
     let fileContext = ""
     if (uploadedFiles && Array.isArray(uploadedFiles) && uploadedFiles.length > 0) {
-      fileContext = "\n\n=== UPLOADED FILES (use these in the replacement) ===\n"
+      fileContext = "\n\n=== UPLOADED FILES ===\n"
       for (const f of uploadedFiles as any[]) {
         fileContext += `File: ${f.name} (${f.type})\n`
-        if (f.preview) fileContext += `Image URL: ${f.preview}\nEmbed with: <img src="${f.preview}" alt="${f.name}">\n`
-        else if (f.url) fileContext += `URL: ${f.url}\n`
-        if (f.extractedContent?.text) fileContext += `Content: ${f.extractedContent.text.slice(0, 2000)}\n`
+
+        // Include extracted text content (PRIMARY USE CASE)
+        if (f.extractedContent?.text) {
+          fileContext += `Extracted Text Content:\n${f.extractedContent.text.slice(0, 2000)}\n`
+        }
+
+        // Include URLs but with strict usage guidelines
+        const imageUrl = f.preview || f.url
+        if (imageUrl) {
+          const isImage = f.type?.startsWith('image/')
+          if (isImage) {
+            fileContext += `\n⚠️ Image URL available: ${imageUrl}\n`
+            fileContext += `CRITICAL: Only use this URL if user explicitly says to "display", "show", "embed", or "add" the image.\n`
+            fileContext += `If user just uploaded for analysis, DO NOT embed the URL.\n`
+            fileContext += `If embedding: <img src="${imageUrl}" alt="${f.name}">\n`
+          } else {
+            fileContext += `\nDocument URL: ${imageUrl} (for reference only - use extracted content instead)\n`
+          }
+        }
         fileContext += "\n"
       }
       fileContext += "=== END FILES ===\n"
@@ -176,7 +192,9 @@ export async function POST(req: NextRequest) {
       "  - Raw HTML only — no markdown, no backticks, no explanations, no DOCTYPE, no <html>/<body> tags",
       "  - Preserve the element tag type unless user says otherwise",
       "  - Keep existing attributes not mentioned in the request",
-      "  - If an image file is provided, use its URL as the src of an <img> tag",
+      "  - DO NOT embed external file URLs (S3, AWS, storage URLs) unless user explicitly says to 'display', 'show', or 'embed' an image",
+      "  - For uploaded documents: Use the EXTRACTED TEXT CONTENT, not file URLs",
+      "  - For images: Only embed URLs if user explicitly requests to display/show the image",
       "  - Return a single complete HTML element/fragment that can directly replace the original",
     ].join("\n")
 

@@ -203,10 +203,7 @@ function FileRow({ file, assistantId, onDeleteRequest, readonly = false }: FileR
           {file.type === "text" ? (
             <ScrollArea className="max-h-[60vh] rounded border p-4">
               <pre className="text-sm whitespace-pre-wrap font-sans">
-                {/* We should show the content if available, but for now it's just previewing file name? 
-                    Actually file name is what was there. Let's keep it as is but localized if it was a label.
-                */}
-                {file.name}
+                {file.content || file.name}
               </pre>
             </ScrollArea>
           ) : proxyUrl ? (
@@ -425,11 +422,14 @@ interface AssistantLibraryProps {
   assistantId: string
   /** When true the component only shows view (no add/delete) */
   readonly?: boolean
+  /** Optional search query for local filtering */
+  searchQuery?: string
 }
 
 export function AssistantLibrary({
   assistantId,
   readonly = false,
+  searchQuery = "",
 }: AssistantLibraryProps) {
   const { t } = useLocale()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -477,10 +477,21 @@ export function AssistantLibrary({
     }
   }
 
+  // Local filtering based on searchQuery
+  const filteredFiles = files.filter((f) => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      f.name.toLowerCase().includes(query) ||
+      (f.url?.toLowerCase().includes(query) ?? false) ||
+      (f.content?.toLowerCase().includes(query) ?? false)
+    )
+  })
+
   // Group files by type
-  const fileItems = files.filter((f) => f.type === "file")
-  const urlItems = files.filter((f) => f.type === "url")
-  const textItems = files.filter((f) => f.type === "text")
+  const fileItems = filteredFiles.filter((f) => f.type === "file")
+  const urlItems = filteredFiles.filter((f) => f.type === "url")
+  const textItems = filteredFiles.filter((f) => f.type === "text")
 
   return (
     <div className="flex flex-col h-full">
@@ -571,14 +582,30 @@ export function AssistantLibrary({
           )}
 
           {/* Empty state */}
-          {!isLoading && files.length === 0 && (
+          {!isLoading && filteredFiles.length === 0 && (
             <div
               className={cn(
                 "flex flex-col items-center justify-center gap-3 py-12 text-center rounded-lg border-2 border-dashed",
                 isDragging ? "border-primary" : "border-muted-foreground/25"
               )}
             >
-              {!readonly ? (
+              {searchQuery ? (
+                <>
+                  <Eye className="h-8 w-8 text-muted-foreground/40" />
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      {t("library.noResults")}
+                    </p>
+                    <p className="text-xs text-muted-foreground/70 mt-0.5">
+                      {t("library.noResultsDescription", { query: searchQuery })}
+                    </p>
+                  </div>
+                  <Button variant="link" size="sm" onClick={() => { }}>
+                    {/* Parent should handle clearing search, but showing this for now */}
+                    {/* t("common.clearSearch") */}
+                  </Button>
+                </>
+              ) : !readonly ? (
                 <>
                   <Upload className="h-8 w-8 text-muted-foreground" />
                   <div>

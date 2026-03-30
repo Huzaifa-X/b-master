@@ -12,6 +12,12 @@ const deploySchema = z.object({
     activeArtifactId: z.number().optional(),
 })
 
+interface ActionResponse<T> {
+    success: boolean
+    data?: T
+    error?: { message: string }
+}
+
 export async function deployToGithubAndVercel(input: any) {
     try {
         const parseResult = deploySchema.safeParse(input)
@@ -321,6 +327,63 @@ export async function deployToGithubAndVercel(input: any) {
                     where: { id: newArtifact.id },
                     data: { activeVersionId: firstVersion.id }
                 })
+            }
+
+            // 11. Send notification
+            if (artifactId) {
+                try {
+                    const userIdsToNotify: string[] = []
+                    
+                    // Get assistant owner (always has artifact permissions)
+                    const assistant = await prisma.assistant.findUnique({
+                        where: { id: assistantIdBigInt },
+                        select: { userId: true }
+                    })
+
+                    if (assistant) {
+                        userIdsToNotify.push(assistant.userId.toString())
+                    }
+
+                    // Get all contacts with artifact permissions
+                    const contactsWithArtifactPermission = await prisma.assistantContact.findMany({
+                        where: {
+                            assistantId: assistantIdBigInt,
+                            OR: [
+                                { access: 'admin' },
+                                {
+                                    AND: [
+                                        { permissions: { not: null } },
+                                        {
+                                            permissions: {
+                                                contains: '"artifacts"'
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        select: { userId: true }
+                    })
+
+                    // Add contact user IDs
+                    for (const contact of contactsWithArtifactPermission) {
+                        const userIdStr = contact.userId.toString()
+                        if (!userIdsToNotify.includes(userIdStr)) {
+                            userIdsToNotify.push(userIdStr)
+                        }
+                    }
+
+                    // Send notifications
+                    const notificationService = (await import('@/lib/services/notifactionService')).default
+                    await notificationService.notifyArtifactCreated(
+                        artifactId.toString(),
+                        assistantId,
+                        session.user.id,
+                        userIdsToNotify
+                    )
+                } catch (notifErr) {
+                    console.error("Failed to send notification:", notifErr)
+                }
             }
         } catch (err) {
             console.error("Failed to save artifact:", err)

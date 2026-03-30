@@ -502,7 +502,13 @@ export const en = {
     roles: {
       user: "User",
       client: "Client",
+      prospect: "Prospect",
       investor: "Investor",
+      colleague: "Colleague",
+      associate: "Associate",
+      coworker: "Coworker",
+      other: "Other",
+      custom: "Custom Role",
     },
     permissions: {
       chat: "Chat",
@@ -1666,6 +1672,9 @@ export const en = {
     addNote: "Add Note",
     noItems: "No items yet",
     addItemsDescription: "Add files, URLs, or notes using the Add button",
+    searchPlaceholder: "Search files, URLs, notes...",
+    noResults: "No results found",
+    noResultsDescription: 'No items match "{query}". Try a different search term.',
     noFilesInLibrary: "No files in library",
     dropToUpload: "Drop to upload",
     filesCount: "Files ({n})",

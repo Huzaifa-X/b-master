@@ -7,7 +7,7 @@ import prisma from "@/lib/prisma"
 export interface AddContactParams {
   assistantId: string
   email: string
-  role: "user" | "client" | "investor"
+  role: string
   description?: string
   telephone?: string
   information?: string
@@ -15,7 +15,7 @@ export interface AddContactParams {
 
 export interface UpdateContactParams {
   contactId: string
-  role: "user" | "client" | "investor"
+  role: string
   description?: string
   telephone?: string
   information?: string
@@ -455,7 +455,7 @@ export async function getAssistantContacts(assistantId: string) {
       description: contact.description || "",
       avatar: contact.user.image || "",
       gender: contact.user.gender || "",
-      role: (contact.role as "user" | "client" | "investor") || "user",
+      role: contact.role || "user",
       address: contact.user.address || "",
       telephone: contact.telephone || "",
       information: contact.information || "",
@@ -558,7 +558,7 @@ export async function getAllContacts() {
       description: contact.description || "",
       avatar: contact.user.image || "",
       gender: contact.user.gender || "",
-      role: (contact.role as "user" | "client" | "investor") || "user",
+      role: contact.role || "user",
       address: contact.user.address || "",
       assistantName: contact.assistant.name,
       assistantId: contact.assistant.id.toString(),

@@ -1,12 +1,6 @@
 import prisma from "@/lib/prisma"
 import axios from "axios"
 
-// ============================================
-// WEB SCRAPING & VECTOR STORE INTEGRATION
-// ============================================
-
-const WEB_CRAWLER_API = "https://web-crawler.dev.bmaster.ai/scraper"
-
 interface ScrapeJobParams {
   url: string
   vectorStoreId: string
@@ -24,7 +18,7 @@ export async function triggerWebScraping(
   params: ScrapeJobParams
 ): Promise<{ success: boolean; error?: string; vectorFileId: string }> {
   try {
-    const response = await axios.post(WEB_CRAWLER_API, {
+    const response = await axios.post(process.env.WEB_CRAWLER_API!, {
       url: params.url,
       vector_store_id: params.vectorStoreId,
       max_pages: params.maxPages || 20,

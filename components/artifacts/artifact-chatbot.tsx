@@ -299,8 +299,8 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
   })
 
   useEffect(() => {
-    const handler = (e: CustomEvent<{ message: string }>) => {
-      const message = e.detail?.message
+    const handler = (e: Event) => {
+      const message = (e as CustomEvent<{ message: string }>).detail?.message
       if (message) {
         // Set the input for visual feedback, then call handleSend with the message directly
         setInput(message)
@@ -308,8 +308,8 @@ export function ArtifactChatbot({ artifactId, artifactName, assistantId, disable
         handleSendRef.current(message)
       }
     }
-    window.addEventListener('trigger-chat-send', handler as EventListener)
-    return () => window.removeEventListener('trigger-chat-send', handler as EventListener)
+    window.addEventListener('trigger-chat-send', handler)
+    return () => window.removeEventListener('trigger-chat-send', handler)
   }, [])
 
   const handleSend = async (directMessage?: string) => {
