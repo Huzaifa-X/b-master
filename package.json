@@ -27,7 +27,7 @@
     "@aws-sdk/s3-request-presigner": "^3.927.0",
     "@diceui/mention": "^0.8.0",
     "@diceui/tags-input": "^0.7.2",
-    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@modelcontextprotocol/sdk": "^1.32.0",
     "@monaco-editor/react": "^4.7.0",
     "@next-auth/prisma-adapter": "^1.0.7",
     "@number-flow/react": "^0.5.10",
